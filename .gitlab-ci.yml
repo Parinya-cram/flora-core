@@ -1,0 +1,63 @@
+# Flora Core pipeline for the shared development server.
+#
+# The deploy job expects a GitLab Runner with the "shell" executor running on
+# the server itself, tagged `flora-dev`, whose user can run docker and owns the
+# checkout at $DEPLOY_PATH.  Nothing here holds credentials: the server keeps
+# its own untracked .env.
+#
+# Required CI/CD variable (Settings > CI/CD > Variables):
+#   DEPLOY_PATH   absolute path of the checkout on the server, e.g. /opt/flora
+
+stages: [validate, deploy]
+
+default:
+  interruptible: true
+
+# ---------------------------------------------------------------- validate
+compose-config:
+  stage: validate
+  tags: [flora-dev]
+  script:
+    - docker compose -f compose.dev.yaml --profile canopy --profile multi-leaf config >/dev/null
+    - docker compose -f flora-gateway/compose.yaml config >/dev/null
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH
+
+python-compile:
+  stage: validate
+  tags: [flora-dev]
+  script:
+    - python3 -m compileall -q services/flora-api/app services/flora-sync-worker
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH
+
+frontend-build:
+  stage: validate
+  image: node:22-bookworm-slim
+  script:
+    - cd frontend
+    - npm ci --no-audit --no-fund
+    - npm run build
+  cache:
+    key:
+      files: [frontend/package-lock.json]
+    paths: [frontend/node_modules/]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH
+
+# ---------------------------------------------------------------- deploy
+deploy-dev:
+  stage: deploy
+  tags: [flora-dev]
+  environment:
+    name: development
+    url: http://172.22.1.103:6890
+  resource_group: flora-dev-server   # never two deploys at once
+  script:
+    - cd "$DEPLOY_PATH"
+    - ./scripts/server/deploy.sh
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

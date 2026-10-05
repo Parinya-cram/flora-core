@@ -8,7 +8,7 @@ services:
       FLORA_API_MODE: sync
       FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-flora-sync-dev-secret-change-me}
     ports:
-      - "127.0.0.1:${FLORA_SYNC_API_PORT:-6896}:8000"
+      - "${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_SYNC_API_PORT:-6896}:8000"
     volumes:
       - ../services/flora-api/app:/app/app:ro
     depends_on:

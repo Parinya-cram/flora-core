@@ -35,3 +35,15 @@ backend/floradb.db
 *.raw
 terminology-packages/
 SnomedCT_*RF2*.zip
+
+# Local and server environment files (never commit real values)
+.env
+.env.local
+.env.*.local
+env/*.env
+!.env.example
+!.env.server.example
+
+# Deployment runtime
+backup/
+*.sql.gz

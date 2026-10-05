@@ -9,7 +9,7 @@ services:
       FLORA_DB_VIEW_PASSWORD: ${FLORA_DB_VIEW_PASSWORD:-flora-view-local-only}
       FLORA_DB_SYNC_PASSWORD: ${FLORA_DB_SYNC_PASSWORD:-flora-sync-local-only}
     ports:
-      - "127.0.0.1:${FLORA_POSTGRES_PORT:-6892}:5432"
+      - "${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_POSTGRES_PORT:-6892}:5432"
     volumes:
       - flora_postgres_data:/var/lib/postgresql/data
       - ../infrastructure/postgres/0000-create-app-role.sql:/docker-entrypoint-initdb.d/0000-create-app-role.sql:ro

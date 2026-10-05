@@ -76,7 +76,7 @@ x-leaf-sync: &leaf-sync
 services:
   flora-leaf-2-db:
     <<: *leaf-db
-    ports: ["127.0.0.1:6902:5432"]
+    ports: ["${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_LEAF_2_DB_PORT:-6902}:5432"]
     volumes: ["flora_leaf_2_data:/var/lib/postgresql/data"]
 
   flora-leaf-2-api:
@@ -84,7 +84,7 @@ services:
     environment:
       <<: *leaf-api-environment
       FLORA_DATABASE_URL: postgresql://flora_app:flora-app-local-only@flora-leaf-2-db:5432/flora
-    ports: ["127.0.0.1:6901:8000"]
+    ports: ["${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_LEAF_2_API_PORT:-6901}:8000"]
     depends_on:
       flora-leaf-2-db: {condition: service_healthy}
       flora-liveagent: {condition: service_healthy}
@@ -95,7 +95,7 @@ services:
     environment:
       <<: *leaf-web-environment
       VITE_API_PROXY_TARGET: http://flora-leaf-2-api:8000
-    ports: ["6900:5173"]
+    ports: ["${FLORA_LEAF_2_PORT:-6900}:5173"]
     volumes:
       - ../frontend:/app/frontend
       - flora_leaf_2_modules:/app/frontend/node_modules
@@ -115,7 +115,7 @@ services:
 
   flora-leaf-3-db:
     <<: *leaf-db
-    ports: ["127.0.0.1:6912:5432"]
+    ports: ["${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_LEAF_3_DB_PORT:-6912}:5432"]
     volumes: ["flora_leaf_3_data:/var/lib/postgresql/data"]
 
   flora-leaf-3-api:
@@ -123,7 +123,7 @@ services:
     environment:
       <<: *leaf-api-environment
       FLORA_DATABASE_URL: postgresql://flora_app:flora-app-local-only@flora-leaf-3-db:5432/flora
-    ports: ["127.0.0.1:6911:8000"]
+    ports: ["${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_LEAF_3_API_PORT:-6911}:8000"]
     depends_on:
       flora-leaf-3-db: {condition: service_healthy}
       flora-liveagent: {condition: service_healthy}
@@ -134,7 +134,7 @@ services:
     environment:
       <<: *leaf-web-environment
       VITE_API_PROXY_TARGET: http://flora-leaf-3-api:8000
-    ports: ["6910:5173"]
+    ports: ["${FLORA_LEAF_3_PORT:-6910}:5173"]
     volumes:
       - ../frontend:/app/frontend
       - flora_leaf_3_modules:/app/frontend/node_modules
@@ -154,7 +154,7 @@ services:
 
   flora-leaf-4-db:
     <<: *leaf-db
-    ports: ["127.0.0.1:6922:5432"]
+    ports: ["${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_LEAF_4_DB_PORT:-6922}:5432"]
     volumes: ["flora_leaf_4_data:/var/lib/postgresql/data"]
 
   flora-leaf-4-api:
@@ -162,7 +162,7 @@ services:
     environment:
       <<: *leaf-api-environment
       FLORA_DATABASE_URL: postgresql://flora_app:flora-app-local-only@flora-leaf-4-db:5432/flora
-    ports: ["127.0.0.1:6921:8000"]
+    ports: ["${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_LEAF_4_API_PORT:-6921}:8000"]
     depends_on:
       flora-leaf-4-db: {condition: service_healthy}
       flora-liveagent: {condition: service_healthy}
@@ -173,7 +173,7 @@ services:
     environment:
       <<: *leaf-web-environment
       VITE_API_PROXY_TARGET: http://flora-leaf-4-api:8000
-    ports: ["6920:5173"]
+    ports: ["${FLORA_LEAF_4_PORT:-6920}:5173"]
     volumes:
       - ../frontend:/app/frontend
       - flora_leaf_4_modules:/app/frontend/node_modules
