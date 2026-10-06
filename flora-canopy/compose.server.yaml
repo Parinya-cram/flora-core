@@ -1,0 +1,58 @@
+# Flora Haber for the shared server (Portainer GitOps).
+#
+# Minimal device-registry / gateway-licensing tier: haber + its registry.
+# Haber pulls the hospital-01 license bundle from the Flora Root we run on the
+# NAS (7100), verifies its Ed25519 signature, and licenses gateways that
+# check in. The gateway on 172.22.1.233 should point its "Canopy address" at
+# http://172.22.1.103:7204 (this Haber). Gateway key must equal
+# HABER_GATEWAY_TOKEN below.
+#
+# Omitted vs the full flora-canopy platform: canopy-db/canopy-api/sync-api/web
+# (we already run a Canopy viewer in the `flora` stack) and the TLS edge. Haber
+# stores its own state in sqlite, so it needs no external DB to license gateways.
+name: flora-haber
+
+services:
+  haber-registry:
+    image: registry:3
+    environment:
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+      OTEL_TRACES_EXPORTER: none
+    ports:
+      - "${FLORA_BIND_ADDR:-127.0.0.1}:${HABER_REGISTRY_PORT:-7205}:5000"
+    volumes:
+      - haber_registry_data:/var/lib/registry
+    restart: unless-stopped
+
+  haber:
+    build:
+      context: ./haber
+    environment:
+      # Flora Root on the NAS (http, no TLS edge in our setup).
+      FLORA_ROOT_URL: ${FLORA_ROOT_URL:-http://172.22.1.103:7100}
+      FLORA_TENANT_ID: ${FLORA_TENANT_ID:-hospital-01}
+      FLORA_ROOT_TENANT_KEY: ${FLORA_ROOT_TENANT_KEY:-root-tenant-demo-key}
+      # Empty = trust the key Root advertises at /api/v1/keys (dev TOFU).
+      FLORA_ROOT_PUBLIC_KEY: ${FLORA_ROOT_PUBLIC_KEY:-}
+      # The gateway's "Gateway key" must match this.
+      HABER_GATEWAY_TOKEN: ${HABER_GATEWAY_TOKEN:-haber-gateway-demo-token}
+      HABER_NODE_TOKEN: ${HABER_NODE_TOKEN:-haber-node-demo-token}
+      HABER_ADMIN_USERNAME: ${HABER_ADMIN_USERNAME:-admin}
+      HABER_ADMIN_PASSWORD: ${HABER_ADMIN_PASSWORD:-admin}
+      HABER_REGISTRY_URL: http://haber-registry:5000
+      HABER_REGISTRY_PUBLIC: ${HABER_REGISTRY_PUBLIC:-172.22.1.103:7205}
+      HABER_ROOT_SYNC_SEC: ${HABER_ROOT_SYNC_SEC:-15}
+    ports:
+      - "${FLORA_BIND_ADDR:-127.0.0.1}:${HABER_PORT:-7204}:8000"
+    volumes:
+      - haber_data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      haber-registry:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  haber_data:
+  haber_registry_data:
