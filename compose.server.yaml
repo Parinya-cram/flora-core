@@ -1,0 +1,142 @@
+# Flora shared server stack for Portainer (GitOps / git-poll).
+#
+# Unlike compose.dev.yaml this binds NO host source: Portainer checks the repo
+# out into its own volume, where the dev stack's ../frontend and
+# ../services bind mounts resolve to nothing.  Every service here runs from its
+# built image instead, and postgres is built from Dockerfile.postgres.dev which
+# bakes the schema in, so a push rebuilds and redeploys cleanly.
+#
+# Set FLORA_BIND_ADDR=0.0.0.0 in the Portainer stack so the LAN can reach it.
+name: flora
+
+services:
+  postgres:
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres.dev
+    environment:
+      POSTGRES_DB: ${FLORA_POSTGRES_DB:-flora}
+      POSTGRES_USER: ${FLORA_POSTGRES_ADMIN_USER:-flora_admin}
+      POSTGRES_PASSWORD: ${FLORA_POSTGRES_ADMIN_PASSWORD:-flora-admin-local-only}
+      FLORA_DB_APP_PASSWORD: ${FLORA_DB_APP_PASSWORD:-flora-app-local-only}
+      FLORA_DB_VIEW_PASSWORD: ${FLORA_DB_VIEW_PASSWORD:-flora-view-local-only}
+      FLORA_DB_SYNC_PASSWORD: ${FLORA_DB_SYNC_PASSWORD:-flora-sync-local-only}
+    ports:
+      - "${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_POSTGRES_PORT:-6892}:5432"
+    volumes:
+      - flora_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  flora-liveagent:
+    build:
+      context: ./services/flora-liveagent
+    environment:
+      LIVEAGENT_PROFILE: ${LIVEAGENT_PROFILE:-stable-anes}
+      LIVEAGENT_SEED: ${LIVEAGENT_SEED:-17}
+      LIVEAGENT_MAX_WINDOW_MINUTES: ${LIVEAGENT_MAX_WINDOW_MINUTES:-240}
+    ports:
+      - "${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_LIVEAGENT_PORT:-6897}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  flora-leaf-api:
+    build:
+      context: ./services/flora-api
+    environment:
+      FLORA_DATABASE_URL: postgresql://flora_app:${FLORA_DB_APP_PASSWORD:-flora-app-local-only}@postgres:5432/${FLORA_POSTGRES_DB:-flora}
+      FLORA_API_ENV: development
+      FLORA_API_MODE: leaf
+      FLORA_LEAF_WRITE_API: "true"
+      FLORA_BOOTSTRAP_ADMIN_ENABLED: ${FLORA_BOOTSTRAP_ADMIN_ENABLED:-true}
+      FLORA_BOOTSTRAP_ADMIN_USERNAME: ${FLORA_BOOTSTRAP_ADMIN_USERNAME:-admin}
+      FLORA_BOOTSTRAP_ADMIN_PASSWORD: ${FLORA_BOOTSTRAP_ADMIN_PASSWORD:-admin}
+      FLORA_BOOTSTRAP_ADMIN_NAME: ${FLORA_BOOTSTRAP_ADMIN_NAME:-Administrator}
+      FLORA_DEVICE_INGEST_ENABLED: "true"
+      FLORA_LEAF_SERVICE_SECRET: ${FLORA_LEAF_SERVICE_SECRET:-flora-leaf-service-dev-secret-change-me}
+      FLORA_CANOPY_SYNC_URL: ${FLORA_CANOPY_SYNC_URL:-http://flora-sync-api:8000}
+      FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-flora-sync-dev-secret-change-me}
+      FLORA_ACCOUNT_CONFIG_SYNC_TIMEOUT_SECONDS: ${FLORA_ACCOUNT_CONFIG_SYNC_TIMEOUT_SECONDS:-1.5}
+      VECTOR_READ_URL: ${VECTOR_READ_URL:-http://flora-liveagent:8000/api/observations}
+      HIS_GATEWAY_BASE_URL: ${HIS_GATEWAY_BASE_URL:-http://10.35.202.6:8590}
+      FLORA_HIS_DEMO_MODE: ${FLORA_HIS_DEMO_MODE:-false}
+    ports:
+      - "${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_LEAF_API_PORT:-6893}:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      flora-liveagent:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  flora-sync-api:
+    build:
+      context: ./services/flora-api
+    environment:
+      FLORA_DATABASE_URL: postgresql://flora_sync:${FLORA_DB_SYNC_PASSWORD:-flora-sync-local-only}@postgres:5432/${FLORA_POSTGRES_DB:-flora}
+      FLORA_API_ENV: development
+      FLORA_API_MODE: sync
+      FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-flora-sync-dev-secret-change-me}
+    ports:
+      - "${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_SYNC_API_PORT:-6896}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  flora-leaf:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend.dev
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      VITE_FLORA_SURFACE: leaf
+      VITE_API_PROXY_TARGET: http://flora-leaf-api:8000
+    ports:
+      - "${FLORA_LEAF_PORT:-6890}:5173"
+    depends_on:
+      flora-leaf-api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  flora-leaf-sync:
+    build:
+      context: ./services/flora-sync-worker
+    environment:
+      FLORA_LEAF_API_URL: http://flora-leaf-api:8000
+      FLORA_CANOPY_SYNC_URL: http://flora-sync-api:8000
+      FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-flora-sync-dev-secret-change-me}
+      FLORA_LEAF_SERVICE_SECRET: ${FLORA_LEAF_SERVICE_SECRET:-flora-leaf-service-dev-secret-change-me}
+      FLORA_LEAF_ID: ${FLORA_LEAF_ID:-leaf-dev-01}
+      FLORA_HOSPITAL_ID: ${FLORA_HOSPITAL_ID:-hospital-dev}
+      FLORA_LEAF_NAME: ${FLORA_LEAF_NAME:-Development Leaf}
+      FLORA_SYNC_INTERVAL_SECONDS: ${FLORA_SYNC_INTERVAL_SECONDS:-10}
+    depends_on:
+      flora-leaf-api:
+        condition: service_healthy
+      flora-sync-api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  flora_postgres_data:
