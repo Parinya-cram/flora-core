@@ -275,7 +275,7 @@ async function api(path, method = "GET", body) {
   if (response.status === 401) { location.href = "/login"; throw new Error("sign in required"); }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const detail = Array.isArray(data.detail) ? data.detail.map((d) => `${d.loc?.slice(-1)[0]}: ${d.msg}`).join("; ") : data.detail;
+    const detail = Array.isArray(data.detail) ? data.detail.map((d) => `${d.loc?.slice(-1)[0]}: ${String(d.msg).replace(/^Value error, /, "")}`).join("; ") : data.detail;
     throw new Error(detail || response.statusText);
   }
   return data;
@@ -495,7 +495,7 @@ function editType(type) {
     ? { name: "parser", label: "Parser", disabled: haber, required: true, placeholder: "hl7v2" }
     : { name: "parser", label: "Parser (in this image)", type: "select", options: parsersOf(image).map((p) => [p, p]) };
   openForm(isNew ? "Add local template" : `Edit ${type.code}${haber ? " (from Canopy)" : ""}`, [
-    { name: "code", label: "Code", disabled: !isNew, required: true, placeholder: "philips-mx800-hl7" },
+    { name: "code", label: "Code (permanent ID, saved in lowercase)", disabled: !isNew, required: true, placeholder: "philips-mx800-hl7" },
     { name: "label", label: "Label", disabled: haber, required: true },
     { name: "manufacturer", label: "Manufacturer", type: "select", options: manufacturerOptions },
     { name: "model", label: "Model", placeholder: "IntelliVue MX800" },
@@ -543,7 +543,7 @@ function typeTable(rows, empty) {
 // ---------------------------------------------------------------- manufacturers
 function editManufacturer(m) {
   openForm(m ? `Edit ${m.name}` : "Add manufacturer", [
-    { name: "code", label: "Code", required: true, placeholder: "philips" },
+    { name: "code", label: "Code (saved in lowercase)", required: true, placeholder: "philips" },
     { name: "name", label: "Name", required: true, placeholder: "Philips Healthcare" },
     { name: "country", label: "Country", placeholder: "NL" },
     { name: "website", label: "Website", placeholder: "https://…" },

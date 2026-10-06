@@ -7,19 +7,20 @@ Manufacturers, local device types and installed devices are edited on the admin 
 from __future__ import annotations
 
 import asyncio
+import re
 import json
 import logging
 import tomllib
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import httpx
 import tomli_w
 from aiokafka import AIOKafkaProducer
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse
-from pydantic import BaseModel, Field
+from pydantic import AfterValidator, BaseModel, BeforeValidator, Field
 from psycopg.types.json import Jsonb
 
 from . import alerts, auth, connection, db, docker_ops, settings
@@ -564,8 +565,18 @@ def reconcile_now():
 CODE_PATTERN = r"^[a-z0-9][a-z0-9_.-]{0,63}$"
 
 
+def check_code(value: str) -> str:
+    if not re.fullmatch(CODE_PATTERN, value):
+        raise ValueError("use 1–64 characters: letters, digits, dot, dash or underscore, starting with a letter or digit")
+    return value
+
+
+# Codes are stable lowercase IDs; "T200" or "Philips MX800" is accepted as "t200" / "philips-mx800".
+Code = Annotated[str, BeforeValidator(lambda v: re.sub(r"\s+", "-", str(v).strip()).lower()), AfterValidator(check_code)]
+
+
 class ManufacturerIn(BaseModel):
-    code: str = Field(pattern=CODE_PATTERN)
+    code: Code
     name: str = Field(min_length=1)
     country: str | None = None
     website: str | None = None
@@ -619,7 +630,7 @@ def delete_manufacturer(code: str):
 
 
 class DeviceTypeIn(BaseModel):
-    code: str = Field(pattern=CODE_PATTERN)
+    code: Code
     label: str = Field(min_length=1)
     manufacturer: str | None = None
     model: str | None = None
