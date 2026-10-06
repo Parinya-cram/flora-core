@@ -108,3 +108,40 @@ def test_medibus_options_override_only_the_selected_mapping():
 def test_medibus_rejects_invalid_timers(options):
     with pytest.raises(ValueError):
         medibus(**options)
+
+
+def test_original_fields_survive_mapping_and_unknown_codes():
+    parser = medibus(parameters={'24:D6': {'ivy_param': 'rr', 'unit': '/min', 'scale': 2}})
+    rows = parser.feed(raw(packet(0x24, b'D6  14B9 8.5A5----', response=True)))
+    assert rows[0]['value'] == 28
+    original = parser.drain_measurements()
+    assert [r['raw_code'] for r in original] == ['24:D6', '24:B9', '24:A5']
+    assert original[0]['raw_value'] == '  14'
+    assert original[0]['value'] == 14
+    assert original[0]['definition']['name'] == 'RR'
+    assert original[0]['mapping']['scale'] == 2
+    assert original[1]['definition']['name'] == 'MV'
+    assert original[1]['mapping'] == {}
+    assert original[2]['raw_value'] == '----' and original[2]['value'] is None
+    assert parser.drain_measurements() == []
+
+
+def test_original_fields_keep_page_identity_and_settings_units():
+    parser = medibus()
+    parser.feed(raw(packet(0x24, b'21 450', response=True) + packet(0x2B, b'21 450', response=True)
+                    + packet(0x29, b'04 0.45', response=True)))
+    original = parser.drain_measurements()
+    assert [r['raw_code'] for r in original] == ['24:21', '2B:21', '29:04']
+    assert original[1]['definition']['name'] == 'VTe'
+    assert original[2]['value'] == .45
+    assert original[2]['definition']['unit'] == 'L'
+    assert original[2]['mapping']['unit'] == 'mL'
+
+
+def test_invalid_packet_does_not_record_partial_measurements():
+    parser = medibus()
+    assert parser.feed(raw(packet(0x24, b'D6  14zz  20', response=True))) == []
+    assert parser.drain_measurements() == []
+    good = packet(0x24, b'D6  14', response=True)
+    parser.feed(raw(good[:-3] + b'00\r'))
+    assert parser.drain_measurements() == []

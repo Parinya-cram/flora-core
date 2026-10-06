@@ -12,7 +12,7 @@
   * { box-sizing:border-box } body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif }
   header { padding:18px 24px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:baseline; flex-wrap:wrap }
   header h1 { font-size:18px; margin:0 } header span { color:var(--muted) }
-  main { padding:20px 24px; display:grid; gap:18px; max-width:1200px }
+  main { padding:20px 24px; display:grid; gap:18px; max-width:1200px; align-content:start }
   section { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px; overflow-x:auto }
   h2 { font-size:14px; margin:0 0 12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted) }
   table { width:100%; border-collapse:collapse } th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top }
@@ -24,22 +24,90 @@
   form.lic { display:flex; gap:8px; flex-wrap:wrap; align-items:end; margin-top:8px } form.lic label { display:grid; font-size:12px; color:var(--muted) }
   form.lic input { width:90px; padding:4px 6px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--ink) }
   pre { margin:0; white-space:pre-wrap; font:12px ui-monospace,Menlo,monospace } code { font:12px ui-monospace,Menlo,monospace; word-break:break-all }
+  .layout { display:grid; grid-template-columns:200px minmax(0,1fr); min-height:calc(100vh - 62px) }
+  nav.tabs { border-right:1px solid var(--line); padding:16px 10px; display:flex; flex-direction:column; gap:2px; position:sticky; top:0; align-self:start }
+  nav.tabs button { all:unset; cursor:pointer; padding:8px 12px; border-radius:8px; color:var(--muted); display:flex; justify-content:space-between; gap:8px }
+  nav.tabs button:hover { background:var(--chip); color:var(--ink) }
+  nav.tabs button[aria-selected="true"] { background:var(--chip); color:var(--ink); font-weight:600; box-shadow:inset 3px 0 0 var(--accent) }
+  nav.tabs button:focus-visible { outline:2px solid var(--accent); outline-offset:1px }
+  nav.tabs .badge { font-size:11px; padding:0 7px; border-radius:999px; background:var(--panel); border:1px solid var(--line) }
+  nav.tabs .badge.warn { color:var(--warn); border-color:currentColor } nav.tabs .badge.bad { color:var(--bad); border-color:currentColor }
+  [data-tab][hidden] { display:none !important }
+  @media (max-width:720px) {
+    .layout { grid-template-columns:1fr }
+    nav.tabs { position:static; flex-direction:row; overflow-x:auto; border-right:0; border-bottom:1px solid var(--line); padding:8px 16px }
+    nav.tabs button { white-space:nowrap } nav.tabs button[aria-selected="true"] { box-shadow:inset 0 -3px 0 var(--accent) }
+    main { padding:16px !important }
+  }
   .bar { height:6px; background:var(--chip); border-radius:3px; width:120px; margin-top:4px } .bar i { display:block; height:100%; border-radius:3px; background:var(--accent) }
+  /* System menu: bottom-of-rail entry point to settings, same on every Flora app. */
+  .sysmenu { margin-top:auto; position:relative; padding-top:10px; border-top:1px solid var(--line) }
+  nav .sysbtn { display:flex; align-items:center; gap:10px; width:100%; border:0; border-radius:7px; background:none; padding:8px 10px;
+            font-size:13px; color:var(--muted); text-align:left; cursor:pointer }
+  nav .sysbtn:hover, nav .sysbtn[aria-expanded="true"], nav .sysbtn.active { background:var(--chip); color:var(--ink) }
+  nav .sysbtn.active { font-weight:600; box-shadow:inset 3px 0 0 var(--accent) }
+  nav .sysbtn svg, .syspop svg { width:18px; height:18px; flex:none; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round }
+  .syspop { position:absolute; left:0; bottom:calc(100% + 6px); z-index:50; width:240px; padding:6px; background:var(--panel);
+            border:1px solid var(--line); border-radius:10px; box-shadow:0 12px 32px rgba(0,0,0,.18) }
+  .syspop[hidden] { display:none }
+  .syspop .who { padding:6px 10px 8px; margin-bottom:4px; border-bottom:1px solid var(--line) }
+  .syspop .who b { display:block; font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted) }
+  .syspop .who span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px }
+  nav .syspop button { display:flex; align-items:center; gap:10px; width:100%; border:0; border-radius:7px; background:none;
+                   padding:7px 10px; font-size:13px; color:var(--ink); text-align:left; cursor:pointer }
+  nav .syspop button:hover { background:var(--chip) } .syspop button.danger { color:var(--bad) }
+  @media (max-width:760px) {
+    .sysmenu { margin:0 0 0 auto; padding:0; border:0 } nav .sysbtn span { display:none }
+    .syspop { left:auto; right:0; bottom:auto; top:calc(100% + 6px) }
+  }
+  nav.tabs { min-height:calc(100vh - 64px) } nav .syspop button[aria-selected="true"] { background:var(--chip); font-weight:600 }
+  @media (max-width:720px) { nav.tabs { min-height:0 } }
 </style>
 </head>
 <body>
-<header><h1>Flora Root</h1><span>Cloud control plane · tenants, licenses, global configuration</span><span id="ts" class="muted"></span></header>
+<header><h1>Flora Root</h1><span>Cloud control plane · tenants, licenses, releases, global configuration</span><span id="ts" class="muted"></span></header>
+<div class="layout">
+<nav class="tabs" role="tablist" aria-label="Root sections">
+  <button role="tab" data-go="tenants">Tenants<span class="badge" hidden></span></button>
+  <button role="tab" data-go="releases">Releases<span class="badge" hidden></span></button>
+  <div class="sysmenu">
+    <div class="syspop" id="syspop" role="menu" hidden>
+      <div class="who"><b>Flora Root</b><span class="muted">Settings</span></div>
+      <button role="tab" data-go="config">Global configuration<span class="badge" hidden></span></button>
+      <button role="tab" data-go="keys">Signing key<span class="badge" hidden></span></button>
+    </div>
+    <button class="sysbtn" id="sysbtn" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.6a1.7 1.7 0 0 1 3.4 0l.2 1.1a7 7 0 0 1 1.7 1l1.1-.4a1.7 1.7 0 0 1 2 .8l.2.3a1.7 1.7 0 0 1-.4 2.2l-.9.7a7 7 0 0 1 0 2l.9.7a1.7 1.7 0 0 1 .4 2.2l-.2.3a1.7 1.7 0 0 1-2 .8l-1.1-.4a7 7 0 0 1-1.7 1l-.2 1.1a1.7 1.7 0 0 1-3.4 0l-.2-1.1a7 7 0 0 1-1.7-1l-1.1.4a1.7 1.7 0 0 1-2-.8l-.2-.3a1.7 1.7 0 0 1 .4-2.2l.9-.7a7 7 0 0 1 0-2l-.9-.7a1.7 1.7 0 0 1-.4-2.2l.2-.3a1.7 1.7 0 0 1 2-.8l1.1.4a7 7 0 0 1 1.7-1Z"/><circle cx="12" cy="12" r="2.6"/></svg><span>System</span></button>
+  </div>
+</nav>
 <main>
-  <section><h2>Tenants</h2><div id="tenants">Loading…</div></section>
-  <section><h2>Global configuration</h2><div id="config"></div></section>
-  <section><h2>Signing key</h2><div id="keys"></div></section>
+  <section data-tab="tenants"><h2>Tenants</h2><div id="tenants">Loading…</div></section>
+  <section data-tab="releases"><h2>Releases</h2><div id="releases"></div>
+    <div class="muted" style="margin-top:8px">Root CI builds every image and pushes it to <code id="registry"></code>, then publishes a release
+    (<code>flora-root/scripts/publish_release.py</code>). Each hospital's Haber mirrors the digests and the hospital approves the rollout.</div></section>
+  <section data-tab="config"><h2>Global configuration</h2><div id="config"></div></section>
+  <section data-tab="keys"><h2>Signing key</h2><div id="keys"></div></section>
 </main>
+</div>
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
 const when = (ms) => ms ? new Date(ms).toLocaleString() : "—";
 const ago = (ms) => { if (!ms) return "never"; const s = Math.round((Date.now() - ms) / 1000); return s < 90 ? `${s}s ago` : `${Math.round(s / 60)} min ago`; };
 let editing = null;
+// Left tab navigation: one tab visible at a time; remembered in the URL hash.
+const tabButtons = [...document.querySelectorAll("nav.tabs button[data-go]")];
+function showTab(name) {
+  if (!tabButtons.some((b) => b.dataset.go === name)) name = "tenants";
+  tabButtons.forEach((b) => b.setAttribute("aria-selected", String(b.dataset.go === name)));
+  document.querySelectorAll("main [data-tab]").forEach((s) => { s.hidden = s.dataset.tab !== name; });
+  document.getElementById("sysbtn").classList.toggle("active", !!document.querySelector(`#syspop [data-go="${name}"]`));
+  if (location.hash.slice(1) !== name) history.replaceState(null, "", "#" + name);
+}
+tabButtons.forEach((b) => b.addEventListener("click", () => showTab(b.dataset.go)));
+window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
+showTab(location.hash.slice(1));
+function badge(tab, text, cls = "") { const el = document.querySelector(`nav.tabs [data-go="${tab}"] .badge`); if (el) { el.textContent = text ?? ""; el.className = "badge " + cls; el.hidden = !text; } }
+
 
 function usage(used, max) {
   const pct = max ? Math.min(100, Math.round(100 * used / max)) : 0;
@@ -50,7 +118,7 @@ function usage(used, max) {
 async function load() {
   const data = await (await fetch("api/v1/overview")).json();
   $("ts").textContent = "updated " + new Date(data.server_ts).toLocaleTimeString();
-  $("tenants").innerHTML = `<table><tr><th>Tenant</th><th>License</th><th>Leaves</th><th>Gateways</th><th>Gateway devices</th><th>Canopy check-in</th><th></th></tr>${
+  $("tenants").innerHTML = `<table><tr><th>Tenant</th><th>License</th><th>Leaves</th><th>Gateways</th><th>Gateway devices</th><th>Canopy check-in</th><th>Running releases</th><th></th></tr>${
     data.tenants.map((t) => {
       const u = t.usage || {};
       const expired = t.revoked_at || t.expires_at < Date.now();
@@ -63,8 +131,10 @@ async function load() {
         <td class="num">${usage(u.leaves, t.max_leaves)}</td><td class="num">${usage(u.gateways, t.max_gateways)}</td>
         <td class="num">${usage(u.gateway_devices, t.max_gateway_devices)}</td>
         <td><span class="${online ? "ok" : "warn"}">${ago(t.last_seen_at)}</span><div class="muted">${esc(t.canopy_version || "")}</div></td>
+        <td><span class="chip">channel ${esc(t.release_channel)}</span>${(u.nodes || []).map((n) =>
+          `<div><b>${esc(n.node_id)}</b> <code>${esc(n.release_id || "unmanaged")}</code>${n.state && n.state !== "current" ? ` <span class="warn">${esc(n.state)}</span>` : ""}</div>`).join("")}</td>
         <td><button onclick="edit('${esc(t.tenant_id)}')">Edit license</button> <button class="danger" onclick="revoke('${esc(t.tenant_id)}')">Revoke</button></td></tr>
-        ${editing === t.tenant_id ? `<tr><td colspan="7"><form class="lic" onsubmit="return save(event,'${esc(t.tenant_id)}')">
+        ${editing === t.tenant_id ? `<tr><td colspan="8"><form class="lic" onsubmit="return save(event,'${esc(t.tenant_id)}')">
           <label>Max leaves<input name="max_leaves" type="number" value="${t.max_leaves}"></label>
           <label>Max gateways<input name="max_gateways" type="number" value="${t.max_gateways}"></label>
           <label>Max gateway devices<input name="max_gateway_devices" type="number" value="${t.max_gateway_devices}"></label>
@@ -72,6 +142,16 @@ async function load() {
           <button class="primary">Issue new bundle</button> <button type="button" onclick="editing=null;load()">Cancel</button></form>
           <div class="muted">Canopy picks up the new bundle on its next sync; gateways get their share on their next check-in.</div></td></tr>` : ""}`;
     }).join("")}</table>`;
+  $("registry").textContent = data.registry;
+  badge("tenants", String(data.tenants.length));
+  badge("releases", String(data.releases.filter((r) => !r.withdrawn_at).length));
+  $("releases").innerHTML = data.releases.length ? `<table><tr><th>Release</th><th>Channel</th><th>Images</th><th>Device types</th><th>Published</th><th></th></tr>${
+    data.releases.map((r) => `<tr class="${r.withdrawn_at ? "muted" : ""}"><td><b>${esc(r.component)}</b> ${esc(r.version)}<div class="muted">${esc(r.notes || "")}</div></td>
+      <td><span class="chip">${esc(r.channel)}</span></td>
+      <td>${Object.entries(r.services).map(([k, v]) => `<div>${esc(k)} <code>${esc(v.repository)}@${esc(v.digest.slice(7, 19))}</code></div>`).join("")}</td>
+      <td class="num">${r.device_types || "—"}</td><td>${when(r.created_at)}</td>
+      <td>${r.withdrawn_at ? `withdrawn ${when(r.withdrawn_at)}` : `<button class="danger" onclick="withdraw('${esc(r.release_id)}')">Withdraw</button>`}</td></tr>`).join("")}</table>`
+    : `<span class="muted">No releases yet.</span>`;
   window.tenants = Object.fromEntries(data.tenants.map((t) => [t.tenant_id, t]));
   $("config").innerHTML = `<table>${data.global_config.map((c) => `<tr><td><b>${esc(c.key)}</b></td><td><pre>${esc(JSON.stringify(c.value, null, 2))}</pre></td><td class="muted">${when(c.updated_at)}</td></tr>`).join("")}</table>`;
   $("keys").innerHTML = data.signing_keys.map((k) => `<div><b>${esc(k.key_id)}</b> · Ed25519 · created ${when(k.created_at)}</div><code>${esc(k.public_raw)}</code>`).join("");
@@ -91,7 +171,20 @@ async function revoke(id) {
   if (!confirm(`Revoke the current license for ${id}? Its gateways stop their device parsers on the next sync.`)) return;
   await fetch(`api/v1/tenants/${id}/license/revoke`, { method: "POST" }); load();
 }
+async function withdraw(id) {
+  if (!confirm(`Withdraw ${id}? Hospitals stop seeing it; nodes already running it keep running until another release is approved.`)) return;
+  const r = await fetch(`api/v1/releases/${id}/withdraw`, { method: "POST" }); if (!r.ok) alert(await r.text()); load();
+}
 load(); setInterval(() => { if (!editing) load(); }, 5000);
+// ---------------------------------------------------------------- system menu
+(() => {
+  const button = document.getElementById("sysbtn"), menu = document.getElementById("syspop");
+  const set = (open) => { menu.hidden = !open; button.setAttribute("aria-expanded", String(open)); };
+  button.addEventListener("click", () => set(menu.hidden));
+  menu.addEventListener("click", (e) => { if (e.target.closest("button")) set(false); });
+  document.addEventListener("mousedown", (e) => { if (!menu.hidden && !e.target.closest(".sysmenu")) set(false); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") set(false); });
+})();
 </script>
 </body>
 </html>

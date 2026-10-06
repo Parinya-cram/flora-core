@@ -8,6 +8,7 @@ export type CaseStatus =
       status: "ACTIVE" | "DISCHARGED" | "ARCHIVED";
       case_id: number;
       hn: string;
+      admission_number?: string | null;
       start_time: number;
       discharge_time?: number;
       admission_source?: AdmissionSource;

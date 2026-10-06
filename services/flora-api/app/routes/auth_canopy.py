@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from psycopg import Connection
 from pydantic import BaseModel
 
+from .. import central_auth
 from ..database import connection
 from .auth_leaf import attach_entitlements, public_user as shared_public_user
 
@@ -104,24 +105,7 @@ def login(payload: LoginRequest, database: Connection = Depends(connection)) -> 
     username = payload.username.strip()
     if not username or not payload.password:
         raise HTTPException(status_code=400, detail="username and password are required")
-    user = database.execute(
-        """
-        SELECT id, username, password_salt, password_hash, name, role,
-               theme_mode, theme_color, language_code, staff_directory_id,
-               parameter_preferences, report_preferences, must_change_password,
-               is_active
-        FROM auth_user
-        WHERE lower(username) = lower(%s)
-        LIMIT 1
-        """,
-        (username,),
-    ).fetchone()
-    if (
-        user is None
-        or not user["is_active"]
-        or not verify_password(payload.password, user["password_salt"], user["password_hash"])
-    ):
-        raise HTTPException(status_code=401, detail="invalid username or password")
+    user = central_auth.authenticate(database, username, payload.password)
     user = attach_entitlements(database, user)
     token, expires_at = create_token(user)
     return {
@@ -137,7 +121,7 @@ def whoami(request: Request, database: Connection = Depends(connection)) -> dict
     user = database.execute(
         """SELECT id,username,name,role,theme_mode,theme_color,language_code,
                   staff_directory_id,parameter_preferences,report_preferences,
-                  must_change_password,is_active
+                  must_change_password,is_active,auth_source,all_units,admin_pin_hash
            FROM auth_user WHERE id=%s LIMIT 1""",
         (payload["sub"],),
     ).fetchone()

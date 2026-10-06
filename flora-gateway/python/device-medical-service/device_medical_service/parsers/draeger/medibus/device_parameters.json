@@ -1,0 +1,2873 @@
+{
+  "catalog_version": "medibus-legacy-reference@1",
+  "source": "Vector/medibus/VSCaptureDrgVent-master/VSCaptureDrgVent-master/Class2.cs",
+  "notice": "Legacy reference dictionary, not the complete manufacturer profile. Null name/unit means not established. Flora conversion rules remain in flora_mapping.json.",
+  "parameters": {
+    "24:00": {
+      "source_symbol": "Accumulated_air_consumption_of_the_device_per_case",
+      "description": "Accumulated air consumption of the device per case",
+      "source_definition": "Air cons  L",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:01": {
+      "source_symbol": "Accumulated_N2O_consumption_of_the_device_per_case",
+      "description": "Accumulated N2O consumption of the device per case",
+      "source_definition": "N2O Cons  L",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:03": {
+      "source_symbol": "Expiratory_minute_volume",
+      "description": "Expiratory minute volume",
+      "source_definition": "MVe L/min",
+      "name": "MVe",
+      "unit": "L/min",
+      "evidence": "legacy-vscapture; not manufacturer-verified",
+      "name_evidence": "Draeger Communicate Protocol.pdf, printed page 19; name/code only"
+    },
+    "24:04": {
+      "source_symbol": "Accumulated_O2_consumption_of_the_device_per_case",
+      "description": "Accumulated O2 consumption of the device per case",
+      "source_definition": "O2 cons  L",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:05": {
+      "source_symbol": "Airway_pressure",
+      "description": "Airway pressure",
+      "source_definition": "Paw mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:06": {
+      "source_symbol": "Inspiratory_minute_volume",
+      "description": "Inspiratory minute volume",
+      "source_definition": "MVi L/min Carina",
+      "name": "MVi",
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified",
+      "name_evidence": "Draeger Communicate Protocol.pdf, printed page 19; name/code only"
+    },
+    "24:07": {
+      "source_symbol": "Dynamic_compliance",
+      "description": "Dynamic compliance",
+      "source_definition": "Cdyn L/bar",
+      "name": null,
+      "unit": "L/bar",
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:08": {
+      "source_symbol": "Resistance",
+      "description": "Resistance",
+      "source_definition": "R mbar/(L/s)",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:09": {
+      "source_symbol": "CO2_production",
+      "description": "CO2 production",
+      "source_definition": "V'CO2 mL/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:0A": {
+      "source_symbol": "Spontaneous_expiratory_minute_volume",
+      "description": "Spontaneous expiratory minute volume",
+      "source_definition": "MVespon L/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:0B": {
+      "source_symbol": "Patient_airway_resistance",
+      "description": "Patient airway resistance",
+      "source_definition": "Rpat mbar/(L/s)",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:0D": {
+      "source_symbol": "Mandatory_expiratory_minute_volume",
+      "description": "Mandatory expiratory minute volume",
+      "source_definition": "MVemand L/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:0E": {
+      "source_symbol": "Increase_of_measured_CO2_value_in_phase_III_of_capnogram",
+      "description": "Increase of measured CO2 value in phase III of capnogram",
+      "source_definition": "CO2 slope mmHg/L",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:0F": {
+      "source_symbol": "O2_central_gas_supply_pressure",
+      "description": "O2 central gas supply pressure",
+      "source_definition": "O2-CGS mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:10": {
+      "source_symbol": "Increase_of_measured_CO2_value_in_phase_III_of_capnogram_KPa_L",
+      "description": "Increase of measured CO2 value in phase III of capnogram KPa L",
+      "source_definition": "CO2 slope kPa/L",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:11": {
+      "source_symbol": "Increase_of_measured_CO2_value_in_phase_III_of_capnogram_Vol_Percent_L",
+      "description": "Increase of measured CO2 value in phase III of capnogram Vol Percent L",
+      "source_definition": "CO2 slope Vol%/L",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:12": {
+      "source_symbol": "Average_device_flow",
+      "description": "Average device flow",
+      "source_definition": "Flow device L/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:16": {
+      "source_symbol": "Mandatory_tidal_volume",
+      "description": "Mandatory tidal volume",
+      "source_definition": "VTmand mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:19": {
+      "source_symbol": "ST_deviation_in_lead_I",
+      "description": "ST deviation in lead I",
+      "source_definition": "STI  mm",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:1A": {
+      "source_symbol": "ST_deviation_in_lead_II",
+      "description": "ST deviation in lead II",
+      "source_definition": "STII mm",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:1B": {
+      "source_symbol": "Accumulated_halothane_consumption_of_device",
+      "description": "Accumulated halothane consumption of device",
+      "source_definition": "Hal cons mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:1C": {
+      "source_symbol": "Accumulated_enflurane_consumption_of_device",
+      "description": "Accumulated enflurane consumption of device",
+      "source_definition": "Enf cons mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:1D": {
+      "source_symbol": "Accumulated_isoflurane_consumption_of_device",
+      "description": "Accumulated isoflurane consumption of device",
+      "source_definition": "Iso cons mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:1E": {
+      "source_symbol": "Accumulated_desflurane_consumption_of_device",
+      "description": "Accumulated desflurane consumption of device",
+      "source_definition": "Des cons mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:1F": {
+      "source_symbol": "Accumulated_sevoflurane_consumption_of_device",
+      "description": "Accumulated sevoflurane consumption of device",
+      "source_definition": "Sev cons mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:21": {
+      "source_symbol": "Cardiac_index",
+      "description": "Cardiac index",
+      "source_definition": "CI L/min/m^2",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:22": {
+      "source_symbol": "Stroke_volume",
+      "description": "Stroke volume",
+      "source_definition": "SV mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:23": {
+      "source_symbol": "Stroke_index",
+      "description": "Stroke index",
+      "source_definition": "SVI mL/m^2",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:24": {
+      "source_symbol": "Left_ventricular_stroke_work_index",
+      "description": "Left ventricular stroke work index",
+      "source_definition": "LVSWI g*m/m^2",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:25": {
+      "source_symbol": "Right_ventricular_stroke_work_index",
+      "description": "Right ventricular stroke work index",
+      "source_definition": "RVSWI g*m/m^2",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:26": {
+      "source_symbol": "Systemic_vascular_resistance",
+      "description": "Systemic vascular resistance",
+      "source_definition": "SVR dyn*s/cm5",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:27": {
+      "source_symbol": "Accumulated_gas_consumption_of_the_device",
+      "description": "Accumulated gas consumption of the device",
+      "source_definition": "Gas cons L",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:28": {
+      "source_symbol": "Therapy_case_duration",
+      "description": "Therapy case duration",
+      "source_definition": "Tcase min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:2A": {
+      "source_symbol": "Correlation_factor",
+      "description": "Correlation factor",
+      "source_definition": "r2 no unit",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:2B": {
+      "source_symbol": "Left_ventricular_pressure_diastolic",
+      "description": "Left ventricular pressure diastolic",
+      "source_definition": "LV D mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:2C": {
+      "source_symbol": "Left_ventricular_pressure_systolic",
+      "description": "Left ventricular pressure systolic",
+      "source_definition": "LV S mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:2D": {
+      "source_symbol": "Left_ventricular_pressure_mean",
+      "description": "Left ventricular pressure mean",
+      "source_definition": "LV M mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:2E": {
+      "source_symbol": "Right_ventricular_pressure_diastolic",
+      "description": "Right ventricular pressure diastolic",
+      "source_definition": "RV D mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:2F": {
+      "source_symbol": "Right_ventricular_pressure_systolic",
+      "description": "Right ventricular pressure systolic",
+      "source_definition": "RV S mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:30": {
+      "source_symbol": "Right_ventricular_pressure_mean",
+      "description": "Right ventricular pressure mean",
+      "source_definition": "RV M mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:31": {
+      "source_symbol": "General_diastolic_pressure_channel_1",
+      "description": "General diastolic pressure channel 1",
+      "source_definition": "GP1 D mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:32": {
+      "source_symbol": "General_systolic_pressure_channel_1",
+      "description": "General systolic pressure channel 1",
+      "source_definition": "GP1 S mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:33": {
+      "source_symbol": "General_mean_pressure_channel_1",
+      "description": "General mean pressure channel 1",
+      "source_definition": "GP1 M mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:34": {
+      "source_symbol": "General_diastolic_pressure_channel_2",
+      "description": "General diastolic pressure channel 2",
+      "source_definition": "GP2 D mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:35": {
+      "source_symbol": "General_systolic_pressure_channel_2",
+      "description": "General systolic pressure channel 2",
+      "source_definition": "GP2 S mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:36": {
+      "source_symbol": "General_mean_pressure_channel_2",
+      "description": "General mean pressure channel 2",
+      "source_definition": "GP2 M mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:37": {
+      "source_symbol": "Intracranial_pressure",
+      "description": "Intracranial pressure",
+      "source_definition": "ICP mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:38": {
+      "source_symbol": "Cerebral_perfusion_pressure",
+      "description": "Cerebral perfusion pressure",
+      "source_definition": "CPP mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:39": {
+      "source_symbol": "Left_atrial_pressure",
+      "description": "Left atrial pressure",
+      "source_definition": "LA mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:3C": {
+      "source_symbol": "Mean_dynamic_compliance",
+      "description": "Mean dynamic compliance",
+      "source_definition": "Cdyn mean L/bar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:50": {
+      "source_symbol": "Inspiratory_halothane_concentration",
+      "description": "Inspiratory halothane concentration",
+      "source_definition": "inHal kPa",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:51": {
+      "source_symbol": "Endtidal_halothane_concentration",
+      "description": "Endtidal halothane concentration",
+      "source_definition": "etHal kPa",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:52": {
+      "source_symbol": "Inspiratory_enflurane_concentration",
+      "description": "Inspiratory enflurane concentration",
+      "source_definition": "inEnf kPa",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:53": {
+      "source_symbol": "Endtidal_enflurane_concentration",
+      "description": "Endtidal enflurane concentration",
+      "source_definition": "etEnf kPa",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:54": {
+      "source_symbol": "Inspiratory_isoflurane_concentration",
+      "description": "Inspiratory isoflurane concentration",
+      "source_definition": "inIso kPa",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:55": {
+      "source_symbol": "Endtidal_isoflurane_concentration",
+      "description": "Endtidal isoflurane concentration",
+      "source_definition": "etIso kPa",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:56": {
+      "source_symbol": "Inspiratory_desflurane_concentration",
+      "description": "Inspiratory desflurane concentration",
+      "source_definition": "inDes kPa",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:57": {
+      "source_symbol": "Endtidal_desflurane_concentration",
+      "description": "Endtidal desflurane concentration",
+      "source_definition": "etDes kPa",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:58": {
+      "source_symbol": "Inspiratory_sevoflurane_concentration",
+      "description": "Inspiratory sevoflurane concentration",
+      "source_definition": "inSev kPa",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:59": {
+      "source_symbol": "Endtidal_sevoflurane_concentration",
+      "description": "Endtidal sevoflurane concentration",
+      "source_definition": "etSev kPa",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:5A": {
+      "source_symbol": "Inspiratory_concentration_of_primary_agent",
+      "description": "Inspiratory concentration of primary agent",
+      "source_definition": "kPa",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:5B": {
+      "source_symbol": "Endtidal_concentration_of_primary_agent",
+      "description": "Endtidal concentration of primary agent",
+      "source_definition": "kPa",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:5C": {
+      "source_symbol": "Inspiratory_concentration_of_secondary_agent",
+      "description": "Inspiratory concentration of secondary agent",
+      "source_definition": "kPa",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:5D": {
+      "source_symbol": "Endtidal_concentration_of_secondary_agent",
+      "description": "Endtidal concentration of secondary agent",
+      "source_definition": "kPa",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:5E": {
+      "source_symbol": "ST_deviation_in_lead_III",
+      "description": "ST deviation in lead III",
+      "source_definition": "STIII mm",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:5F": {
+      "source_symbol": "ST_deviation_in_lead_aVL",
+      "description": "ST deviation in lead aVL",
+      "source_definition": "STaVL mm",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:60": {
+      "source_symbol": "ST_deviation_in_lead_aVF",
+      "description": "ST deviation in lead aVF",
+      "source_definition": "STaVF mm",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:61": {
+      "source_symbol": "ST_deviation_in_lead_aVR",
+      "description": "ST deviation in lead aVR",
+      "source_definition": "STaVR mm",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:62": {
+      "source_symbol": "ST_deviation_in_lead_V",
+      "description": "ST deviation in lead V",
+      "source_definition": "STV mm",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:63": {
+      "source_symbol": "ST_deviation_in_lead_V_plus",
+      "description": "ST deviation in lead V plus",
+      "source_definition": "STV+ mm",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:64": {
+      "source_symbol": "O2_uptake",
+      "description": "O2 uptake",
+      "source_definition": "V'O2 10 mL/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:65": {
+      "source_symbol": "Peripheral_skin_temperature",
+      "description": "Peripheral skin temperature",
+      "source_definition": "T Peri °C",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:66": {
+      "source_symbol": "Central_skin_temperature",
+      "description": "Central skin temperature",
+      "source_definition": "T Centr °C",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:68": {
+      "source_symbol": "Spontaneous_inspiratory_tidal_volume",
+      "description": "Spontaneous inspiratory tidal volume",
+      "source_definition": "VTispon mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:69": {
+      "source_symbol": "Plateau_time",
+      "description": "Plateau time",
+      "source_definition": "Tplat s",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:6A": {
+      "source_symbol": "Mattress_temperature",
+      "description": "Mattress temperature",
+      "source_definition": "T Matt °C",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:6B": {
+      "source_symbol": "Ambient_pressure",
+      "description": "Ambient pressure",
+      "source_definition": "Pamb mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:6C": {
+      "source_symbol": "Relative_humidity",
+      "description": "Relative humidity",
+      "source_definition": "Humidity %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:6D": {
+      "source_symbol": "Air_temperature",
+      "description": "Air temperature",
+      "source_definition": "T Air °C",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:6E": {
+      "source_symbol": "Radiant_warmer_power",
+      "description": "Radiant warmer power",
+      "source_definition": "Heater rad %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:6F": {
+      "source_symbol": "Spontaneous_inspiratory_time",
+      "description": "Spontaneous inspiratory time",
+      "source_definition": "Tispon s",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:71": {
+      "source_symbol": "Minimum_pressure",
+      "description": "Minimum pressure",
+      "source_definition": "Pmin mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:72": {
+      "source_symbol": "Occlusion_pressure_in_P01_maneuver",
+      "description": "Occlusion pressure in P01 maneuver",
+      "source_definition": "P0.1 mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:73": {
+      "source_symbol": "Mean_airway_pressure",
+      "description": "Mean airway pressure",
+      "source_definition": "Pmean mbar",
+      "name": null,
+      "unit": "mbar",
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:74": {
+      "source_symbol": "Plateau_pressure",
+      "description": "Plateau pressure",
+      "source_definition": "Pplat mbar",
+      "name": null,
+      "unit": "mbar",
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:76": {
+      "source_symbol": "Inspiratory_peak_flow",
+      "description": "Inspiratory peak flow",
+      "source_definition": "Flowipeak mL/s",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:78": {
+      "source_symbol": "Positive_endexpiratory_pressure",
+      "description": "Positive endexpiratory pressure",
+      "source_definition": "PEEP mbar",
+      "name": null,
+      "unit": "mbar",
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:79": {
+      "source_symbol": "Intrinsic_PEEP",
+      "description": "Intrinsic PEEP",
+      "source_definition": "PEEPi mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:7B": {
+      "source_symbol": "Mandatory_respiratory_rate",
+      "description": "Mandatory respiratory rate",
+      "source_definition": "RRmand 1/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:7C": {
+      "source_symbol": "Mandatory_minute_volume",
+      "description": "Mandatory minute volume",
+      "source_definition": "MVmand L/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:7D": {
+      "source_symbol": "Peak_inspiratory_pressure",
+      "description": "Peak inspiratory pressure",
+      "source_definition": "PIP mbar",
+      "name": null,
+      "unit": "mbar",
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:7E": {
+      "source_symbol": "Mandatory_tidal_volume_L",
+      "description": "Mandatory tidal volume L",
+      "source_definition": "VTmand L",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:7F": {
+      "source_symbol": "Spontaneous_tidal_volume",
+      "description": "Spontaneous tidal volume",
+      "source_definition": "VTspon L",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:81": {
+      "source_symbol": "Volume_trapped_in_the_lung_by_intrinsic_PEEP",
+      "description": "Volume trapped in the lung by intrinsic PEEP",
+      "source_definition": "Vtrap mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:83": {
+      "source_symbol": "Mandatory_expiratory_tidal_volume",
+      "description": "Mandatory expiratory tidal volume",
+      "source_definition": "VTemand mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:84": {
+      "source_symbol": "Spontaneous_expiratory_tidal_volume",
+      "description": "Spontaneous expiratory tidal volume",
+      "source_definition": "VTespon mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:85": {
+      "source_symbol": "Mandatory_inspiratory_tidal_volume",
+      "description": "Mandatory inspiratory tidal volume",
+      "source_definition": "VTimand mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:86": {
+      "source_symbol": "Tidal_volume_during_HFO",
+      "description": "Tidal volume during HFO",
+      "source_definition": "VThf mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:88": {
+      "source_symbol": "Tidal_volume",
+      "description": "Tidal volume",
+      "source_definition": "VT mL",
+      "name": "VT",
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified",
+      "name_evidence": "Draeger Communicate Protocol.pdf, printed page 19; name/code only"
+    },
+    "24:89": {
+      "source_symbol": "Serial_dead_space_volume",
+      "description": "Serial dead space volume",
+      "source_definition": "Vds mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:8A": {
+      "source_symbol": "Ratio_of_serial_dead_space_volume_to_expiratory_tidal_volume",
+      "description": "Ratio of serial dead space volume to expiratory tidal volume",
+      "source_definition": "Vds/VTe %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:8B": {
+      "source_symbol": "Inspiratory_tidal_volume",
+      "description": "Inspiratory tidal volume",
+      "source_definition": "VTi mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:8C": {
+      "source_symbol": "Noninvasive_blood_pressure_diastolic",
+      "description": "Noninvasive blood pressure diastolic",
+      "source_definition": "NIBP D mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:8D": {
+      "source_symbol": "Negative_inspiratory_force",
+      "description": "Negative inspiratory force",
+      "source_definition": "NIF mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:91": {
+      "source_symbol": "Noninvasive_blood_pressure_mean",
+      "description": "Noninvasive blood pressure mean",
+      "source_definition": "NIBP M mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:92": {
+      "source_symbol": "Time_since_last_noninvasive_blood_pressure_measurement",
+      "description": "Time since last noninvasive blood pressure measurement",
+      "source_definition": "Tnibp min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:96": {
+      "source_symbol": "Noninvasive_blood_pressure_systolic",
+      "description": "Noninvasive blood pressure systolic",
+      "source_definition": "NIBP S mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:9B": {
+      "source_symbol": "Cardiac_output",
+      "description": "Cardiac output",
+      "source_definition": "C.O. L/min 01.01",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:9C": {
+      "source_symbol": "Total_halothane_uptake",
+      "description": "Total halothane uptake",
+      "source_definition": "Hal tot mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:9D": {
+      "source_symbol": "Total_desflurane_uptake",
+      "description": "Total desflurane uptake",
+      "source_definition": "Des tot mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:9E": {
+      "source_symbol": "Total_isoflurane_uptake",
+      "description": "Total isoflurane uptake",
+      "source_definition": "Iso tot mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:9F": {
+      "source_symbol": "Total_sevoflurane_uptake",
+      "description": "Total sevoflurane uptake",
+      "source_definition": "Sev tot mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:A0": {
+      "source_symbol": "Total_enflurane_uptake",
+      "description": "Total enflurane uptake",
+      "source_definition": "Enf tot mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:A1": {
+      "source_symbol": "Pulmonary_arterial_pressure_diastolic",
+      "description": "Pulmonary arterial pressure diastolic",
+      "source_definition": "PA D mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:A2": {
+      "source_symbol": "Duration_of_phototherapy",
+      "description": "Duration of phototherapy",
+      "source_definition": "Dur PT h:min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:A3": {
+      "source_symbol": "Irradiance_during_phototherapy",
+      "description": "Irradiance during phototherapy",
+      "source_definition": "Irradiance PT µW/cm2/nm",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:A5": {
+      "source_symbol": "Central_venous_pressure",
+      "description": "Central venous pressure",
+      "source_definition": "CVP mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:A6": {
+      "source_symbol": "Pulmonary_arterial_pressure_mean",
+      "description": "Pulmonary arterial pressure mean",
+      "source_definition": "PA M mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:A7": {
+      "source_symbol": "Right_atrial_pressure",
+      "description": "Right atrial pressure",
+      "source_definition": "RA mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:AB": {
+      "source_symbol": "Pulmonary_arterial_pressure_systolic",
+      "description": "Pulmonary arterial pressure systolic",
+      "source_definition": "PA S mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:AC": {
+      "source_symbol": "MAC_multiple_derived_from_inspiratory_concentrations",
+      "description": "MAC multiple derived from inspiratory concentrations",
+      "source_definition": "inxMAC no unit",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:AD": {
+      "source_symbol": "MAC_multiple_derived_from_expiratory_concentrations",
+      "description": "MAC multiple derived from expiratory concentrations",
+      "source_definition": "xMAC no unit",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:AE": {
+      "source_symbol": "Inspiratory_desflurane_concentration_percent",
+      "description": "Inspiratory desflurane concentration percent",
+      "source_definition": "inDes %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:AF": {
+      "source_symbol": "Endtidal_desflurane_concentration_percent",
+      "description": "Endtidal desflurane concentration percent",
+      "source_definition": "etDes %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:B0": {
+      "source_symbol": "Inspiratory_sevoflurane_concentration_percent",
+      "description": "Inspiratory sevoflurane concentration percent",
+      "source_definition": "inSev %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:B1": {
+      "source_symbol": "Endtidal_sevoflurane_concentration_percent",
+      "description": "Endtidal sevoflurane concentration percent",
+      "source_definition": "etSev %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:B2": {
+      "source_symbol": "Leakage_of_the_breathing_system_mL_min",
+      "description": "Leakage of the breathing system mL min",
+      "source_definition": "",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:B3": {
+      "source_symbol": "Leakage_minute_volume_in_percent_of_inspiratory_minute_volume",
+      "description": "Leakage minute volume in percent of inspiratory minute volume",
+      "source_definition": "% leak %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:B4": {
+      "source_symbol": "Respiratory_rate_based_on_pressure_measurement",
+      "description": "Respiratory rate based on pressure measurement",
+      "source_definition": "RRp 1/min",
+      "name": "RRp",
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified",
+      "name_evidence": "Draeger Communicate Protocol.pdf, printed page 19; name/code only"
+    },
+    "24:B5": {
+      "source_symbol": "Spontaneous_respiratory_rate",
+      "description": "Spontaneous respiratory rate",
+      "source_definition": "RRspon 1/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:B6": {
+      "source_symbol": "Spontaneous_breathing_portion_of_minute_volume",
+      "description": "Spontaneous breathing portion of minute volume",
+      "source_definition": "% MVspon %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:B7": {
+      "source_symbol": "Spontaneous_minute_volume",
+      "description": "Spontaneous minute volume",
+      "source_definition": "MVspon L/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:B9": {
+      "source_symbol": "Minute_volume",
+      "description": "Minute volume",
+      "source_definition": "MV L/min",
+      "name": "MV",
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified",
+      "name_evidence": "Draeger Communicate Protocol.pdf, printed page 19; name/code only"
+    },
+    "24:BD": {
+      "source_symbol": "Apnea_duration",
+      "description": "Apnea duration",
+      "source_definition": "s",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:BE": {
+      "source_symbol": "Temperature_2",
+      "description": "Temperature 2",
+      "source_definition": "T2 °C",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:C0": {
+      "source_symbol": "Oxygen_concentration",
+      "description": "Oxygen concentration",
+      "source_definition": "O2 %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:C1": {
+      "source_symbol": "Airway_temperature",
+      "description": "Airway temperature",
+      "source_definition": "T Airw °C",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:C2": {
+      "source_symbol": "Skin_temperature_difference",
+      "description": "Skin temperature difference",
+      "source_definition": "?T Skin °C",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:C3": {
+      "source_symbol": "Temperature_1",
+      "description": "Temperature 1",
+      "source_definition": "T1 °C",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:C4": {
+      "source_symbol": "Inspiratory_expiratory_oxygen_concentration_difference",
+      "description": "Inspiratory expiratory oxygen concentration difference",
+      "source_definition": "?O2 %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:C5": {
+      "source_symbol": "Pulmonary_wedge_pressure",
+      "description": "Pulmonary wedge pressure",
+      "source_definition": "PWP mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:C6": {
+      "source_symbol": "Battery_capacity",
+      "description": "Battery capacity",
+      "source_definition": "%",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:C7": {
+      "source_symbol": "Insp_O2_accuracy",
+      "description": "Insp O2 accuracy",
+      "source_definition": "O2bias %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:C8": {
+      "source_symbol": "Arterial_diastolic_pressure",
+      "description": "Arterial diastolic pressure",
+      "source_definition": "ART D mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:C9": {
+      "source_symbol": "Rapid_shallow_breathing_index",
+      "description": "Rapid shallow breathing index",
+      "source_definition": "RSBI 1/min/L",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:CD": {
+      "source_symbol": "Arterial_mean_pressure",
+      "description": "Arterial mean pressure",
+      "source_definition": "ART M mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:D0": {
+      "source_symbol": "Respiratory_rate_of_triggered",
+      "description": "Respiratory rate of triggered",
+      "source_definition": "mandatory breaths",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:D2": {
+      "source_symbol": "Arterial_systolic_pressure",
+      "description": "Arterial systolic pressure",
+      "source_definition": "ART S mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:D5": {
+      "source_symbol": "Respiratory_rate_based_on_CO2_measurement",
+      "description": "Respiratory rate based on CO2 measurement",
+      "source_definition": "RRc 1/min",
+      "name": "RRc",
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified",
+      "name_evidence": "Draeger Communicate Protocol.pdf, printed page 19; name/code only"
+    },
+    "24:D6": {
+      "source_symbol": "Respiratory_rate",
+      "description": "Respiratory rate",
+      "source_definition": "RR 1/min",
+      "name": "RR",
+      "unit": "/min",
+      "evidence": "legacy-vscapture; not manufacturer-verified",
+      "name_evidence": "Draeger Communicate Protocol.pdf, printed page 19; name/code only"
+    },
+    "24:D7": {
+      "source_symbol": "Respiratory_rate_based_on_volume_flow_measurement",
+      "description": "Respiratory rate based on volume flow measurement",
+      "source_definition": "RRf 1/min",
+      "name": "RRf",
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified",
+      "name_evidence": "Draeger Communicate Protocol.pdf, printed page 19; name/code only"
+    },
+    "24:D9": {
+      "source_symbol": "Respiratory_rate_min",
+      "description": "Respiratory rate min",
+      "source_definition": "RR 1/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:DA": {
+      "source_symbol": "Inspiratory_CO2_concentration",
+      "description": "Inspiratory CO2 concentration",
+      "source_definition": "inCO2 %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:DB": {
+      "source_symbol": "Endtidal_CO2_concentration",
+      "description": "Endtidal CO2 concentration",
+      "source_definition": "etCO2 %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:DC": {
+      "source_symbol": "Heart_rate",
+      "description": "Heart rate",
+      "source_definition": "HR 1/min",
+      "name": null,
+      "unit": "/min",
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:DD": {
+      "source_symbol": "N2O_freshgas_flow",
+      "description": "N2O freshgas flow",
+      "source_definition": "FG V'N2O mL/min",
+      "name": null,
+      "unit": "mL/min",
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:DE": {
+      "source_symbol": "Air_freshgas_flow",
+      "description": "Air freshgas flow",
+      "source_definition": "FG V'Air mL/min",
+      "name": null,
+      "unit": "mL/min",
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:E1": {
+      "source_symbol": "Pulse_Rate",
+      "description": "Pulse Rate",
+      "source_definition": "PLSm1/min",
+      "name": null,
+      "unit": "/min",
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:E2": {
+      "source_symbol": "Oxygen_freshgas_flow",
+      "description": "Oxygen freshgas flow",
+      "source_definition": "FG V'O2 mL/min",
+      "name": null,
+      "unit": "mL/min",
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:E3": {
+      "source_symbol": "Endtidal_CO2_concentration_kPa",
+      "description": "Endtidal CO2 concentration kPa",
+      "source_definition": "etCO2 kPa",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:E4": {
+      "source_symbol": "Light_level",
+      "description": "Light level",
+      "source_definition": "Light lux",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:E5": {
+      "source_symbol": "Inspiratory_CO2_concentration_mmHg",
+      "description": "Inspiratory CO2 concentration mmHg",
+      "source_definition": "inCO2 mmHg",
+      "name": null,
+      "unit": "mmHg",
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:E6": {
+      "source_symbol": "Endtidal_CO2_concentration_mmHg",
+      "description": "Endtidal CO2 concentration mmHg",
+      "source_definition": "etCO2 mmHg",
+      "name": null,
+      "unit": "mmHg",
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:E7": {
+      "source_symbol": "Measured_IE_I_part",
+      "description": "Measured IE I part",
+      "source_definition": "no unit",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:E8": {
+      "source_symbol": "Measured_IE_E_part",
+      "description": "Measured IE E part",
+      "source_definition": "no unit",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:E9": {
+      "source_symbol": "Inspiratory_concentration_of_primary_agent_percent",
+      "description": "Inspiratory concentration of primary agent percent",
+      "source_definition": "%",
+      "name": null,
+      "unit": "%",
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:EA": {
+      "source_symbol": "Endtidal_concentration_of_primary_agent_percent",
+      "description": "Endtidal concentration of primary agent percent",
+      "source_definition": "%",
+      "name": null,
+      "unit": "%",
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:EB": {
+      "source_symbol": "Oxygen_saturation_from_pulse_oximetry",
+      "description": "Oxygen saturation from pulse oximetry",
+      "source_definition": "SpO2 %",
+      "name": null,
+      "unit": "%",
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:EC": {
+      "source_symbol": "Noise_level",
+      "description": "Noise level",
+      "source_definition": "Noise dB(A)",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:ED": {
+      "source_symbol": "Inspiratory_concentration_of_secondary_agent_percent",
+      "description": "Inspiratory concentration of secondary agent percent",
+      "source_definition": "%",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:EE": {
+      "source_symbol": "Endtidal_concentration_of_secondary_agent_percent",
+      "description": "Endtidal concentration of secondary agent percent",
+      "source_definition": "%",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:EF": {
+      "source_symbol": "Endtidal_oxygen_concentration_percent",
+      "description": "Endtidal oxygen concentration percent",
+      "source_definition": "etO2 %",
+      "name": null,
+      "unit": "%",
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:F0": {
+      "source_symbol": "Inspiratory_oxygen_fraction",
+      "description": "Inspiratory oxygen fraction",
+      "source_definition": "FiO2 %",
+      "name": null,
+      "unit": "%",
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:F1": {
+      "source_symbol": "Convective_heater_power",
+      "description": "Convective heater power",
+      "source_definition": "Heater conv %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:F2": {
+      "source_symbol": "Body_weight",
+      "description": "Body weight",
+      "source_definition": "BW g",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:F3": {
+      "source_symbol": "Weight_date",
+      "description": "Weight date",
+      "source_definition": "DDMM",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:F4": {
+      "source_symbol": "Inspiratory_halothane_concentration_percent",
+      "description": "Inspiratory halothane concentration percent",
+      "source_definition": "inHal %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:F5": {
+      "source_symbol": "Endtidal_halothane_concentration_percent",
+      "description": "Endtidal halothane concentration percent",
+      "source_definition": "etHal %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:F6": {
+      "source_symbol": "Inspiratory_enflurane_concentration_percent",
+      "description": "Inspiratory enflurane concentration percent",
+      "source_definition": "inEnf %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:F7": {
+      "source_symbol": "Endtidal_enflurane_concentration_percent",
+      "description": "Endtidal enflurane concentration percent",
+      "source_definition": "etEnf %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:F8": {
+      "source_symbol": "Inspiratory_isoflurane_concentration_percent",
+      "description": "Inspiratory isoflurane concentration percent",
+      "source_definition": "inIso %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:F9": {
+      "source_symbol": "Endtidal_isoflurane_concentration_percent",
+      "description": "Endtidal isoflurane concentration percent",
+      "source_definition": "etIso %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:FA": {
+      "source_symbol": "Weight_sample_age",
+      "description": "Weight sample age",
+      "source_definition": "h",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:FB": {
+      "source_symbol": "Inspiratory_N2O_concentration",
+      "description": "Inspiratory N2O concentration",
+      "source_definition": "inN2O %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:FC": {
+      "source_symbol": "Endtidal_N2O_concentration_percent",
+      "description": "Endtidal N2O concentration percent",
+      "source_definition": "etN2O %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "24:FF": {
+      "source_symbol": "Inspiratory_CO2_concentration_kPa",
+      "description": "Inspiratory CO2 concentration kPa",
+      "source_definition": "inCO2 kPa",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:00": {
+      "source_symbol": "Spontaneous_tidal_volume",
+      "description": "Spontaneous tidal volume",
+      "source_definition": "VTspon mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:03": {
+      "source_symbol": "Pressure_amplitude_during_HFO",
+      "description": "Pressure amplitude during HFO",
+      "source_definition": "Phf mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:04": {
+      "source_symbol": "Inspiratory_part_of_IE_ratio_during_spontaneous_breathing",
+      "description": "Inspiratory part of IE ratio during spontaneous breathing",
+      "source_definition": "I I:Espon  no unit",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:05": {
+      "source_symbol": "Expiratory_part_of_IE_ratio_during_spontaneous_breathing",
+      "description": "Expiratory part of IE ratio during spontaneous breathing",
+      "source_definition": "E  I:Espon  no unit",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:06": {
+      "source_symbol": "Elastance",
+      "description": "Elastance",
+      "source_definition": "E mbar/L",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:07": {
+      "source_symbol": "Time_constant",
+      "description": "Time constant",
+      "source_definition": "TC s",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:09": {
+      "source_symbol": "Expiratory_time_constant",
+      "description": "Expiratory time constant",
+      "source_definition": "TCe s",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:0A": {
+      "source_symbol": "Static_compliance",
+      "description": "Static compliance",
+      "source_definition": "Cstat mL/mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:0B": {
+      "source_symbol": "Ratio_of_compliance_during_the_last_20_percent_of_inspiration_over_dynamic_compliance",
+      "description": "Ratio of compliance during the last 20 percent of inspiration over dynamic compliance",
+      "source_definition": "C20/Cdyn no unit",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:0C": {
+      "source_symbol": "CO2_elimination_coefficient_during_HFO",
+      "description": "CO2 elimination coefficient during HFO",
+      "source_definition": "DCO2 10*mL^2/s",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:0D": {
+      "source_symbol": "Rapid_shallow_breathing_index",
+      "description": "Rapid shallow breathing index",
+      "source_definition": "RSBI 1/min/mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:0E": {
+      "source_symbol": "Trainoffour_ratio",
+      "description": "Trainoffour ratio",
+      "source_definition": "TOF Ratio %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:0F": {
+      "source_symbol": "Posttetanic_count",
+      "description": "Posttetanic count",
+      "source_definition": "PTC no unit",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:10": {
+      "source_symbol": "NMT_temperature",
+      "description": "NMT temperature",
+      "source_definition": "T NMT °C",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:11": {
+      "source_symbol": "Single_twitch_mode",
+      "description": "Single twitch mode",
+      "source_definition": "Single %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:12": {
+      "source_symbol": "Trainoffour_count",
+      "description": "Trainoffour count",
+      "source_definition": "TOF Cnt no unit",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:13": {
+      "source_symbol": "Bispectral_index",
+      "description": "Bispectral index",
+      "source_definition": "BIS no unit",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:14": {
+      "source_symbol": "Electromyogram_power",
+      "description": "Electromyogram power",
+      "source_definition": "EMG dB",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:15": {
+      "source_symbol": "Signal_quality_index",
+      "description": "Signal quality index",
+      "source_definition": "SQI %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:16": {
+      "source_symbol": "Burst_suppression_ratio_BIS",
+      "description": "Burst suppression ratio BIS",
+      "source_definition": "BSR %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:17": {
+      "source_symbol": "Spectral_edge_frequency_95",
+      "description": "Spectral edge frequency 95",
+      "source_definition": "SEF95 Hz",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:18": {
+      "source_symbol": "Burst_count__BIS",
+      "description": "Burst count  BIS",
+      "source_definition": "BCT no unit",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:19": {
+      "source_symbol": "Total_power__BIS",
+      "description": "Total power  BIS",
+      "source_definition": "EEG Pwr dB",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:1A": {
+      "source_symbol": "Goal_for_pressure_support_in_SmartCare",
+      "description": "Goal for pressure support in SmartCare",
+      "source_definition": "SC-Psupp goal mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:1B": {
+      "source_symbol": "Rated_pressure_support_by_internal_controller_in_SmartCare",
+      "description": "Rated pressure support by internal controller in SmartCare",
+      "source_definition": "SC-Psupp rated mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:1C": {
+      "source_symbol": "Duration_of_session__hours__in_SmartCare",
+      "description": "Duration of session  hours  in SmartCare",
+      "source_definition": "SC-duration h",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:1D": {
+      "source_symbol": "Duration_of_session__minutes__in_SmartCare",
+      "description": "Duration of session  minutes  in SmartCare",
+      "source_definition": "SC-duration min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:1E": {
+      "source_symbol": "Spontaneous_respiratory_rate_in_SmartCare",
+      "description": "Spontaneous respiratory rate in SmartCare",
+      "source_definition": "SC-RRspon 1/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:1F": {
+      "source_symbol": "Tidal_volume_in_SmartCare",
+      "description": "Tidal volume in SmartCare",
+      "source_definition": "SC-VT mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:21": {
+      "source_symbol": "Expiratory_tidal_volume",
+      "description": "Expiratory tidal volume",
+      "source_definition": "VTe mL",
+      "name": "VTe",
+      "unit": "mL",
+      "evidence": "legacy-vscapture; not manufacturer-verified",
+      "name_evidence": "Draeger Communicate Protocol.pdf, printed page 19; name/code only"
+    },
+    "2B:22": {
+      "source_symbol": "Inspiratory_tidal_volume",
+      "description": "Inspiratory tidal volume",
+      "source_definition": "VTi mL",
+      "name": "VTi",
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified",
+      "name_evidence": "Draeger Communicate Protocol.pdf, printed page 19; name/code only"
+    },
+    "2B:23": {
+      "source_symbol": "Endinspiratory_pressure",
+      "description": "Endinspiratory pressure",
+      "source_definition": "EIP mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:24": {
+      "source_symbol": "Effective_expiratory_time_during_APRVAutoRelease",
+      "description": "Effective expiratory time during APRVAutoRelease",
+      "source_definition": "Tlow s",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:25": {
+      "source_symbol": "CO2_production_volume_per_breath",
+      "description": "CO2 production volume per breath",
+      "source_definition": "VTCO2 mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:28": {
+      "source_symbol": "Endtidal_CO2_concentration_in_SmartCare",
+      "description": "Endtidal CO2 concentration in SmartCare",
+      "source_definition": "SC-etCO2 mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:29": {
+      "source_symbol": "ST_deviation_in_lead_I",
+      "description": "ST deviation in lead I",
+      "source_definition": "STI mm",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:2A": {
+      "source_symbol": "ST_deviation_in_lead_II",
+      "description": "ST deviation in lead II",
+      "source_definition": "STII mm",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:2B": {
+      "source_symbol": "ST_deviation_in_lead_III",
+      "description": "ST deviation in lead III",
+      "source_definition": "STIII mm",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:2C": {
+      "source_symbol": "ST_deviation_in_lead_aVL",
+      "description": "ST deviation in lead aVL",
+      "source_definition": "STaVL mm",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:2D": {
+      "source_symbol": "ST_deviation_in_lead_aVF",
+      "description": "ST deviation in lead aVF",
+      "source_definition": "STaVF mm",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:2E": {
+      "source_symbol": "ST_deviation_in_lead_aVR",
+      "description": "ST deviation in lead aVR",
+      "source_definition": "STaVR mm",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:2F": {
+      "source_symbol": "ST_deviation_in_lead_V",
+      "description": "ST deviation in lead V",
+      "source_definition": "STV mm",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:30": {
+      "source_symbol": "ST_deviation_in_lead_V_plus",
+      "description": "ST deviation in lead V plus",
+      "source_definition": "STV+ mm",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:31": {
+      "source_symbol": "Upper_pressure_level_during_APRV",
+      "description": "Upper pressure level during APRV",
+      "source_definition": "Phigh mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:32": {
+      "source_symbol": "Lower_pressure_level_during_APRV",
+      "description": "Lower pressure level during APRV",
+      "source_definition": "Plow mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:33": {
+      "source_symbol": "Spontaneous_mean_tidal_volume",
+      "description": "Spontaneous mean tidal volume",
+      "source_definition": "VTspon mean mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:34": {
+      "source_symbol": "Inspiratory_spontaneous_mean_Tidal_volume_",
+      "description": "Inspiratory spontaneous mean Tidal volume ",
+      "source_definition": "VTispon mean mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:35": {
+      "source_symbol": "Expiratory_spontaneous_mean_Tidal_Volume",
+      "description": "Expiratory spontaneous mean Tidal Volume",
+      "source_definition": "VTespon mean mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:36": {
+      "source_symbol": "Tidal_volume_per_kg_ideal_body_weight",
+      "description": "Tidal volume per kg ideal body weight",
+      "source_definition": "VT/IBW mL/kg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:37": {
+      "source_symbol": "Leakage_minute_volume",
+      "description": "Leakage minute volume",
+      "source_definition": "MVleak L/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:38": {
+      "source_symbol": "Inspiratory_time",
+      "description": "Inspiratory time",
+      "source_definition": "Ti s",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:39": {
+      "source_symbol": "Leakage_of_breathing_system",
+      "description": "Leakage of breathing system",
+      "source_definition": "bag and hoses in Man/Spont mL/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:3A": {
+      "source_symbol": "Compliance_of_the_breathing_system_including_patient_circuit",
+      "description": "Compliance of the breathing system including patient circuit",
+      "source_definition": "Cbs+hose mL/hPa",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:3B": {
+      "source_symbol": "Compliance_of_the_breathing_hoses",
+      "description": "Compliance of the breathing hoses",
+      "source_definition": "Chose mL/hPa",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:3C": {
+      "source_symbol": "Adaption_Time",
+      "description": "Adaption Time",
+      "source_definition": "Tadapt min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:3D": {
+      "source_symbol": "Applied_upper_limit_for_the_VT_target_range_in_Smart_Ventilation_Control",
+      "description": "Applied upper limit for the VT target range in Smart Ventilation Control",
+      "source_definition": "SVC-VT high mL/kg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:3E": {
+      "source_symbol": "Tidal_volume_calculated_by_Smart_Ventilation_Control",
+      "description": "Tidal volume calculated by Smart Ventilation Control",
+      "source_definition": "SVC-VT mL/kg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:3F": {
+      "source_symbol": "Applied_lower_limit_for_the_VT_target_range_in_Smart_Ventilation_Control",
+      "description": "Applied lower limit for the VT target range in Smart Ventilation Control",
+      "source_definition": "SVC-VT low mL/kg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:40": {
+      "source_symbol": "Applied_upper_limit_for_the_etCO2_target_range_in_Smart_Ventilation_Control",
+      "description": "Applied upper limit for the etCO2 target range in Smart Ventilation Control",
+      "source_definition": "SVC-etCO2 high mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:41": {
+      "source_symbol": "Endtidal_carbon_dioxide_concentration_calculated_by_Smart_Ventilation_Control",
+      "description": "Endtidal carbon dioxide concentration calculated by Smart Ventilation Control",
+      "source_definition": "SVC-etCO2 mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:42": {
+      "source_symbol": "Applied_lower_limit_for_the_etCO2_target_range_in_Smart_Ventilation_Control",
+      "description": "Applied lower limit for the etCO2 target range in Smart Ventilation Control",
+      "source_definition": "SVC-etCO2 low mmHg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:43": {
+      "source_symbol": "Total_respiratory_rate_in_Smart_Ventilation_Control",
+      "description": "Total respiratory rate in Smart Ventilation Control",
+      "source_definition": "SVCRRTotal 1/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:44": {
+      "source_symbol": "Spontaneous_respiratory_rate_set_by_Smart_Ventilation_Control",
+      "description": "Spontaneous respiratory rate set by Smart Ventilation Control",
+      "source_definition": "SVC-RRspon 1/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:45": {
+      "source_symbol": "Relative_pressure_support_above_PEEP_set_by_Smart_Ventilation_Control",
+      "description": "Relative pressure support above PEEP set by Smart Ventilation Control",
+      "source_definition": "SVC-Psupp mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:46": {
+      "source_symbol": "Inspiratory_pressure_set_by_Smart_Ventilation_Control",
+      "description": "Inspiratory pressure set by Smart Ventilation Control",
+      "source_definition": "SVCPInsp mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:47": {
+      "source_symbol": "Respiratory_rate_set_by_Smart_Ventilation_Control",
+      "description": "Respiratory rate set by Smart Ventilation Control",
+      "source_definition": "SVC-RR 1/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:48": {
+      "source_symbol": "Minimum_respiratory_rate_set_by_Smart_Ventilation_Control",
+      "description": "Minimum respiratory rate set by Smart Ventilation Control",
+      "source_definition": "SVC-RRmin 1/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:49": {
+      "source_symbol": "Inspiratory_time_set_by_Smart_Ventilation_Control",
+      "description": "Inspiratory time set by Smart Ventilation Control",
+      "source_definition": "SVC-TI s",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:4A": {
+      "source_symbol": "Flow_trigger_set_by_Smart_Ventilation_Control",
+      "description": "Flow trigger set by Smart Ventilation Control",
+      "source_definition": "SVC-Trigger L/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:4B": {
+      "source_symbol": "currently_active_ventilation_goal_of_Smart_Ventilation_Control",
+      "description": "currently active ventilation goal of Smart Ventilation Control",
+      "source_definition": "0: Controlled Ventilation  1: Augmented Ventilation 2: Encourage SB  3: Prep. Extubation",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:4C": {
+      "source_symbol": "Current_state_of_Smart_Ventilation_Control",
+      "description": "Current state of Smart Ventilation Control",
+      "source_definition": "SVC state 0:Off 1: On 2: Suspended",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:4D": {
+      "source_symbol": "VT_classification_by_Smart_Ventilation_Control",
+      "description": "VT classification by Smart Ventilation Control",
+      "source_definition": "SVC VT class 0: Unknown 1: very low 2: low 3: normal 4: high 5: very high",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:4E": {
+      "source_symbol": "EtCO2_classification_by_Smart_Ventilation_Control",
+      "description": "EtCO2 classification by Smart Ventilation Control",
+      "source_definition": "SVC etCO2 class 0: Unknown 1: severe hypoventilated 2: mild hypoventilated 3: normoventilated 4: mild hyperventilated 5: severe hyperventilated",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:4F": {
+      "source_symbol": "Therapy_phase_of_Smart_Ventilation_Control",
+      "description": "Therapy phase of Smart Ventilation Control",
+      "source_definition": "SVC phase 0: Adaptation 1: Ventilation Management 2: Recovery",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:50": {
+      "source_symbol": "Ventilation_mode_used_by_Smart_Ventilation_Control",
+      "description": "Ventilation mode used by Smart Ventilation Control",
+      "source_definition": "SVC mode 0: PC-BIPAP/PS 1: SPN-CPAP/ PS",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:51": {
+      "source_symbol": "Spontaneous_breathing_detection_of_Smart_Ventilation_Control",
+      "description": "Spontaneous breathing detection of Smart Ventilation Control",
+      "source_definition": "SVC spont. breathing 0: No 1: Yes",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:52": {
+      "source_symbol": "Resistance_of_the_breathing_hoses",
+      "description": "Resistance of the breathing hoses",
+      "source_definition": "Rhose mbar/ L/s",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "2B:53": {
+      "source_symbol": "Difference_between_inspired_and_expired_tidal_volume",
+      "description": "Difference between inspired and expired tidal volume",
+      "source_definition": "VT mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:01": {
+      "source_symbol": "Inspiratory_oxygen_fraction",
+      "description": "Inspiratory oxygen fraction",
+      "source_definition": "FiO2 %",
+      "name": null,
+      "unit": "%",
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:02": {
+      "source_symbol": "Inspiratory_flow",
+      "description": "Inspiratory flow",
+      "source_definition": "L/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:03": {
+      "source_symbol": "Time_interval_between_sighs",
+      "description": "Time interval between sighs",
+      "source_definition": "Interval sighs",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:04": {
+      "source_symbol": "Inspiratory_tidal_volume_L",
+      "description": "Inspiratory tidal volume L",
+      "source_definition": "VTi L",
+      "name": null,
+      "unit": "L",
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:05": {
+      "source_symbol": "Inspiratory_time",
+      "description": "Inspiratory time",
+      "source_definition": "Ti s",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:06": {
+      "source_symbol": "Expiratory_time",
+      "description": "Expiratory time",
+      "source_definition": "Te s",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:07": {
+      "source_symbol": "IE_I_part",
+      "description": "IE I part",
+      "source_definition": "",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:08": {
+      "source_symbol": "IE_E_part",
+      "description": "IE E part",
+      "source_definition": "",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:09": {
+      "source_symbol": "Respiratory_rate",
+      "description": "Respiratory rate",
+      "source_definition": "RR 1/min",
+      "name": null,
+      "unit": "/min",
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:0A": {
+      "source_symbol": "Minimal_provided_respiratory_rate",
+      "description": "Minimal provided respiratory rate",
+      "source_definition": "RRmin 1/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:0B": {
+      "source_symbol": "Positive_end_expiratory_pressure",
+      "description": "Positive end expiratory pressure",
+      "source_definition": "PEEP mbar",
+      "name": null,
+      "unit": "mbar",
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:0C": {
+      "source_symbol": "Additional_intermittent_PEEP_for_sighs",
+      "description": "Additional intermittent PEEP for sighs",
+      "source_definition": "intPEEPsigh",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:0D": {
+      "source_symbol": "Lower_pressure_level_during_APRV",
+      "description": "Lower pressure level during APRV",
+      "source_definition": "Plow mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:0E": {
+      "source_symbol": "Upper_pressure_level_during_APRV",
+      "description": "Upper pressure level during APRV",
+      "source_definition": "Phigh",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:0F": {
+      "source_symbol": "Time_of_lower_pressure_level_during_APRV",
+      "description": "Time of lower pressure level during APRV",
+      "source_definition": "Tlow s",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:10": {
+      "source_symbol": "Time_of_upper_pressure_level_during_APRV",
+      "description": "Time of upper pressure level during APRV",
+      "source_definition": "Thigh",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:11": {
+      "source_symbol": "Apnea_alarm_time",
+      "description": "Apnea alarm time",
+      "source_definition": "Tapn s",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:12": {
+      "source_symbol": "Pressure_amplitude_above_PEEP_in_Pressure_Support",
+      "description": "Pressure amplitude above PEEP in Pressure Support",
+      "source_definition": "Psupp mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:13": {
+      "source_symbol": "Pressure_limitation",
+      "description": "Pressure limitation",
+      "source_definition": "Pmax mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:14": {
+      "source_symbol": "Number_of_respiratory_cycles_per_sigh",
+      "description": "Number of respiratory cycles per sigh",
+      "source_definition": "phase",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:17": {
+      "source_symbol": "P01_repetition_interval",
+      "description": "P01 repetition interval",
+      "source_definition": "Interval P0.1 min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:18": {
+      "source_symbol": "Delay_for_minute_volume_higH",
+      "description": "Delay for minute volume higH",
+      "source_definition": "alarm",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:19": {
+      "source_symbol": "Delay_for_minute_volume_low_alarm",
+      "description": "Delay for minute volume low alarm",
+      "source_definition": "MVlow delay s",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:1A": {
+      "source_symbol": "Air_temperature",
+      "description": "Air temperature",
+      "source_definition": "T Air °C",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:1B": {
+      "source_symbol": "Skin_temperature",
+      "description": "Skin temperature",
+      "source_definition": "T Skin °C",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:1C": {
+      "source_symbol": "Relative_humidity",
+      "description": "Relative humidity",
+      "source_definition": "Humidity %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:24": {
+      "source_symbol": "Oxygen_concentration",
+      "description": "Oxygen concentration",
+      "source_definition": "O2 %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:27": {
+      "source_symbol": "Plateau_time_in_percent_of_inspiratory_time",
+      "description": "Plateau time in percent of inspiratory time",
+      "source_definition": "% Tplat %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:29": {
+      "source_symbol": "Flow_trigger_threshold",
+      "description": "Flow trigger threshold",
+      "source_definition": "Trigger  L/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:2A": {
+      "source_symbol": "Frequency_during_HFO",
+      "description": "Frequency during HFO",
+      "source_definition": "fhf Hz",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:2E": {
+      "source_symbol": "Pressure_rise_time",
+      "description": "Pressure rise time",
+      "source_definition": "Slope s",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:2F": {
+      "source_symbol": "Fresh_gas_flow",
+      "description": "Fresh gas flow",
+      "source_definition": "FG flow mL/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:3C": {
+      "source_symbol": "Flow_assist_during_PPS_ventilation",
+      "description": "Flow assist during PPS ventilation",
+      "source_definition": "Flow Assist (mbar*s/L)/10",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:3D": {
+      "source_symbol": "Volume_assist_during_PPS_ventilation",
+      "description": "Volume assist during PPS ventilation",
+      "source_definition": "Vol. Assist (mbar/L)/10",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:3E": {
+      "source_symbol": "Radiant_warmer_power",
+      "description": "Radiant warmer power",
+      "source_definition": "Heater rad %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:3F": {
+      "source_symbol": "Mattress_temperature",
+      "description": "Mattress temperature",
+      "source_definition": "T Matt °C",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:40": {
+      "source_symbol": "Inspiratory_tidal_volume_mL",
+      "description": "Inspiratory tidal volume mL",
+      "source_definition": "VTi mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:42": {
+      "source_symbol": "Respiratory_rate_for_apnea_ventilation",
+      "description": "Respiratory rate for apnea ventilation",
+      "source_definition": "RRapn 1/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:44": {
+      "source_symbol": "Tidal_volume_for_apnea_ventilation",
+      "description": "Tidal volume for apnea ventilation",
+      "source_definition": "VTapn L",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:45": {
+      "source_symbol": "Inspiratory_pressure",
+      "description": "Inspiratory pressure",
+      "source_definition": "Pinsp mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:46": {
+      "source_symbol": "Compensation_rate_during_ATC",
+      "description": "Compensation rate during ATC",
+      "source_definition": "% comp %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:47": {
+      "source_symbol": "Inner_diameter_of_the_endotracheal_tracheostoma_tube",
+      "description": "Inner diameter of the endotracheal tracheostoma tube",
+      "source_definition": "tube mm",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:49": {
+      "source_symbol": "Ratio_of_inspiration_to_expiration_IE_percent",
+      "description": "Ratio of inspiration to expiration IE percent",
+      "source_definition": "",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:4A": {
+      "source_symbol": "Age",
+      "description": "Age",
+      "source_definition": "",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:4B": {
+      "source_symbol": "Weight",
+      "description": "Weight",
+      "source_definition": "Wt kg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:4E": {
+      "source_symbol": "Disconnection_alarm_time",
+      "description": "Disconnection alarm time",
+      "source_definition": "Tdiscon",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:4F": {
+      "source_symbol": "Flow_Acceleration",
+      "description": "Flow Acceleration",
+      "source_definition": "Flow Acc mbar/s",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:55": {
+      "source_symbol": "Volatile_anesthetic_agent_concentration_in_the_fresh",
+      "description": "Volatile anesthetic agent concentration in the fresh",
+      "source_definition": "gas",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:56": {
+      "source_symbol": "Endtidal_volatile_agent_concentration",
+      "description": "Endtidal volatile agent concentration",
+      "source_definition": "etVA kPa",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:5B": {
+      "source_symbol": "Isoflurane_concentration_in_the_fresh",
+      "description": "Isoflurane concentration in the fresh",
+      "source_definition": "gas",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:5C": {
+      "source_symbol": "Endtidal_isoflurane_concentration",
+      "description": "Endtidal isoflurane concentration",
+      "source_definition": "etIso kPa",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:5D": {
+      "source_symbol": "Desflurane_concentration_in_the_fresh",
+      "description": "Desflurane concentration in the fresh",
+      "source_definition": "gas",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:5E": {
+      "source_symbol": "Endtidal_desflurane_concentration",
+      "description": "Endtidal desflurane concentration",
+      "source_definition": "etDes kPa",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:5F": {
+      "source_symbol": "Sevoflurane_concentration_in_the_fresh",
+      "description": "Sevoflurane concentration in the fresh",
+      "source_definition": "gas",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:60": {
+      "source_symbol": "Endtidal_sevoflurane_concentration",
+      "description": "Endtidal sevoflurane concentration",
+      "source_definition": "etSev kPa",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:61": {
+      "source_symbol": "Oxygen_concentration_in_the_fresh",
+      "description": "Oxygen concentration in the fresh",
+      "source_definition": "gas",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:62": {
+      "source_symbol": "Minimum_freshgas_flow",
+      "description": "Minimum freshgas flow",
+      "source_definition": "MinFG flow L/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:63": {
+      "source_symbol": "Maximal_inspiratory_time_for_flow_cycled_strokes",
+      "description": "Maximal inspiratory time for flow cycled strokes",
+      "source_definition": "Timax s",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:65": {
+      "source_symbol": "Constant_flow_during_O2_therapy",
+      "description": "Constant flow during O2 therapy",
+      "source_definition": "Const flow L/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:66": {
+      "source_symbol": "Mean_airway_pressure_during_HFO",
+      "description": "Mean airway pressure during HFO",
+      "source_definition": "MAPhf mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:67": {
+      "source_symbol": "Inspiratory_part_of_IE_ratio_during_HFO",
+      "description": "Inspiratory part of IE ratio during HFO",
+      "source_definition": "I (I:Ehf) no unit",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:68": {
+      "source_symbol": "Expiratory_part_of_IE_ratio_during_HFO",
+      "description": "Expiratory part of IE ratio during HFO",
+      "source_definition": "E (I:Ehf) no unit",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:69": {
+      "source_symbol": "Pressure_amplitude_during_HFO",
+      "description": "Pressure amplitude during HFO",
+      "source_definition": "Ampl hf mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:6A": {
+      "source_symbol": "Tidal_volume_during_HFO",
+      "description": "Tidal volume during HFO",
+      "source_definition": "VThf mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:6B": {
+      "source_symbol": "Respiratory_rate_of_sighs_during_HFO",
+      "description": "Respiratory rate of sighs during HFO",
+      "source_definition": "Rrsigh",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:6C": {
+      "source_symbol": "Inspiratory_time_of_sighs_during_HFO",
+      "description": "Inspiratory time of sighs during HFO",
+      "source_definition": "Tisigh",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:6D": {
+      "source_symbol": "Inspiratory_pressure_of_sighs_during_HFO",
+      "description": "Inspiratory pressure of sighs during HFO",
+      "source_definition": "Psigh",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:6E": {
+      "source_symbol": "Tidal_volume_during_apnea_ventilation",
+      "description": "Tidal volume during apnea ventilation",
+      "source_definition": "VTapn mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:6F": {
+      "source_symbol": "Ideal_body_weight",
+      "description": "Ideal body weight",
+      "source_definition": "IBW kg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:72": {
+      "source_symbol": "Inspiratory_termination_criterion_based_on_peak_inspiratory_flow",
+      "description": "Inspiratory termination criterion based on peak inspiratory flow",
+      "source_definition": "Insp. term. %PIF",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:73": {
+      "source_symbol": "Expiratory_termination_criterion_during_APRV_AutoRelease",
+      "description": "Expiratory termination criterion during APRV AutoRelease",
+      "source_definition": "Exp. term. %PEF",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:74": {
+      "source_symbol": "Ideal_body_weight_in_SmartCare",
+      "description": "Ideal body weight in SmartCare",
+      "source_definition": "SC-Weight  kg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:75": {
+      "source_symbol": "Start_of_night_rest_in_SmartCare",
+      "description": "Start of night rest in SmartCare",
+      "source_definition": "SC-start of rest h",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:76": {
+      "source_symbol": "End_of_night_rest_in_SmartCare",
+      "description": "End of night rest in SmartCare",
+      "source_definition": "SC-end of rest h",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:78": {
+      "source_symbol": "Pressure_rise_time_of_sighs_during_HFO",
+      "description": "Pressure rise time of sighs during HFO",
+      "source_definition": "Slopesigh",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:79": {
+      "source_symbol": "FiO2_in_SmartCare_upper_limit",
+      "description": "FiO2 in SmartCare upper limit",
+      "source_definition": "SC-FiO2 high",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:7A": {
+      "source_symbol": "PEEP_in_SmartCare_upper_limit",
+      "description": "PEEP in SmartCare upper limit",
+      "source_definition": "SC-PEEPmax mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:7B": {
+      "source_symbol": "Pressure_variability",
+      "description": "Pressure variability",
+      "source_definition": "Press. var. %",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:7D": {
+      "source_symbol": "Maximum_time_of_low_pressure_level_during_APRV_AutoRelease",
+      "description": "Maximum time of low pressure level during APRV AutoRelease",
+      "source_definition": "Tlow max s",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:7E": {
+      "source_symbol": "Spontaneous_respiratory_rate_in_SmartCare_lower_limit",
+      "description": "Spontaneous respiratory rate in SmartCare lower limit",
+      "source_definition": "SC-RRspon low 1/min",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:7F": {
+      "source_symbol": "Spontaneous_respiratory_rate_in_SmartCare_upper_limit",
+      "description": "Spontaneous respiratory rate in SmartCare upper limit",
+      "source_definition": "SC-RRspon high",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:80": {
+      "source_symbol": "Tidal_volume_in_SmartCare_lower_limit",
+      "description": "Tidal volume in SmartCare lower limit",
+      "source_definition": "SC-VT low mL/kg",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:81": {
+      "source_symbol": "Endtidal_CO2_in_SmartCare_upper_limit",
+      "description": "Endtidal CO2 in SmartCare upper limit",
+      "source_definition": "SC-etCO2higH",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:82": {
+      "source_symbol": "Patient_height_in_SmartCare",
+      "description": "Patient height in SmartCare",
+      "source_definition": "SC-Height cm",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:83": {
+      "source_symbol": "Patient_height",
+      "description": "Patient height",
+      "source_definition": "Ht cm",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:84": {
+      "source_symbol": "Maximal_peak_to_peak_pressure_during_HFO",
+      "description": "Maximal peak to peak pressure during HFO",
+      "source_definition": "Ampl hf max mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:85": {
+      "source_symbol": "Volume_limitation",
+      "description": "Volume limitation",
+      "source_definition": "VTmax mL",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:86": {
+      "source_symbol": "Manual_inspiratory_pressure_for_Neonates_during_NIV",
+      "description": "Manual inspiratory pressure for Neonates during NIV",
+      "source_definition": "PmanInsp mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:87": {
+      "source_symbol": "Maximum_time_of_pressure_for_manual_inspiration_pressure_for_Neonates_during_NIV",
+      "description": "Maximum time of pressure for manual inspiration pressure for Neonates during NIV",
+      "source_definition": "TmanInsp s",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:88": {
+      "source_symbol": "Maximum_airway_pressure_in_Smart_Ventilation_Control",
+      "description": "Maximum airway pressure in Smart Ventilation Control",
+      "source_definition": "SVC-Pmax mbar",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:8A": {
+      "source_symbol": "Airway_access",
+      "description": "Airway access",
+      "source_definition": "0: Tube, 1: Laryngeal Mask",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:8B": {
+      "source_symbol": "Lung_mechanics_in_Smart_Ventilation_Control",
+      "description": "Lung mechanics in Smart Ventilation Control",
+      "source_definition": "0: Normal, 1: Restrictive, 2: Obstructive",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    },
+    "29:8C": {
+      "source_symbol": "Ventilation_goal_of_Smart_Ventilation_Control",
+      "description": "Ventilation goal of Smart Ventilation Control",
+      "source_definition": "0: Controlled Ventilation, 1: Augmented Ventilation, 2: Encourage SB, 3: Recovery",
+      "name": null,
+      "unit": null,
+      "evidence": "legacy-vscapture; not manufacturer-verified"
+    }
+  }
+}

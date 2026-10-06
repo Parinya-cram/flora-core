@@ -14,8 +14,11 @@ from psycopg import Connection
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel
 
+from .. import directory, ldap_auth
 from ..database import connection
-from ..account_config_sync import apply_account_config, pull_account_config, push_personal_theme
+from ..account_config_sync import (
+    apply_account_config, authenticate_with_canopy, pull_account_config, push_personal_theme,
+)
 
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
@@ -106,7 +109,10 @@ class PasswordChangeRequest(BaseModel):
 class UserCreateRequest(BaseModel):
     username: str
     name: str
-    password: str
+    password: str = ""
+    auth_source: str = "local"
+    all_units: bool = False
+    unit_keys: list[str] = []
     hospital_id: str | None = None
     staff_directory_id: int | None = None
     role_codes: list[str] = ["clinician"]
@@ -117,6 +123,16 @@ class UserCreateRequest(BaseModel):
 
 class UserAccessRequest(BaseModel):
     role_codes: list[str]
+
+
+class UserWardsRequest(BaseModel):
+    all_units: bool = False
+    unit_keys: list[str] = []
+
+
+class AdminPinRequest(BaseModel):
+    current_password: str
+    pin: str | None = None
 
 
 def now_ms() -> int:
@@ -218,6 +234,7 @@ def attach_entitlements(database: Connection, row: dict[str, Any]) -> dict[str, 
     roles, permissions = entitlements(database, row)
     row["_role_codes"] = roles
     row["_permissions"] = permissions
+    row["_units"] = directory.user_units(database, row["id"]) if row.get("id") else []
     return row
 
 
@@ -242,7 +259,12 @@ def set_user_roles(database: Connection, user_id: int, role_codes: list[str]) ->
         )
     legacy = "admin" if "system_admin" in valid else valid[0]
     database.execute("UPDATE auth_user SET role=%s,updated_at=%s WHERE id=%s", (legacy, current, user_id))
+    directory.touch(database, user_id, current)
     return valid
+
+
+def ward_access(row: dict[str, Any]) -> dict[str, Any]:
+    return {"allUnits": directory.has_all_units(row), "units": row.get("_units") or []}
 
 
 def public_user(row: dict[str, Any]) -> dict[str, Any]:
@@ -261,6 +283,9 @@ def public_user(row: dict[str, Any]) -> dict[str, Any]:
     result["roleCodes"] = row.get("_role_codes") or []
     result["permissions"] = row.get("_permissions") or []
     result["mustChangePassword"] = bool(row.get("must_change_password"))
+    result["authSource"] = row.get("auth_source") or "local"
+    result["wardAccess"] = ward_access(row)
+    result["hasAdminPin"] = bool(row.get("admin_pin_hash"))
     return result
 
 
@@ -285,6 +310,11 @@ def managed_user(row: dict[str, Any]) -> dict[str, Any]:
         "roleCodes": row.get("_role_codes") or [],
         "permissions": row.get("_permissions") or [],
         "mustChangePassword": bool(row.get("must_change_password")),
+        "allUnits": bool(row.get("all_units")),
+        "units": row.get("_units") or [],
+        "hasAdminPin": bool(row.get("admin_pin_hash")),
+        "syncState": ("pending" if row.get("directory_pending") else "synced" if row.get("directory_managed") else "local")
+                     if directory.is_leaf() else "synced",
     }
 
 
@@ -336,7 +366,8 @@ def current_user(request: Request, database: Connection = Depends(connection)) -
                u.id, u.username, u.hospital_id, u.auth_source, u.name, u.role,
                u.theme_mode, u.theme_color, u.language_code, u.staff_directory_id,
                u.parameter_preferences, u.report_preferences, u.is_active,
-               u.must_change_password, u.created_at, u.updated_at, u.last_login_at
+               u.must_change_password, u.created_at, u.updated_at, u.last_login_at,
+               u.all_units, u.admin_pin_hash, u.directory_pending, u.directory_managed
         FROM auth_session s
         JOIN auth_user u ON u.id = s.user_id
         WHERE s.token_hash = %s
@@ -369,6 +400,28 @@ def require_permission(permission_code: str):
     return permitted
 
 
+def pin_approval(
+    request: Request, user: dict[str, Any] = Depends(current_user), database: Connection = Depends(connection)
+) -> dict[str, Any]:
+    """Leaf user-management writes need an administrator's PIN, whoever is signed in."""
+    approver = directory.approve_with_pin(database, request.headers.get("x-flora-admin-pin", "").strip())
+    user["_approved_by"] = approver["username"]
+    return user
+
+
+def service_only(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
+    if user.get("username") != "flora-sync" or user.get("id") is not None:
+        raise HTTPException(status_code=403, detail="service access required")
+    return user
+
+
+def approval_detail(actor: dict[str, Any], detail: dict[str, Any] | None = None) -> dict[str, Any]:
+    result = dict(detail or {})
+    if actor.get("_approved_by"):
+        result["approvedBy"] = actor["_approved_by"]
+    return result
+
+
 @router.post("/login")
 def login(payload: LoginRequest, request: Request, database: Connection = Depends(connection)) -> dict:
     username = payload.username.strip()
@@ -377,9 +430,30 @@ def login(payload: LoginRequest, request: Request, database: Connection = Depend
     user = database.execute(
         "SELECT * FROM auth_user WHERE lower(username)=lower(%s) LIMIT 1", (username,)
     ).fetchone()
-    if user is None or not user["is_active"] or not verify_password(
-        payload.password, user["password_salt"], user["password_hash"]
-    ):
+    local_ok = (
+        user is not None and user["is_active"] and (user.get("auth_source") or "local") != "ldap"
+        and verify_password(payload.password, user["password_salt"], user["password_hash"])
+    )
+    if not local_ok:
+        # Ask Canopy: a user just assigned to this ward, a password changed centrally,
+        # or an LDAP account. LDAP passwords are cached locally for offline sign-in.
+        outcome, central = authenticate_with_canopy(username, payload.password)
+        if outcome == "ok" and central:
+            with database.transaction():
+                directory.apply_record(database, central, from_canopy=True)
+                if central.get("auth_source") == "ldap":
+                    salt, hashed = new_password_record(payload.password)
+                    database.execute(
+                        "UPDATE auth_user SET password_salt=%s,password_hash=%s WHERE lower(username)=lower(%s)",
+                        (salt, hashed, username),
+                    )
+            user = database.execute(
+                "SELECT * FROM auth_user WHERE lower(username)=lower(%s) LIMIT 1", (username,)
+            ).fetchone()
+            local_ok = user is not None and bool(user["is_active"])
+        elif outcome == "unavailable" and user is not None and user["is_active"] and user.get("auth_source") == "ldap":
+            local_ok = verify_password(payload.password, user["password_salt"] or "", user["password_hash"] or "")
+    if not local_ok:
         audit(database, "auth.login", None, target={"username": username}, status="denied", detail={"reason": "invalid_credentials"})
         raise HTTPException(status_code=401, detail="invalid username or password")
     central_config = pull_account_config(user["username"])
@@ -786,17 +860,20 @@ def users(
 @atomic
 def create_user(
     payload: UserCreateRequest,
-    actor: dict = Depends(admin_user),
+    actor: dict = Depends(pin_approval),
     database: Connection = Depends(connection),
 ) -> dict:
     username = payload.username.strip().lower()
     name = payload.name.strip()
     password = payload.password.strip()
+    auth_source = payload.auth_source.strip().lower() or "local"
+    if auth_source not in {"local", "ldap"}:
+        raise HTTPException(status_code=400, detail="authentication source must be local or ldap")
     if re.fullmatch(r"[a-z0-9][a-z0-9._-]{2,63}", username) is None:
         raise HTTPException(status_code=400, detail="username must be 3-64 characters using letters, numbers, dot, underscore or dash")
     if not name:
         raise HTTPException(status_code=400, detail="display name is required")
-    if len(password) < 8:
+    if auth_source == "local" and len(password) < 8:
         raise HTTPException(status_code=400, detail="temporary password must be at least 8 characters")
     if payload.staff_directory_id is not None:
         staff = database.execute("SELECT id,hospital_id FROM staff_directory WHERE id=%s", (payload.staff_directory_id,)).fetchone()
@@ -813,25 +890,34 @@ def create_user(
     theme = payload.theme_color
     if theme is not None and database.execute("SELECT code FROM theme_scheme_master WHERE code=%s AND is_active=1", (theme,)).fetchone() is None:
         raise HTTPException(status_code=400, detail="invalid scheme")
-    salt, hashed = new_password_record(password)
+    salt, hashed = new_password_record(password) if auth_source == "local" else (None, None)
     current = now_ms()
     try:
-        row = database.execute(
-            """INSERT INTO auth_user(username,hospital_id,auth_source,password_salt,password_hash,name,role,
-                     theme_mode,theme_color,language_code,staff_directory_id,is_active,must_change_password,
-                     created_at,updated_at,parameter_preferences,report_preferences)
-               VALUES (%s,%s,'local',%s,%s,%s,'clinician','dark',%s,%s,%s,%s,1,%s,%s,'{}'::jsonb,'{}'::jsonb)
-               RETURNING *""",
-            (username, payload.hospital_id.strip() if payload.hospital_id else (staff.get("hospital_id") if staff else None),
-             salt, hashed, name, theme, payload.language_code, payload.staff_directory_id,
-             1 if payload.is_active else 0, current, current),
-        ).fetchone()
+        with database.transaction():
+            row = database.execute(
+                """INSERT INTO auth_user(username,hospital_id,auth_source,password_salt,password_hash,name,role,
+                         theme_mode,theme_color,language_code,staff_directory_id,is_active,must_change_password,
+                         created_at,updated_at,parameter_preferences,report_preferences)
+                   VALUES (%s,%s,%s,%s,%s,%s,'clinician','dark',%s,%s,%s,%s,%s,%s,%s,'{}'::jsonb,'{}'::jsonb)
+                   RETURNING *""",
+                (username, payload.hospital_id.strip() if payload.hospital_id else (staff.get("hospital_id") if staff else None),
+                 auth_source, salt, hashed, name, theme, payload.language_code, payload.staff_directory_id,
+                 1 if payload.is_active else 0, 1 if auth_source == "local" else 0, current, current),
+            ).fetchone()
     except Exception as error:
         raise HTTPException(status_code=409, detail="username or staff link already exists") from error
     role_codes = set_user_roles(database, row["id"], payload.role_codes)
+    unit_keys = payload.unit_keys
+    if directory.is_leaf() and not payload.all_units and not unit_keys:
+        # A user created at the bedside belongs to this Leaf's ward unless told otherwise.
+        leaf_unit = directory.ward_options(database)["leafUnitKey"]
+        unit_keys = [leaf_unit] if leaf_unit else []
+    directory.set_units(database, row["id"], payload.all_units, unit_keys)
     row = database.execute("SELECT * FROM auth_user WHERE id=%s", (row["id"],)).fetchone()
     row = attach_entitlements(database, row)
-    audit(database, "auth.user.create", actor, target=row, detail={"roles": role_codes})
+    audit(database, "auth.user.create", actor, target=row,
+          detail=approval_detail(actor, {"roles": role_codes, "authSource": auth_source,
+                                         "allUnits": payload.all_units, "units": unit_keys}))
     return {"row": managed_user(row)}
 
 
@@ -840,7 +926,7 @@ def create_user(
 def update_user_access(
     user_id: int,
     payload: UserAccessRequest,
-    actor: dict = Depends(admin_user),
+    actor: dict = Depends(pin_approval),
     database: Connection = Depends(connection),
 ) -> dict:
     existing = database.execute("SELECT * FROM auth_user WHERE id=%s", (user_id,)).fetchone()
@@ -850,7 +936,7 @@ def update_user_access(
         raise HTTPException(status_code=400, detail="you cannot remove your own system administrator access")
     role_codes = set_user_roles(database, user_id, payload.role_codes)
     row = attach_entitlements(database, database.execute("SELECT * FROM auth_user WHERE id=%s", (user_id,)).fetchone())
-    audit(database, "auth.user.access.update", actor, target=row, detail={"roles": role_codes})
+    audit(database, "auth.user.access.update", actor, target=row, detail=approval_detail(actor, {"roles": role_codes}))
     return {"row": managed_user(row)}
 
 
@@ -907,7 +993,7 @@ def preferences(
 def link_user_staff(
     user_id: int,
     payload: StaffLinkRequest,
-    actor: dict = Depends(admin_user),
+    actor: dict = Depends(pin_approval),
     database: Connection = Depends(connection),
 ) -> dict:
     if payload.staff_directory_id is not None:
@@ -925,7 +1011,7 @@ def link_user_staff(
       hospital_id=coalesce(%s,hospital_id),updated_at=%s WHERE id=%s RETURNING *""",
       (payload.staff_directory_id,staff.get("hospital_id") if staff else None,now_ms(),user_id)).fetchone()
     if row is None: raise HTTPException(status_code=404, detail="user not found")
-    audit(database,"auth.user.staff-link",actor,target=row,detail={"staffDirectoryId":payload.staff_directory_id})
+    audit(database,"auth.user.staff-link",actor,target=row,detail=approval_detail(actor,{"staffDirectoryId":payload.staff_directory_id}))
     return {"row":managed_user(attach_entitlements(database, row))}
 
 
@@ -934,7 +1020,7 @@ def link_user_staff(
 def set_active(
     user_id: int,
     payload: ActiveRequest,
-    actor: dict = Depends(admin_user),
+    actor: dict = Depends(pin_approval),
     database: Connection = Depends(connection),
 ) -> dict:
     if not payload.is_active and user_id == actor["id"]:
@@ -956,9 +1042,11 @@ def set_active(
     ).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="user not found")
-    if not payload.is_active:
+    directory.touch(database, user_id)
+    if not payload.is_active and directory.is_leaf():
         database.execute("UPDATE auth_session SET revoked_at=%s WHERE user_id=%s AND revoked_at IS NULL", (now_ms(), user_id))
-    audit(database, "auth.user.set-active", actor, target=row, detail={"isActive": payload.is_active})
+    audit(database, "auth.user.set-active", actor, target=row, detail=approval_detail(actor, {"isActive": payload.is_active}))
+    row = database.execute("SELECT * FROM auth_user WHERE id=%s", (user_id,)).fetchone()
     return {"row": managed_user(attach_entitlements(database, row))}
 
 
@@ -967,12 +1055,14 @@ def set_active(
 def reset_password(
     user_id: int,
     payload: PasswordResetRequest,
-    actor: dict = Depends(admin_user),
+    actor: dict = Depends(pin_approval),
     database: Connection = Depends(connection),
 ) -> dict:
     existing = database.execute("SELECT * FROM auth_user WHERE id=%s", (user_id,)).fetchone()
     if existing is None:
         raise HTTPException(status_code=404, detail="user not found")
+    if existing.get("auth_source") == "ldap":
+        raise HTTPException(status_code=400, detail="LDAP passwords are managed in the directory server")
     applied = (payload.password or "").strip() or (
         DEFAULT_PASSWORD if existing.get("auth_source") == "staff" else str(existing.get("hospital_id") or "").strip()
     )
@@ -985,8 +1075,11 @@ def reset_password(
     ).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="user not found")
-    database.execute("UPDATE auth_session SET revoked_at=%s WHERE user_id=%s AND revoked_at IS NULL", (now_ms(), user_id))
-    audit(database, "auth.user.reset-password", actor, target=row)
+    directory.touch(database, user_id)
+    if directory.is_leaf():
+        database.execute("UPDATE auth_session SET revoked_at=%s WHERE user_id=%s AND revoked_at IS NULL", (now_ms(), user_id))
+    audit(database, "auth.user.reset-password", actor, target=row, detail=approval_detail(actor))
+    row = database.execute("SELECT * FROM auth_user WHERE id=%s", (user_id,)).fetchone()
     return {"row": managed_user(attach_entitlements(database, row)), "applied_password": applied}
 
 
@@ -997,6 +1090,8 @@ def change_password(
     user: dict = Depends(current_user),
     database: Connection = Depends(connection),
 ) -> dict:
+    if user.get("auth_source") == "ldap":
+        raise HTTPException(status_code=400, detail="LDAP passwords are managed in the directory server")
     credential = database.execute("SELECT password_salt, password_hash FROM auth_user WHERE id=%s", (user["id"],)).fetchone()
     if credential is None or not verify_password(payload.current_password, credential["password_salt"], credential["password_hash"]):
         raise HTTPException(status_code=400, detail="current password is incorrect")
@@ -1008,5 +1103,95 @@ def change_password(
         "UPDATE auth_user SET password_salt=%s, password_hash=%s, must_change_password=0, updated_at=%s WHERE id=%s RETURNING *",
         (salt, hashed, now_ms(), user["id"]),
     ).fetchone()
+    directory.touch(database, user["id"])
     audit(database, "auth.self.change-password", user, target=row)
     return {"row": managed_user(attach_entitlements(database, row))}
+
+
+@router.put("/users/{user_id}/wards")
+@atomic
+def update_user_wards(
+    user_id: int,
+    payload: UserWardsRequest,
+    actor: dict = Depends(pin_approval),
+    database: Connection = Depends(connection),
+) -> dict:
+    if database.execute("SELECT 1 FROM auth_user WHERE id=%s", (user_id,)).fetchone() is None:
+        raise HTTPException(status_code=404, detail="user not found")
+    units = directory.set_units(database, user_id, payload.all_units, payload.unit_keys)
+    row = attach_entitlements(database, database.execute("SELECT * FROM auth_user WHERE id=%s", (user_id,)).fetchone())
+    audit(database, "auth.user.wards.update", actor, target=row,
+          detail=approval_detail(actor, {"allUnits": payload.all_units, "units": [unit["key"] for unit in units]}))
+    return {"row": managed_user(row)}
+
+
+@router.get("/ward-options")
+def leaf_ward_options(_: dict = Depends(current_user), database: Connection = Depends(connection)) -> dict:
+    return directory.ward_options(database)
+
+
+@router.get("/ldap/status")
+def ldap_status(database: Connection = Depends(connection)) -> dict:
+    # Leafs delegate LDAP sign-in to Canopy; reflect Canopy's setting from the last directory sync.
+    state = database.execute("SELECT ldap_enabled FROM auth_directory_state WHERE id=1").fetchone()
+    return {"enabled": bool(state and state["ldap_enabled"]), "delegated": True}
+
+
+@router.put("/self/admin-pin")
+def leaf_admin_pin(_: dict = Depends(current_user)) -> dict:
+    raise HTTPException(status_code=409, detail="manage the admin PIN from Canopy")
+
+
+# --- directory synchronization (called by the Leaf sync worker) ---------------
+
+@router.get("/directory/pending")
+def directory_pending(_: dict = Depends(service_only), database: Connection = Depends(connection)) -> dict:
+    rows = database.execute("SELECT * FROM auth_user WHERE directory_pending=1 ORDER BY id").fetchall()
+    return {"users": [directory.record(database, row) for row in rows]}
+
+
+@router.put("/directory")
+def directory_apply(
+    payload: dict[str, Any],
+    _: dict = Depends(service_only),
+    database: Connection = Depends(connection),
+) -> dict:
+    leaf_unit = payload.get("leaf_unit") or {}
+    units = [unit for unit in payload.get("units") or [] if isinstance(unit, dict)]
+    users = [user for user in payload.get("users") or [] if isinstance(user, dict)]
+    current = now_ms()
+    database.execute(
+        """INSERT INTO auth_directory_state(id,leaf_unit_key,leaf_unit_name,units,ldap_enabled,synced_at)
+           VALUES (1,%s,%s,%s,%s,%s) ON CONFLICT(id) DO UPDATE SET leaf_unit_key=excluded.leaf_unit_key,
+             leaf_unit_name=excluded.leaf_unit_name,units=excluded.units,ldap_enabled=excluded.ldap_enabled,
+             synced_at=excluded.synced_at""",
+        (leaf_unit.get("key"), leaf_unit.get("name"), Jsonb(units), 1 if payload.get("ldap_enabled") else 0, current),
+    )
+    # Canopy accepted these pushes; clear the pending flag unless edited again since.
+    for ack in payload.get("acknowledged") or []:
+        database.execute(
+            """UPDATE auth_user SET directory_pending=0,directory_managed=1
+               WHERE lower(username)=lower(%s) AND directory_version<=%s""",
+            (str(ack.get("username") or ""), int(ack.get("directory_version") or 0)),
+        )
+    applied, stale, failed = 0, 0, []
+    for user in users:
+        try:
+            result = directory.apply_record(database, user, from_canopy=True)
+        except Exception as error:  # one bad record must not block the rest
+            failed.append({"username": user.get("username"), "error": type(error).__name__})
+            continue
+        applied += result == "applied"
+        stale += result == "stale"
+    # Managed accounts no longer assigned to this ward stop working here.
+    present = [str(user.get("username") or "").lower() for user in users]
+    removed = database.execute(
+        """UPDATE auth_user SET is_active=0,updated_at=%s
+           WHERE directory_managed=1 AND directory_pending=0 AND is_active=1
+             AND NOT (lower(username)=ANY(%s)) RETURNING id,username""",
+        (current, present),
+    ).fetchall()
+    for row in removed:
+        database.execute("UPDATE auth_session SET revoked_at=%s WHERE user_id=%s AND revoked_at IS NULL", (current, row["id"]))
+    return {"ok": True, "applied": applied, "stale": stale, "failed": failed,
+            "removed": [row["username"] for row in removed]}

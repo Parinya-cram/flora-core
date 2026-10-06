@@ -21,6 +21,7 @@ env files (`FLORA_ROOT_URL`, `HABER_URL`, `CANOPY_SYNC_URL`, `LEAF_DEVICE_READ_U
 ./demo/up.sh        # build + start everything, open a demo case on each Leaf
 ./demo/status.sh    # health of every tier + device data path
 ./demo/down.sh      # stop (keeps data);  ./demo/down.sh --reset  wipes demo volumes
+./demo/test-sync-outage.sh   # proves Leaf → Canopy sync recovers by itself after an outage
 ```
 
 The first build takes a few minutes (the Rust image compiles inside Docker).
@@ -30,13 +31,19 @@ Vitals show up on each Leaf chart within about a minute of the case opening.
 
 | What | URL | Sign in |
 | --- | --- | --- |
-| Root admin (cloud) | http://localhost:7100 | — (admin API open in demo) |
-| Canopy viewer | http://localhost:7200 | `admin` / `admin`, change on first sign-in |
-| Canopy Haber | http://localhost:7204 | — |
-| Gateway admin | http://localhost:7400 | — (localhost only) |
+| Root admin (cloud) | http://localhost:7100 | `admin` / `admin` |
+| Canopy viewer | http://localhost:7200 | `admin` / `admin` |
+| Canopy Haber | http://localhost:7204 | `admin` / `admin` |
+| Gateway admin | http://localhost:7400 | `admin` / `admin` (localhost only) |
 | Device simulator | http://localhost:7420 | — |
-| Leaf OR-1 | http://localhost:7300 | `admin` / `FloraDemo-2026` (set by `seed-cases.py`) |
-| Leaf ICU bed 1 | http://localhost:7310 | `admin` / `FloraDemo-2026` |
+| Leaf OR-1 | http://localhost:7300 | `admin` / `admin` |
+| Leaf ICU bed 1 | http://localhost:7310 | `admin` / `admin` |
+
+Every system defaults to `admin` / `admin`. Leaf and Canopy skip the forced
+password change (`FLORA_BOOTSTRAP_ADMIN_MUST_CHANGE_PASSWORD=false`); Root, Haber
+and the Gateway admin page use a browser sign-in (`*_ADMIN_USERNAME` /
+`*_ADMIN_PASSWORD`). If a Leaf or Canopy password was changed, put it back with
+`./demo/reset-admins.sh`.
 
 ## What the demo shows
 
@@ -65,6 +72,25 @@ Vitals show up on each Leaf chart within about a minute of the case opening.
 6. **Egress push.** The publisher forwards every observation to the simulator's
    `/receiver` (the `pod:uri` box in the gateway diagram).
 
+7. **Root → Haber → node updates.** Root is the only place images are built. A
+   release pins each service of one component to an image digest and is signed
+   by Root. Haber copies those digests into the hospital registry (`:7205`), the
+   hospital approves the release on Haber's **Releases** tab, and every node's
+   `flora-updater` sidecar pulls from Haber and recreates only the changed
+   services. Leaves wait until no case is open. See [flora-updater](../flora-updater/README.md).
+
+### Try a release
+
+```bash
+./demo/release.sh 1.2.3            # build, push, publish and approve canopy, leaf, gateway 1.2.3
+./demo/release.sh 1.2.4 gateway    # just the gateway (parsers restart one at a time)
+```
+
+Watch it on Haber's **Nodes** tab (`http://localhost:7204/#nodes`) or with
+`./demo/status.sh`. The demo cases keep each Leaf on **waiting · active case**
+until the case is discharged. To roll back, approve the older release on Haber's
+**Releases** tab. **Hold** stops a component from following approvals.
+
 ### Try the license controls
 
 On the Root page, **Revoke** the hospital's license. Within about 30 s Haber picks
@@ -90,11 +116,13 @@ Each app owns one block, so everything fits on one machine next to the original
 | --- | --- | ---: | --- | --- |
 | 71xx | flora-root | 7100 | Root API + admin page | all interfaces (Canopy calls it) |
 | | | 7102 | root-db (Postgres) | 127.0.0.1 |
+| | | 7105 | Root registry (CI pushes, Haber mirrors) | all |
 | 72xx | flora-canopy | 7200 | Canopy web (Vite) | all |
 | | | 7201 | canopy-api | 127.0.0.1 |
 | | | 7202 | canopy-db | 127.0.0.1 |
 | | | 7203 | sync-api (Leaves push here) | all |
-| | | 7204 | Haber (gateways check in here) | all |
+| | | 7204 | Haber (gateways check in, updaters ask here) | all |
+| | | 7205 | haber-registry (nodes pull images here) | all |
 | 73xx | flora-leaf `leaf-or-01` | 7300 / 7301 / 7302 | web / API (Electron) / db | web all, rest 127.0.0.1 |
 | | flora-leaf `leaf-icu-01` | 7310 / 7311 / 7312 | web / API / db | same |
 | | next Leaf | 7320 / 7321 / 7322 | copy an env file | |
@@ -112,10 +140,16 @@ Each app owns one block, so everything fits on one machine next to the original
 
 These keep the demo self-contained; none of them is acceptable at a site.
 
-- Secrets and passwords are fixed demo values in the compose files and
+- Every sign-in is `admin` / `admin`, and secrets and passwords are fixed demo values in the compose files and
   `flora-leaf/env/*.env`. Replace every `*-demo-*` / `*-local-only` value.
 - Root's admin API is open (`ROOT_ADMIN_KEY` empty), and Haber trusts the first
   Root public key it sees (`FLORA_ROOT_PUBLIC_KEY` empty). Set both.
-- The gateway service mounts the Docker socket to start parser containers.
+- The gateway service and every `flora-updater` mount the Docker socket.
+- Both registries are plain HTTP with no auth (Docker trusts `localhost`). At a
+  site: TLS on both, Root registry pull-only per tenant, haber-registry push for
+  Haber only, and nodes configured to trust Haber's certificate.
+- Nodes trust the first Root key Haber hands them; pin `FLORA_ROOT_PUBLIC_KEY`.
+- Releases are built from the dev Dockerfiles (`uvicorn --reload`, Vite dev
+  server for the web UIs, which are not release-managed yet).
 - Every app speaks plain HTTP. Put TLS in front of Root, the Canopy sync API,
   Haber and the gateway data-api.

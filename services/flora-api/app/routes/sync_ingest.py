@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 
+from .. import central_auth, directory, ldap_auth
 from ..database import connection
 
 
@@ -34,6 +35,17 @@ class SyncBatch(BaseModel):
     observed_location: dict[str, Any] | None = None
     applied_config_version: int = Field(default=0, ge=0)
     messages: list[SyncMessage] = Field(default_factory=list, max_length=500)
+
+
+class DirectoryExchange(BaseModel):
+    leaf_id: str = Field(min_length=1, max_length=120)
+    changes: list[dict[str, Any]] = Field(default_factory=list, max_length=1000)
+
+
+class DirectoryAuthentication(BaseModel):
+    leaf_id: str = Field(min_length=1, max_length=120)
+    username: str = Field(min_length=1, max_length=160)
+    password: str = Field(min_length=1, max_length=512)
 
 
 class PersonalThemeSync(BaseModel):
@@ -272,3 +284,44 @@ def save_personal_theme(
         (user["id"], normalized, payload.display_name.strip(), *colors, current, current),
     ).fetchone()
     return {"ok": True, "row": dict(row)}
+
+
+def _directory_audit(database: Connection, action: str, leaf_id: str, username: str | None, detail: dict[str, Any]) -> None:
+    import json
+    database.execute(
+        """INSERT INTO auth_audit(action,actor_username,actor_role,target_username,status,detail_json,created_at)
+           VALUES (%s,%s,'integration',%s,'ok',%s,%s)""",
+        (action, f"leaf:{leaf_id}", username, json.dumps(detail, separators=(",", ":")), directory.now_ms()),
+    )
+
+
+@router.post("/directory", dependencies=[Depends(require_sync_secret)])
+def exchange_directory(payload: DirectoryExchange, database: Connection = Depends(connection)) -> dict[str, Any]:
+    """Accept user changes made on a Leaf, then return that Leaf's ward directory."""
+    acknowledged = []
+    for change in payload.changes:
+        username = str(change.get("username") or "")
+        try:
+            result = directory.apply_record(database, change, from_canopy=False)
+        except Exception as error:  # e.g. a duplicate hospital id; report and continue
+            acknowledged.append({"username": username, "status": "failed", "error": type(error).__name__})
+            continue
+        if result == "applied":
+            _directory_audit(database, "directory.leaf-change", payload.leaf_id, username,
+                             {"directoryVersion": change.get("directory_version")})
+        acknowledged.append({"username": username, "status": result,
+                             "directory_version": int(change.get("directory_version") or 0)})
+    result = directory.leaf_directory(database, payload.leaf_id)
+    result["ldap_enabled"] = ldap_auth.enabled()
+    # Only acknowledge pushes that Canopy now holds (applied, or superseded by a newer central edit).
+    result["acknowledged"] = [item for item in acknowledged if item["status"] in {"applied", "stale"}]
+    result["failed"] = [item for item in acknowledged if item["status"] == "failed"]
+    return result
+
+
+@router.post("/directory/authenticate", dependencies=[Depends(require_sync_secret)])
+def authenticate_for_leaf(payload: DirectoryAuthentication, database: Connection = Depends(connection)) -> dict[str, Any]:
+    user = central_auth.authenticate(database, payload.username, payload.password)
+    if not directory.in_leaf_scope(database, user["id"], payload.leaf_id):
+        raise HTTPException(status_code=403, detail="user is not assigned to this ward")
+    return {"user": directory.record(database, user)}

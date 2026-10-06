@@ -45,3 +45,21 @@ CREATE TABLE IF NOT EXISTS root_checkin (
   bundle_id       text,
   usage           jsonb NOT NULL DEFAULT '{}'::jsonb
 );
+
+-- Images built by Root CI and pushed to the Root registry. A release pins every
+-- service of one component (canopy, leaf, gateway) to an image digest; Haber mirrors
+-- the digests into the hospital and the hospital approves the rollout.
+CREATE TABLE IF NOT EXISTS root_release (
+  release_id    text PRIMARY KEY,               -- <component>-<version>
+  component     text NOT NULL CHECK (component IN ('canopy', 'leaf', 'gateway')),
+  version       text NOT NULL,
+  channel       text NOT NULL DEFAULT 'stable',
+  services      jsonb NOT NULL,                 -- {"api": {"repository": "flora/leaf/api", "digest": "sha256:…"}}
+  device_types  jsonb NOT NULL DEFAULT '[]'::jsonb,  -- gateway: catalog; "image" names a service key
+  notes         text,
+  created_at    bigint NOT NULL,
+  withdrawn_at  bigint,
+  UNIQUE (component, version)
+);
+
+ALTER TABLE root_tenant ADD COLUMN IF NOT EXISTS release_channel text NOT NULL DEFAULT 'stable';

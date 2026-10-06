@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 
+from .. import directory
 from ..database import connection
 from .auth_canopy import read_token
 from .auth_leaf import (
@@ -39,7 +40,7 @@ def current_canopy_user(request: Request, database: Connection = Depends(connect
     row = database.execute(
         """SELECT id,username,name,role,theme_mode,theme_color,language_code,
                   staff_directory_id,parameter_preferences,report_preferences,
-                  must_change_password,is_active
+                  must_change_password,is_active,auth_source,all_units,admin_pin_hash
            FROM auth_user WHERE id=%s LIMIT 1""",
         (payload["sub"],),
     ).fetchone()
@@ -416,6 +417,8 @@ def change_password(
     user: dict = Depends(current_canopy_user),
     database: Connection = Depends(connection),
 ) -> dict:
+    if user.get("auth_source") == "ldap":
+        raise HTTPException(status_code=400, detail="LDAP passwords are managed in the directory server")
     credential = database.execute(
         "SELECT password_salt,password_hash FROM auth_user WHERE id=%s", (user["id"],)
     ).fetchone()
@@ -432,5 +435,6 @@ def change_password(
            WHERE id=%s RETURNING *""",
         (salt, hashed, now_ms(), user["id"]),
     ).fetchone()
+    directory.touch(database, user["id"])
     audit(database, "canopy.self.change-password", user, target=row)
     return {"row": managed_user(attach_entitlements(database, row))}

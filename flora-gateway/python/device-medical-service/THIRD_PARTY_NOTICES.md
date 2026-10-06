@@ -20,7 +20,7 @@ application, or Node.js runtime are bundled in the parser image.
 
 ## IACS M540
 
-`parsers/draeger/iacs_m540/blocks.py`, `parsers/draeger/iacs_m540/parameters.json`, and the synthetic
+`parsers/draeger/iacs_m540/blocks.py`, `parsers/draeger/iacs_m540/flora_mapping.json`, and the synthetic
 test fixture were adapted from the user's local `C:\Users\JK\vector` tree:
 
 - `src/vector_edge/adapters/iacs_m540.py`
@@ -36,7 +36,8 @@ not assign them a new license or establish redistribution rights.
 
 ## MEDIBUS
 
-`parsers/draeger/medibus/parser.py` and `parsers/draeger/medibus/parameters.json` are adapted from the
+`parsers/draeger/medibus/parser.py`, `parsers/draeger/medibus/flora_mapping.json`,
+and `parsers/draeger/medibus/device_parameters.json` are adapted from the
 framing, command sequence, and code tables in:
 
 `C:\Users\JK\vector\medibus\VSCaptureDrgVent-master\VSCaptureDrgVent-master\Class1.cs`

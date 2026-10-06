@@ -10,70 +10,792 @@
   @media (prefers-color-scheme: dark) { :root { --bg:#121614; --panel:#1a201d; --ink:#e4ebe6; --muted:#9aa59f;
           --line:#2a332e; --accent:#6dbb8f; --ok:#6dbb8f; --warn:#e0a84a; --bad:#e07a7a; --chip:#232b27; } }
   * { box-sizing:border-box } body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif }
-  header { padding:18px 24px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:baseline; flex-wrap:wrap }
-  header h1 { font-size:18px; margin:0 } header span { color:var(--muted) }
+  body { display:grid; grid-template-columns:220px minmax(0,1fr); min-height:100vh }
+  aside { position:sticky; top:0; height:100vh; display:flex; flex-direction:column; gap:18px; padding:18px 12px;
+          background:var(--panel); border-right:1px solid var(--line) }
+  a { color:var(--accent) }
+  .brand .site { display:flex; flex-direction:column; gap:1px; margin-top:6px; padding:6px 8px; border-radius:7px; background:var(--chip) }
+  .brand .site b { font-size:12px; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .brand .site code { font-size:11px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .brand .site.unset b { color:var(--warn) }
+  .brand { padding:0 10px } .brand h1 { font-size:17px; margin:0; white-space:nowrap } .brand div { font-size:12px; color:var(--muted) }
+  nav { display:flex; flex-direction:column; gap:2px }
+  nav button { display:flex; align-items:center; gap:10px; width:100%; text-align:left; border:0; border-radius:7px;
+               background:none; padding:8px 10px; font-size:13px; color:var(--muted) }
+  nav button svg { width:16px; height:16px; flex:none; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round }
+  nav button:hover { background:var(--chip); color:var(--ink) }
+  nav button.active { background:var(--chip); color:var(--ink); font-weight:600; box-shadow:inset 3px 0 0 var(--accent) }
+  .content { min-width:0 }
+  header { padding:16px 24px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:baseline; flex-wrap:wrap }
+  header h2 { font-size:18px; margin:0; text-transform:none; letter-spacing:0; color:var(--ink) } header span { color:var(--muted) }
   main { padding:20px 24px; display:grid; gap:18px; max-width:1300px }
+  main[hidden] { display:none }
   section { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px; overflow-x:auto }
+  .head { display:flex; align-items:center; gap:10px; margin:0 0 12px } .head h2 { margin:0 } .head button { margin-left:auto }
   h2 { font-size:14px; margin:0 0 12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted) }
   .layers { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px }
-  .layer { border:1px solid var(--line); border-radius:8px; padding:10px 12px } .layer h3 { margin:0 0 6px; font-size:13px }
+  .layer { border:1px solid var(--line); border-radius:8px; padding:10px 12px } .layer.off { border-style:dashed; opacity:.85 } .layer h3 { margin:0 0 6px; font-size:13px }
   table { width:100%; border-collapse:collapse } th,td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top }
-  th { font-weight:600; color:var(--muted); font-size:12px }
+  th { font-weight:600; color:var(--muted); font-size:12px } td.actions { white-space:nowrap; text-align:right }
   .chip { display:inline-block; padding:1px 8px; border-radius:999px; background:var(--chip); font-size:12px; margin:1px 3px 1px 0; font-variant-numeric:tabular-nums }
   .ok { color:var(--ok) } .warn { color:var(--warn) } .bad { color:var(--bad) } .muted { color:var(--muted) }
   .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; background:var(--bad) } .dot.on { background:var(--ok) }
   button { font:inherit; font-size:12px; padding:3px 9px; border-radius:6px; border:1px solid var(--line); background:var(--panel); color:var(--ink); cursor:pointer }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600 }
+  button.danger { color:var(--bad) }
   code, pre { font:12px ui-monospace,Menlo,monospace } pre { margin:0; white-space:pre-wrap }
   .log td { padding:4px 10px; font-size:12px }
+  dialog { border:1px solid var(--line); border-radius:10px; background:var(--panel); color:var(--ink); padding:0; width:min(640px, calc(100vw - 32px)) }
+  dialog::backdrop { background:rgba(0,0,0,.35) }
+  dialog form { padding:18px 20px } dialog h3 { margin:0 0 4px; font-size:16px }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:4px 14px; margin-top:10px }
+  .field { display:flex; flex-direction:column } .field.wide { grid-column:1 / -1 }
+  .field label { font-size:12px; color:var(--muted); margin:8px 0 3px }
+  .field input, .field select, .field textarea { font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--ink) }
+  .field textarea { min-height:70px; font:12px ui-monospace,Menlo,monospace } .field input:disabled, .field select:disabled, .field textarea:disabled { opacity:.6 }
+  .field.check { flex-direction:row; align-items:center; gap:8px; margin-top:14px } .field.check label { margin:0; color:var(--ink) }
+  :root { --series-in:#2a78d6; --series-out:#eb6834 }
+  @media (prefers-color-scheme: dark) { :root { --series-in:#3987e5; --series-out:#d95926 } }
+  .key { display:inline-block; width:10px; height:3px; border-radius:2px; vertical-align:middle; margin:0 4px 0 2px }
+  .key.in { background:var(--series-in) } .key.out { background:var(--series-out) }
+  .group { margin-top:14px } .group h3 { font-size:12px; margin:0 0 8px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em }
+  .streams { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:10px }
+  .stream { text-align:left; display:block; width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--panel); color:var(--ink); font:inherit; cursor:pointer }
+  .stream:hover { border-color:var(--muted) } .stream.sel { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) }
+  .stream .row { display:flex; gap:8px; align-items:baseline } .stream .row code { font-weight:600 } .stream .row .muted { margin-left:auto; font-size:12px }
+  .stream svg { display:block; width:100%; height:36px; margin-top:6px }
+  .stream .nums { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px }
+  .tile { border:1px solid var(--line); border-radius:8px; padding:8px 12px } .tile b { display:block; font-size:20px; font-variant-numeric:tabular-nums }
+  .tile span { font-size:12px; color:var(--muted) }
+  .charts { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:14px }
+  figure { margin:0 } figcaption { font-size:12px; color:var(--muted); margin-bottom:4px }
+  .chart { position:relative } .chart svg { display:block; width:100%; height:180px; overflow:visible }
+  .chart .grid line { stroke:var(--line) } .chart text { fill:var(--muted); font-size:10px; font-variant-numeric:tabular-nums }
+  .tip { position:absolute; pointer-events:none; background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:6px 8px;
+         font-size:12px; white-space:nowrap; box-shadow:0 2px 8px rgba(0,0,0,.15); font-variant-numeric:tabular-nums }
+  .frames td { font-size:12px; padding:5px 8px } .frames tr.frame { cursor:pointer } .frames tr.frame:hover td { background:var(--chip) }
+  .frames .preview { font:12px ui-monospace,Menlo,monospace; max-width:0; width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .frames pre { padding:10px; background:var(--bg); border-radius:6px; max-height:360px; overflow:auto }
+  .ctl { color:var(--warn) }
+  body.operator .admin-only { display:none !important }
+  .role { font-size:11px; padding:0 6px; border-radius:999px; background:var(--chip) }
+  fieldset.conn { border:1px solid var(--line); border-radius:8px; padding:4px 12px 10px; margin:12px 0 0 }
+  fieldset.conn legend { font-size:12px; color:var(--muted); padding:0 4px }
+  .formerror { color:var(--bad); min-height:18px; margin-top:10px; font-size:13px }
+  .buttons { display:flex; gap:8px; justify-content:flex-end; margin-top:12px } .buttons button { padding:6px 14px; font-size:13px }
+  @media (max-width:760px) {
+    body { display:block }
+    aside { position:sticky; z-index:5; height:auto; flex-direction:row; align-items:center; gap:10px; padding:8px 16px;
+            border-right:0; border-bottom:1px solid var(--line); overflow-x:auto }
+    .brand div { display:none }
+    nav { flex-direction:row } nav button { width:auto; white-space:nowrap }
+    nav button.active { box-shadow:inset 0 -2px 0 var(--accent) }
+    header, main { padding-left:16px; padding-right:16px }
+  }
+  /* System menu: bottom-of-rail entry point to settings, same on every Flora app. */
+  .sysmenu { margin-top:auto; position:relative; padding-top:10px; border-top:1px solid var(--line) }
+  .sysbtn { display:flex; align-items:center; gap:10px; width:100%; border:0; border-radius:7px; background:none; padding:8px 10px;
+            font-size:13px; color:var(--muted); text-align:left; cursor:pointer }
+  .sysbtn:hover, .sysbtn[aria-expanded="true"], .sysbtn.active { background:var(--chip); color:var(--ink) }
+  .sysbtn.active { font-weight:600; box-shadow:inset 3px 0 0 var(--accent) }
+  .sysbtn svg, .syspop svg { width:18px; height:18px; flex:none; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round }
+  .syspop { position:absolute; left:0; bottom:calc(100% + 6px); z-index:50; width:240px; padding:6px; background:var(--panel);
+            border:1px solid var(--line); border-radius:10px; box-shadow:0 12px 32px rgba(0,0,0,.18) }
+  .syspop[hidden] { display:none }
+  .syspop .who { padding:6px 10px 8px; margin-bottom:4px; border-bottom:1px solid var(--line) }
+  .syspop .who b { display:block; font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted) }
+  .syspop .who span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px }
+  .syspop button { display:flex; align-items:center; gap:10px; width:100%; border:0; border-radius:7px; background:none;
+                   padding:7px 10px; font-size:13px; color:var(--ink); text-align:left; cursor:pointer }
+  .syspop button:hover { background:var(--chip) } .syspop button.danger { color:var(--bad) }
+  @media (max-width:760px) {
+    .sysmenu { margin:0 0 0 auto; padding:0; border:0 } .sysbtn span { display:none }
+    .syspop { left:auto; right:0; bottom:auto; top:calc(100% + 6px) }
+  }
 </style>
 </head>
 <body>
-<header><h1>Flora Gateway</h1><span id="gw">Device integration</span><span id="ts" class="muted"></span></header>
-<main>
+<aside>
+  <div class="brand"><h1>Flora Gateway</h1>
+    <div class="site"><b id="site-label">Location not set</b><code id="site-id"></code></div></div>
+  <nav id="tabs">
+    <button data-tab="overview"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Overview</button>
+    <button data-tab="devices"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Devices</button>
+    <button data-tab="streams"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7c3 0 3 3 6 3s3-3 6-3 3 3 6 3M3 14c3 0 3 3 6 3s3-3 6-3 3 3 6 3"/></svg>Streams</button>
+  </nav>
+  <div class="sysmenu">
+    <div class="syspop" id="syspop" role="menu" hidden>
+      <div class="who"><b>Station</b><span id="who" class="muted"></span></div>
+      <button data-tab="types"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5z"/><path d="m3 13 9 5 9-5"/></svg>Device types</button>
+      <button data-tab="manufacturers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l6 4V9l6 4V5h6v16H3z"/></svg>Manufacturers</button>
+      <button data-tab="users"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/></svg>Users</button>
+      <button class="danger" onclick="signOut()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5M14 8l4 4-4 4M18 12H8"/></svg>Sign out</button>
+    </div>
+    <button class="sysbtn" id="sysbtn" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.6a1.7 1.7 0 0 1 3.4 0l.2 1.1a7 7 0 0 1 1.7 1l1.1-.4a1.7 1.7 0 0 1 2 .8l.2.3a1.7 1.7 0 0 1-.4 2.2l-.9.7a7 7 0 0 1 0 2l.9.7a1.7 1.7 0 0 1 .4 2.2l-.2.3a1.7 1.7 0 0 1-2 .8l-1.1-.4a7 7 0 0 1-1.7 1l-.2 1.1a1.7 1.7 0 0 1-3.4 0l-.2-1.1a7 7 0 0 1-1.7-1l-1.1.4a1.7 1.7 0 0 1-2-.8l-.2-.3a1.7 1.7 0 0 1 .4-2.2l.9-.7a7 7 0 0 1 0-2l-.9-.7a1.7 1.7 0 0 1-.4-2.2l.2-.3a1.7 1.7 0 0 1 2-.8l1.1.4a7 7 0 0 1 1.7-1Z"/><circle cx="12" cy="12" r="2.6"/></svg><span>System</span></button>
+  </div>
+</aside>
+<div class="content">
+<header><h2 id="title">Overview</h2><span id="gw">Station admin</span><span id="ts" class="muted"></span></header>
+
+<main data-panel="overview">
+  <section><div class="head"><h2>Station</h2><button class="admin-only" onclick="editSite()">Edit location</button></div><div id="site"></div></section>
   <section><h2>License (from Haber at Canopy)</h2><div id="license">Loading…</div></section>
   <section><h2>Layers</h2><div id="layers" class="layers"></div></section>
-  <section><h2>Device instances</h2><div id="instances"></div></section>
+  <section><h2>Live device data</h2><div id="instances"></div></section>
   <section><h2>Logs</h2><div id="logs"></div></section>
 </main>
+<main data-panel="devices" hidden>
+  <section><div class="head"><h2>Installed devices</h2><button class="primary" onclick="editDevice()">Add device</button></div><div id="devices"></div></section>
+</main>
+<main data-panel="streams" hidden>
+  <section><div class="head"><h2>Ingress streams</h2><span id="monitor" class="muted"></span>
+      <label class="muted" style="margin-left:auto">Window <select id="window">
+        <option value="60">1 min</option><option value="300" selected>5 min</option><option value="900">15 min</option></select></label></div>
+    <p class="muted" style="margin-top:0">Frames read from each device (<span class="key in"></span>in) and written back to it (<span class="key out"></span>out: polls, ACKs). Live since the gateway service started.</p>
+    <div id="streams"></div></section>
+  <section id="stream-detail" hidden>
+    <div class="head"><h2 id="sd-title"></h2><span id="sd-devices" class="muted"></span>
+      <span style="margin-left:auto; display:flex; gap:6px">
+        <button id="sd-pause" onclick="toggleStreamPause()">Pause</button>
+        <button onclick="selectStream(null)">Close</button></span></div>
+    <div class="tiles" id="sd-tiles"></div>
+    <div class="charts">
+      <figure><figcaption>Frames per second</figcaption><div class="chart" id="sd-frames"></div></figure>
+      <figure><figcaption>Bytes per second in</figcaption><div class="chart" id="sd-bytes"></div></figure>
+    </div>
+    <div class="head" style="margin-top:16px"><h2>Payloads</h2>
+      <label class="muted" style="margin-left:auto">Show <select id="sd-view"><option value="text">text</option><option value="hex">hex</option></select></label>
+      <label class="muted"><select id="sd-dir"><option value="">in + out</option><option value="in">in only</option><option value="out">out only</option></select></label></div>
+    <div id="sd-frames-list"></div>
+  </section>
+</main>
+<main data-panel="types" hidden>
+  <section><div class="head"><h2>From Canopy</h2><span id="types-sync" class="muted"></span>
+      <button onclick="act('api/haber/sync')">Sync now</button></div>
+    <p class="muted">Device types are normally managed at Canopy (Haber) and arrive with the approved parser images from the repository.
+      Canopy receives them from Flora Root releases, and a hospital may add its own at Canopy; each row shows which.
+      Here you can only set manufacturer, model, description and connection defaults.</p>
+    <div id="types-canopy"></div></section>
+  <section><div class="head"><h2>Local templates</h2><button class="primary admin-only" onclick="editType()">Add local template</button></div>
+    <p class="muted">For a device Canopy does not list yet (gateway admin only). A template must use a parser image Canopy delivered and a parser inside it,
+      and its type must be in the Root license. If Canopy later sends a type with the same code, the Canopy version replaces it.</p>
+    <div id="types-local"></div></section>
+</main>
+<main data-panel="manufacturers" hidden>
+  <section><div class="head"><h2>Manufacturers</h2><button class="primary admin-only" onclick="editManufacturer()">Add manufacturer</button></div><div id="manufacturers"></div></section>
+</main>
+<main data-panel="users" hidden>
+  <section class="admin-only"><div class="head"><h2>Users</h2><button class="primary" onclick="editUser()">Add user</button></div>
+    <p class="muted">Admins manage device types, manufacturers and users. Operators run the station: devices, controllers and streams.</p>
+    <div id="users"></div></section>
+  <section><h2>My password</h2>
+    <form id="password" style="max-width:420px">
+      <div class="field"><label>Current password</label><input name="current_password" type="password" autocomplete="current-password" required></div>
+      <div class="field"><label>New password (6+ characters)</label><input name="new_password" type="password" autocomplete="new-password" minlength="6" required></div>
+      <div class="buttons" style="justify-content:flex-start"><button class="primary">Change password</button></div>
+      <div class="formerror" id="password-msg"></div>
+    </form></section>
+</main>
+
+</div>
+
+<dialog id="dialog"><form method="dialog" id="dialog-form">
+  <h3 id="dialog-title"></h3><div class="grid" id="dialog-fields"></div>
+  <div class="formerror" id="dialog-error"></div>
+  <div class="buttons"><button type="button" onclick="dialog.close()">Cancel</button><button class="primary" value="save">Save</button></div>
+</form></dialog>
+<datalist id="pods"></datalist>
+
 <script>
 const $ = (id) => document.getElementById(id);
-const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
-const ago = (ms) => { if (!ms) return "—"; const s = Math.round((Date.now() - ms) / 1000); return s < 90 ? `${s}s ago` : `${Math.round(s / 60)} min ago`; };
-const get = async (path) => (await fetch(path)).json();
-const post = async (path) => { const r = await fetch(path, { method: "POST" }); if (!r.ok) alert(await r.text()); refresh(); };
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+const ago = (ms) => { if (!ms) return "—"; const s = Math.round((Date.now() - ms) / 1000); return s < 90 ? `${s}s ago` : s < 5400 ? `${Math.round(s / 60)} min ago` : new Date(ms).toLocaleString(); };
+const day = (ms) => ms ? new Date(ms).toLocaleDateString() : "—";
+const enc = encodeURIComponent;
+const dialog = $("dialog");
 
-async function refresh() {
+async function api(path, method = "GET", body) {
+  const response = await fetch(path, { method, headers: body ? { "content-type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+  if (response.status === 401) { location.href = "/login"; throw new Error("sign in required"); }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = Array.isArray(data.detail) ? data.detail.map((d) => `${d.loc?.slice(-1)[0]}: ${d.msg}`).join("; ") : data.detail;
+    throw new Error(detail || response.statusText);
+  }
+  return data;
+}
+const get = (path) => api(path);
+async function act(path, method = "POST", confirmText) {
+  if (confirmText && !confirm(confirmText)) return;
+  try { await api(path, method); } catch (error) { alert(error.message); }
+  render();
+}
+// Stopping an ingress controller cuts off every device on its pods, so running parsers need a second confirmation.
+async function stopController(name) {
+  const path = `api/controllers/${enc(name)}/stop`;
+  if (!confirm(`Stop ${name}? Devices on its pods will stop sending data until it is started again.`)) return;
+  let response = await fetch(path, { method: "POST" });
+  if (response.status === 409) {
+    const detail = (await response.json()).detail;
+    const list = detail.running.map((d) => `  • ${d.label || d.device_id} (${d.device_id}, ${d.pod})`).join("\n");
+    if (!confirm(`Warning: ${detail.message}:\n\n${list}\n\nThese parsers keep running but will receive no data. Stop ${name} anyway?`)) return;
+    response = await fetch(path + "?force=true", { method: "POST" });
+  }
+  if (response.status === 401) { location.href = "/login"; return; }
+  if (!response.ok) alert((await response.json().catch(() => ({}))).detail || response.statusText);
+  render();
+}
+async function signOut() { await fetch("api/auth/logout", { method: "POST" }); location.href = "/login"; }
+
+// ---------------------------------------------------------------- tabs
+let tab = (location.hash || "#overview").slice(1);
+function show(name) {
+  tab = document.querySelector(`main[data-panel="${name}"]`) ? name : "overview";
+  history.replaceState(null, "", "#" + tab);
+  document.querySelectorAll("main").forEach((m) => m.hidden = m.dataset.panel !== tab);
+  document.querySelectorAll("aside button[data-tab]").forEach((b) => {
+    b.classList.toggle("active", b.dataset.tab === tab);
+    if (b.dataset.tab === tab) { b.setAttribute("aria-current", "page"); $("title").textContent = b.textContent.trim(); }
+    else b.removeAttribute("aria-current");
+  });
+  $("sysbtn").classList.toggle("active", !!document.querySelector(`#syspop button[data-tab="${tab}"]`));
+  render();
+}
+document.querySelector("aside").addEventListener("click", (e) => { const b = e.target.closest("button[data-tab]"); if (b) show(b.dataset.tab); });
+// ---------------------------------------------------------------- system menu
+(() => {
+  const button = document.getElementById("sysbtn"), menu = document.getElementById("syspop");
+  const set = (open) => { menu.hidden = !open; button.setAttribute("aria-expanded", String(open)); };
+  button.addEventListener("click", () => set(menu.hidden));
+  menu.addEventListener("click", (e) => { if (e.target.closest("button")) set(false); });
+  document.addEventListener("mousedown", (e) => { if (!menu.hidden && !e.target.closest(".sysmenu")) set(false); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") set(false); });
+})();
+addEventListener("hashchange", () => location.hash.slice(1) !== tab && show(location.hash.slice(1)));
+
+// ---------------------------------------------------------------- form dialog
+// fields: [{name, label, type: text|number|select|check|json|textarea|date|password, options, wide, disabled, placeholder, list}]
+function openForm(title, fields, values, onSave) {
+  $("dialog-title").textContent = title;
+  $("dialog-error").textContent = "";
+  $("dialog-fields").innerHTML = fields.map((f) => {
+    const v = values[f.name];
+    const attrs = `name="${f.name}" ${f.disabled ? "disabled" : ""} ${f.required ? "required" : ""} placeholder="${esc(f.placeholder || "")}" ${f.list ? `list="${f.list}"` : ""}`;
+    let input;
+    if (f.type === "select") input = `<select ${attrs}>${f.options.map(([value, label]) => `<option value="${esc(value)}" ${String(value) === String(v ?? "") ? "selected" : ""}>${esc(label)}</option>`).join("")}</select>`;
+    else if (f.type === "check") return `<div class="field check"><input type="checkbox" id="f-${f.name}" ${attrs} ${v ? "checked" : ""}><label for="f-${f.name}">${esc(f.label)}</label></div>`;
+    else if (f.type === "json") input = `<textarea ${attrs}>${esc(JSON.stringify(v ?? {}, null, 2))}</textarea>`;
+    else if (f.type === "textarea") input = `<textarea ${attrs} style="font:inherit">${esc(v)}</textarea>`;
+    else if (f.type === "date") input = `<input type="date" ${attrs} value="${v ? new Date(v).toISOString().slice(0, 10) : ""}">`;
+    else if (f.type === "connection") return `<fieldset class="field wide conn" data-conn="${f.name}"><legend>${esc(f.label)}</legend><div class="grid" data-conn-fields></div></fieldset>`;
+    else input = `<input type="${f.type || "text"}" ${attrs} value="${esc(v)}" ${f.type === "password" ? 'autocomplete="new-password"' : ""}>`;
+    return `<div class="field ${f.wide ? "wide" : ""}"><label>${esc(f.label)}</label>${input}</div>`;
+  }).join("");
+  for (const f of fields.filter((f) => f.type === "connection")) {
+    const box = document.querySelector(`[data-conn="${f.name}"] [data-conn-fields]`);
+    const controller = $("dialog-form").elements[f.controllerField];
+    const draw = () => box.innerHTML = connectionInputs(controller.value, values[f.name] || {});
+    controller.addEventListener("change", draw); draw();
+  }
+  $("dialog-form").onsubmit = async (event) => {
+    event.preventDefault();
+    const form = event.target, out = {};
+    try {
+      for (const f of fields) {
+        const el = form.elements[f.name];
+        if (f.type === "connection") out[f.name] = readConnection(form, form.elements[f.controllerField].value);
+        else if (f.type === "check") out[f.name] = el.checked;
+        else if (f.type === "json") { try { out[f.name] = JSON.parse(el.value || "{}"); } catch { throw new Error(`${f.label}: invalid JSON`); } }
+        else if (f.type === "date") out[f.name] = el.value ? Date.parse(el.value + "T00:00:00") : null;
+        else out[f.name] = el.value.trim() === "" ? null : el.value.trim();
+      }
+      await onSave(out);
+      dialog.close(); render();
+    } catch (error) { $("dialog-error").textContent = error.message; }
+  };
+  dialog.showModal();
+}
+
+// ---------------------------------------------------------------- connection defaults
+// Mirrors app/connection.py and the pod fields in gateway.toml. Blank = controller default.
+const CONNECTION_FIELDS = {
+  serial: [
+    ["baud", "Baud rate", [300, 600, 1200, 2400, 4800, 9600, 14400, 19200, 38400, 57600, 115200, 230400]],
+    ["data_bits", "Data bits", [5, 6, 7, 8]],
+    ["parity", "Parity (check bit)", ["none", "even", "odd"]],
+    ["stop_bits", "Stop bits", [1, 2]],
+    ["flow_control", "Flow control", ["none", "hardware", "software"]],
+    ["rts", "RTS", "bool"], ["dtr", "DTR", "bool"],
+    ["idle_ms", "Frame idle gap (ms)", "number"], ["max_frame_bytes", "Max frame bytes", "number"],
+  ],
+  socket: [
+    ["transport", "Transport", ["tcp", "udp"]], ["framing", "Framing", ["mllp", "line", "idle", "raw"]],
+    ["auto_ack", "Auto HL7 ACK", "bool"], ["idle_ms", "Idle gap (ms)", "number"],
+    ["connect_timeout_ms", "Connect timeout (ms)", "number"], ["read_timeout_ms", "Read timeout (ms)", "number"],
+    ["reconnect_ms", "Reconnect delay (ms)", "number"], ["max_frame_bytes", "Max frame bytes", "number"],
+  ],
+  feeder: [["interval_ms", "Poll interval (ms)", "number"], ["timeout_ms", "Request timeout (ms)", "number"]],
+  webhook: [["max_body_bytes", "Max body bytes", "number"]],
+};
+function connectionInputs(controller, values) {
+  const fields = CONNECTION_FIELDS[controller] || [];
+  if (!fields.length) return `<span class="muted">No connection settings for ${esc(controller)}.</span>`;
+  return fields.map(([key, label, kind]) => {
+    const v = values[key], name = `conn_${key}`;
+    let input;
+    if (kind === "number") input = `<input type="number" min="0" name="${name}" value="${esc(v)}" placeholder="default">`;
+    else {
+      const options = kind === "bool" ? [[true, "on"], [false, "off"]] : kind.map((o) => [o, o]);
+      input = `<select name="${name}"><option value="">— default</option>${options.map(([o, text]) =>
+        `<option value="${esc(o)}" ${v !== undefined && String(v) === String(o) ? "selected" : ""}>${esc(text)}</option>`).join("")}</select>`;
+    }
+    return `<div class="field"><label>${esc(label)}</label>${input}</div>`;
+  }).join("");
+}
+function readConnection(form, controller) {
+  const out = {};
+  for (const [key, , kind] of CONNECTION_FIELDS[controller] || []) {
+    const raw = form.elements[`conn_${key}`].value;
+    if (raw === "") continue;
+    out[key] = kind === "bool" ? raw === "true" : kind === "number" || typeof kind[0] === "number" ? Number(raw) : raw;
+  }
+  return out;
+}
+function connectionSummary(t) {
+  const c = t.connection_defaults || {};
+  if (t.controller === "serial" && c.baud) {
+    const frame = `${c.data_bits ?? 8}${(c.parity ?? "none")[0].toUpperCase()}${c.stop_bits ?? 1}`;
+    return `${c.baud} ${frame}${c.flow_control && c.flow_control !== "none" ? " · " + c.flow_control : ""}`;
+  }
+  return Object.entries(c).map(([k, v]) => `${k}=${v}`).join(" · ");
+}
+
+// ---------------------------------------------------------------- data caches
+let cache = { types: [], manufacturers: [], devices: [], images: [], haber: {} };
+let me = { role: "operator" };
+async function loadRegistry() {
+  const [types, manufacturers, devices, images] = await Promise.all([get("api/device-types"), get("api/manufacturers"), get("api/instances"), get("api/parser-images")]);
+  cache = { types: types.rows, manufacturers: manufacturers.rows, devices: devices.rows, images: images.rows, haber: images.haber };
+}
+async function loadPods() {
+  try {
+    const config = await get("api/config");
+    $("pods").innerHTML = ["serial", "feeder", "webhook", "socket"].flatMap((s) => (config[s]?.pods || []).map((p) => `<option value="${esc(s + "." + p.id)}">`)).join("");
+  } catch { /* config is optional for the form */ }
+}
+
+// ---------------------------------------------------------------- devices
+function editDevice(device) {
+  const isNew = !device;
+  const typeOptions = cache.types.map((t) => [t.code, `${t.manufacturer_name ? t.manufacturer_name + " · " : ""}${t.label} (${t.code})`]);
+  openForm(isNew ? "Add device" : `Edit ${device.device_id}`, [
+    { name: "device_id", label: "Device ID", disabled: !isNew, required: true, placeholder: "or2-monitor-01" },
+    { name: "label", label: "Name", placeholder: "OR-2 patient monitor" },
+    { name: "device_type", label: "Device type", type: "select", options: typeOptions, wide: true },
+    { name: "serial_number", label: "Serial number" },
+    { name: "asset_tag", label: "Asset tag" },
+    { name: "station", label: "Station", placeholder: "OR-2, ICU bed 3" },
+    { name: "location", label: "Location", placeholder: "Building / floor / room" },
+    { name: "installed_at", label: "Installed on", type: "date" },
+    { name: "leaf_id", label: "Leaf workstation", placeholder: "leaf-or-02" },
+    { name: "pod", label: "Connection pod (controller.pod)", required: true, list: "pods", placeholder: "socket.or2-monitor", wide: true },
+    { name: "options", label: "Parser options (JSON, overrides type defaults)", type: "json", wide: true },
+    { name: "notes", label: "Notes", type: "textarea", wide: true },
+    { name: "enabled", label: "Enabled (runs a parser container)", type: "check" },
+  ], device || { enabled: true, options: {}, installed_at: Date.now() }, async (values) => {
+    if (isNew) await api("api/instances", "POST", values);
+    else { delete values.device_id; await api(`api/instances/${enc(device.device_id)}`, "PUT", values); }
+  });
+}
+function renderDevices() {
+  const typeBy = Object.fromEntries(cache.types.map((t) => [t.code, t]));
+  $("devices").innerHTML = cache.devices.length ? `<table><tr><th>Device</th><th>Type / manufacturer</th><th>Serial · asset</th><th>Station · location</th><th>Pod → Leaf</th><th>Installed</th><th>Parser</th><th></th></tr>${cache.devices.map((d) => {
+    const t = typeBy[d.device_type] || {};
+    return `<tr><td><b>${esc(d.label || d.device_id)}</b><div class="muted"><code>${esc(d.device_id)}</code></div></td>
+      <td>${esc(t.label || d.device_type)}<div class="muted">${esc(t.manufacturer_name || "—")}${t.model ? " · " + esc(t.model) : ""}</div></td>
+      <td>${esc(d.serial_number || "—")}<div class="muted">${esc(d.asset_tag || "")}</div></td>
+      <td>${esc(d.station || "—")}<div class="muted">${esc(d.location || "")}</div></td>
+      <td><code>${esc(d.pod)}</code><div>→ ${esc(d.leaf_id || "unassigned")}</div></td>
+      <td>${day(d.installed_at)}</td>
+      <td>${d.enabled ? "" : `<span class="warn">disabled</span> `}${d.container ? `<span class="${d.container.status === "running" ? "ok" : "warn"}">${esc(d.container.status)}</span>` : `<span class="muted">not started</span>`}</td>
+      <td class="actions"><button onclick='editDevice(cache.devices.find((x) => x.device_id === ${JSON.stringify(d.device_id)}))'>Edit</button>
+        <button onclick="act('api/instances/${enc(d.device_id)}/enabled/${!d.enabled}')">${d.enabled ? "Disable" : "Enable"}</button>
+        <button class="danger" onclick="act('api/instances/${enc(d.device_id)}', 'DELETE', 'Remove ${esc(d.device_id)} and stop its parser?')">Remove</button></td></tr>`;
+  }).join("")}</table>` : `<span class="muted">No devices installed yet.</span>`;
+}
+
+// ---------------------------------------------------------------- device types
+const parsersOf = (image) => cache.images.find((i) => i.image === image)?.parsers || [];
+function editType(type) {
+  const isNew = !type, haber = type?.source === "haber";
+  const manufacturerOptions = [["", "—"], ...cache.manufacturers.map((m) => [m.code, m.name])];
+  const image = type?.image || cache.images[0]?.image || "";
+  const imageField = haber
+    ? { name: "image", label: "Parser image (from Canopy)", disabled: true, wide: true }
+    : { name: "image", label: "Parser image (delivered by Canopy)", type: "select", wide: true,
+        options: cache.images.map((i) => [i.image, `${i.image}${i.version ? " · v" + i.version : ""}`]) };
+  const parserField = haber || !parsersOf(image).length
+    ? { name: "parser", label: "Parser", disabled: haber, required: true, placeholder: "hl7v2" }
+    : { name: "parser", label: "Parser (in this image)", type: "select", options: parsersOf(image).map((p) => [p, p]) };
+  openForm(isNew ? "Add local template" : `Edit ${type.code}${haber ? " (from Canopy)" : ""}`, [
+    { name: "code", label: "Code", disabled: !isNew, required: true, placeholder: "philips-mx800-hl7" },
+    { name: "label", label: "Label", disabled: haber, required: true },
+    { name: "manufacturer", label: "Manufacturer", type: "select", options: manufacturerOptions },
+    { name: "model", label: "Model", placeholder: "IntelliVue MX800" },
+    { name: "description", label: "Description", type: "textarea", wide: true },
+    { name: "category", label: "Category", disabled: haber, placeholder: "patient_monitor" },
+    { name: "protocol", label: "Protocol", disabled: haber, required: true, placeholder: "hl7v2" },
+    { name: "controller", label: "Controller", type: "select", disabled: haber, options: ["socket", "serial", "feeder", "webhook"].map((c) => [c, c]) },
+    parserField,
+    imageField,
+    { name: "connection_defaults", label: "Connection defaults (for the device's pod)", type: "connection", controllerField: "controller" },
+    { name: "default_options", label: "Default parser options (JSON)", type: "json", disabled: haber, wide: true },
+  ], type || { category: "device", controller: "socket", default_options: {}, connection_defaults: {}, image }, async (values) => {
+    const body = { ...type, ...values, code: type?.code || values.code };
+    for (const key of ["category"]) body[key] = body[key] || "device";
+    if (isNew) await api("api/device-types", "POST", body);
+    else await api(`api/device-types/${enc(type.code)}`, "PUT", body);
+  });
+  // The parser list follows the chosen image, so a template cannot name a parser the image lacks.
+  const form = $("dialog-form");
+  if (!haber && form.elements.parser.tagName === "SELECT") form.elements.image.addEventListener("change", () => {
+    form.elements.parser.innerHTML = parsersOf(form.elements.image.value).map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join("");
+  });
+}
+function renderTypes() {
+  const h = cache.haber || {};
+  $("types-sync").innerHTML = `${h.status === "ok" ? `<span class="dot on"></span>` : `<span class="dot"></span>`}${esc(h.status || "never")} · last sync ${ago(h.last_sync)}${h.release_id ? ` · release <code>${esc(h.release_id)}</code>` : ""}`;
+  $("types-canopy").innerHTML = typeTable(cache.types.filter((t) => t.source === "haber"), "No device types from Canopy yet. Check the Haber connection and sync.");
+  $("types-local").innerHTML = typeTable(cache.types.filter((t) => t.source !== "haber"), "No local templates.");
+}
+// "registry/flora/gateway/parser@sha256:9fbf…" -> "parser@sha256:9fbfd82"; the full reference is in the tooltip.
+const shortImage = (ref) => { const [name, digest] = ref.split("@"); const base = name.split("/").pop(); return digest ? `${base}@${digest.slice(0, 14)}` : base; };
+function typeTable(rows, empty) {
+  if (!rows.length) return `<span class="muted">${esc(empty)}</span>`;
+  return `<table><tr><th>Type</th><th>Manufacturer · model</th><th>Category</th><th>Connection</th><th>Image</th><th>Devices</th><th></th></tr>${rows.map((t) => `<tr>
+    <td><b>${esc(t.label)}</b><div class="muted"><code>${esc(t.code)}</code></div></td>
+    <td>${esc(t.manufacturer_name || "—")}<div class="muted">${esc(t.model || "")}</div></td>
+    <td>${esc(t.category)}</td>
+    <td><span class="chip">${esc(t.controller)}</span><span class="chip">${esc(t.protocol)}</span><div class="muted">parser <code>${esc(t.parser)}</code></div>${connectionSummary(t) ? `<div><code>${esc(connectionSummary(t))}</code></div>` : ""}</td>
+    <td><code title="${esc(t.image)}">${esc(shortImage(t.image))}</code>${t.source === "haber" ? `<div class="muted">${t.origin === "canopy" ? "hospital (Canopy)" : "Root release"} · v${esc(t.haber_version || "?")}</div>` : ""}</td>
+    <td>${t.instances}</td>
+    <td class="actions"><button class="admin-only" onclick='editType(cache.types.find((x) => x.code === ${JSON.stringify(t.code)}))'>Edit</button>
+      ${t.source === "haber" ? "" : `<button class="danger admin-only" onclick="act('api/device-types/${enc(t.code)}', 'DELETE', 'Delete device type ${esc(t.code)}?')">Delete</button>`}</td></tr>`).join("")}</table>`;
+}
+
+// ---------------------------------------------------------------- manufacturers
+function editManufacturer(m) {
+  openForm(m ? `Edit ${m.name}` : "Add manufacturer", [
+    { name: "code", label: "Code", required: true, placeholder: "philips" },
+    { name: "name", label: "Name", required: true, placeholder: "Philips Healthcare" },
+    { name: "country", label: "Country", placeholder: "NL" },
+    { name: "website", label: "Website", placeholder: "https://…" },
+    { name: "support_contact", label: "Local support contact", wide: true, placeholder: "Service engineer, phone, email" },
+    { name: "notes", label: "Notes", type: "textarea", wide: true },
+  ], m || {}, async (values) => {
+    if (m) await api(`api/manufacturers/${enc(m.code)}`, "PUT", values);
+    else await api("api/manufacturers", "POST", values);
+  });
+}
+function renderManufacturers() {
+  $("manufacturers").innerHTML = `<table><tr><th>Manufacturer</th><th>Country</th><th>Website</th><th>Support</th><th>Device types</th><th></th></tr>${cache.manufacturers.map((m) => `<tr>
+    <td><b>${esc(m.name)}</b><div class="muted"><code>${esc(m.code)}</code></div></td><td>${esc(m.country || "—")}</td>
+    <td>${m.website && /^https?:\/\//.test(m.website) ? `<a href="${esc(m.website)}" target="_blank" rel="noopener">${esc(m.website)}</a>` : esc(m.website || "—")}</td>
+    <td>${esc(m.support_contact || "—")}</td><td>${m.device_types}</td>
+    <td class="actions"><button onclick='editManufacturer(cache.manufacturers.find((x) => x.code === ${JSON.stringify(m.code)}))'>Edit</button>
+      <button class="danger" onclick="act('api/manufacturers/${enc(m.code)}', 'DELETE', 'Delete manufacturer ${esc(m.name)}?')">Delete</button></td></tr>`).join("")}</table>`;
+}
+
+// ---------------------------------------------------------------- users
+let users = [];
+function editUser(u) {
+  openForm(u ? `Edit ${u.username}` : "Add user", [
+    { name: "username", label: "Username", required: true },
+    { name: "display_name", label: "Display name" },
+    { name: "password", label: u ? "New password (blank = keep)" : "Password (6+ characters)", type: "password", required: !u },
+    { name: "role", label: "Role", type: "select", options: [["operator", "Operator — devices, controllers, streams"], ["admin", "Admin — also device types, manufacturers, users"]] },
+    { name: "enabled", label: "Enabled", type: "check" },
+  ], u || { enabled: true, role: "operator" }, async (values) => {
+    if (u) await api(`api/users/${u.id}`, "PUT", values);
+    else await api("api/users", "POST", values);
+  });
+}
+async function renderUsers() {
+  users = (await get("api/users")).rows;
+  $("users").innerHTML = `<table><tr><th>User</th><th>Role</th><th>Status</th><th>Last sign-in</th><th></th></tr>${users.map((u) => `<tr>
+    <td><b>${esc(u.display_name || u.username)}</b><div class="muted"><code>${esc(u.username)}</code></div></td>
+    <td><span class="role">${esc(u.role)}</span></td>
+    <td>${u.enabled ? `<span class="ok">enabled</span>` : `<span class="warn">disabled</span>`}</td><td>${ago(u.last_login_at)}</td>
+    <td class="actions"><button onclick='editUser(users.find((x) => x.id === ${u.id}))'>Edit</button>
+      <button class="danger" onclick="act('api/users/${u.id}', 'DELETE', 'Delete user ${esc(u.username)}?')">Delete</button></td></tr>`).join("")}</table>`;
+}
+$("password").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.target, msg = $("password-msg");
+  try {
+    await api("api/auth/password", "POST", { current_password: form.current_password.value, new_password: form.new_password.value });
+    form.reset(); msg.className = "formerror ok"; msg.textContent = "Password changed. Other sessions were signed out.";
+  } catch (error) { msg.className = "formerror"; msg.textContent = error.message; }
+});
+
+// ---------------------------------------------------------------- overview
+async function renderOverview() {
   const [lic, controllers, instances, status, logs] = await Promise.all([
     get("api/license"), get("api/controllers"), get("api/instances"), get("api/devices/status").catch(() => ({ devices: [] })), get("api/logs?limit=40")]);
   $("ts").textContent = "updated " + new Date().toLocaleTimeString();
-  $("gw").textContent = lic.gateway_id ? `${lic.gateway_id} · tenant ${lic.tenant_id || "—"}` : "Device integration";
+  $("gw").textContent = lic.gateway_id ? `${lic.gateway_id} · tenant ${lic.tenant_id || "—"}` : "Station admin";
   $("license").innerHTML = `<span class="${lic.valid ? "ok" : "bad"}"><b>${lic.valid ? "Valid" : "Not valid"}</b></span>
     ${lic.reason ? ` — ${esc(lic.reason)}` : ""} · devices <b>${lic.used}</b> / ${lic.max_devices ?? "—"}
     ${lic.expires_at ? ` · expires ${new Date(lic.expires_at).toLocaleDateString()}` : ""} · bundle <code>${esc(lic.bundle_id || "—")}</code>
     <div class="muted">Haber: ${esc(lic.haber?.status)} ${lic.haber?.error ? "— " + esc(lic.haber.error) : ""} · last sync ${ago(lic.haber?.last_sync)}
-    <button onclick="post('api/haber/sync')">Sync now</button></div>`;
-  $("layers").innerHTML = Object.entries(controllers).map(([name, c]) => `<div class="layer"><h3><span class="dot ${c.reachable ? "on" : ""}"></span>${esc(name)}
-      <button style="float:right" onclick="post('api/controllers/${name}/restart')">Restart</button></h3>
-      ${(c.pods || []).map((p) => `<div><span class="dot ${p.connected ? "on" : ""}"></span><code>${esc(p.pod)}</code>
-        <span class="muted">${p.frames} frames · ${ago(p.last_frame_ts)}</span>${p.last_error ? `<div class="bad">${esc(p.last_error)}</div>` : ""}</div>`).join("") || `<span class="muted">${c.reachable ? "no pods" : esc(c.error)}</span>`}</div>`).join("");
+    <button onclick="act('api/haber/sync')">Sync now</button></div>`;
+  const prefixes = { "serial-controller": "serial.", "feeder-controller": "feeder.", "webhook-controller": "webhook.", "socket-controller": "socket." };
+  $("layers").innerHTML = Object.entries(controllers).map(([name, c]) => {
+    const stopped = c.container_status && c.container_status !== "running";
+    const users = c.ingress ? instances.rows.filter((i) => i.pod.startsWith(prefixes[name])) : [];
+    const enabledUsers = users.filter((i) => i.enabled);
+    const buttons = !c.container_status ? "" : stopped
+      ? `<button onclick="act('api/controllers/${enc(name)}/start')">Start</button>`
+      : `${c.ingress ? `<button class="danger" onclick="stopController('${esc(name)}')">Stop</button> ` : ""}<button onclick="act('api/controllers/${enc(name)}/restart')">Restart</button>`;
+    return `<div class="layer ${stopped ? "off" : ""}"><h3><span class="dot ${c.reachable ? "on" : ""}"></span>${esc(name)}
+      <span style="float:right">${buttons}</span></h3>
+      ${c.ingress ? `<div class="muted">${users.length} device(s) · ${stopped ? `<b class="warn">${esc(c.container_status)}</b>` : esc(c.container_status || "unknown")}</div>` : ""}
+      ${stopped && enabledUsers.length ? `<div class="bad">Stopped while ${enabledUsers.length} enabled device(s) use it: ${enabledUsers.map((i) => esc(i.device_id)).join(", ")}</div>` : ""}
+      ${stopped ? "" : (c.pods || []).map((p) => `<div><span class="dot ${p.connected ? "on" : ""}"></span><code>${esc(p.pod)}</code>
+        <span class="muted">${p.frames} frames · ${ago(p.last_frame_ts)}</span>${p.last_error ? `<div class="bad">${esc(p.last_error)}</div>` : ""}</div>`).join("") || `<span class="muted">${c.reachable ? "no pods" : esc(c.error)}</span>`}</div>`;
+  }).join("");
   const byDevice = Object.fromEntries((status.devices || []).map((d) => [d.device_id, d]));
-  const latest = Object.fromEntries(await Promise.all(instances.rows.map(async (i) => [i.device_id, await get(`api/devices/${i.device_id}/latest?seconds=30`).catch(() => [])])));
+  const latest = Object.fromEntries(await Promise.all(instances.rows.map(async (i) => [i.device_id, await get(`api/devices/${enc(i.device_id)}/latest?seconds=30`).catch(() => [])])));
   $("instances").innerHTML = `<table><tr><th>Device</th><th>Pod → Leaf</th><th>Parser container</th><th>Data</th><th>Latest values</th><th></th></tr>${instances.rows.map((i) => {
     const d = byDevice[i.device_id] || {};
     const values = {};
-    for (const row of latest[i.device_id] || []) values[row.ivy_param] = row;
-    return `<tr><td><b>${esc(i.label || i.device_id)}</b><div class="muted"><code>${esc(i.device_id)}</code> · ${esc(i.device_type)}</div></td>
+    for (const row of (Array.isArray(latest[i.device_id]) ? latest[i.device_id] : [])) values[row.ivy_param] = row;
+    return `<tr><td><b>${esc(i.label || i.device_id)}</b><div class="muted"><code>${esc(i.device_id)}</code> · ${esc(i.device_type)}${i.station ? " · " + esc(i.station) : ""}</div></td>
       <td><code>${esc(i.pod)}</code><div>→ ${esc(i.leaf_id || "unassigned")}</div></td>
       <td>${i.enabled ? "" : `<span class="warn">disabled</span> `}${i.container ? `<span class="${i.container.status === "running" ? "ok" : "warn"}">${esc(i.container.status)}</span>` : `<span class="muted">not started</span>`}</td>
       <td><span class="dot ${d.is_online ? "on" : ""}"></span>${esc(d.status || "waiting")}<div class="muted">${d.total_samples ?? 0} samples · ${ago(d.last_seen_ts)}</div></td>
       <td>${Object.values(values).map((v) => `<span class="chip">${esc(v.ivy_param)} ${esc(v.value)}${v.unit ? " " + esc(v.unit) : ""}</span>`).join("") || `<span class="muted">—</span>`}</td>
-      <td><button onclick="post('api/instances/${i.device_id}/restart')">Restart</button>
-          <button onclick="post('api/instances/${i.device_id}/enabled/${!i.enabled}')">${i.enabled ? "Disable" : "Enable"}</button></td></tr>`;
+      <td class="actions"><button onclick="act('api/instances/${enc(i.device_id)}/restart')">Restart</button>
+          <button onclick="act('api/instances/${enc(i.device_id)}/enabled/${!i.enabled}')">${i.enabled ? "Disable" : "Enable"}</button></td></tr>`;
   }).join("")}</table>`;
   $("logs").innerHTML = `<table class="log">${logs.rows.map((l) => `<tr><td class="muted">${new Date(l.ts).toLocaleTimeString()}</td><td class="${l.level === "info" ? "" : "warn"}">${esc(l.level)}</td>
     <td>${esc(l.component)}</td><td><code>${esc(l.pod || "")}</code></td><td>${esc(l.message)}</td></tr>`).join("")}</table>`;
 }
-refresh(); setInterval(refresh, 5000);
+
+
+// ---------------------------------------------------------------- streams
+const stream = { selected: null, frames: [], lastId: 0, paused: false, open: new Set() };
+const fmtRate = (v, unit) => v >= 1000 ? `${(v / 1000).toFixed(1)}k${unit}` : `${v < 10 && v % 1 ? v.toFixed(1) : Math.round(v)}${unit}`;
+const fmtBytes = (n) => n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : n >= 1024 ? `${(n / 1024).toFixed(1)} kB` : `${n} B`;
+
+// Per-second rows [sec, fin, bin, fout, bout] -> buckets of `size` seconds, values as per-second averages.
+function bucket(series, size) {
+  const out = [];
+  for (let i = 0; i < series.length; i += size) {
+    const rows = series.slice(i, i + size), n = rows.length;
+    out.push([rows[0][0], ...[1, 2, 3, 4].map((k) => rows.reduce((a, r) => a + r[k], 0) / n)]);
+  }
+  return out;
+}
+const bucketSize = (window) => window <= 60 ? 1 : window <= 300 ? 5 : 15;
+
+function sparkline(rows) {
+  const max = Math.max(1e-9, ...rows.map((r) => Math.max(r[1], r[3])));
+  const pts = (k) => rows.map((r, i) => `${(i / Math.max(1, rows.length - 1) * 100).toFixed(2)},${(34 - r[k] / max * 30).toFixed(2)}`).join(" ");
+  const hasOut = rows.some((r) => r[3] > 0);
+  return `<svg viewBox="0 0 100 36" preserveAspectRatio="none" aria-hidden="true">
+    <line x1="0" y1="34.5" x2="100" y2="34.5" stroke="var(--line)" vector-effect="non-scaling-stroke"/>
+    ${hasOut ? `<polyline points="${pts(3)}" fill="none" stroke="var(--series-out)" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>` : ""}
+    <polyline points="${pts(1)}" fill="none" stroke="var(--series-in)" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`;
+}
+
+function niceMax(v) { if (v <= 0) return 1; const p = 10 ** Math.floor(Math.log10(v)), m = v / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; }
+
+// One-axis line chart with crosshair + tooltip. series: [{label, color, key, format}]
+function lineChart(el, rows, series, size) {
+  const W = Math.max(280, el.clientWidth || 600), H = 180, L = 44, R = 8, T = 8, B = 22;
+  const max = niceMax(Math.max(...rows.flatMap((r) => series.map((s) => r[s.key]))));
+  const x = (i) => L + i / Math.max(1, rows.length - 1) * (W - L - R), y = (v) => T + (1 - v / max) * (H - T - B);
+  const ticks = [0, max / 2, max];
+  const time = (sec) => new Date(sec * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(series.map((s) => s.label).join(", "))} over time">
+    <g class="grid">${ticks.map((t) => `<line x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/><text x="${L - 6}" y="${y(t) + 3}" text-anchor="end">${esc(series[0].format(t))}</text>`).join("")}</g>
+    <text x="${L}" y="${H - 6}">${time(rows[0][0])}</text><text x="${W - R}" y="${H - 6}" text-anchor="end">now</text>
+    ${series.map((s) => `<polyline points="${rows.map((r, i) => `${x(i).toFixed(1)},${y(r[s.key]).toFixed(1)}`).join(" ")}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`).join("")}
+    <g class="cross" visibility="hidden"><line y1="${T}" y2="${H - B}" stroke="var(--muted)" stroke-dasharray="3 3"/>
+      ${series.map((s) => `<circle r="4" fill="${s.color}" stroke="var(--panel)" stroke-width="2"/>`).join("")}</g>
+    <rect x="${L}" y="0" width="${W - L - R}" height="${H}" fill="transparent"/></svg><div class="tip" hidden></div>`;
+  const svg = el.querySelector("svg"), cross = svg.querySelector(".cross"), tip = el.querySelector(".tip");
+  svg.querySelector("rect").addEventListener("mousemove", (ev) => {
+    const box = svg.getBoundingClientRect(), px = (ev.clientX - box.left) / box.width * W;
+    const i = Math.max(0, Math.min(rows.length - 1, Math.round((px - L) / (W - L - R) * (rows.length - 1)))), r = rows[i];
+    cross.setAttribute("visibility", "visible");
+    cross.querySelector("line").setAttribute("x1", x(i)); cross.querySelector("line").setAttribute("x2", x(i));
+    cross.querySelectorAll("circle").forEach((c, k) => { c.setAttribute("cx", x(i)); c.setAttribute("cy", y(r[series[k].key])); });
+    tip.hidden = false;
+    tip.innerHTML = `<div class="muted">${time(r[0])}${size > 1 ? ` · ${size}s avg` : ""}</div>` +
+      series.map((s) => `<div><span class="key" style="background:${s.color}"></span>${esc(s.label)} <b>${esc(s.format(r[s.key]))}</b></div>`).join("");
+    const left = x(i) / W * box.width;
+    tip.style.left = `${left > box.width / 2 ? left - tip.offsetWidth - 12 : left + 12}px`; tip.style.top = "8px";
+  });
+  svg.querySelector("rect").addEventListener("mouseleave", () => { cross.setAttribute("visibility", "hidden"); tip.hidden = true; });
+}
+
+// Shows device bytes readably: HL7/ASCII control characters become visible markers.
+const CTL = { 0x0b: "VT", 0x1c: "FS", 0x0d: "CR", 0x0a: "LF", 0x02: "STX", 0x03: "ETX", 0x06: "ACK", 0x15: "NAK", 0x1b: "ESC", 0x09: "TAB" };
+function frameBytes(f) {
+  if (f.encoding === "base64") { const bin = atob(f.payload); return Uint8Array.from(bin, (c) => c.charCodeAt(0)); }
+  return new TextEncoder().encode(f.payload);
+}
+function showText(f) {
+  if (f.encoding === "base64") {
+    const bytes = frameBytes(f), printable = bytes.filter((b) => b >= 0x20 && b < 0x7f || CTL[b]).length;
+    if (printable < bytes.length * 0.9) return null;   // mostly binary: hex is the honest view
+  }
+  const text = f.encoding === "base64" ? String.fromCharCode(...frameBytes(f)) : f.payload;
+  return [...text].map((ch) => {
+    const c = ch.charCodeAt(0);
+    if (c === 0x0d) return `<span class="ctl">⟨CR⟩</span>\n`;
+    if (c === 0x0a) return `<span class="ctl">⟨LF⟩</span>\n`;
+    if (c < 0x20 || c === 0x7f) return `<span class="ctl">⟨${CTL[c] || c.toString(16).padStart(2, "0")}⟩</span>`;
+    return esc(ch);
+  }).join("");
+}
+function showHex(f) {
+  const bytes = frameBytes(f), lines = [];
+  for (let i = 0; i < bytes.length; i += 16) {
+    const chunk = [...bytes.slice(i, i + 16)];
+    lines.push(`${i.toString(16).padStart(6, "0")}  ${chunk.map((b) => b.toString(16).padStart(2, "0")).join(" ").padEnd(47)}  ${esc(chunk.map((b) => b >= 0x20 && b < 0x7f ? String.fromCharCode(b) : ".").join(""))}`);
+  }
+  return lines.join("\n");
+}
+function preview(f) {
+  const text = f.encoding === "base64" ? [...frameBytes(f).slice(0, 48)].map((b) => b.toString(16).padStart(2, "0")).join(" ") : f.payload.slice(0, 200);
+  return text.replace(/[\x00-\x1f\x7f]/g, (c) => c === "\r" ? " ⏎ " : "·");
+}
+
+function renderStreamFrames() {
+  const view = $("sd-view").value, dir = $("sd-dir").value;
+  const frames = stream.frames.filter((f) => !dir || f.direction === dir);
+  $("sd-frames-list").innerHTML = frames.length ? `<table class="frames"><tr><th>Time</th><th>Dir</th><th>Seq</th><th>Size</th><th>Payload</th></tr>${frames.map((f) => {
+    const open = stream.open.has(f.id), body = open ? (view === "hex" ? showHex(f) : showText(f) ?? showHex(f)) : "";
+    return `<tr class="frame" data-id="${f.id}"><td class="muted">${new Date(f.ts).toLocaleTimeString()}</td>
+      <td><span class="key ${f.direction}"></span>${f.direction}</td><td>${esc(f.seq ?? "—")}</td><td>${fmtBytes(f.size)}</td>
+      <td class="preview">${esc(preview(f))}</td></tr>
+      ${open ? `<tr><td colspan="5"><pre>${body}</pre>${f.truncated ? `<div class="muted">Payload truncated to the first 8192 characters.</div>` : ""}
+        ${Object.keys(f.meta || {}).length ? `<div class="muted">meta ${esc(JSON.stringify(f.meta))}</div>` : ""}</td></tr>` : ""}`;
+  }).join("")}</table>` : `<span class="muted">No frames yet${dir ? " in this direction" : ""}. Frames appear here as the device sends data.</span>`;
+}
+$("sd-frames-list").addEventListener("click", (e) => {
+  const row = e.target.closest("tr.frame"); if (!row) return;
+  const id = Number(row.dataset.id); stream.open.has(id) ? stream.open.delete(id) : stream.open.add(id); renderStreamFrames();
+});
+$("sd-view").addEventListener("change", renderStreamFrames);
+$("sd-dir").addEventListener("change", renderStreamFrames);
+$("window").addEventListener("change", () => render());
+
+function toggleStreamPause() { stream.paused = !stream.paused; $("sd-pause").textContent = stream.paused ? "Resume" : "Pause"; }
+function selectStream(pod) {
+  stream.selected = pod; stream.frames = []; stream.lastId = 0; stream.open.clear();
+  stream.paused = false; $("sd-pause").textContent = "Pause";
+  $("stream-detail").hidden = !pod;
+  render();
+  if (pod) $("stream-detail").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function renderStreams() {
+  const window = Number($("window").value), size = bucketSize(window);
+  const data = await get(`api/streams?window=${window}`);
+  const m = data.monitor;
+  $("monitor").innerHTML = m.state === "running" ? `<span class="dot on"></span>live` : `<span class="dot"></span>${esc(m.state)}${m.error ? " — " + esc(m.error) : ""}`;
+  const groups = {};
+  for (const st of data.streams) (groups[st.controller] ||= []).push(st);
+  $("streams").innerHTML = Object.keys(groups).length ? Object.entries(groups).map(([controller, list]) => `<div class="group"><h3>${esc(controller)}-controller</h3>
+    <div class="streams">${list.map((st) => `<button class="stream ${st.pod === stream.selected ? "sel" : ""}" data-pod="${esc(st.pod)}">
+      <div class="row"><code>${esc(st.pod)}</code><span class="muted">${st.last_ts ? ago(st.last_ts) : "no data yet"}</span></div>
+      <div class="nums">${st.devices.length ? esc(st.devices.join(", ")) : "no device"} · ${fmtRate(st.rate.frames_in, "/s")} · ${fmtBytes(Math.round(st.rate.bytes_in))}/s</div>
+      ${sparkline(bucket(st.series, size))}
+      <div class="nums">${st.totals.frames_in} in · ${st.totals.frames_out} out · ${fmtBytes(st.totals.bytes_in)}</div></button>`).join("")}</div></div>`).join("")
+    : `<span class="muted">No ingress pods configured.</span>`;
+  if (!stream.selected) return;
+  const d = await get(`api/streams/${stream.selected.split("/").map(enc).join("/")}?window=${window}&after=${stream.lastId}`);
+  $("sd-title").textContent = d.pod;
+  const sel = data.streams.find((st) => st.pod === d.pod);
+  $("sd-devices").textContent = sel?.devices.length ? "→ " + sel.devices.join(", ") : "no device assigned";
+  $("sd-tiles").innerHTML = [
+    [fmtRate(d.rate.frames_in, "/s"), "frames in (10 s)"], [`${fmtBytes(Math.round(d.rate.bytes_in))}/s`, "bytes in (10 s)"],
+    [fmtRate(d.rate.frames_out, "/s"), "frames out (10 s)"], [d.totals.frames_in.toLocaleString(), "frames in since start"],
+    [fmtBytes(d.totals.bytes_in), "received since start"], [d.last_ts ? ago(d.last_ts) : "—", "last frame"],
+  ].map(([v, label]) => `<div class="tile"><b>${esc(v)}</b><span>${esc(label)}</span></div>`).join("");
+  const rows = bucket(d.series, size);
+  lineChart($("sd-frames"), rows, [
+    { label: "in", key: 1, color: "var(--series-in)", format: (v) => fmtRate(v, "/s") },
+    { label: "out", key: 3, color: "var(--series-out)", format: (v) => fmtRate(v, "/s") }], size);
+  lineChart($("sd-bytes"), rows, [{ label: "in", key: 2, color: "var(--series-in)", format: (v) => fmtBytes(Math.round(v)) + "/s" }], size);
+  if (!stream.paused && d.frames.length) {
+    stream.frames = [...d.frames, ...stream.frames].slice(0, 200);
+    stream.lastId = Math.max(stream.lastId, ...d.frames.map((f) => f.id));
+    renderStreamFrames();
+  } else if (!stream.frames.length) renderStreamFrames();
+}
+$("streams").addEventListener("click", (e) => { const b = e.target.closest("button.stream"); if (b) selectStream(b.dataset.pod === stream.selected ? null : b.dataset.pod); });
+
+
+// ---------------------------------------------------------------- site (where this gateway is installed)
+let site = {};
+const UNIT_TYPES = [["", "—"], ["or", "Operating room (OR)"], ["icu", "ICU"], ["er", "Emergency (ER)"], ["ward", "Ward"], ["other", "Other"]];
+async function loadSite() {
+  site = await get("api/site");
+  $("site-label").textContent = site.label || "Location not set";
+  $("site-id").textContent = site.gateway_id;
+  document.querySelector(".brand .site").classList.toggle("unset", !site.label);
+  document.querySelector(".brand .site").title = [site.label, site.hospital, site.building, site.floor && `floor ${site.floor}`, site.gateway_id].filter(Boolean).join(" · ");
+  document.title = site.label ? `${site.label} · ${site.gateway_id} — Flora Gateway` : `${site.gateway_id} — Flora Gateway`;
+  const rows = [["Gateway ID", `<code>${esc(site.gateway_id)}</code>`], ["Hospital", esc(site.hospital || site.tenant_id || "—")],
+    ["Ward / unit", esc([site.unit, UNIT_TYPES.find(([v]) => v === site.unit_type)?.[1]].filter((v) => v && v !== "—").join(" · ") || "—")],
+    ["Building · floor · room", esc([site.building, site.floor && `floor ${site.floor}`, site.room].filter(Boolean).join(" · ") || "—")],
+    ["Contact", esc(site.contact || "—")]];
+  $("site").innerHTML = `${site.label ? `<div style="font-size:16px; font-weight:600; margin-bottom:8px">${esc(site.label)}</div>` : `<div class="warn" style="margin-bottom:8px">Location not set. ${me.role === "admin" ? "Use Edit location so staff can tell this gateway apart." : "Ask an admin to set it."}</div>`}
+    <div class="tiles">${rows.map(([k, v]) => `<div class="tile"><span>${esc(k)}</span><div>${v}</div></div>`).join("")}</div>
+    ${site.notes ? `<div class="muted">${esc(site.notes)}</div>` : ""}
+    ${site.updated_at ? `<div class="muted" style="font-size:12px">Updated ${ago(site.updated_at)} by ${esc(site.updated_by || "—")}</div>` : ""}`;
+}
+function editSite() {
+  openForm("Station location", [
+    { name: "display_name", label: "Station name (shown in the sidebar and browser tab)", wide: true, placeholder: "OR-1 anaesthesia station" },
+    { name: "unit", label: "Ward / unit", placeholder: "OR, ICU, Ward 5A" },
+    { name: "unit_type", label: "Unit type", type: "select", options: UNIT_TYPES },
+    { name: "hospital", label: "Hospital", placeholder: site.tenant_id || "" },
+    { name: "building", label: "Building" },
+    { name: "floor", label: "Floor" },
+    { name: "room", label: "Room / bed", placeholder: "OR-1" },
+    { name: "contact", label: "Contact (biomed / IT)", wide: true, placeholder: "Name, phone" },
+    { name: "notes", label: "Notes", type: "textarea", wide: true },
+  ], site, async (values) => { await api("api/site", "PUT", values); await loadSite(); });
+}
+
+async function render() {
+  try {
+    if (tab === "overview") { loadSite().catch(() => {}); return await renderOverview(); }
+    if (tab === "streams") return await renderStreams();
+    if (tab === "users") return me.role === "admin" ? await renderUsers() : undefined;
+    await loadRegistry();
+    ({ devices: renderDevices, types: renderTypes, manufacturers: renderManufacturers })[tab]();
+  } catch (error) { if (error.message !== "sign in required") console.error(error); }
+}
+
+get("api/auth/me").then((u) => {
+  me = u;
+  $("who").textContent = `${u.display_name || u.username} · ${u.role}`;
+  document.body.classList.toggle("operator", u.role !== "admin");
+}).catch(() => {});
+loadPods();
+loadSite().catch(() => {});
+loadRegistry().catch(() => {});
+show(tab);
+setInterval(() => tab === "overview" && !dialog.open && render(), 5000);
+setInterval(() => tab === "streams" && !dialog.open && render(), 2000);
 </script>
 </body>
 </html>

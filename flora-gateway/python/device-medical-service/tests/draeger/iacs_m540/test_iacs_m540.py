@@ -43,3 +43,15 @@ def test_m540_waveform_signed_samples_and_opaque_bounds():
     assert IacsDatagramParser().parse(bytes(32) + block).waveforms['31-1'] == samples
     with pytest.raises(IacsParseError, match="truncated"):
         IacsDatagramParser().parse(bytes(32) + b'\x00\x0c')
+
+
+def test_m540_keeps_unmapped_integers_without_inventing_names_or_units():
+    data = bytes.fromhex((FIXTURES / 'iacs-m540-numeric.hex').read_text())
+    parser = load_parser('iacs_m540', 'monitor', 'socket.m540', {'source_ip': '192.0.2.10', 'parameters': []})
+    assert parser.feed(raw(data, 'socket.m540', source_ip='192.0.2.10')) == []
+    original = parser.drain_measurements()
+    decoded = IacsDatagramParser().parse(data).numeric_values
+    assert {r['raw_code']: r['raw_value'] for r in original} == decoded
+    assert all(r['definition']['name'] is None and r['definition']['unit'] is None for r in original)
+    assert all(r['mapping'] == {} for r in original)
+    assert parser.drain_measurements() == []

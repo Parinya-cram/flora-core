@@ -6,7 +6,10 @@
 #   docker compose -p flora-leaf-or-01  --env-file env/leaf-or-01.env  up -d --build
 #   docker compose -p flora-leaf-icu-01 --env-file env/leaf-icu-01.env up -d --build
 #
-# Builds from the shared source in ../services and ../frontend.
+# Builds from the shared source in ../services and ../frontend. Once Haber has an
+# approved leaf release, the updater swaps leaf-api and leaf-sync to the release
+# images (FLORA_IMAGE_API / FLORA_IMAGE_SYNC in .release/<project>.env), but never
+# while a case is open. compose.override.yaml (dev only) mounts the source instead.
 
 services:
   leaf-db:
@@ -34,6 +37,7 @@ services:
   leaf-api:
     build:
       context: ../services/flora-api
+    image: ${FLORA_IMAGE_API:-flora-leaf-api:dev}
     environment:
       FLORA_DATABASE_URL: postgresql://flora_app:${LEAF_DB_APP_PASSWORD:-flora-leaf-app-local-only}@leaf-db:5432/flora
       FLORA_API_ENV: development
@@ -42,12 +46,15 @@ services:
       FLORA_BOOTSTRAP_ADMIN_ENABLED: "true"
       FLORA_BOOTSTRAP_ADMIN_USERNAME: ${LEAF_ADMIN_USERNAME:-admin}
       FLORA_BOOTSTRAP_ADMIN_PASSWORD: ${LEAF_ADMIN_PASSWORD:-admin}
+      FLORA_BOOTSTRAP_ADMIN_MUST_CHANGE_PASSWORD: ${FLORA_BOOTSTRAP_ADMIN_MUST_CHANGE_PASSWORD:-false}
       FLORA_BOOTSTRAP_ADMIN_NAME: Administrator
       FLORA_DEVICE_INGEST_ENABLED: "true"
       FLORA_LEAF_SERVICE_SECRET: ${FLORA_LEAF_SERVICE_SECRET:-flora-leaf-service-demo-secret-change-me}
       FLORA_CANOPY_SYNC_URL: ${CANOPY_SYNC_URL:-http://host.docker.internal:7203}
       FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-flora-sync-demo-secret-change-me}
       FLORA_ACCOUNT_CONFIG_SYNC_TIMEOUT_SECONDS: "1.5"
+      # Leaf identity for directory sign-in (users of this Leaf's ward, checked by Canopy).
+      FLORA_LEAF_ID: ${FLORA_LEAF_ID:-leaf-or-01}
       # Leaf pulls device data from its Flora Gateway data-api (Vector-compatible).
       VECTOR_READ_URL: ${LEAF_DEVICE_READ_URL:-http://host.docker.internal:7410/data-api/leaf-or-01/api/observations}
       HIS_GATEWAY_BASE_URL: ${HIS_GATEWAY_BASE_URL:-http://127.0.0.1:9}
@@ -55,8 +62,6 @@ services:
     ports:
       # Electron: FLORA_API_BASE_URL=http://127.0.0.1:<LEAF_API_PORT>
       - "127.0.0.1:${LEAF_API_PORT:-7301}:8000"
-    volumes:
-      - ../services/flora-api/app:/app/app:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -89,6 +94,7 @@ services:
   leaf-sync:
     build:
       context: ../services/flora-sync-worker
+    image: ${FLORA_IMAGE_SYNC:-flora-leaf-sync:dev}
     environment:
       FLORA_LEAF_API_URL: http://leaf-api:8000
       FLORA_CANOPY_SYNC_URL: ${CANOPY_SYNC_URL:-http://host.docker.internal:7203}
@@ -104,6 +110,32 @@ services:
       leaf-api: {condition: service_healthy}
     restart: unless-stopped
 
+
+  # Keeps this project on the release approved in Haber (see ../flora-updater).
+  updater:
+    build:
+      context: ../flora-updater
+    image: ${FLORA_IMAGE_UPDATER:-flora-updater:dev}
+    environment:
+      FLORA_COMPONENT: leaf
+      FLORA_NODE_ID: ${FLORA_LEAF_ID:-leaf-or-01}
+      HABER_URL: ${HABER_URL:-http://host.docker.internal:7204}
+      HABER_NODE_TOKEN: ${HABER_NODE_TOKEN:-haber-node-demo-token}
+      FLORA_ROOT_PUBLIC_KEY: ${FLORA_ROOT_PUBLIC_KEY:-}
+      FLORA_UPDATER_WINDOW: ${FLORA_UPDATER_WINDOW:-}
+      # Safety gate: no update while this Leaf has an active case.
+      FLORA_UPDATER_GATE_URL: http://leaf-api:8000/api/case/status
+      FLORA_UPDATER_GATE_HEADER: "x-flora-service-secret: ${FLORA_LEAF_SERVICE_SECRET:-flora-leaf-service-demo-secret-change-me}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # The compose project's parent directory; the updater re-runs compose against it.
+      - ..:/host
+      - updater_state:/state
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
 volumes:
+  updater_state:
   leaf_db_data:
   leaf_frontend_modules:

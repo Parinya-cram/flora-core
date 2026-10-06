@@ -176,15 +176,15 @@ that device's parser with the updated instance record.
 
 **The JSON file is a seed, not an ongoing override.** Gateway Service inserts
 missing device IDs once; editing a seed entry does not overwrite an existing
-database record. The current API supports create, enable/disable, restart, and
-delete, but not updating an existing instance's options. Until an update endpoint
-and settings UI are added, retain the desired instance JSON and re-register the
-instance through the existing management API when changing those options.
+database record. Edit an installed device on the **Devices** tab of the station
+admin (`http://localhost:7400`) or with `PUT /api/instances/<device_id>`; changing
+its type, pod or options restarts its parser.
 
 For a new instance in a running gateway:
 
 ```powershell
-$headers = @{ 'x-gateway-key' = $env:GATEWAY_ADMIN_KEY }
+$basic = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('admin:admin'))  # a gateway user
+$headers = @{ 'authorization' = "Basic $basic"; 'x-gateway-key' = $env:GATEWAY_ADMIN_KEY }
 $devices = Get-Content '../config/instances.hidro.json' -Raw | ConvertFrom-Json
 # Adjust the path above for your current directory. Select the intended device.
 $device = $devices | Where-Object device_id -eq 'or-bx50-01'

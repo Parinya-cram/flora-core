@@ -4,7 +4,7 @@
 - Device types: `draeger-medibus`.
 - Transport: Serial RS-232.
 
-`parser.py` owns framing, checksums, handshake, polling, replies, and decoding. `parameters.json` holds page/code mappings.
+`parser.py` owns framing, checksums, handshake, polling, replies, and decoding. `flora_mapping.json` holds Flora conversions. `device_parameters.json` holds the separate legacy source definitions.
 
 ## Configuration
 
@@ -25,3 +25,5 @@ python -m pytest -q tests/draeger/medibus
 The tests mirror this folder; shared synthetic fixtures are in `tests/fixtures`.
 Read [DEVELOPMENT.md](../../../../../../DEVELOPMENT.md) for the parser contract, data flow,
 and registration checklist.
+
+Original fields and migration: [Dräger parameter guide](../../../../../../DRAEGER-PARAMETERS.md).

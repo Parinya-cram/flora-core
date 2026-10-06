@@ -54,3 +54,10 @@ class RuntimeTest(unittest.TestCase):
         assert observations[0][1]['ivy_param'] == 'rr'
         assert observations[0][1]['value'] == 14
         assert observations[0][1]['system_ts'] == 1000
+
+        measurements = [(key, value) for topic, key, value in sent if topic == 'gw.measurements']
+        assert len(measurements) == 1
+        assert measurements[0][0] == 'vent-01'
+        assert measurements[0][1]['raw_code'] == '24:D6'
+        assert measurements[0][1]['raw_value'] == '  14'
+        assert measurements[0][1]['definition']['name'] == 'RR'

@@ -21,3 +21,11 @@ FLORA_API_BASE_URL=http://127.0.0.1:7301 npm run desktop:start:no-build
 ```
 
 API, sync worker and web build from the shared source in `../services` and `../frontend`.
+
+Each project runs a `flora-updater` sidecar. When Haber approves a leaf release it
+switches `leaf-api` and `leaf-sync` to the release images, but only while
+`/api/case/status` reports no active case. Set `FLORA_UPDATER_WINDOW=02:00-05:00`
+to also limit updates to a maintenance window. Once a node is on a release, keep
+`--env-file .release/<project>.env` on manual compose commands (demo/up.sh does),
+otherwise compose puts the dev images back. `compose.override.yaml` (dev only)
+mounts the API source for hot reload.

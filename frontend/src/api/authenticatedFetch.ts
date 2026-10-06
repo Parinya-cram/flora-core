@@ -1,4 +1,5 @@
 import { BACKEND_BASE } from "./backendBase";
+import { isWardScopedPath, WARD_HEADER, wardHeaders } from "./wardSelection";
 
 const SESSION_KEY = "flora_auth_token";
 
@@ -12,10 +13,13 @@ export function installAuthenticatedFetch(): void {
     const isFloraApi = (url.origin === window.location.origin || url.origin === apiOrigin) &&
       (url.pathname === "/health" || url.pathname.startsWith("/api/"));
     const token = window.localStorage.getItem(SESSION_KEY)?.trim();
-    if (!isFloraApi || !token) return originalFetch(input, init);
+    const ward = isFloraApi && isWardScopedPath(url.pathname) ? wardHeaders()[WARD_HEADER] : undefined;
+    if (!isFloraApi || (!token && !ward)) return originalFetch(input, init);
     const headers = new Headers(input instanceof Request ? input.headers : undefined);
     new Headers(init.headers).forEach((value, key) => headers.set(key, value));
-    if (!headers.has("X-FLORA-Session")) headers.set("X-FLORA-Session", token);
+    if (token && !headers.has("X-FLORA-Session")) headers.set("X-FLORA-Session", token);
+    // Canopy ward scope rides on every fleet/report request (omitted for "All wards").
+    if (ward && !headers.has(WARD_HEADER)) headers.set(WARD_HEADER, ward);
     return originalFetch(input, { ...init, headers });
   };
 }

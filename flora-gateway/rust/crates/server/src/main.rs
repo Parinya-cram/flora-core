@@ -42,6 +42,16 @@ struct StatusQuery {
     leaf_id: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct MeasurementQuery {
+    from: i64,
+    to: i64,
+    device_id: Option<String>,
+    leaf_id: Option<String>,
+    after_id: Option<i64>,
+    limit: Option<i64>,
+}
+
 type ApiError = (StatusCode, Json<Value>);
 
 #[tokio::main]
@@ -54,6 +64,7 @@ async fn main() -> Result<()> {
     let app = Router::new()
         .route("/health", get(health))
         .route("/api/observations", get(observations))
+        .route("/api/measurements", get(measurements))
         .route("/api/devices/status", get(device_status))
         .with_state(state);
     let listener = tokio::net::TcpListener::bind(&config.server.listen).await?;
@@ -103,6 +114,28 @@ async fn observations(State(state): State<AppState>, Query(query): Query<Observa
         }
     }
     Ok(Json(rows))
+}
+
+async fn measurements(State(state): State<AppState>, Query(query): Query<MeasurementQuery>) -> Result<Json<Value>, ApiError> {
+    if query.to <= query.from || query.to.saturating_sub(query.from) > state.max_window_ms {
+        return Err((StatusCode::BAD_REQUEST, Json(json!({ "error": "invalid window", "max_window_ms": state.max_window_ms }))));
+    }
+    let limit = query.limit.unwrap_or(1000).clamp(1, 10000);
+    let after = query.after_id.unwrap_or(0).max(0);
+    let client = state.pool.get().await.map_err(internal)?;
+    let row = client.query_one(
+        r#"SELECT coalesce(json_agg(t ORDER BY t.id), '[]'::json)
+           FROM (SELECT m.* FROM gateway_measurement m
+                 WHERE m.system_ts >= $1 AND m.system_ts < $2 AND m.id > $3
+                   AND ($4::text IS NULL OR m.device_id = $4)
+                   AND ($5::text IS NULL OR m.device_id IN
+                       (SELECT device_id FROM gateway_device_instance WHERE leaf_id = $5))
+                 ORDER BY m.id LIMIT $6) t"#,
+        &[&query.from, &query.to, &after, &query.device_id, &query.leaf_id, &limit],
+    ).await.map_err(internal)?;
+    let rows: Value = row.get(0);
+    let next = rows.as_array().and_then(|items| items.last()).and_then(|item| item["id"].as_i64());
+    Ok(Json(json!({"rows": rows, "next_after_id": next})))
 }
 
 async fn device_status(State(state): State<AppState>, Query(query): Query<StatusQuery>) -> Result<Json<Value>, ApiError> {

@@ -9,6 +9,8 @@ import { useAuth } from "./auth/useAuth";
 import { useBootstrapStatus } from "./bootstrap/useBootstrapStatus";
 import { getEditionInfo, getSurfaceInfo } from "./edition/config";
 import { useLanguage } from "./context/LanguageContext";
+import { useWorkstationSettings } from "./hooks/useWorkstationSettings";
+import { useCanopyWard } from "./hooks/useCanopyWard";
 
 const NAV_COLLAPSED_KEY = "flora.ui.navigationCollapsed";
 
@@ -25,6 +27,9 @@ export default function App() {
   const bootstrap = useBootstrapStatus();
   const edition = getEditionInfo();
   const surface = getSurfaceInfo();
+  const workstation = useWorkstationSettings();
+  const isCanopy = surface.code === "canopy";
+  const ward = useCanopyWard(user, isCanopy && isAuthenticated);
   const [caseStatus, setCaseStatus] = useState<CaseStatus>({ status: "IDLE" });
   const [isNavigationOpen, setIsNavigationOpen] = useState(false);
   const [isNavigationCollapsed, setIsNavigationCollapsed] = useState(() => readStoredBool(NAV_COLLAPSED_KEY, false));
@@ -163,8 +168,20 @@ export default function App() {
 
   useEffect(() => {
     if (typeof document === "undefined") return;
-    document.title = edition.code === "full" ? t(`product.${surface.code}.name`) : edition.productName;
-  }, [edition.code, edition.productName, surface.code, t]);
+    const productName = edition.code === "full" ? t(`product.${surface.code}.name`) : edition.productName;
+    // Leaf tabs identify the bedside: "Ward · AN 123 · Flora Leaf" (HN when there is no AN).
+    const parts = [productName];
+    if (surface.code === "leaf") {
+      const wardLabel = (workstation.careUnitName || workstation.roomName || "").trim();
+      const caseId = caseStatus.status === "IDLE"
+        ? ""
+        : caseStatus.admission_number?.trim()
+          ? `AN ${caseStatus.admission_number.trim()}`
+          : caseStatus.hn ? `HN ${caseStatus.hn}` : "";
+      parts.unshift(...[wardLabel, caseId].filter(Boolean));
+    }
+    document.title = parts.join(" · ");
+  }, [caseStatus, edition.code, edition.productName, surface.code, t, workstation.careUnitName, workstation.roomName]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -354,6 +371,7 @@ export default function App() {
         setActiveView={setActiveView}
         sessionUser={user}
         caseStatus={caseStatus}
+        ward={isCanopy ? ward : null}
         onLogout={logout}
         onShutdown={handleShutdown}
         onToggleNavigation={() => {
@@ -369,12 +387,16 @@ export default function App() {
           sessionUser={user}
           caseStatus={caseStatus}
           collapsed={isNavigationCollapsed}
+          wardName={isCanopy && ward.ready ? ward.selectedName || t(ward.allUnits ? "ward.all" : "ward.none") : null}
           mobileOpen={isNavigationOpen}
           onCloseMobile={() => setIsNavigationOpen(false)}
+          onLogout={logout}
         />
 
         <div className="app-main flex-1 overflow-auto">
-          <MainArea
+          {/* Canopy views wait for a validated ward and remount when it changes so every view refetches in scope. */}
+          {isCanopy && !ward.ready ? null : <MainArea
+            key={isCanopy ? `ward:${ward.selected}` : "leaf"}
             caseStatus={caseStatus}
             activeView={activeView}
             sessionUser={user}
@@ -387,7 +409,7 @@ export default function App() {
               await refreshCase();
               setActiveView("case");
             }}
-          />
+          />}
         </div>
       </div>
 

@@ -122,7 +122,7 @@ def round2(value: float) -> float:
 def case_status(database: Connection = Depends(connection)) -> dict:
     row = database.execute(
         """
-        SELECT id, hn, status, start_time, discharge_time, admission_source, identity_status
+        SELECT id, hn, admission_number, status, start_time, discharge_time, admission_source, identity_status
         FROM cases
         WHERE status = 'active'
         ORDER BY start_time DESC, id DESC
@@ -135,6 +135,7 @@ def case_status(database: Connection = Depends(connection)) -> dict:
         "status": row["status"].upper(),
         "case_id": row["id"],
         "hn": row["hn"],
+        "admission_number": row["admission_number"],
         "start_time": row["start_time"],
         "discharge_time": row["discharge_time"],
         "admission_source": row["admission_source"],

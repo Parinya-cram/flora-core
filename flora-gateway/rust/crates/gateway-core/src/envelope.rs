@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 pub const OBS_TOPIC: &str = "gw.obs";
+pub const MEASUREMENT_TOPIC: &str = "gw.measurements";
 pub const LOG_TOPIC: &str = "gw.logs";
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -101,6 +102,42 @@ pub struct LogEvent {
     pub message: String,
     #[serde(default)]
     pub detail: Value,
+}
+
+/// Original device fields. Unknown definitions remain explicit, never inferred
+/// from a Flora chart key. `mapping` is a snapshot of the optional conversion.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeviceMeasurement {
+    pub device_id: String,
+    pub protocol: String,
+    pub pod: String,
+    pub raw_code: String,
+    pub raw_value: Value,
+    pub value: Value,
+    pub definition: Value,
+    pub mapping: Value,
+    pub system_ts: i64,
+    pub device_ts: Option<i64>,
+    pub gateway_id: String,
+    pub seq: i64,
+}
+
+#[cfg(test)]
+mod measurement_tests {
+    use super::*;
+
+    #[test]
+    fn original_unavailable_value_and_definition_survive_serialization() {
+        let input = serde_json::json!({
+            "device_id": "test", "protocol": "draeger-medibus", "pod": "serial.test",
+            "raw_code": "24:D6", "raw_value": "----", "value": null,
+            "definition": {"name": "RR", "unit": null, "evidence": "source reference"},
+            "mapping": {}, "system_ts": 1000, "device_ts": null,
+            "gateway_id": "gw", "seq": 3
+        });
+        let decoded: DeviceMeasurement = serde_json::from_value(input.clone()).unwrap();
+        assert_eq!(serde_json::to_value(decoded).unwrap(), input);
+    }
 }
 
 pub fn pod_key(controller: &str, id: &str) -> String {

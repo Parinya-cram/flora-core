@@ -7,6 +7,7 @@ from psycopg import Connection
 
 from ..database import connection
 from .auth_canopy import read_token
+from .canopy_users import ward_scope
 
 
 router = APIRouter(
@@ -14,6 +15,10 @@ router = APIRouter(
     tags=["canopy-fleet"],
     dependencies=[Depends(read_token)],
 )
+
+# A Leaf belongs to the ward of its assigned bed; unassigned Leafs are visible only
+# to users with access to every ward (scope None).
+IN_SCOPE = "(%s::text[] IS NULL OR scope_unit.unit_key = ANY(%s))"
 
 
 def _record(value: Any) -> dict[str, Any]:
@@ -201,6 +206,7 @@ def _chart_summary(snapshot: dict[str, Any], patient: dict[str, Any]) -> dict[st
 @router.get("/icu-overview")
 def icu_overview(
     limit_points: int = Query(default=30, ge=12, le=120),
+    scope: list[str] | None = Depends(ward_scope),
     database: Connection = Depends(connection),
 ) -> dict[str, Any]:
     rows = database.execute(
@@ -225,10 +231,13 @@ def icu_overview(
           WHERE case_row.leaf_id=leaf.leaf_id AND upper(case_row.status)='ACTIVE'
           ORDER BY case_row.last_synced_at DESC LIMIT 1
         ) active ON true
+        LEFT JOIN canopy_leaf_unit scope_unit ON scope_unit.leaf_id=leaf.leaf_id
+        WHERE {IN_SCOPE}
         ORDER BY coalesce(assignment.desired_config#>>'{location,careUnitName}',''),
                  coalesce(assignment.desired_config#>>'{location,bedName}',''),
                  coalesce(nullif(leaf.canopy_display_name,''),leaf.display_name),leaf.leaf_id
-        """
+        """.replace("{IN_SCOPE}", IN_SCOPE),
+        (scope, scope),
     ).fetchall()
     result: list[dict[str, Any]] = []
     now = datetime.now(timezone.utc)
@@ -264,7 +273,7 @@ def icu_overview(
 
 
 @router.get("/leaves")
-def leaves(database: Connection = Depends(connection)) -> dict:
+def leaves(scope: list[str] | None = Depends(ward_scope), database: Connection = Depends(connection)) -> dict:
     rows = database.execute(
         """
         SELECT leaf.leaf_id, leaf.hospital_id,
@@ -287,18 +296,21 @@ def leaves(database: Connection = Depends(connection)) -> dict:
                     ELSE 'offline' END AS connection_status
         FROM sync_leaf_node leaf
         LEFT JOIN canopy_leaf_assignment assignment ON assignment.leaf_id=leaf.leaf_id
+        LEFT JOIN canopy_leaf_unit scope_unit ON scope_unit.leaf_id=leaf.leaf_id
+        WHERE {IN_SCOPE}
         ORDER BY coalesce(assignment.desired_config#>>'{location,hospitalName}', leaf.hospital_id),
                  assignment.desired_config#>>'{location,buildingName}',
                  assignment.desired_config#>>'{location,careUnitName}',
                  assignment.desired_config#>>'{location,roomName}',
                  coalesce(nullif(leaf.canopy_display_name,''),leaf.display_name), leaf.leaf_id
-        """
+        """.replace("{IN_SCOPE}", IN_SCOPE),
+        (scope, scope),
     ).fetchall()
     return {"rows": rows}
 
 
 @router.get("/active-cases")
-def active_cases(database: Connection = Depends(connection)) -> dict:
+def active_cases(scope: list[str] | None = Depends(ward_scope), database: Connection = Depends(connection)) -> dict:
     rows = database.execute(
         """
         SELECT c.global_case_id, c.hospital_id, c.leaf_id,
@@ -313,9 +325,11 @@ def active_cases(database: Connection = Depends(connection)) -> dict:
                     ELSE 'offline' END AS sync_status
         FROM sync_case_index c
         JOIN sync_leaf_node l ON l.leaf_id = c.leaf_id
-        WHERE upper(c.status) = 'ACTIVE'
+        LEFT JOIN canopy_leaf_unit scope_unit ON scope_unit.leaf_id = c.leaf_id
+        WHERE upper(c.status) = 'ACTIVE' AND {IN_SCOPE}
         ORDER BY c.start_time DESC NULLS LAST, c.last_synced_at DESC
-        """
+        """.replace("{IN_SCOPE}", IN_SCOPE),
+        (scope, scope),
     ).fetchall()
     return {"rows": rows}
 
@@ -324,6 +338,7 @@ def active_cases(database: Connection = Depends(connection)) -> dict:
 def cases(
     status: str | None = Query(default=None, max_length=24),
     limit: int = Query(default=50, ge=1, le=500),
+    scope: list[str] | None = Depends(ward_scope),
     database: Connection = Depends(connection),
 ) -> dict:
     normalized_status = str(status or "").strip().upper()
@@ -343,17 +358,22 @@ def cases(
                     ELSE 'offline' END AS sync_status
         FROM sync_case_index c
         JOIN sync_leaf_node l ON l.leaf_id = c.leaf_id
-        WHERE (%s = '' OR upper(c.status) = %s)
+        LEFT JOIN canopy_leaf_unit scope_unit ON scope_unit.leaf_id = c.leaf_id
+        WHERE (%s = '' OR upper(c.status) = %s) AND {IN_SCOPE}
         ORDER BY c.last_synced_at DESC, c.start_time DESC NULLS LAST
         LIMIT %s
-        """,
-        (normalized_status, normalized_status, limit),
+        """.replace("{IN_SCOPE}", IN_SCOPE),
+        (normalized_status, normalized_status, scope, scope, limit),
     ).fetchall()
     return {"rows": rows}
 
 
 @router.get("/cases/{global_case_id}/snapshot")
-def case_snapshot(global_case_id: uuid.UUID, database: Connection = Depends(connection)) -> dict:
+def case_snapshot(
+    global_case_id: uuid.UUID,
+    scope: list[str] | None = Depends(ward_scope),
+    database: Connection = Depends(connection),
+) -> dict:
     row = database.execute(
         """
         SELECT c.global_case_id, c.hospital_id, c.leaf_id,
@@ -361,9 +381,10 @@ def case_snapshot(global_case_id: uuid.UUID, database: Connection = Depends(conn
                c.source_case_id, c.status, c.revision, c.last_synced_at, c.snapshot
         FROM sync_case_index c
         JOIN sync_leaf_node l ON l.leaf_id = c.leaf_id
-        WHERE c.global_case_id = %s
-        """,
-        (global_case_id,),
+        LEFT JOIN canopy_leaf_unit scope_unit ON scope_unit.leaf_id = c.leaf_id
+        WHERE c.global_case_id = %s AND {IN_SCOPE}
+        """.replace("{IN_SCOPE}", IN_SCOPE),
+        (global_case_id, scope, scope),
     ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="synchronized case not found")

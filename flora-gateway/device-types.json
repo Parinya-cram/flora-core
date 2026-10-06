@@ -1,0 +1,303 @@
+[
+  {
+    "code": "hl7-patient-monitor",
+    "label": "Patient monitor (HL7 v2 / IHE PCD-01)",
+    "category": "patient_monitor",
+    "protocol": "hl7v2",
+    "controller": "socket",
+    "parser": "hl7v2",
+    "image": "parser",
+    "default_options": {
+      "timezone": "Asia/Bangkok"
+    },
+    "connection_defaults": {
+      "transport": "tcp",
+      "framing": "mllp",
+      "auto_ack": true
+    },
+    "version": "1"
+  },
+  {
+    "code": "json-anesthesia-machine",
+    "label": "Anesthesia machine (JSON push)",
+    "category": "anesthesia_machine",
+    "protocol": "json",
+    "controller": "webhook",
+    "parser": "json_fields",
+    "image": "parser",
+    "default_options": {
+      "units": {
+        "et_agent": "%",
+        "fi_agent": "%",
+        "fio2": "%",
+        "airway_pressure_peak": "cmH2O"
+      }
+    },
+    "version": "1"
+  },
+  {
+    "code": "http-ventilator",
+    "label": "ICU ventilator (HTTP poll)",
+    "category": "ventilator",
+    "protocol": "json",
+    "controller": "feeder",
+    "parser": "json_fields",
+    "image": "parser",
+    "default_options": {
+      "codes": {
+        "MODE": "set_vent_mode",
+        "PEEP": "set_peep",
+        "FIO2_SET": "set_fio2",
+        "RR_SET": "set_rr",
+        "VT_SET": "set_tidal_volume"
+      }
+    },
+    "connection_defaults": {
+      "interval_ms": 5000
+    },
+    "version": "1"
+  },
+  {
+    "code": "serial-temp-module",
+    "label": "Temperature / CVP module (RS-232, polled)",
+    "category": "temperature_module",
+    "protocol": "ascii",
+    "controller": "serial",
+    "parser": "ascii_kv",
+    "image": "parser",
+    "default_options": {
+      "codes": {
+        "TEMP": "temperature",
+        "CVP": "cvp"
+      },
+      "units": {
+        "temperature": "Cel",
+        "cvp": "mmHg"
+      },
+      "poll_command": "?\\r\\n",
+      "poll_interval_sec": 5
+    },
+    "connection_defaults": {
+      "baud": 9600,
+      "data_bits": 8,
+      "parity": "none",
+      "stop_bits": 1,
+      "flow_control": "none",
+      "idle_ms": 80
+    },
+    "version": "1"
+  },
+  {
+    "code": "draeger-iacs-m540",
+    "label": "Dräger M540 (IACS UDP, research mapping)",
+    "category": "patient_monitor",
+    "protocol": "draeger-iacs",
+    "controller": "socket",
+    "parser": "iacs_m540",
+    "image": "parser",
+    "default_options": {},
+    "connection_defaults": {
+      "transport": "udp",
+      "auto_ack": false,
+      "max_frame_bytes": 6096
+    },
+    "version": "1"
+  },
+  {
+    "code": "draeger-medibus",
+    "label": "Dräger MEDIBUS.X (RS-232 numeric data)",
+    "category": "ventilator",
+    "protocol": "draeger-medibus",
+    "controller": "serial",
+    "parser": "medibus",
+    "image": "parser",
+    "default_options": {
+      "poll_interval_sec": 1,
+      "response_timeout_sec": 3,
+      "session_timeout_sec": 10
+    },
+    "connection_defaults": {
+      "baud": 19200,
+      "data_bits": 8,
+      "parity": "even",
+      "stop_bits": 1,
+      "flow_control": "none",
+      "rts": true,
+      "dtr": true,
+      "idle_ms": 20,
+      "max_frame_bytes": 16384
+    },
+    "version": "1"
+  },
+  {
+    "code": "ge-carestation-750",
+    "label": "GE Carestation 750 (COM 1.2)",
+    "category": "anesthesia_machine",
+    "protocol": "ge-datex-com12",
+    "controller": "serial",
+    "parser": "ge_carestation",
+    "image": "parser",
+    "default_options": {},
+    "connection_defaults": {
+      "baud": 19200,
+      "data_bits": 7,
+      "parity": "odd",
+      "stop_bits": 1,
+      "flow_control": "none",
+      "rts": true,
+      "dtr": true,
+      "idle_ms": 20
+    },
+    "version": "1"
+  },
+  {
+    "code": "ge-aisys-cs2",
+    "label": "GE Aisys CS2 (Hidro COM 1.2 profile)",
+    "category": "anesthesia_machine",
+    "protocol": "ge-datex-com12",
+    "controller": "serial",
+    "parser": "ge_carestation",
+    "image": "parser",
+    "default_options": {},
+    "connection_defaults": {
+      "baud": 19200,
+      "data_bits": 7,
+      "parity": "odd",
+      "stop_bits": 1,
+      "flow_control": "none",
+      "rts": true,
+      "dtr": true,
+      "idle_ms": 20
+    },
+    "version": "1"
+  },
+  {
+    "code": "ge-bx50-dri",
+    "label": "GE Bx50 / B650 (Hidro DRI profile)",
+    "category": "patient_monitor",
+    "protocol": "ge-s5-dri",
+    "controller": "serial",
+    "parser": "ge_dri",
+    "image": "parser",
+    "default_options": {
+      "checksum_mode": "escaped",
+      "dri_levels": [
+        12,
+        11,
+        10,
+        9,
+        8,
+        6
+      ]
+    },
+    "connection_defaults": {
+      "baud": 19200,
+      "data_bits": 8,
+      "parity": "even",
+      "stop_bits": 1,
+      "flow_control": "hardware",
+      "dtr": true,
+      "idle_ms": 20
+    },
+    "version": "1"
+  },
+  {
+    "code": "ge-s5-dri",
+    "label": "GE S/5 (DRI)",
+    "category": "patient_monitor",
+    "protocol": "ge-s5-dri",
+    "controller": "serial",
+    "parser": "ge_dri",
+    "image": "parser",
+    "default_options": {
+      "checksum_mode": "payload",
+      "dri_levels": [
+        9,
+        8,
+        7
+      ]
+    },
+    "connection_defaults": {
+      "baud": 19200,
+      "data_bits": 8,
+      "parity": "even",
+      "stop_bits": 1,
+      "flow_control": "hardware",
+      "dtr": true,
+      "idle_ms": 20
+    },
+    "version": "1"
+  },
+  {
+    "code": "ge-aisys-dri",
+    "label": "GE Aisys (legacy DRI alternative)",
+    "category": "anesthesia_machine",
+    "protocol": "ge-s5-dri",
+    "controller": "serial",
+    "parser": "ge_dri",
+    "image": "parser",
+    "default_options": {
+      "checksum_mode": "payload",
+      "dri_levels": [
+        12,
+        11,
+        10,
+        9,
+        8,
+        6
+      ]
+    },
+    "connection_defaults": {
+      "baud": 115200,
+      "data_bits": 8,
+      "parity": "even",
+      "stop_bits": 1,
+      "flow_control": "none",
+      "rts": true,
+      "dtr": true,
+      "idle_ms": 20
+    },
+    "version": "1"
+  },
+  {
+    "code": "bbraun-space-bcc",
+    "label": "B. Braun SpaceCom (BCC TCP)",
+    "category": "infusion_pump",
+    "protocol": "bbraun-bcc",
+    "controller": "socket",
+    "parser": "bbraun_bcc",
+    "image": "parser",
+    "default_options": {
+      "bed_id": "1/1/1",
+      "poll_interval_sec": 5
+    },
+    "connection_defaults": {
+      "transport": "tcp",
+      "framing": "raw",
+      "auto_ack": false,
+      "connect_timeout_ms": 3000,
+      "read_timeout_ms": 15000,
+      "reconnect_ms": 3000
+    },
+    "version": "1"
+  },
+  {
+    "code": "hidro-hl7-monitor",
+    "label": "Hidro shared HL7 monitor (GE / configured vendor aliases)",
+    "category": "patient_monitor",
+    "protocol": "hl7v2",
+    "controller": "socket",
+    "parser": "hidro_hl7",
+    "image": "parser",
+    "default_options": {
+      "timezone": "Asia/Bangkok",
+      "repair_segments": false
+    },
+    "connection_defaults": {
+      "transport": "tcp",
+      "framing": "mllp",
+      "auto_ack": true
+    },
+    "version": "1"
+  }
+]

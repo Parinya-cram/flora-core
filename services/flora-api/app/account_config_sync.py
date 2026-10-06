@@ -69,6 +69,41 @@ def _push_personal_theme(username: str, theme: dict[str, Any]) -> bool:
         return False
 
 
+LEAF_ID = os.getenv("FLORA_LEAF_ID", "").strip()
+DIRECTORY_AUTH_TIMEOUT_SECONDS = max(0.5, float(os.getenv("FLORA_DIRECTORY_AUTH_TIMEOUT_SECONDS", "4")))
+
+
+def _authenticate(username: str, password: str) -> tuple[str, dict[str, Any] | None]:
+    request = urllib.request.Request(
+        f"{CANOPY_SYNC_URL}/api/sync/v1/directory/authenticate",
+        data=json.dumps({"leaf_id": LEAF_ID, "username": username, "password": password}).encode("utf-8"),
+        headers={"Authorization": f"Bearer {SYNC_SECRET}", "Accept": "application/json",
+                 "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=DIRECTORY_AUTH_TIMEOUT_SECONDS) as response:
+            payload = json.load(response)
+            user = payload.get("user") if isinstance(payload, dict) else None
+            return ("ok", user) if isinstance(user, dict) else ("unavailable", None)
+    except urllib.error.HTTPError as error:
+        return ("denied", None) if error.code in {401, 403, 404} else ("unavailable", None)
+    except (OSError, ValueError, urllib.error.URLError):
+        return ("unavailable", None)
+
+
+def authenticate_with_canopy(username: str, password: str) -> tuple[str, dict[str, Any] | None]:
+    """Verify credentials centrally: ("ok", directory record) | ("denied", None) | ("unavailable", None)."""
+    if not CANOPY_SYNC_URL or not SYNC_SECRET or not LEAF_ID:
+        return ("unavailable", None)
+    future = SYNC_EXECUTOR.submit(_authenticate, username, password)
+    try:
+        return future.result(timeout=DIRECTORY_AUTH_TIMEOUT_SECONDS + 0.5)
+    except concurrent.futures.TimeoutError:
+        future.cancel()
+        return ("unavailable", None)
+
+
 def push_personal_theme(username: str, theme: dict[str, Any]) -> bool:
     """Explicitly publish one private theme to the owner's central account."""
     if not CANOPY_SYNC_URL or not SYNC_SECRET:

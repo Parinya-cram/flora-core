@@ -16,6 +16,12 @@ def _enabled() -> bool:
     return os.getenv("FLORA_API_ENV", "production").strip().lower() == "development"
 
 
+def _must_change_password() -> bool:
+    # Demo installs set this to false so the default admin/admin keeps working.
+    configured = os.getenv("FLORA_BOOTSTRAP_ADMIN_MUST_CHANGE_PASSWORD", "true")
+    return configured.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def ensure_bootstrap_admin(database: Connection) -> bool:
     """Create the first local administrator for a completely empty installation.
 
@@ -59,9 +65,10 @@ def ensure_bootstrap_admin(database: Connection) -> bool:
             """INSERT INTO auth_user (
                    username, auth_source, password_salt, password_hash, name, role,
                    is_active, created_at, updated_at, language_code, must_change_password
-               ) VALUES (%s,'local',%s,%s,%s,'admin',1,%s,%s,%s,1)
+               ) VALUES (%s,'local',%s,%s,%s,'admin',1,%s,%s,%s,%s)
                RETURNING id""",
-            (username, salt, password_digest, display_name, current, current, language["code"]),
+            (username, salt, password_digest, display_name, current, current, language["code"],
+             1 if _must_change_password() else 0),
         ).fetchone()
         database.execute(
             """INSERT INTO auth_user_role (

@@ -9,11 +9,15 @@ import { getSurfaceInfo } from "../edition/config";
 import floraLogo from "../assets/floraicon.png";
 import canopyLogo from "../assets/canopyicon.png";
 import ClinicalReferenceTooltip from "../components/common/ClinicalReferenceTooltip";
+import WardSwitcher from "../components/WardSwitcher";
+import type { CanopyWardState } from "../hooks/useCanopyWard";
 
 type Props = {
   setActiveView: (view: AppView) => void;
   sessionUser: AuthUser | null;
   caseStatus: CaseStatus;
+  /** Canopy ward scope; null on Leaf. */
+  ward?: CanopyWardState | null;
   onLogout: () => void;
   onShutdown?: () => void;
   onToggleNavigation: () => void;
@@ -28,7 +32,7 @@ function Icon({ kind }: { kind: "account" | "logout" | "power" }) {
   return <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true"><path d={paths[kind]} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 }
 
-export default function TopBar({ setActiveView, sessionUser, caseStatus, onLogout, onShutdown, onToggleNavigation }: Props) {
+export default function TopBar({ setActiveView, sessionUser, caseStatus, ward = null, onLogout, onShutdown, onToggleNavigation }: Props) {
   const { t } = useLanguage();
   const surface = getSurfaceInfo();
   const surfaceLogo = surface.code === "canopy" ? canopyLogo : floraLogo;
@@ -53,6 +57,7 @@ export default function TopBar({ setActiveView, sessionUser, caseStatus, onLogou
     {isIdleLeaf ? <span className="hidden items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold text-emerald-500 sm:inline-flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />{t("topbar.readyNextCase")}</span> : null}
     {caseStatus.status !== "IDLE" && caseStatus.identity_status === "pending" ? <span className="hidden items-center gap-1.5 rounded-full border border-rose-400/35 bg-rose-500/10 px-2.5 py-1 text-[10px] font-bold text-rose-400 sm:inline-flex"><span className="h-1.5 w-1.5 rounded-full bg-rose-400" />{t("topbar.identityPending")}</span> : null}
     <div className="ml-auto flex shrink-0 items-center gap-2">
+      {surface.code === "canopy" && ward ? <WardSwitcher ward={ward} /> : null}
       <LanguagePicker compact />
       <ThemePicker compact />
       <div ref={userMenuRef} className="relative">

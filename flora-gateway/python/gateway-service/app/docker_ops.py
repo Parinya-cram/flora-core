@@ -26,6 +26,10 @@ def parser_name(device_id: str) -> str:
 def start_parser(instance: dict[str, Any], device_type: dict[str, Any]) -> str:
     options = {**(device_type.get("default_options") or {}), **(instance.get("options") or {})}
     name = parser_name(instance["device_id"])
+    try:
+        client().images.get(device_type["image"])
+    except ImageNotFound:  # pull (from Haber) before the running parser is stopped
+        client().images.pull(device_type["image"])
     stop_parser(instance["device_id"])
     container = client().containers.run(
         device_type["image"],
@@ -66,19 +70,49 @@ def parser_states() -> dict[str, dict[str, Any]]:
     return {
         container.labels.get("flora.gateway.device_id", container.name): {
             "container": container.name, "status": container.status, "image": container.image.tags[:1],
+            "image_ref": container.attrs["Config"]["Image"],
         }
         for container in containers
     }
 
 
-def restart_service(service: str) -> str:
+def service_containers(service: str) -> list:
     containers = client().containers.list(all=True, filters={"label": [
         f"com.docker.compose.project={settings.COMPOSE_PROJECT}", f"com.docker.compose.service={service}"]})
     if not containers:
         raise LookupError(f"no container for service {service}")
+    return containers
+
+
+def restart_service(service: str) -> str:
+    containers = service_containers(service)
     for container in containers:
         container.restart(timeout=10)
     return containers[0].name
 
 
-__all__ = ["start_parser", "stop_parser", "parser_states", "restart_service", "ImageNotFound", "DockerException"]
+def stop_service(service: str) -> str:
+    """Stopped containers stay down across Docker restarts (unless-stopped) until started again."""
+    containers = service_containers(service)
+    for container in containers:
+        container.stop(timeout=10)
+    return containers[0].name
+
+
+def start_service(service: str) -> str:
+    containers = service_containers(service)
+    for container in containers:
+        container.start()
+    return containers[0].name
+
+
+def service_states() -> dict[str, str]:
+    try:
+        containers = client().containers.list(all=True, filters={"label": f"com.docker.compose.project={settings.COMPOSE_PROJECT}"})
+    except DockerException:
+        return {}
+    return {c.labels.get("com.docker.compose.service", c.name): c.status for c in containers}
+
+
+__all__ = ["start_parser", "stop_parser", "parser_states", "restart_service", "stop_service", "start_service",
+           "service_states", "ImageNotFound", "DockerException"]

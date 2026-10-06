@@ -1,4 +1,4 @@
-# Flora Root — cloud control plane: tenants, licenses, global configuration.
+# Flora Root — cloud control plane: tenants, licenses, releases, global configuration.
 # Ports: 71xx (see ../demo/PORTS.md). Run: docker compose up -d --build
 name: flora-root
 
@@ -28,9 +28,13 @@ services:
       FLORA_ROOT_DATABASE_URL: postgresql://flora_root:${FLORA_ROOT_DB_PASSWORD:-flora-root-local-only}@root-db:5432/flora_root
       # Empty = admin API open (demo only). Set a long random value anywhere else.
       ROOT_ADMIN_KEY: ${ROOT_ADMIN_KEY:-}
+      ROOT_ADMIN_USERNAME: ${ROOT_ADMIN_USERNAME:-admin}
+      ROOT_ADMIN_PASSWORD: ${ROOT_ADMIN_PASSWORD:-admin}
       ROOT_SEED_DEMO: ${ROOT_SEED_DEMO:-true}
       ROOT_DEMO_TENANT_ID: ${ROOT_DEMO_TENANT_ID:-hospital-01}
       ROOT_DEMO_TENANT_KEY: ${ROOT_DEMO_TENANT_KEY:-root-tenant-demo-key}
+      # Registry address handed to every Haber in the signed release manifest.
+      ROOT_REGISTRY_URL: ${ROOT_REGISTRY_URL:-http://host.docker.internal:7105}
     ports:
       # Published on all interfaces: every Canopy calls Root here.
       - "${FLORA_ROOT_PORT:-7100}:8000"
@@ -38,5 +42,19 @@ services:
       root-db: {condition: service_healthy}
     restart: unless-stopped
 
+  # Every Flora image is built by Root CI and pushed here; Haber mirrors from it.
+  # Production: TLS + token auth in front of it (pull-only credentials per tenant).
+  root-registry:
+    image: registry:3
+    environment:
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+      OTEL_TRACES_EXPORTER: none
+    ports:
+      - "${FLORA_ROOT_REGISTRY_PORT:-7105}:5000"
+    volumes:
+      - root_registry_data:/var/lib/registry
+    restart: unless-stopped
+
 volumes:
   root_db_data:
+  root_registry_data:

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import type { BootstrapStatus } from "../bootstrap/floraDesktop";
 import floraAppIcon from "../assets/floraicon.png";
 import canopyAppIcon from "../assets/canopyicon.png";
@@ -6,6 +6,7 @@ import ThemePicker from "../components/ThemePicker";
 import LanguagePicker from "../components/LanguagePicker";
 import { useLanguage } from "../context/LanguageContext";
 import { getSurfaceInfo } from "../edition/config";
+import { getLdapStatus } from "../api/authApi";
 
 type Props = {
   onLogin: (username: string, password: string) => Promise<boolean> | boolean;
@@ -49,6 +50,14 @@ export default function LoginPage({ onLogin, loginEnabled = true, bootstrapStatu
   const [error, setError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [ldapEnabled, setLdapEnabled] = useState(false);
+
+  useEffect(() => {
+    if (!loginEnabled) return;
+    let cancelled = false;
+    void getLdapStatus().then(status => { if (!cancelled) setLdapEnabled(status.enabled); });
+    return () => { cancelled = true; };
+  }, [loginEnabled]);
 
   const isChecking = !loginEnabled && bootstrapStatus?.backendState === "starting";
   const systemState: Readiness = loginEnabled ? "ready" : isChecking ? "checking" : "unavailable";
@@ -139,6 +148,7 @@ export default function LoginPage({ onLogin, loginEnabled = true, bootstrapStatu
               >
                 {isLoggingIn ? t("login.submitting") : !loginEnabled ? t("login.waiting") : t("login.submit")}
               </button>
+              {ldapEnabled ? <p className="text-center text-[11px] text-[var(--app-muted)]">{t("login.ldapEnabled")}</p> : null}
             </form>
             <details className="mt-[14px] rounded-lg border border-[var(--app-border)] bg-[var(--app-control-bg)]/50 p-[10px] md:hidden">
               <summary className="cursor-pointer text-[12px] font-semibold text-[var(--app-text)]">

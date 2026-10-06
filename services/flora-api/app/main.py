@@ -24,6 +24,7 @@ from .routes.fleet_control import router as fleet_control_router
 from .routes.legacy_archive import router as legacy_archive_router
 from .routes.canopy_reports import router as canopy_reports_router
 from .routes.canopy_preferences import router as canopy_preferences_router
+from .routes.canopy_users import router as canopy_users_router
 from .routes.sync_ingest import router as sync_ingest_router
 from .routes.workstation import router as workstation_router
 from .routes.terminology import router as terminology_router
@@ -68,6 +69,7 @@ if API_MODE == "leaf" and os.getenv("FLORA_LEAF_WRITE_API", "false").lower() == 
 if API_MODE == "canopy":
     app.include_router(canopy_auth_router)
     app.include_router(canopy_preferences_router)
+    app.include_router(canopy_users_router)
     app.include_router(fleet_read_router)
     app.include_router(fleet_control_router)
     app.include_router(legacy_archive_router)
@@ -80,6 +82,7 @@ if API_MODE == "sync":
 async def enforce_canopy_read_only(request: Request, call_next):
     if API_MODE == "canopy" and request.method not in {"GET", "HEAD", "OPTIONS"}:
         canopy_preference_write = request.url.path.startswith("/api/auth/preferences/") or request.url.path.startswith("/api/auth/self/")
+        canopy_preference_write = canopy_preference_write or request.url.path.startswith("/api/auth/users/") or request.url.path == "/api/auth/users"
         report_generation = request.method == "POST" and request.url.path.startswith("/api/fleet/legacy/cases/") and request.url.path.endswith("/report.pdf")
         if request.url.path not in {"/api/auth/login", "/api/auth/logout"} and not request.url.path.startswith("/api/fleet/control") and not canopy_preference_write and not report_generation:
             return JSONResponse(

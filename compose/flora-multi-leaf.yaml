@@ -84,6 +84,7 @@ services:
     environment:
       <<: *leaf-api-environment
       FLORA_DATABASE_URL: postgresql://flora_app:flora-app-local-only@flora-leaf-2-db:5432/flora
+      FLORA_LEAF_ID: leaf-dev-02
     ports: ["${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_LEAF_2_API_PORT:-6901}:8000"]
     depends_on:
       flora-leaf-2-db: {condition: service_healthy}
@@ -123,6 +124,7 @@ services:
     environment:
       <<: *leaf-api-environment
       FLORA_DATABASE_URL: postgresql://flora_app:flora-app-local-only@flora-leaf-3-db:5432/flora
+      FLORA_LEAF_ID: leaf-dev-03
     ports: ["${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_LEAF_3_API_PORT:-6911}:8000"]
     depends_on:
       flora-leaf-3-db: {condition: service_healthy}
@@ -162,6 +164,7 @@ services:
     environment:
       <<: *leaf-api-environment
       FLORA_DATABASE_URL: postgresql://flora_app:flora-app-local-only@flora-leaf-4-db:5432/flora
+      FLORA_LEAF_ID: leaf-dev-04
     ports: ["${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_LEAF_4_API_PORT:-6921}:8000"]
     depends_on:
       flora-leaf-4-db: {condition: service_healthy}

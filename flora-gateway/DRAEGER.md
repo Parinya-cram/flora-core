@@ -130,7 +130,11 @@ ID, and pod names. The repository's demo configuration and demo seed are unchang
 
 ## Mapping and protocol behavior
 
-Mappings ship inside the parser image beside each protocol implementation as `parameters.json` (see [DEVELOPMENT.md](DEVELOPMENT.md)).
+Original decoded fields are now stored independently of Flora conversions.
+See [DRAEGER-PARAMETERS.md](DRAEGER-PARAMETERS.md) for definitions, evidence,
+the required database migration, and the original-measurement API.
+Flora mappings ship beside each Dräger parser as `flora_mapping.json`;
+the MEDIBUS source-reference dictionary is `device_parameters.json`.
 
 - M540 `parameters` replaces the default rule list. Each rule supplies
   `source_keys`, `ivy_param`, `unit`, optional `scale`, `precision`, and
@@ -146,7 +150,9 @@ Mappings ship inside the parser image beside each protocol implementation as `pa
   matching Flora meaning are enabled. CO2 percentage values and generic tidal
   volume are not mislabeled as mmHg or expired tidal volume.
 - Bad checksums, incomplete records, unavailable values, and unmapped codes
-  produce no observations. An oversized or interrupted serial frame is discarded
+  produce no Flora observations. Valid MEDIBUS fields, including unavailable
+  and unmapped fields, remain in the separate original-measurement store.
+  An oversized or interrupted serial frame is discarded
   and parsing resumes at the next start byte. Realtime bytes do not interfere
   with the ASCII channel, but are not decoded as observations.
 - Commands returned by `poll()` and replies returned by `drain_commands()` go

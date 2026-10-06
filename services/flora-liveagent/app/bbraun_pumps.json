@@ -1,0 +1,16 @@
+[
+  {
+    "device_id": "LIVEAGENT_BBRAUN_01",
+    "label": "B. Braun demo pump 1",
+    "rate_ml_h": 12,
+    "volume_ml": 50,
+    "pause_minutes": [30, 40]
+  },
+  {
+    "device_id": "LIVEAGENT_BBRAUN_02",
+    "label": "B. Braun demo pump 2",
+    "rate_ml_h": 24,
+    "volume_ml": 20,
+    "pause_minutes": [10, 15]
+  }
+]

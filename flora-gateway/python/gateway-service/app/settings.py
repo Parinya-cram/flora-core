@@ -6,6 +6,10 @@ GATEWAY_ID = os.getenv("FLORA_GATEWAY_ID", "gateway-dev")
 CONFIG_PATH = os.getenv("FLORA_GATEWAY_CONFIG", "/config/gateway.toml")
 SEED_PATH = os.getenv("FLORA_GATEWAY_SEED", "/config/instances.json")
 ADMIN_KEY = os.getenv("GATEWAY_ADMIN_KEY", "").strip()
+# First admin account, created only when gateway_user is empty. Change it on the Account tab.
+ADMIN_USERNAME = os.getenv("GATEWAY_ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.getenv("GATEWAY_ADMIN_PASSWORD", "admin")
+SESSION_HOURS = int(os.getenv("GATEWAY_SESSION_HOURS", "12"))
 
 # Haber is the device registry that runs inside Flora Canopy.
 HABER_URL = os.getenv("HABER_URL", "").rstrip("/")
@@ -27,5 +31,8 @@ CONTROLLERS = {
     "collector": os.getenv("COLLECTOR_ADMIN_URL", "http://collector:5005"),
     "publisher": os.getenv("PUBLISHER_ADMIN_URL", "http://publisher:5006"),
 }
+# Ingress controllers that can be stopped when a station does not use them, keyed to their pod prefix.
+INGRESS = {"serial-controller": "serial", "feeder-controller": "feeder", "webhook-controller": "webhook",
+           "socket-controller": "socket"}
 CONFIG_SECTIONS = {"serial": "serial-controller", "feeder": "feeder-controller", "webhook": "webhook-controller",
                    "socket": "socket-controller", "publisher": "publisher"}

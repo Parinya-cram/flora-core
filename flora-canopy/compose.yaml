@@ -2,7 +2,9 @@
 # ER, OR), the sync API Leaves push to, and Haber (device registry for gateways).
 # Ports: 72xx (see ../demo/PORTS.md). Run: docker compose up -d --build
 #
-# Builds from the shared source in ../services and ../frontend.
+# Builds from the shared source in ../services and ../frontend. Once Haber has an
+# approved canopy release, the updater swaps canopy-api, sync-api and haber to the
+# release images. compose.override.yaml (dev only) mounts the API source instead.
 name: flora-canopy
 
 services:
@@ -31,6 +33,7 @@ services:
   canopy-api:
     build:
       context: ../services/flora-api
+    image: ${FLORA_IMAGE_API:-flora-canopy-api:dev}
     environment:
       FLORA_DATABASE_URL: postgresql://flora_view:${CANOPY_DB_VIEW_PASSWORD:-flora-canopy-view-local-only}@canopy-db:5432/flora
       FLORA_API_ENV: development
@@ -39,11 +42,22 @@ services:
       FLORA_BOOTSTRAP_ADMIN_ENABLED: "true"
       FLORA_BOOTSTRAP_ADMIN_USERNAME: ${CANOPY_ADMIN_USERNAME:-admin}
       FLORA_BOOTSTRAP_ADMIN_PASSWORD: ${CANOPY_ADMIN_PASSWORD:-admin}
+      FLORA_BOOTSTRAP_ADMIN_MUST_CHANGE_PASSWORD: ${FLORA_BOOTSTRAP_ADMIN_MUST_CHANGE_PASSWORD:-false}
       FLORA_BOOTSTRAP_ADMIN_NAME: Canopy Administrator
+      # LDAP / Active Directory sign-in (search with the service account, then bind as the user).
+      FLORA_LDAP_ENABLED: ${FLORA_LDAP_ENABLED:-false}
+      FLORA_LDAP_URL: ${FLORA_LDAP_URL:-}
+      FLORA_LDAP_BIND_DN: ${FLORA_LDAP_BIND_DN:-}
+      FLORA_LDAP_BIND_PASSWORD: ${FLORA_LDAP_BIND_PASSWORD:-}
+      FLORA_LDAP_BASE_DN: ${FLORA_LDAP_BASE_DN:-}
+      FLORA_LDAP_USER_FILTER: ${FLORA_LDAP_USER_FILTER:-(uid={username})}
+      FLORA_LDAP_NAME_ATTR: ${FLORA_LDAP_NAME_ATTR:-displayName}
+      FLORA_LDAP_START_TLS: ${FLORA_LDAP_START_TLS:-false}
+      FLORA_LDAP_TLS_VERIFY: ${FLORA_LDAP_TLS_VERIFY:-true}
+      FLORA_LDAP_AUTO_PROVISION: ${FLORA_LDAP_AUTO_PROVISION:-false}
+      FLORA_LDAP_DEFAULT_ROLE: ${FLORA_LDAP_DEFAULT_ROLE:-viewer}
     ports:
       - "127.0.0.1:${CANOPY_API_PORT:-7201}:8000"
-    volumes:
-      - ../services/flora-api/app:/app/app:ro
     depends_on:
       canopy-db: {condition: service_healthy}
     healthcheck: &api-health
@@ -57,15 +71,26 @@ services:
   sync-api:
     build:
       context: ../services/flora-api
+    image: ${FLORA_IMAGE_API:-flora-canopy-api:dev}
     environment:
       FLORA_DATABASE_URL: postgresql://flora_sync:${CANOPY_DB_SYNC_PASSWORD:-flora-canopy-sync-local-only}@canopy-db:5432/flora
       FLORA_API_ENV: development
       FLORA_API_MODE: sync
       FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-flora-sync-demo-secret-change-me}
+      # Same directory settings: Leafs delegate LDAP sign-in through the sync API.
+      FLORA_LDAP_ENABLED: ${FLORA_LDAP_ENABLED:-false}
+      FLORA_LDAP_URL: ${FLORA_LDAP_URL:-}
+      FLORA_LDAP_BIND_DN: ${FLORA_LDAP_BIND_DN:-}
+      FLORA_LDAP_BIND_PASSWORD: ${FLORA_LDAP_BIND_PASSWORD:-}
+      FLORA_LDAP_BASE_DN: ${FLORA_LDAP_BASE_DN:-}
+      FLORA_LDAP_USER_FILTER: ${FLORA_LDAP_USER_FILTER:-(uid={username})}
+      FLORA_LDAP_NAME_ATTR: ${FLORA_LDAP_NAME_ATTR:-displayName}
+      FLORA_LDAP_START_TLS: ${FLORA_LDAP_START_TLS:-false}
+      FLORA_LDAP_TLS_VERIFY: ${FLORA_LDAP_TLS_VERIFY:-true}
+      FLORA_LDAP_AUTO_PROVISION: ${FLORA_LDAP_AUTO_PROVISION:-false}
+      FLORA_LDAP_DEFAULT_ROLE: ${FLORA_LDAP_DEFAULT_ROLE:-viewer}
     ports:
       - "${CANOPY_SYNC_PORT:-7203}:8000"
-    volumes:
-      - ../services/flora-api/app:/app/app:ro
     depends_on:
       canopy-db: {condition: service_healthy}
     healthcheck: *api-health
@@ -89,19 +114,27 @@ services:
       canopy-api: {condition: service_healthy}
     restart: unless-stopped
 
-  # Device registry: Image, Device Type, Device License. Gateways check in here.
+  # Image repository + device registry. Gateways check in here; every node's
+  # flora-updater asks it which release to run and pulls from haber-registry.
   haber:
     build:
       context: ./haber
-    image: flora-canopy-haber:dev
+    image: ${FLORA_IMAGE_HABER:-flora-canopy-haber:dev}
     environment:
       FLORA_ROOT_URL: ${FLORA_ROOT_URL:-http://host.docker.internal:7100}
       FLORA_TENANT_ID: ${FLORA_TENANT_ID:-hospital-01}
       FLORA_ROOT_TENANT_KEY: ${FLORA_ROOT_TENANT_KEY:-root-tenant-demo-key}
       FLORA_ROOT_PUBLIC_KEY: ${FLORA_ROOT_PUBLIC_KEY:-}
       HABER_GATEWAY_TOKEN: ${HABER_GATEWAY_TOKEN:-haber-gateway-demo-token}
+      HABER_ADMIN_USERNAME: ${HABER_ADMIN_USERNAME:-admin}
+      HABER_ADMIN_PASSWORD: ${HABER_ADMIN_PASSWORD:-admin}
       CANOPY_DATABASE_URL: postgresql://flora_view:${CANOPY_DB_VIEW_PASSWORD:-flora-canopy-view-local-only}@canopy-db:5432/flora
       HABER_ROOT_SYNC_SEC: ${HABER_ROOT_SYNC_SEC:-15}
+      HABER_NODE_TOKEN: ${HABER_NODE_TOKEN:-haber-node-demo-token}
+      HABER_REGISTRY_URL: http://haber-registry:5000
+      # How nodes address haber-registry (their Docker daemon pulls from here).
+      HABER_REGISTRY_PUBLIC: ${HABER_REGISTRY_PUBLIC:-localhost:7205}
+      FLORA_ROOT_REGISTRY_URL: ${FLORA_ROOT_REGISTRY_URL:-}
     ports:
       - "${HABER_PORT:-7204}:8000"
     volumes:
@@ -110,9 +143,45 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       canopy-db: {condition: service_healthy}
+      haber-registry: {condition: service_started}
+    restart: unless-stopped
+
+  # The hospital's copy of every approved Flora image. Only Haber writes to it.
+  # Production: TLS, and push restricted to Haber (htpasswd) — nodes pull only.
+  haber-registry:
+    image: registry:3
+    environment:
+      OTEL_TRACES_EXPORTER: none
+    ports:
+      - "${HABER_REGISTRY_PORT:-7205}:5000"
+    volumes:
+      - haber_registry_data:/var/lib/registry
+    restart: unless-stopped
+
+  # Keeps this project on the release approved in Haber (see ../flora-updater).
+  updater:
+    build:
+      context: ../flora-updater
+    image: ${FLORA_IMAGE_UPDATER:-flora-updater:dev}
+    environment:
+      FLORA_COMPONENT: canopy
+      FLORA_NODE_ID: ${CANOPY_NODE_ID:-canopy}
+      HABER_URL: http://haber:8000
+      HABER_NODE_TOKEN: ${HABER_NODE_TOKEN:-haber-node-demo-token}
+      FLORA_ROOT_PUBLIC_KEY: ${FLORA_ROOT_PUBLIC_KEY:-}
+      FLORA_UPDATER_WINDOW: ${FLORA_UPDATER_WINDOW:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # The compose project's parent directory; the updater re-runs compose against it.
+      - ..:/host
+      - updater_state:/state
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
 volumes:
+  updater_state:
+  haber_registry_data:
   canopy_db_data:
   canopy_frontend_modules:
   haber_data:

@@ -12,7 +12,7 @@
   * { box-sizing:border-box } body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif }
   header { padding:18px 24px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:baseline; flex-wrap:wrap }
   header h1 { font-size:18px; margin:0 } header span { color:var(--muted) }
-  main { padding:20px 24px; display:grid; gap:18px; max-width:1200px; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)) }
+  main { padding:20px 24px; display:grid; gap:18px; max-width:1200px; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); align-content:start }
   section { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px; overflow-x:auto }
   section.wide { grid-column:1/-1 }
   h2 { font-size:14px; margin:0 0 12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted) }
@@ -21,26 +21,106 @@
   .chip { display:inline-block; padding:1px 8px; border-radius:999px; background:var(--chip); font-size:12px; margin:1px 2px 1px 0 }
   .ok { color:var(--ok) } .warn { color:var(--warn) } .bad { color:var(--bad) } .muted { color:var(--muted) }
   .big { font-size:22px; font-weight:600 } dl { display:grid; grid-template-columns:auto 1fr; gap:6px 14px; margin:0 } dt { color:var(--muted) }
+  button.ghost { background:transparent; color:var(--ink); border-color:var(--line) }
   button { font:inherit; padding:5px 10px; border-radius:6px; border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer }
+  .layout { display:grid; grid-template-columns:200px minmax(0,1fr); min-height:calc(100vh - 62px) }
+  nav.tabs { border-right:1px solid var(--line); padding:16px 10px; display:flex; flex-direction:column; gap:2px; position:sticky; top:0; align-self:start }
+  nav.tabs button { all:unset; cursor:pointer; padding:8px 12px; border-radius:8px; color:var(--muted); display:flex; justify-content:space-between; gap:8px }
+  nav.tabs button:hover { background:var(--chip); color:var(--ink) }
+  nav.tabs button[aria-selected="true"] { background:var(--chip); color:var(--ink); font-weight:600; box-shadow:inset 3px 0 0 var(--accent) }
+  nav.tabs button:focus-visible { outline:2px solid var(--accent); outline-offset:1px }
+  nav.tabs .badge { font-size:11px; padding:0 7px; border-radius:999px; background:var(--panel); border:1px solid var(--line) }
+  nav.tabs .badge.warn { color:var(--warn); border-color:currentColor } nav.tabs .badge.bad { color:var(--bad); border-color:currentColor }
+  [data-tab][hidden] { display:none !important }
+  @media (max-width:720px) {
+    .layout { grid-template-columns:1fr }
+    nav.tabs { position:static; flex-direction:row; overflow-x:auto; border-right:0; border-bottom:1px solid var(--line); padding:8px 16px }
+    nav.tabs button { white-space:nowrap } nav.tabs button[aria-selected="true"] { box-shadow:inset 0 -3px 0 var(--accent) }
+    main { padding:16px !important }
+  }
   code { font:12px ui-monospace,Menlo,monospace }
+  /* System menu: bottom-of-rail entry point to settings, same on every Flora app. */
+  .sysmenu { margin-top:auto; position:relative; padding-top:10px; border-top:1px solid var(--line) }
+  nav .sysbtn { display:flex; align-items:center; gap:10px; width:100%; border:0; border-radius:7px; background:none; padding:8px 10px;
+            font-size:13px; color:var(--muted); text-align:left; cursor:pointer }
+  nav .sysbtn:hover, nav .sysbtn[aria-expanded="true"], nav .sysbtn.active { background:var(--chip); color:var(--ink) }
+  nav .sysbtn.active { font-weight:600; box-shadow:inset 3px 0 0 var(--accent) }
+  nav .sysbtn svg, .syspop svg { width:18px; height:18px; flex:none; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round }
+  .syspop { position:absolute; left:0; bottom:calc(100% + 6px); z-index:50; width:240px; padding:6px; background:var(--panel);
+            border:1px solid var(--line); border-radius:10px; box-shadow:0 12px 32px rgba(0,0,0,.18) }
+  .syspop[hidden] { display:none }
+  .syspop .who { padding:6px 10px 8px; margin-bottom:4px; border-bottom:1px solid var(--line) }
+  .syspop .who b { display:block; font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted) }
+  .syspop .who span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px }
+  nav .syspop button { display:flex; align-items:center; gap:10px; width:100%; border:0; border-radius:7px; background:none;
+                   padding:7px 10px; font-size:13px; color:var(--ink); text-align:left; cursor:pointer }
+  nav .syspop button:hover { background:var(--chip) } .syspop button.danger { color:var(--bad) }
+  @media (max-width:760px) {
+    .sysmenu { margin:0 0 0 auto; padding:0; border:0 } nav .sysbtn span { display:none }
+    .syspop { left:auto; right:0; bottom:auto; top:calc(100% + 6px) }
+  }
+  nav.tabs { min-height:calc(100vh - 64px) } nav .syspop button[aria-selected="true"] { background:var(--chip); font-weight:600 }
+  @media (max-width:720px) { nav.tabs { min-height:0 } }
 </style>
 </head>
 <body>
-<header><h1>Canopy · Haber</h1><span>Device registry · Image, Device Type, Device License</span><span id="ts" class="muted"></span></header>
+<header><h1>Canopy · Haber</h1><span>Image repository · releases, Device Type, Device License</span><span id="ts" class="muted"></span></header>
+<div class="layout">
+<nav class="tabs" role="tablist" aria-label="Haber sections">
+  <button role="tab" data-go="license">License<span class="badge" hidden></span></button>
+  <button role="tab" data-go="releases">Releases<span class="badge" hidden></span></button>
+  <button role="tab" data-go="nodes">Nodes<span class="badge" hidden></span></button>
+  <button role="tab" data-go="gateways">Gateways<span class="badge" hidden></span></button>
+  <button role="tab" data-go="leaves">Leaves<span class="badge" hidden></span></button>
+  <div class="sysmenu">
+    <div class="syspop" id="syspop" role="menu" hidden>
+      <div class="who"><b>Canopy Haber</b><span class="muted">Settings</span></div>
+      <button role="tab" data-go="catalog">Device catalog<span class="badge" hidden></span></button>
+    </div>
+    <button class="sysbtn" id="sysbtn" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.6a1.7 1.7 0 0 1 3.4 0l.2 1.1a7 7 0 0 1 1.7 1l1.1-.4a1.7 1.7 0 0 1 2 .8l.2.3a1.7 1.7 0 0 1-.4 2.2l-.9.7a7 7 0 0 1 0 2l.9.7a1.7 1.7 0 0 1 .4 2.2l-.2.3a1.7 1.7 0 0 1-2 .8l-1.1-.4a7 7 0 0 1-1.7 1l-.2 1.1a1.7 1.7 0 0 1-3.4 0l-.2-1.1a7 7 0 0 1-1.7-1l-1.1.4a1.7 1.7 0 0 1-2-.8l-.2-.3a1.7 1.7 0 0 1 .4-2.2l.9-.7a7 7 0 0 1 0-2l-.9-.7a1.7 1.7 0 0 1-.4-2.2l.2-.3a1.7 1.7 0 0 1 2-.8l1.1.4a7 7 0 0 1 1.7-1Z"/><circle cx="12" cy="12" r="2.6"/></svg><span>System</span></button>
+  </div>
+</nav>
 <main>
-  <section><h2>Flora Root link</h2><div id="root">Loading…</div></section>
-  <section><h2>Hospital license</h2><div id="license"></div></section>
-  <section class="wide"><h2>Gateways</h2><div id="gateways"></div></section>
-  <section><h2>Leaves synced to Canopy</h2><div id="leaves"></div></section>
-  <section><h2>Device catalog</h2><div id="catalog"></div></section>
+  <section data-tab="license"><h2>Flora Root link</h2><div id="root">Loading…</div></section>
+  <section data-tab="license"><h2>Hospital license</h2><div id="license"></div></section>
+  <section class="wide" data-tab="releases"><h2>Releases from Flora Root</h2><div id="releases"></div></section>
+  <section class="wide" data-tab="nodes"><h2>Nodes (flora-updater)</h2><div id="nodes"></div></section>
+  <section class="wide" data-tab="gateways"><h2>Gateways</h2><div id="gateways"></div></section>
+  <section class="wide" data-tab="leaves"><h2>Leaves synced to Canopy</h2><div id="leaves"></div></section>
+  <section class="wide" data-tab="catalog"><h2>Device catalog</h2><div id="catalog"></div></section>
 </main>
+</div>
 <script>
 const $ = (id) => document.getElementById(id);
+// Left tab navigation: one tab visible at a time; remembered in the URL hash.
+const tabButtons = [...document.querySelectorAll("nav.tabs button[data-go]")];
+function showTab(name) {
+  if (!tabButtons.some((b) => b.dataset.go === name)) name = "license";
+  tabButtons.forEach((b) => b.setAttribute("aria-selected", String(b.dataset.go === name)));
+  document.querySelectorAll("main [data-tab]").forEach((s) => { s.hidden = s.dataset.tab !== name; });
+  document.getElementById("sysbtn").classList.toggle("active", !!document.querySelector(`#syspop [data-go="${name}"]`));
+  if (location.hash.slice(1) !== name) history.replaceState(null, "", "#" + name);
+}
+tabButtons.forEach((b) => b.addEventListener("click", () => showTab(b.dataset.go)));
+window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
+showTab(location.hash.slice(1));
+function badge(tab, text, cls = "") { const el = document.querySelector(`nav.tabs [data-go="${tab}"] .badge`); if (el) { el.textContent = text ?? ""; el.className = "badge " + cls; el.hidden = !text; } }
+
 const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
 const ago = (ms) => { if (!ms) return "never"; const s = Math.round((Date.now() - ms) / 1000); return s < 90 ? `${s}s ago` : `${Math.round(s / 60)} min ago`; };
 
 async function load() {
   const d = await (await fetch("api/haber/v1/overview")).json();
+  renderReleases(d);
+  const ready = d.releases.rows.filter((r) => r.mirror.status === "ready" && d.releases.approvals[r.component]?.release_id !== r.release_id
+    && d.releases.latest[r.component] === r.release_id).length;
+  badge("releases", ready ? `${ready} new` : "", "warn");
+  const trouble = d.nodes.filter((n) => ["failed", "error"].includes(n.state)).length;
+  const waiting = d.nodes.filter((n) => ["waiting", "applying"].includes(n.state)).length;
+  badge("nodes", trouble ? `${trouble} failed` : waiting ? `${waiting} pending` : d.nodes.length ? String(d.nodes.length) : "", trouble ? "bad" : waiting ? "warn" : "");
+  badge("gateways", d.gateways.length ? String(d.gateways.length) : "");
+  badge("leaves", d.leaves.length ? String(d.leaves.length) : "");
+  badge("license", d.license_valid ? "" : "!", "bad");
   $("ts").textContent = `${d.tenant_id} · updated ${new Date(d.server_ts).toLocaleTimeString()}`;
   const r = d.root;
   $("root").innerHTML = `<dl><dt>Status</dt><dd class="${r.status === "ok" ? "ok" : "warn"}">${esc(r.status)}${r.error ? ` — ${esc(r.error)}` : ""}</dd>
@@ -66,8 +146,50 @@ async function load() {
   $("catalog").innerHTML = `<table><tr><th>Device type</th><th>Path</th></tr>${d.catalog.device_types.map((t) =>
     `<tr><td><b>${esc(t.label)}</b><div class="muted"><code>${esc(t.code)}</code></div></td><td>${esc(t.controller)} → ${esc(t.parser)}<div class="muted">${esc(t.image)}</div></td></tr>`).join("")}</table>`;
 }
+function renderReleases(d) {
+  const R = d.releases, approvals = R.approvals || {};
+  const comps = ["canopy", "leaf", "gateway"];
+  const state = (m) => ({ ready: `<span class="ok">in Haber</span>`, mirroring: `<span class="warn">copying…</span>`,
+    failed: `<span class="bad">failed</span>` }[m.status] || `<span class="muted">${esc(m.status)}</span>`);
+  const mb = (b) => b ? ` · ${(b / 1048576).toFixed(0)} MB` : "";
+  $("releases").innerHTML = `<p class="muted">Channel <span class="chip">${esc(R.channel || "—")}</span> · nodes pull from <code>${esc(R.registry)}</code>
+    · mirror ${esc(R.mirror.status)}${R.mirror.error ? ` <span class="bad">${esc(R.mirror.error)}</span>` : ""}</p>` + (R.rows.length ? `<table>
+    <tr><th>Component</th><th>Release</th><th>Images</th><th>In Haber</th><th>Rollout</th></tr>${R.rows.map((r) => {
+      const approved = approvals[r.component]?.release_id === r.release_id;
+      const latest = R.latest[r.component] === r.release_id;
+      const action = approved ? `<span class="ok">approved</span><div class="muted">${esc(approvals[r.component].approved_by || "")} · ${ago(approvals[r.component].approved_at)}</div>`
+        : r.mirror.status === "ready" ? `<button onclick="approve('${esc(r.release_id)}')">${approvals[r.component] ? "Switch to this" : "Approve"}</button>`
+        : r.mirror.status === "failed" ? `<button class="ghost" onclick="remirror('${esc(r.release_id)}')">Retry copy</button>` : "";
+      return `<tr><td><b>${esc(r.component)}</b></td><td>${esc(r.version)} ${latest ? `<span class="chip">latest</span>` : ""}<div class="muted">${esc(r.notes || "")}</div></td>
+        <td>${Object.entries(r.services).map(([k, v]) => `<div>${esc(k)} <code>${esc(v.digest.slice(7, 19))}</code></div>`).join("")}${r.device_types ? `<div class="muted">${r.device_types} device types</div>` : ""}</td>
+        <td>${state(r.mirror)}${mb(r.mirror.bytes)}${r.mirror.error ? `<div class="bad">${esc(r.mirror.error)}</div>` : ""}</td><td>${action}</td></tr>`;
+    }).join("")}</table>` : `<p class="muted">Flora Root has not published releases for this channel yet.</p>`)
+    + `<p>${comps.filter((c) => approvals[c]).map((c) => `<button class="ghost" onclick="hold('${c}')">Hold ${c} updates</button>`).join(" ")}</p>
+    <p class="muted">Approving a release sends it to every node of that component. Leaves update only when no case is open.
+    Approve an older release to roll back.</p>`;
+  const stateCls = { current: "ok", applying: "warn", waiting: "warn", failed: "bad", error: "bad" };
+  $("nodes").innerHTML = d.nodes.length ? `<table><tr><th>Node</th><th>Running</th><th>State</th><th>Last report</th></tr>${d.nodes.map((n) =>
+    `<tr><td><b>${esc(n.node_id)}</b><div class="muted">${esc(n.component)} · ${esc(n.project || "")}</div></td>
+     <td><code>${esc(n.release_id || "dev build (unmanaged)")}</code>${n.target && n.target !== n.release_id ? `<div class="muted">→ ${esc(n.target)}</div>` : ""}</td>
+     <td class="${stateCls[n.state] || ""}">${esc(n.state)}${n.detail ? `<div class="muted">${esc(n.detail)}</div>` : ""}</td>
+     <td class="${Date.now() - n.last_seen < 120000 ? "ok" : "warn"}">${ago(n.last_seen)}</td></tr>`).join("")}</table>`
+    : `<p class="muted">No flora-updater has reported yet.</p>`;
+}
+async function post(url) { const r = await fetch(url, { method: "POST" }); if (!r.ok) alert(await r.text()); load(); }
+function approve(id) { if (confirm(`Roll out ${id} to every node of this component?`)) post(`api/haber/v1/releases/${id}/approve`); }
+function hold(c) { if (confirm(`Stop following approvals for ${c}? Nodes keep running what they have.`)) post(`api/haber/v1/components/${c}/hold`); }
+function remirror(id) { post(`api/haber/v1/releases/${id}/mirror`); }
 async function sync() { const r = await fetch("api/haber/v1/root/sync", { method: "POST" }); if (!r.ok) alert(await r.text()); load(); }
 load(); setInterval(load, 5000);
+// ---------------------------------------------------------------- system menu
+(() => {
+  const button = document.getElementById("sysbtn"), menu = document.getElementById("syspop");
+  const set = (open) => { menu.hidden = !open; button.setAttribute("aria-expanded", String(open)); };
+  button.addEventListener("click", () => set(menu.hidden));
+  menu.addEventListener("click", (e) => { if (e.target.closest("button")) set(false); });
+  document.addEventListener("mousedown", (e) => { if (!menu.hidden && !e.target.closest(".sysmenu")) set(false); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") set(false); });
+})();
 </script>
 </body>
 </html>

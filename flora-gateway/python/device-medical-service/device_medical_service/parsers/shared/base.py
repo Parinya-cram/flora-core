@@ -31,6 +31,7 @@ class Parser:
         self.device_id = device_id
         self.pod = pod
         self.options = options or {}
+        self._measurements = []
         codes = {str(k).lower(): v for k, v in self.default_codes.items()}
         codes.update({str(k).lower(): v for k, v in (self.options.get("codes") or {}).items()})
         self.codes = codes
@@ -48,6 +49,20 @@ class Parser:
     def drain_commands(self) -> list[dict[str, Any]]:
         """Protocol replies produced by feed(), sent through the pod controller."""
         return []
+
+    def drain_measurements(self) -> list[dict[str, Any]]:
+        """Original device fields, independently of optional Flora conversions."""
+        rows, self._measurements = self._measurements, []
+        return rows
+
+    def record_measurement(self, frame, code, raw_value, value, *, definition=None, mapping=None):
+        self._measurements.append({
+            "device_id": self.device_id, "protocol": self.protocol, "pod": self.pod,
+            "raw_code": code, "raw_value": raw_value, "value": value,
+            "definition": definition or {}, "mapping": mapping or {},
+            "system_ts": frame.ts, "device_ts": None,
+            "gateway_id": frame.gateway_id, "seq": frame.seq,
+        })
 
     def feed(self, frame: RawFrame) -> list[dict[str, Any]]:
         raise NotImplementedError

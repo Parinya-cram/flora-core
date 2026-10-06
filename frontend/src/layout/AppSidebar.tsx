@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { CaseStatus } from "../api/caseApi";
 import type { AuthUser } from "../auth/useAuth";
 import { useLanguage } from "../context/LanguageContext";
 import { getSurfaceInfo } from "../edition/config";
 import ClinicalReferenceTooltip from "../components/common/ClinicalReferenceTooltip";
+import { useWorkstationSettings } from "../hooks/useWorkstationSettings";
 import chartMenuIcon from "../assets/menu-chart.png";
 import ioMenuIcon from "../assets/menu-io.png";
 import clinicalMenuIcon from "../assets/menu-clinical.png";
@@ -31,6 +33,9 @@ type Props = {
   collapsed: boolean;
   mobileOpen: boolean;
   onCloseMobile: () => void;
+  onLogout?: () => void;
+  /** Canopy: name of the ward currently in scope. */
+  wardName?: string | null;
 };
 
 type NavIconName = "chart" | "io" | "clinical" | "form" | "staff" | "patient" | "report" | "config" | "archive" | "start" | "fleet" | "dashboard" | "canopy-dashboard" | "canopy-monitoring" | "canopy-charts" | "canopy-reports" | "canopy-config" | "canopy-infrastructure";
@@ -94,7 +99,87 @@ function NavIcon({ name }: { name: NavIconName }) {
   </svg>;
 }
 
-function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, collapsed, onCloseMobile }: Omit<Props, "mobileOpen">) {
+function GearIcon() {
+  return <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M10.3 3.6a1.7 1.7 0 0 1 3.4 0l.2 1.1a7 7 0 0 1 1.7 1l1.1-.4a1.7 1.7 0 0 1 2 .8l.2.3a1.7 1.7 0 0 1-.4 2.2l-.9.7a7 7 0 0 1 0 2l.9.7a1.7 1.7 0 0 1 .4 2.2l-.2.3a1.7 1.7 0 0 1-2 .8l-1.1-.4a7 7 0 0 1-1.7 1l-.2 1.1a1.7 1.7 0 0 1-3.4 0l-.2-1.1a7 7 0 0 1-1.7-1l-1.1.4a1.7 1.7 0 0 1-2-.8l-.2-.3a1.7 1.7 0 0 1 .4-2.2l.9-.7a7 7 0 0 1 0-2l-.9-.7a1.7 1.7 0 0 1-.4-2.2l.2-.3a1.7 1.7 0 0 1 2-.8l1.1.4a7 7 0 0 1 1.7-1Z" />
+    <circle cx="12" cy="12" r="2.6" />
+  </svg>;
+}
+
+type SystemMenuProps = {
+  collapsed: boolean;
+  canSettings: boolean;
+  activeView: AppView;
+  sessionUser: AuthUser | null;
+  navigate: (view: AppView) => void;
+  onLogout?: () => void;
+};
+
+/** Bottom-of-rail entry point to settings, shared by every Flora surface. */
+function SystemMenu({ collapsed, canSettings, activeView, sessionUser, navigate, onLogout }: SystemMenuProps) {
+  const { t } = useLanguage();
+  const surface = getSurfaceInfo();
+  const workstation = useWorkstationSettings();
+  const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const toggle = () => {
+    setAnchor(buttonRef.current?.getBoundingClientRect() ?? null);
+    setOpen(value => !value);
+  };
+  // Portaled + fixed: the rail's backdrop-filter would otherwise clip the menu.
+  const menuStyle = anchor ? (collapsed
+    ? { left: anchor.right + 8, bottom: window.innerHeight - anchor.bottom }
+    : { left: anchor.left, bottom: window.innerHeight - anchor.top + 8, width: Math.max(anchor.width, 256) }) : undefined;
+  const settingsActive = activeView === "master" || activeView === "account";
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: MouseEvent | KeyboardEvent) => {
+      const target = event.target as Node;
+      if (event instanceof KeyboardEvent ? event.key === "Escape" : !rootRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+
+  const choose = (action: () => void) => {
+    setOpen(false);
+    action();
+  };
+  const location = surface.code === "leaf"
+    ? [workstation.careUnitName, workstation.roomName, workstation.bedName].filter(Boolean).join(" · ")
+    : workstation.hospitalName;
+  const itemClass = "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-xs font-semibold hover:bg-[var(--app-control-bg)]";
+
+  return <div ref={rootRef} className="relative border-t border-[var(--app-border)] p-2">
+    {open ? createPortal(<div ref={menuRef} role="menu" aria-label={t("system.menu")} style={menuStyle} className="fixed z-[1200] w-64 rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-2 shadow-2xl">
+      <div className="mb-1 border-b border-[var(--app-border)] px-3 pb-2 pt-1">
+        <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--app-muted)]">{surface.code === "leaf" ? t("system.workstation") : surface.productName}</div>
+        {location ? <div className="truncate text-xs font-semibold">{location}</div> : null}
+        <div className="truncate text-[11px] text-[var(--app-muted)]">{sessionUser?.name || sessionUser?.username}</div>
+      </div>
+      {canSettings ? <button role="menuitem" type="button" onClick={() => choose(() => navigate("master"))} className={itemClass}><span className="inline-flex h-5 w-5 items-center justify-center"><GearIcon /></span>{t("system.settings")}</button> : null}
+      <button role="menuitem" type="button" onClick={() => choose(() => navigate("account"))} className={itemClass}><span className="inline-flex h-5 w-5 items-center justify-center"><NavIcon name="patient" /></span>{t("topbar.accountSettings")}</button>
+      {onLogout ? <button role="menuitem" type="button" onClick={() => choose(onLogout)} className={`${itemClass} mt-1 text-rose-400 hover:bg-rose-500/10`}><span className="inline-flex h-5 w-5 items-center justify-center text-base">⏻</span>{t("topbar.signOut")}</button> : null}
+    </div>, document.body) : null}
+    <ClinicalReferenceTooltip text={t("system.menu")} compact disabled={!collapsed || open} className="w-full">
+      <button ref={buttonRef} type="button" onClick={toggle} aria-haspopup="menu" aria-expanded={open} aria-label={t("system.menu")}
+        className={`flora-nav-item flex h-12 w-full items-center rounded-xl border text-sm font-semibold transition ${collapsed ? "justify-center" : "gap-3 px-3"} ${settingsActive ? "border-[var(--app-accent)] text-[var(--app-accent)]" : "border-transparent text-[var(--app-muted)] hover:bg-[var(--app-control-bg)] hover:text-[var(--app-text)]"}`}>
+        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center"><GearIcon /></span>
+        {!collapsed ? <span className="truncate">{t("system.menu")}</span> : null}
+      </button>
+    </ClinicalReferenceTooltip>
+  </div>;
+}
+
+function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, collapsed, onCloseMobile, onLogout, wardName }: Omit<Props, "mobileOpen">) {
   const { t } = useLanguage();
   const [canopyPanel, setCanopyPanel] = useState<CanopyCasePanelId>(storedCanopyPanel);
   const [canopyCaseOpen, setCanopyCaseOpen] = useState(false);
@@ -102,7 +187,7 @@ function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, colla
   const permissions = sessionUser?.permissions || [];
   const isIdleLeaf = surface.code === "leaf" && caseStatus.status === "IDLE";
   const canConfigure = permissions.some(permission => ["account.manage", "config.manage", "clinical_master.manage", "staff.manage"].includes(permission));
-  const canConfigureCanopy = permissions.includes("config.manage") || String(sessionUser?.role || "").trim().toLowerCase() === "admin";
+  const canConfigureCanopy = permissions.includes("config.manage") || permissions.includes("account.manage") || String(sessionUser?.role || "").trim().toLowerCase() === "admin";
   const canReport = permissions.includes("report.generate");
   const items: NavItem[] = surface.code === "canopy"
     ? [
@@ -110,13 +195,11 @@ function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, colla
         { view: "monitoring", label: "Central Charting", icon: "canopy-monitoring" },
         { view: "fleet", label: "Case List", icon: "canopy-charts" },
         { view: "report", label: "Reports", icon: "canopy-reports" },
-        ...(canConfigureCanopy ? [{ view: "master" as AppView, label: "Configuration", icon: "canopy-config" as NavIconName }] : []),
         { view: "infrastructure", label: "Infrastructure", icon: "canopy-infrastructure" },
       ]
     : isIdleLeaf
       ? [
           { view: "case", label: t("topbar.startCase"), icon: "start" },
-          ...(canConfigure ? [{ view: "master" as AppView, label: t("topbar.config"), icon: "config" as NavIconName }] : []),
           { view: "history", label: t("topbar.archive"), icon: "archive" },
         ]
       : [
@@ -127,7 +210,6 @@ function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, colla
           { view: "staff", label: "Staff", icon: "staff" },
           { view: "patient", label: "Patient", icon: "patient" },
           ...(canReport ? [{ view: "report" as AppView, label: "Reports", icon: "report" as NavIconName }] : []),
-          ...(canConfigure ? [{ view: "master" as AppView, label: t("topbar.config"), icon: "config" as NavIconName }] : []),
           { view: "history", label: t("topbar.archive"), icon: "archive" },
         ];
 
@@ -166,6 +248,12 @@ function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, colla
       <button type="button" onClick={onCloseMobile} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--app-border)] bg-[var(--app-control-bg)] text-lg" aria-label="Close navigation">×</button>
     </div>
     <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2" aria-label="Workspace navigation">
+      {surface.code === "canopy" && wardName ? (collapsed
+        ? <ClinicalReferenceTooltip text={`${t("ward.label")}: ${wardName}`} compact className="w-full"><div className="mb-1 flex h-7 items-center justify-center rounded-lg bg-[var(--app-control-bg)] text-[9px] font-extrabold uppercase text-[var(--app-muted)]" aria-label={`${t("ward.label")}: ${wardName}`}>{wardName.slice(0, 3)}</div></ClinicalReferenceTooltip>
+        : <div className="mb-1 rounded-lg border border-[var(--app-border)] bg-[var(--app-control-bg)] px-3 py-1.5">
+          <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-[var(--app-muted)]">{t("ward.label")}</div>
+          <div className="truncate text-xs font-semibold text-[var(--app-text)]" title={wardName}>{wardName}</div>
+        </div>) : null}
       {items.map(item => <div key={item.view}>
         <ClinicalReferenceTooltip text={item.label} compact disabled={!collapsed} className="w-full"><button type="button" onClick={() => navigate(item.view)} aria-label={item.label} aria-current={activeView === item.view ? "page" : undefined} className={`flora-nav-item flex h-12 w-full items-center rounded-xl border text-sm font-semibold transition ${collapsed ? "justify-center" : "gap-3 px-3"} ${activeView === item.view ? "border-[var(--app-accent)] bg-[var(--app-accent)] text-[var(--app-accent-contrast)]" : "border-transparent hover:bg-[var(--app-control-bg)]"}`}><span className="flora-nav-icon inline-flex h-9 w-9 shrink-0 items-center justify-center"><NavIcon name={item.icon} /></span>{!collapsed ? <span className="truncate">{item.label}</span> : null}</button></ClinicalReferenceTooltip>
         {surface.code === "canopy" && item.view === "fleet" && activeView === "fleet" && canopyCaseOpen ? <div className={`mt-1 space-y-1 ${collapsed ? "border-t border-[var(--app-border)] pt-1" : "ml-5 border-l border-[var(--app-border)] pl-2"}`} aria-label="Clinical chart sections">
@@ -173,6 +261,8 @@ function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, colla
         </div> : null}
       </div>)}
     </nav>
+    <SystemMenu collapsed={collapsed} canSettings={surface.code === "canopy" ? canConfigureCanopy : canConfigure}
+      activeView={activeView} sessionUser={sessionUser} navigate={navigate} onLogout={onLogout} />
   </div>;
 }
 

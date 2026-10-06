@@ -8,7 +8,7 @@ use std::time::Duration;
 use anyhow::Result;
 use gateway_core::admin;
 use gateway_core::config::GatewayConfig;
-use gateway_core::envelope::{LogEvent, Observation, LOG_TOPIC, OBS_TOPIC};
+use gateway_core::envelope::{DeviceMeasurement, LogEvent, Observation, LOG_TOPIC, OBS_TOPIC, MEASUREMENT_TOPIC};
 use gateway_core::{kafka, telemetry};
 use rdkafka::consumer::{CommitMode, Consumer, StreamConsumer};
 use rdkafka::Message;
@@ -37,6 +37,12 @@ ON CONFLICT (device_id) DO UPDATE SET
   total_samples = gateway_device_seen.total_samples + excluded.total_samples,
   latest_observation = excluded.latest_observation"#;
 
+const INSERT_MEASUREMENTS: &str = r#"
+INSERT INTO gateway_measurement (device_id, protocol, pod, raw_code, raw_value, value, definition, mapping, system_ts, device_ts, gateway_id, seq)
+SELECT device_id, protocol, pod, raw_code, raw_value, value, definition, mapping, system_ts, device_ts, gateway_id, seq
+FROM jsonb_to_recordset($1::jsonb) AS x(device_id text, protocol text, pod text, raw_code text,
+    raw_value jsonb, value jsonb, definition jsonb, mapping jsonb, system_ts bigint, device_ts bigint, gateway_id text, seq bigint)"#;
+
 const INSERT_LOGS: &str = r#"
 INSERT INTO gateway_log (ts, component, level, pod, message, detail)
 SELECT ts, component, level, pod, message, coalesce(detail, '{}'::jsonb)
@@ -51,7 +57,7 @@ async fn main() -> Result<()> {
     tokio::spawn(admin::serve("collector", config.collector.admin_port, status.clone()));
 
     let consumer: StreamConsumer = kafka::consumer(&config.kafka.brokers, "gw-collector", false, "earliest")?;
-    consumer.subscribe(&[OBS_TOPIC, LOG_TOPIC])?;
+    consumer.subscribe(&[OBS_TOPIC, LOG_TOPIC, MEASUREMENT_TOPIC])?;
     let mut client = connect(&config.collector.database_url).await;
     admin::set_connected(&status, "postgres", true, None);
     tracing::info!("collector started");
@@ -59,9 +65,10 @@ async fn main() -> Result<()> {
     let flush = Duration::from_millis(config.collector.flush_ms);
     loop {
         let mut observations: Vec<Observation> = Vec::new();
+        let mut measurements: Vec<DeviceMeasurement> = Vec::new();
         let mut logs: Vec<LogEvent> = Vec::new();
         let deadline = Instant::now() + flush;
-        while observations.len() + logs.len() < config.collector.batch_size {
+        while observations.len() + logs.len() + measurements.len() < config.collector.batch_size {
             match tokio::time::timeout_at(deadline, consumer.recv()).await {
                 Err(_) => break,
                 Ok(Err(error)) => {
@@ -75,6 +82,11 @@ async fn main() -> Result<()> {
                             Ok(observation) => observations.push(observation),
                             Err(error) => tracing::warn!(%error, "skipping malformed observation"),
                         }
+                    } else if message.topic() == MEASUREMENT_TOPIC {
+                        match serde_json::from_slice::<DeviceMeasurement>(payload) {
+                            Ok(measurement) => measurements.push(measurement),
+                            Err(error) => tracing::warn!(%error, "skipping malformed device measurement"),
+                        }
                     } else {
                         match serde_json::from_slice::<LogEvent>(payload) {
                             Ok(event) => logs.push(event),
@@ -84,13 +96,14 @@ async fn main() -> Result<()> {
                 }
             }
         }
-        if observations.is_empty() && logs.is_empty() {
+        if observations.is_empty() && logs.is_empty() && measurements.is_empty() {
             continue;
         }
         let observations = serde_json::to_value(&observations)?;
         let logs = serde_json::to_value(&logs)?;
+        let measurements = serde_json::to_value(&measurements)?;
         loop {
-            match store(&mut client, &observations, &logs).await {
+            match store(&mut client, &observations, &logs, &measurements).await {
                 Ok(()) => break,
                 Err(error) => {
                     tracing::warn!(%error, "store failed, reconnecting");
@@ -108,7 +121,7 @@ async fn main() -> Result<()> {
     }
 }
 
-async fn store(client: &mut Client, observations: &Value, logs: &Value) -> Result<()> {
+async fn store(client: &mut Client, observations: &Value, logs: &Value, measurements: &Value) -> Result<()> {
     let transaction = client.transaction().await?;
     if observations.as_array().is_some_and(|rows| !rows.is_empty()) {
         transaction.execute(INSERT_OBSERVATIONS, &[observations]).await?;
@@ -116,6 +129,9 @@ async fn store(client: &mut Client, observations: &Value, logs: &Value) -> Resul
     }
     if logs.as_array().is_some_and(|rows| !rows.is_empty()) {
         transaction.execute(INSERT_LOGS, &[logs]).await?;
+    }
+    if measurements.as_array().is_some_and(|rows| !rows.is_empty()) {
+        transaction.execute(INSERT_MEASUREMENTS, &[measurements]).await?;
     }
     transaction.commit().await?;
     Ok(())

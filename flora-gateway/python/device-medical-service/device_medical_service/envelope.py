@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 OBS_TOPIC = "gw.obs"
+MEASUREMENT_TOPIC = "gw.measurements"
 LOG_TOPIC = "gw.logs"
 
 

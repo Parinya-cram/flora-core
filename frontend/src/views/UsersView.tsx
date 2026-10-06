@@ -3,17 +3,25 @@ import {
   changeOwnPassword,
   createManagedUser,
   getAuthRoles,
+  getLdapStatus,
   getManagedUsers,
   getSelfManagedUser,
+  getWardOptions,
   linkManagedUserStaff,
   resetManagedUserPassword,
   setManagedUserActive,
   updateManagedUserAccess,
+  updateManagedUserWards,
   type AuthRole,
   type ManagedAuthUser,
+  type ManagedUserSyncState,
+  type WardOption,
+  type WardRef,
 } from "../api/authApi";
 import { getStaffDirectory, getStaffMyCases, type StaffLibraryItem, type StaffMyCaseRow } from "../api/staffApi";
 import type { AuthUser } from "../auth/useAuth";
+import { getSurfaceInfo } from "../edition/config";
+import { useAdminPinGuard } from "../hooks/useAdminPinGuard";
 
 type Props = {
   sessionUser: AuthUser | null;
@@ -36,11 +44,66 @@ function sourceLabel(source?: string) {
   if (token === "staff") return "Staff";
   if (token === "seed") return "Built-in";
   if (token === "local") return "Local";
+  if (token === "ldap") return "LDAP";
   return token;
 }
 
+function SourceBadge({ source }: { source?: string }) {
+  if (String(source || "").trim().toLowerCase() !== "ldap") return <>{sourceLabel(source)}</>;
+  return <span className="inline-flex rounded-full border border-sky-400/35 bg-sky-500/10 px-2 py-0.5 text-[10px] font-bold tracking-wide text-sky-300">LDAP</span>;
+}
+
+const SYNC_BADGE: Record<ManagedUserSyncState, { label: string; title: string; className: string }> = {
+  synced: { label: "Synced", title: "Matches the Canopy user directory.", className: "bg-emerald-500/10 text-emerald-300 border-emerald-400/30" },
+  pending: { label: "Pending", title: "Change saved on this Leaf; waiting to sync with Canopy.", className: "bg-amber-500/10 text-amber-300 border-amber-400/30" },
+  local: { label: "Local", title: "Exists only on this Leaf.", className: "bg-slate-500/15 text-slate-300 border-slate-400/30" },
+};
+
+function SyncBadge({ state }: { state: ManagedUserSyncState }) {
+  const badge = SYNC_BADGE[state];
+  return <span title={badge.title} className={`inline-flex rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${badge.className}`}>{badge.label}</span>;
+}
+
+function WardChips({ allUnits, units }: { allUnits: boolean; units: WardRef[] }) {
+  if (allUnits) return <span className="inline-flex rounded-full border border-[var(--app-accent)] px-2 py-0.5 text-[10px] font-semibold text-[var(--app-accent)]">All wards</span>;
+  if (units.length === 0) return <span className="text-xs text-[var(--app-muted)]">No ward</span>;
+  return <span className="flex flex-wrap gap-1">{units.map(unit => <span key={unit.key} className="inline-flex max-w-[140px] truncate rounded-full border border-[var(--app-border)] bg-[var(--app-control-bg)] px-2 py-0.5 text-[10px] font-medium" title={unit.name}>{unit.name}</span>)}</span>;
+}
+
+/** "All wards" toggle plus a ward checklist; kept separate from role assignment. */
+function WardPicker({ options, allUnits, unitKeys, disabled, onChange }: {
+  options: WardOption[];
+  allUnits: boolean;
+  unitKeys: string[];
+  disabled?: boolean;
+  onChange: (next: { allUnits: boolean; unitKeys: string[] }) => void;
+}) {
+  const toggle = (key: string) => onChange({ allUnits, unitKeys: unitKeys.includes(key) ? unitKeys.filter(item => item !== key) : [...unitKeys, key] });
+  return <div className="space-y-2">
+    <label className="flex items-center gap-2 rounded border border-[var(--app-border)] px-3 py-2 text-sm">
+      <input type="checkbox" checked={allUnits} disabled={disabled} onChange={event => onChange({ allUnits: event.target.checked, unitKeys })} />
+      <span><span className="block font-medium">All wards</span><span className="block text-xs text-[var(--app-muted)]">Can view every care unit and switch ward on Canopy.</span></span>
+    </label>
+    <div className={`grid max-h-56 gap-1 overflow-y-auto sm:grid-cols-2 ${allUnits ? "opacity-50" : ""}`}>
+      {options.map(option => <label key={option.key} className="flex items-start gap-2 rounded border border-[var(--app-border)] px-2 py-1.5 text-xs">
+        <input type="checkbox" className="mt-0.5" checked={unitKeys.includes(option.key)} disabled={disabled || allUnits} onChange={() => toggle(option.key)} />
+        <span className="min-w-0"><span className="block truncate font-medium">{option.name}</span>{option.buildingName ? <span className="block truncate text-[var(--app-muted)]">{option.buildingName}</span> : null}</span>
+      </label>)}
+      {options.length === 0 ? <div className="text-xs text-[var(--app-muted)]">No care units configured.</div> : null}
+    </div>
+  </div>;
+}
+
+const emptyNewUser = (unitKeys: string[] = []) => ({
+  username: "", name: "", password: "", hospitalId: "", staffDirectoryId: "", roleCodes: ["clinician"],
+  authSource: "local" as "local" | "ldap", allUnits: false, unitKeys,
+});
+
 export default function UsersView({ sessionUser }: Props) {
   const isAdmin = sessionUser?.permissions?.includes("account.manage") === true || String(sessionUser?.role || "").trim().toLowerCase() === "admin";
+  const isLeaf = getSurfaceInfo().code === "leaf";
+  // Leaf writes need an admin PIN; Canopy writes are authorised by the session alone.
+  const { runWithAdminPin, pinDialog } = useAdminPinGuard(isLeaf);
   const [rows, setRows] = useState<ManagedAuthUser[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -59,7 +122,11 @@ export default function UsersView({ sessionUser }: Props) {
   const [roles, setRoles] = useState<AuthRole[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [accessRoles, setAccessRoles] = useState<string[]>([]);
-  const [newUser, setNewUser] = useState({ username: "", name: "", password: "", hospitalId: "", staffDirectoryId: "", roleCodes: ["clinician"] });
+  const [wardOptions, setWardOptions] = useState<WardOption[]>([]);
+  const [leafUnitKey, setLeafUnitKey] = useState<string | null>(null);
+  const [ldapEnabled, setLdapEnabled] = useState(false);
+  const [wardDraft, setWardDraft] = useState<{ allUnits: boolean; unitKeys: string[] }>({ allUnits: false, unitKeys: [] });
+  const [newUser, setNewUser] = useState(() => emptyNewUser());
 
   const selected = useMemo(
     () => rows.find(row => row.id === selectedUserId) || rows[0] || null,
@@ -98,13 +165,41 @@ export default function UsersView({ sessionUser }: Props) {
 
   useEffect(() => {
     if (!isAdmin) return;
-    getStaffDirectory({ include_inactive: true, limit: 500 }).then(setStaffDirectory).catch(() => setStaffDirectory([]));
+    // Canopy has no staff directory; staff links are managed on Leaf only.
+    if (isLeaf) getStaffDirectory({ include_inactive: true, limit: 500 }).then(setStaffDirectory).catch(() => setStaffDirectory([]));
     getAuthRoles().then(setRoles).catch(() => setRoles([]));
-  }, [isAdmin]);
+    getWardOptions().then(result => {
+      setWardOptions(result.rows);
+      setLeafUnitKey(result.leafUnitKey);
+      // On Leaf, new users default to this bedside's ward.
+      if (isLeaf && result.leafUnitKey) {
+        const key = result.leafUnitKey;
+        setNewUser(current => current.unitKeys.length || current.allUnits ? current : { ...current, unitKeys: [key] });
+      }
+    }).catch(() => setWardOptions([]));
+    getLdapStatus().then(status => setLdapEnabled(status.enabled)).catch(() => setLdapEnabled(false));
+  }, [isAdmin, isLeaf]);
 
   useEffect(() => {
     setAccessRoles(selected?.roleCodes?.length ? selected.roleCodes : selected?.role ? [selected.role === "admin" ? "system_admin" : selected.role] : []);
   }, [selected?.id, selected?.role, selected?.roleCodes]);
+
+  useEffect(() => {
+    setWardDraft({ allUnits: selected?.allUnits === true, unitKeys: (selected?.units || []).map(unit => unit.key) });
+  }, [selected?.id, selected?.allUnits, selected?.units]);
+
+  // Assigned wards that are no longer in the options list still need to be visible (and removable).
+  const editorWardOptions = useMemo(() => {
+    const known = new Set(wardOptions.map(option => option.key));
+    const extra = (selected?.units || []).filter(unit => !known.has(unit.key)).map(unit => ({ ...unit, buildingName: null }));
+    return [...wardOptions, ...extra];
+  }, [selected?.units, wardOptions]);
+  const wardDraftChanged = !!selected && (
+    wardDraft.allUnits !== selected.allUnits
+    || wardDraft.unitKeys.length !== selected.units.length
+    || wardDraft.unitKeys.some(key => !selected.units.some(unit => unit.key === key))
+  );
+  const selectedIsLdap = selected?.authSource === "ldap";
 
   // For non-admin: load cases where this user appears as a staff member
   useEffect(() => {
@@ -130,9 +225,11 @@ export default function UsersView({ sessionUser }: Props) {
     setError("");
     setNote("");
     try {
-      const next = await setManagedUserActive(selected.id, !selected.isActive);
-      replaceRow(next);
-      setNote(`${next.username} is now ${next.isActive ? "active" : "inactive"}.`);
+      await runWithAdminPin(async adminPin => {
+        const next = await setManagedUserActive(selected.id, !selected.isActive, { adminPin });
+        replaceRow(next);
+        setNote(`${next.username} is now ${next.isActive ? "active" : "inactive"}.`);
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update user");
     } finally {
@@ -144,9 +241,11 @@ export default function UsersView({ sessionUser }: Props) {
     if (!selected) return;
     setSaving(true); setError(""); setNote("");
     try {
-      const next = await linkManagedUserStaff(selected.id, staffDirectoryId);
-      replaceRow(next);
-      setNote(staffDirectoryId ? "Staff profile linked." : "Staff profile unlinked.");
+      await runWithAdminPin(async adminPin => {
+        const next = await linkManagedUserStaff(selected.id, staffDirectoryId, { adminPin });
+        replaceRow(next);
+        setNote(staffDirectoryId ? "Staff profile linked." : "Staff profile unlinked.");
+      });
     } catch (err) { setError(err instanceof Error ? err.message : "Failed to link staff profile"); }
     finally { setSaving(false); }
   };
@@ -158,10 +257,12 @@ export default function UsersView({ sessionUser }: Props) {
     setNote("");
     try {
       const payload = mode === "custom" ? customPassword.trim() : undefined;
-      const result = await resetManagedUserPassword(selected.id, payload);
-      replaceRow(result.row);
-      setCustomPassword("");
-      setNote(`Password reset for ${result.row.username}. Applied password: ${result.appliedPassword}`);
+      await runWithAdminPin(async adminPin => {
+        const result = await resetManagedUserPassword(selected.id, payload, { adminPin });
+        replaceRow(result.row);
+        setCustomPassword("");
+        setNote(`Password reset for ${result.row.username}. Applied password: ${result.appliedPassword}`);
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to reset password");
     } finally {
@@ -197,23 +298,33 @@ export default function UsersView({ sessionUser }: Props) {
   };
 
   const handleCreateUser = async () => {
-    if (!newUser.username.trim() || !newUser.name.trim() || newUser.password.length < 8 || newUser.roleCodes.length === 0) {
-      setError("Username, display name, an 8-character temporary password and at least one role are required.");
+    const isLdapUser = ldapEnabled && newUser.authSource === "ldap";
+    if (!newUser.username.trim() || !newUser.name.trim() || (!isLdapUser && newUser.password.length < 8) || newUser.roleCodes.length === 0) {
+      setError(isLdapUser
+        ? "Username, display name and at least one role are required."
+        : "Username, display name, an 8-character temporary password and at least one role are required.");
       return;
     }
     setSaving(true); setError(""); setNote("");
     try {
-      const created = await createManagedUser({
-        username: newUser.username.trim(), name: newUser.name.trim(), password: newUser.password,
-        hospitalId: newUser.hospitalId.trim() || undefined,
-        staffDirectoryId: newUser.staffDirectoryId ? Number(newUser.staffDirectoryId) : null,
-        roleCodes: newUser.roleCodes,
+      await runWithAdminPin(async adminPin => {
+        const created = await createManagedUser({
+          username: newUser.username.trim(), name: newUser.name.trim(), password: isLdapUser ? "" : newUser.password,
+          authSource: isLdapUser ? "ldap" : "local",
+          hospitalId: newUser.hospitalId.trim() || undefined,
+          staffDirectoryId: isLeaf && newUser.staffDirectoryId ? Number(newUser.staffDirectoryId) : null,
+          roleCodes: newUser.roleCodes,
+          allUnits: newUser.allUnits,
+          unitKeys: newUser.allUnits ? [] : newUser.unitKeys,
+        }, { adminPin });
+        setRows(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+        setSelectedUserId(created.id);
+        setNewUser(emptyNewUser(isLeaf && leafUnitKey ? [leafUnitKey] : []));
+        setShowCreate(false);
+        setNote(isLdapUser
+          ? `${created.username} created. They sign in with their directory (LDAP) password.`
+          : `${created.username} created. They must change the temporary password after signing in.`);
       });
-      setRows(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
-      setSelectedUserId(created.id);
-      setNewUser({ username: "", name: "", password: "", hospitalId: "", staffDirectoryId: "", roleCodes: ["clinician"] });
-      setShowCreate(false);
-      setNote(`${created.username} created. They must change the temporary password after signing in.`);
     } catch (err) { setError(err instanceof Error ? err.message : "Failed to create user"); }
     finally { setSaving(false); }
   };
@@ -222,10 +333,28 @@ export default function UsersView({ sessionUser }: Props) {
     if (!selected || accessRoles.length === 0) return;
     setSaving(true); setError(""); setNote("");
     try {
-      const next = await updateManagedUserAccess(selected.id, accessRoles);
-      replaceRow(next);
-      setNote(`Access updated for ${next.username}.`);
+      await runWithAdminPin(async adminPin => {
+        const next = await updateManagedUserAccess(selected.id, accessRoles, { adminPin });
+        replaceRow(next);
+        setNote(`Access updated for ${next.username}.`);
+      });
     } catch (err) { setError(err instanceof Error ? err.message : "Failed to update access"); }
+    finally { setSaving(false); }
+  };
+
+  const handleSaveWards = async () => {
+    if (!selected) return;
+    setSaving(true); setError(""); setNote("");
+    try {
+      await runWithAdminPin(async adminPin => {
+        const next = await updateManagedUserWards(selected.id, {
+          allUnits: wardDraft.allUnits,
+          unitKeys: wardDraft.allUnits ? [] : wardDraft.unitKeys,
+        }, { adminPin });
+        replaceRow(next);
+        setNote(`Ward access updated for ${next.username}.`);
+      });
+    } catch (err) { setError(err instanceof Error ? err.message : "Failed to update ward access"); }
     finally { setSaving(false); }
   };
 
@@ -236,7 +365,9 @@ export default function UsersView({ sessionUser }: Props) {
           <div className="text-lg font-semibold text-[var(--app-text)]">{isAdmin ? "Users" : "My Account"}</div>
           <div className="text-sm text-[var(--app-muted)]">
             {isAdmin
-              ? "Review local accounts, activation state, and passwords."
+              ? isLeaf
+                ? "Review accounts, roles, ward access and passwords. Changes on this Leaf require an admin PIN."
+                : "Manage every Leaf and Canopy account: roles, ward access, activation and passwords."
               : "Review your account details and change your password."}
           </div>
         </div>
@@ -258,10 +389,14 @@ export default function UsersView({ sessionUser }: Props) {
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <label className="text-xs text-[var(--app-muted)]">Username<input className="mt-1 w-full rounded border border-[var(--app-border)] px-3 py-2 text-sm" value={newUser.username} onChange={e => setNewUser(v => ({ ...v, username: e.target.value }))} /></label>
             <label className="text-xs text-[var(--app-muted)]">Display name<input className="mt-1 w-full rounded border border-[var(--app-border)] px-3 py-2 text-sm" value={newUser.name} onChange={e => setNewUser(v => ({ ...v, name: e.target.value }))} /></label>
-            <label className="text-xs text-[var(--app-muted)]">Temporary password<input type="password" className="mt-1 w-full rounded border border-[var(--app-border)] px-3 py-2 text-sm" value={newUser.password} onChange={e => setNewUser(v => ({ ...v, password: e.target.value }))} /></label>
+            {ldapEnabled ? <label className="text-xs text-[var(--app-muted)]">Authentication<select className="mt-1 w-full rounded border border-[var(--app-border)] px-3 py-2 text-sm" value={newUser.authSource} onChange={e => setNewUser(v => ({ ...v, authSource: e.target.value === "ldap" ? "ldap" : "local" }))}><option value="local">Local password</option><option value="ldap">LDAP directory</option></select></label> : null}
+            {ldapEnabled && newUser.authSource === "ldap"
+              ? <div className="self-end pb-2 text-xs text-[var(--app-muted)]">Signs in with the directory password — no Flora password is stored.</div>
+              : <label className="text-xs text-[var(--app-muted)]">Temporary password<input type="password" className="mt-1 w-full rounded border border-[var(--app-border)] px-3 py-2 text-sm" value={newUser.password} onChange={e => setNewUser(v => ({ ...v, password: e.target.value }))} /></label>}
             <label className="text-xs text-[var(--app-muted)]">Hospital ID<input className="mt-1 w-full rounded border border-[var(--app-border)] px-3 py-2 text-sm" value={newUser.hospitalId} onChange={e => setNewUser(v => ({ ...v, hospitalId: e.target.value }))} /></label>
-            <label className="text-xs text-[var(--app-muted)] md:col-span-2">Staff profile<select className="mt-1 w-full rounded border border-[var(--app-border)] px-3 py-2 text-sm" value={newUser.staffDirectoryId} onChange={e => setNewUser(v => ({ ...v, staffDirectoryId: e.target.value }))}><option value="">Not linked</option>{staffDirectory.filter(staff => staff.is_active !== 0).map(staff => <option key={staff.id} value={staff.id}>{staff.name} · {staff.role}</option>)}</select></label>
+            {isLeaf ? <label className="text-xs text-[var(--app-muted)] md:col-span-2">Staff profile<select className="mt-1 w-full rounded border border-[var(--app-border)] px-3 py-2 text-sm" value={newUser.staffDirectoryId} onChange={e => setNewUser(v => ({ ...v, staffDirectoryId: e.target.value }))}><option value="">Not linked</option>{staffDirectory.filter(staff => staff.is_active !== 0).map(staff => <option key={staff.id} value={staff.id}>{staff.name} · {staff.role}</option>)}</select></label> : null}
             <div className="md:col-span-2"><div className="mb-1 text-xs text-[var(--app-muted)]">Access roles</div><div className="flex flex-wrap gap-2">{roles.filter(role => role.isActive).map(role => <label key={role.code} className="inline-flex items-center gap-2 rounded border border-[var(--app-border)] px-3 py-2 text-xs"><input type="checkbox" checked={newUser.roleCodes.includes(role.code)} onChange={() => setNewUser(v => ({ ...v, roleCodes: v.roleCodes.includes(role.code) ? v.roleCodes.filter(code => code !== role.code) : [...v.roleCodes, role.code] }))} />{role.displayName}</label>)}</div></div>
+            <div className="md:col-span-2 xl:col-span-4"><div className="mb-1 text-xs text-[var(--app-muted)]">Ward access</div><WardPicker options={wardOptions} allUnits={newUser.allUnits} unitKeys={newUser.unitKeys} disabled={saving} onChange={next => setNewUser(v => ({ ...v, ...next }))} /></div>
           </div>
           <button type="button" className="mt-3 rounded bg-[var(--app-accent)] px-4 py-2 text-sm font-semibold text-[var(--app-accent-contrast)] disabled:opacity-50" disabled={saving} onClick={() => void handleCreateUser()}>{saving ? "Creating..." : "Create user"}</button>
         </section>
@@ -305,6 +440,7 @@ export default function UsersView({ sessionUser }: Props) {
                     <th className="border-b border-[var(--app-border)] px-3 py-2">Username</th>
                     <th className="border-b border-[var(--app-border)] px-3 py-2">Name</th>
                     <th className="border-b border-[var(--app-border)] px-3 py-2">Source</th>
+                    <th className="border-b border-[var(--app-border)] px-3 py-2">Wards</th>
                     <th className="border-b border-[var(--app-border)] px-3 py-2">Status</th>
                   </tr>
                 </thead>
@@ -319,8 +455,10 @@ export default function UsersView({ sessionUser }: Props) {
                       >
                         <td className="border-b border-[var(--app-border)] px-3 py-2 font-medium">{row.username}</td>
                         <td className="border-b border-[var(--app-border)] px-3 py-2">{row.name}</td>
-                        <td className="border-b border-[var(--app-border)] px-3 py-2">{sourceLabel(row.authSource)}</td>
+                        <td className="border-b border-[var(--app-border)] px-3 py-2"><SourceBadge source={row.authSource} /></td>
+                        <td className="border-b border-[var(--app-border)] px-3 py-2"><WardChips allUnits={row.allUnits} units={row.units} /></td>
                         <td className="border-b border-[var(--app-border)] px-3 py-2">
+                          <span className="flex flex-wrap items-center gap-1">
                           <span
                             className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
                               row.isActive
@@ -330,13 +468,15 @@ export default function UsersView({ sessionUser }: Props) {
                           >
                             {row.isActive ? "Active" : "Inactive"}
                           </span>
+                          {isLeaf ? <SyncBadge state={row.syncState} /> : null}
+                          </span>
                         </td>
                       </tr>
                     );
                   })}
                   {rows.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-3 py-6 text-center text-sm text-[var(--app-muted)]">
+                      <td colSpan={5} className="px-3 py-6 text-center text-sm text-[var(--app-muted)]">
                         {loading ? "Loading users..." : "No users found."}
                       </td>
                     </tr>
@@ -444,7 +584,7 @@ export default function UsersView({ sessionUser }: Props) {
                 </div>
                 <div className="rounded border border-[var(--app-border)] bg-[var(--app-control-bg)] px-3 py-2">
                   <div className="text-[11px] uppercase tracking-wide text-[var(--app-muted)]">Source</div>
-                  <div className="mt-1 text-sm">{sourceLabel(selected.authSource)}</div>
+                  <div className="mt-1 text-sm"><SourceBadge source={selected.authSource} /></div>
                 </div>
                 <div className="rounded border border-[var(--app-border)] bg-[var(--app-control-bg)] px-3 py-2">
                   <div className="text-[11px] uppercase tracking-wide text-[var(--app-muted)]">Hospital ID</div>
@@ -464,7 +604,16 @@ export default function UsersView({ sessionUser }: Props) {
                     <button type="button" className="rounded border border-[var(--app-border)] px-3 py-2 text-sm font-medium disabled:opacity-45" disabled={saving || accessRoles.length === 0} onClick={() => void handleSaveAccess()}>Save access</button>
                   </div>
 
-                  <div className="space-y-2 rounded border border-[var(--app-border)] bg-[var(--app-control-bg)] p-3">
+                  <div className="space-y-3 rounded border border-[var(--app-border)] bg-[var(--app-control-bg)] p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div><div className="text-sm font-medium">Ward access</div><div className="text-xs text-[var(--app-muted)]">Which care units this user may view. Assigned separately from roles.</div></div>
+                      {isLeaf ? <SyncBadge state={selected.syncState} /> : null}
+                    </div>
+                    <WardPicker options={editorWardOptions} allUnits={wardDraft.allUnits} unitKeys={wardDraft.unitKeys} disabled={saving} onChange={setWardDraft} />
+                    <button type="button" className="rounded border border-[var(--app-border)] px-3 py-2 text-sm font-medium disabled:opacity-45" disabled={saving || !wardDraftChanged} onClick={() => void handleSaveWards()}>Save ward access</button>
+                  </div>
+
+                  {isLeaf ? <div className="space-y-2 rounded border border-[var(--app-border)] bg-[var(--app-control-bg)] p-3">
                     <div className="text-sm font-medium">Staff profile</div>
                     <select
                       className="w-full rounded border border-[var(--app-border)] px-3 py-2 text-sm"
@@ -476,7 +625,7 @@ export default function UsersView({ sessionUser }: Props) {
                       {staffDirectory.map(staff => <option key={staff.id} value={staff.id}>{staff.name} · {staff.role}{staff.hospital_id ? ` · ${staff.hospital_id}` : ""}{staff.is_active === 0 ? " · inactive" : ""}</option>)}
                     </select>
                     <div className="text-xs text-[var(--app-muted)]">Links login identity to the clinician directory and their case history.</div>
-                  </div>
+                  </div> : null}
 
                   <div className="space-y-2 rounded border border-[var(--app-border)] bg-[var(--app-control-bg)] p-3">
                     <div className="text-sm font-medium">Account State</div>
@@ -499,7 +648,10 @@ export default function UsersView({ sessionUser }: Props) {
                     </button>
                   </div>
 
-                  <div className="space-y-3 rounded border border-[var(--app-border)] bg-[var(--app-control-bg)] p-3">
+                  {selectedIsLdap ? <div className="space-y-1 rounded border border-[var(--app-border)] bg-[var(--app-control-bg)] p-3">
+                    <div className="text-sm font-medium">Password</div>
+                    <div className="text-xs text-[var(--app-muted)]">Managed by the LDAP directory. Reset it in the directory service, not in Flora.</div>
+                  </div> : <div className="space-y-3 rounded border border-[var(--app-border)] bg-[var(--app-control-bg)] p-3">
                     <div>
                       <div className="text-sm font-medium">Password</div>
                       <div className="text-xs text-[var(--app-muted)]">
@@ -539,8 +691,12 @@ export default function UsersView({ sessionUser }: Props) {
                         Set Custom Password
                       </button>
                     </div>
-                  </div>
+                  </div>}
                 </>
+              ) : selectedIsLdap ? (
+                <div className="rounded border border-[var(--app-border)] bg-[var(--app-control-bg)] p-3 text-xs text-[var(--app-muted)]">
+                  Your password is managed by the organisation directory (LDAP).
+                </div>
               ) : (
                 <div className="space-y-3 rounded border border-[var(--app-border)] bg-[var(--app-control-bg)] p-3">
                   <div>
@@ -599,6 +755,7 @@ export default function UsersView({ sessionUser }: Props) {
           )}
         </aside>
       </div>
+      {pinDialog}
     </div>
   );
 }

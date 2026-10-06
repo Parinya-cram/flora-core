@@ -4,6 +4,12 @@ Root issues each tenant a license bundle (modules, Leaf/Gateway limits, licensed
 device types) plus global configuration, signed with Ed25519. Canopy's Haber
 pulls the bundle, verifies it against Root's public key, and keeps working from
 the cached bundle when the cloud is unreachable.
+
+Root is also the only place images are built. A release pins every service of a
+component (canopy, leaf, gateway) to an image digest in the Root registry; each
+tenant receives the releases of its channel as a signed manifest. Haber mirrors
+those digests into the hospital, the hospital approves the rollout, and every
+node's flora-updater pulls from Haber.
 """
 from __future__ import annotations
 
@@ -29,9 +35,14 @@ from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
 from pydantic import BaseModel, Field
 
+from . import basic_auth
+
 log = logging.getLogger("flora-root")
 DATABASE_URL = os.getenv("FLORA_ROOT_DATABASE_URL", "postgresql://flora_root:flora-root-local-only@root-db:5432/flora_root")
 ADMIN_KEY = os.getenv("ROOT_ADMIN_KEY", "").strip()
+# Where Haber pulls release images from (the Root registry as seen by hospitals).
+REGISTRY_URL = os.getenv("ROOT_REGISTRY_URL", "http://host.docker.internal:7105").rstrip("/")
+RELEASES_PER_COMPONENT = int(os.getenv("ROOT_RELEASES_PER_COMPONENT", "5"))
 DAY_MS = 86_400_000
 pool = ConnectionPool(DATABASE_URL, min_size=1, max_size=5, open=False, kwargs={"row_factory": dict_row, "autocommit": True})
 
@@ -100,6 +111,9 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Flora Root", lifespan=lifespan)
+basic_auth.install(app, "Flora Root", "ROOT", [
+    r"/health", r"/api/v1/keys", r"/api/v1/tenants/[^/]+/(bundle|heartbeat|releases)",  # Canopy, tenant key auth
+])
 
 
 # ------------------------------------------------------------------ auth
@@ -142,11 +156,19 @@ def issue_license(connection, tenant_id: str, payload: LicenseIn) -> str:
     return bundle_id
 
 
+def sign(payload: dict[str, Any]) -> dict[str, Any]:
+    """Every Root document travels as {bundle, signature, key_id}; tiers verify it the same way."""
+    with pool.connection() as connection:
+        key = connection.execute("SELECT * FROM root_signing_key WHERE active ORDER BY created_at DESC LIMIT 1").fetchone()
+    private = serialization.load_pem_private_key(key["private_pem"].encode(), password=None)
+    signature = base64.b64encode(private.sign(canonical(payload))).decode()
+    return {"bundle": payload, "signature": signature, "key_id": key["key_id"], "algorithm": "Ed25519"}
+
+
 def signed_bundle(tenant_id: str) -> dict[str, Any]:
     with pool.connection() as connection:
         tenant = connection.execute("SELECT * FROM root_tenant WHERE tenant_id=%s", (tenant_id,)).fetchone()
         license_ = connection.execute("SELECT * FROM root_license WHERE tenant_id=%s AND current", (tenant_id,)).fetchone()
-        key = connection.execute("SELECT * FROM root_signing_key WHERE active ORDER BY created_at DESC LIMIT 1").fetchone()
         config = {row["key"]: row["value"] for row in connection.execute("SELECT key, value FROM root_global_config ORDER BY key")}
     if license_ is None:
         raise HTTPException(404, "tenant has no license")
@@ -167,9 +189,7 @@ def signed_bundle(tenant_id: str) -> dict[str, Any]:
         "global_config": config,
         "signed_at": now_ms(),
     }
-    private = serialization.load_pem_private_key(key["private_pem"].encode(), password=None)
-    signature = base64.b64encode(private.sign(canonical(bundle))).decode()
-    return {"bundle": bundle, "signature": signature, "key_id": key["key_id"], "algorithm": "Ed25519"}
+    return sign(bundle)
 
 
 @app.get("/api/v1/keys")
@@ -202,6 +222,109 @@ def heartbeat(tenant_id: str, body: Heartbeat, request: Request):
             (tenant_id, now_ms(), body.canopy_version, body.bundle_id, Jsonb(body.usage)))
         current = connection.execute("SELECT bundle_id FROM root_license WHERE tenant_id=%s AND current", (tenant_id,)).fetchone()
     return {"current_bundle_id": current["bundle_id"] if current else None, "server_ts": now_ms()}
+
+
+# ------------------------------------------------------------------ releases
+
+def release_doc(row: dict[str, Any]) -> dict[str, Any]:
+    return {"release_id": row["release_id"], "component": row["component"], "version": row["version"],
+            "channel": row["channel"], "services": row["services"], "device_types": row["device_types"],
+            "notes": row["notes"], "created_at": row["created_at"]}
+
+
+def signed_releases(tenant: dict[str, Any]) -> dict[str, Any]:
+    with pool.connection() as connection:
+        rows = connection.execute(
+            """SELECT * FROM (
+                 SELECT r.*, row_number() OVER (PARTITION BY component ORDER BY created_at DESC) AS rank
+                 FROM root_release r WHERE channel=%s AND withdrawn_at IS NULL) ranked
+               WHERE rank <= %s ORDER BY component, created_at DESC""",
+            (tenant["release_channel"], RELEASES_PER_COMPONENT)).fetchall()
+    releases = [release_doc(row) for row in rows]
+    latest: dict[str, str] = {}
+    for release in releases:
+        latest.setdefault(release["component"], release["release_id"])
+    return sign({
+        "tenant_id": tenant["tenant_id"],
+        "channel": tenant["release_channel"],
+        "registry": REGISTRY_URL,
+        "releases": releases,
+        "latest": latest,
+        "signed_at": now_ms(),
+    })
+
+
+@app.get("/api/v1/tenants/{tenant_id}/releases")
+def tenant_releases(tenant_id: str, request: Request):
+    tenant = require_tenant(tenant_id, request)
+    if tenant["status"] != "active":
+        raise HTTPException(403, "tenant suspended")
+    return signed_releases(tenant)
+
+
+class ServiceImage(BaseModel):
+    repository: str = Field(pattern=r"^[a-z0-9]+([._/-][a-z0-9]+)*$")
+    digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    tag: str | None = None
+
+
+class ReleaseIn(BaseModel):
+    component: str = Field(pattern=r"^(canopy|leaf|gateway)$")
+    version: str = Field(pattern=r"^[0-9A-Za-z.+-]{1,40}$")
+    channel: str = Field("stable", pattern=r"^[a-z0-9-]{2,20}$")
+    services: dict[str, ServiceImage] = Field(min_length=1)
+    device_types: list[dict[str, Any]] = []
+    notes: str | None = None
+
+
+@app.post("/api/v1/releases", dependencies=[Depends(require_admin)], status_code=201)
+def publish_release(body: ReleaseIn):
+    """Called by Root CI after it pushed every image of the release to the Root registry."""
+    for item in body.device_types:
+        if item.get("image") not in body.services:
+            raise HTTPException(422, f"device type {item.get('code')} uses unknown service {item.get('image')!r}")
+    release_id = f"{body.component}-{body.version}"
+    with pool.connection() as connection:
+        if connection.execute("SELECT 1 FROM root_release WHERE release_id=%s", (release_id,)).fetchone():
+            raise HTTPException(409, f"{release_id} exists; releases are immutable, bump the version")
+        connection.execute(
+            """INSERT INTO root_release (release_id, component, version, channel, services, device_types, notes, created_at)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (release_id, body.component, body.version, body.channel,
+             Jsonb({key: value.model_dump(exclude_none=True) for key, value in body.services.items()}),
+             Jsonb(body.device_types), body.notes, now_ms()))
+    return {"release_id": release_id}
+
+
+@app.post("/api/v1/releases/{release_id}/withdraw", dependencies=[Depends(require_admin)])
+def withdraw_release(release_id: str):
+    with pool.connection() as connection:
+        row = connection.execute("UPDATE root_release SET withdrawn_at=%s WHERE release_id=%s AND withdrawn_at IS NULL "
+                                 "RETURNING release_id", (now_ms(), release_id)).fetchone()
+    if row is None:
+        raise HTTPException(404, "no such active release")
+    return {"withdrawn": release_id}
+
+
+@app.get("/api/v1/releases", dependencies=[Depends(require_admin)])
+def list_releases():
+    with pool.connection() as connection:
+        rows = connection.execute("SELECT * FROM root_release ORDER BY component, created_at DESC").fetchall()
+    return {"registry": REGISTRY_URL, "rows": rows}
+
+
+class ChannelIn(BaseModel):
+    channel: str = Field(pattern=r"^[a-z0-9-]{2,20}$")
+
+
+@app.put("/api/v1/tenants/{tenant_id}/channel", dependencies=[Depends(require_admin)])
+def set_channel(tenant_id: str, body: ChannelIn):
+    with pool.connection() as connection:
+        row = connection.execute("UPDATE root_tenant SET release_channel=%s, updated_at=%s WHERE tenant_id=%s RETURNING tenant_id",
+                                 (body.channel, now_ms(), tenant_id)).fetchone()
+    if row is None:
+        raise HTTPException(404, "tenant not found")
+    return {"tenant_id": tenant_id, "channel": body.channel}
 
 
 # ------------------------------------------------------------------ administration
@@ -259,7 +382,7 @@ def put_global_config(key: str, value: Any = Body(...)):
 def overview():
     with pool.connection() as connection:
         tenants = connection.execute(
-            """SELECT t.tenant_id, t.name, t.region, t.status, l.bundle_id, l.modules, l.max_leaves, l.max_gateways,
+            """SELECT t.tenant_id, t.name, t.region, t.status, t.release_channel, l.bundle_id, l.modules, l.max_leaves, l.max_gateways,
                       l.max_gateway_devices, l.device_types, l.issued_at, l.expires_at, l.revoked_at,
                       c.last_seen_at, c.canopy_version, c.bundle_id AS canopy_bundle_id, c.usage
                FROM root_tenant t
@@ -268,7 +391,11 @@ def overview():
                ORDER BY t.tenant_id""").fetchall()
         config = connection.execute("SELECT key, value, updated_at FROM root_global_config ORDER BY key").fetchall()
         keys = connection.execute("SELECT key_id, public_raw, created_at FROM root_signing_key WHERE active").fetchall()
-    return {"server_ts": now_ms(), "tenants": tenants, "global_config": config, "signing_keys": keys}
+        releases = connection.execute(
+            "SELECT release_id, component, version, channel, services, jsonb_array_length(device_types) AS device_types, "
+            "notes, created_at, withdrawn_at FROM root_release ORDER BY created_at DESC LIMIT 30").fetchall()
+    return {"server_ts": now_ms(), "tenants": tenants, "global_config": config, "signing_keys": keys,
+            "registry": REGISTRY_URL, "releases": releases}
 
 
 @app.get("/health")

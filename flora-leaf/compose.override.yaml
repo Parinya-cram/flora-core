@@ -1,0 +1,7 @@
+# Dev only: hot-reload the API from source. Loaded automatically by a plain
+# `docker compose up` in this directory; demo/up.sh and release-managed nodes use
+# `-f compose.yaml` alone so the release image's code is what runs.
+services:
+  leaf-api:
+    volumes:
+      - ../services/flora-api/app:/app/app:ro

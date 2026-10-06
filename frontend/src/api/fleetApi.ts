@@ -1,5 +1,6 @@
 import { BACKEND_BASE } from "./backendBase";
 import { readStoredAuthToken } from "./authApi";
+import { wardHeaders } from "./wardSelection";
 
 export type LeafNode = {
   leaf_id: string;
@@ -156,7 +157,7 @@ export type IcuOverview = { server_time: string; rows: IcuOverviewBed[] };
 async function rows<T>(path: string): Promise<T[]> {
   const token = readStoredAuthToken();
   const response = await fetch(`${BACKEND_BASE}${path}`, {
-    headers: token ? { "X-FLORA-Session": token } : {},
+    headers: { ...wardHeaders(), ...(token ? { "X-FLORA-Session": token } : {}) },
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({})) as { detail?: string; error?: string };
@@ -168,7 +169,7 @@ async function rows<T>(path: string): Promise<T[]> {
 async function getJson<T>(path: string): Promise<T> {
   const token = readStoredAuthToken();
   const response = await fetch(`${BACKEND_BASE}${path}`, {
-    headers: token ? { "X-FLORA-Session": token } : {},
+    headers: { ...wardHeaders(), ...(token ? { "X-FLORA-Session": token } : {}) },
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({})) as { detail?: string; error?: string };
@@ -181,7 +182,7 @@ async function sendJson<T>(path: string, method: "POST" | "PUT", body: unknown):
   const token = readStoredAuthToken();
   const response = await fetch(`${BACKEND_BASE}${path}`, {
     method,
-    headers: { "Content-Type": "application/json", ...(token ? { "X-FLORA-Session": token } : {}) },
+    headers: { "Content-Type": "application/json", ...wardHeaders(), ...(token ? { "X-FLORA-Session": token } : {}) },
     body: JSON.stringify(body),
   });
   const data = await response.json().catch(() => ({}));
@@ -225,6 +226,7 @@ export async function generateLegacyArchiveReport(archiveCaseId: string, section
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...wardHeaders(),
       ...(token ? { "X-FLORA-Session": token } : {}),
     },
     body: JSON.stringify({ sections }),

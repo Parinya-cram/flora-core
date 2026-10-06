@@ -47,3 +47,9 @@ env/*.env
 # Deployment runtime
 backup/
 *.sql.gz
+
+# Release env written by flora-updater
+.release/
+
+# OS files
+.DS_Store

@@ -1,5 +1,6 @@
 import { readStoredAuthToken } from "./authApi";
 import { BACKEND_BASE } from "./backendBase";
+import { wardHeaders } from "./wardSelection";
 
 export type ReportCategory = "clinical_timing" | "clinical_summary" | "operations";
 
@@ -48,7 +49,7 @@ export type ReportStaffOption = {
 
 function headers(): Record<string, string> {
   const token = readStoredAuthToken();
-  return token ? { "X-FLORA-Session": token } : {};
+  return { ...wardHeaders(), ...(token ? { "X-FLORA-Session": token } : {}) };
 }
 
 async function errorMessage(response: Response) {

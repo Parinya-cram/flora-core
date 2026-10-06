@@ -13,12 +13,18 @@ import time
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
+from .bbraun import PUMPS, fields as pump_fields
 
 
 SERVICE_STARTED_AT = int(time.time() * 1000)
 PROFILE = os.getenv("LIVEAGENT_PROFILE", "stable-anes").strip() or "stable-anes"
 SEED = int(os.getenv("LIVEAGENT_SEED", "17"))
 MAX_WINDOW_MINUTES = max(1, int(os.getenv("LIVEAGENT_MAX_WINDOW_MINUTES", "240")))
+PUMP_START_MS = int(os.getenv("LIVEAGENT_PUMP_START_MS") or SERVICE_STARTED_AT // 60_000 * 60_000)
+
+
+def pumps_enabled():
+    return PROFILE in {"bbraun", "stable-anes-bbraun"}
 
 app = FastAPI(title="Flora LiveAgent", version="1.0.0")
 
@@ -56,6 +62,8 @@ def observations_for_minute(minute_ts: int) -> list[dict[str, Any]]:
     """Return a clinically plausible but explicitly synthetic minute snapshot."""
     minute = minute_ts // 60_000
     timestamp = minute_ts + 55_000
+    if PROFILE == "bbraun":
+        return pump_observations(timestamp)
     monitor = "LIVEAGENT_MONITOR_01"
     machine = "LIVEAGENT_ANES_01"
 
@@ -114,6 +122,22 @@ def observations_for_minute(minute_ts: int) -> list[dict[str, Any]]:
                 _row(timestamp, monitor, "hl7", "nibp_map", _rounded((nibp_sys + 2 * nibp_dia) / 3), "mmHg"),
             ]
         )
+    if pumps_enabled():
+        rows.extend(pump_observations(timestamp))
+    return rows
+
+
+def pump_observations(timestamp: int) -> list[dict[str, Any]]:
+    if timestamp < PUMP_START_MS:
+        return []
+    rows = []
+    for pump in PUMPS:
+        for code, param, value, unit in pump_fields(pump, (timestamp - PUMP_START_MS) / 60_000):
+            row = _row(timestamp, pump["device_id"], "bbraun-bcc", param, value, unit)
+            row["raw_code"] = "BCC_" + code
+            if param == "run_state":
+                row["status_encoding"] = "synthetic-label"
+            rows.append(row)
     return rows
 
 
@@ -132,6 +156,7 @@ def health() -> dict[str, Any]:
         "service": "flora-liveagent",
         "mode": "synthetic-demo-only",
         "profile": PROFILE,
+        "pump_start_ms": PUMP_START_MS if pumps_enabled() else None,
     }
 
 
@@ -172,32 +197,40 @@ def device_status(online_window_sec: int = Query(default=30, ge=1, le=3600)) -> 
         ("LIVEAGENT_MONITOR_01", "patient_monitor", "Patient monitor", "hl7"),
         ("LIVEAGENT_ANES_01", "anesthesia_machine", "Anesthesia machine", "anes_machine"),
     ]
+    if PROFILE == "bbraun":
+        definitions = []
+    if pumps_enabled():
+        definitions.extend((p["device_id"], "infusion_pump_" + str(i + 1), p["label"], "bbraun-bcc")
+                           for i, p in enumerate(PUMPS))
     for device_id, logical_id, label, protocol in definitions:
         samples = [row for row in latest if row["device_id"] == device_id]
         latest_row = samples[-1] if samples else None
+        online = bool(samples)
         device = {
             "device_id": device_id,
             "device_key": device_id,
             "source": "liveagent",
             "protocol": protocol,
-            "is_online": True,
-            "status": "online",
-            "last_seen_ts": now,
-            "seconds_since_last": 0,
+            "is_online": online,
+            "status": "online" if online else "waiting",
+            "last_seen_ts": now if online else None,
+            "seconds_since_last": 0 if online else None,
             "total_samples": len(samples),
             "samples_in_window": len(samples),
             "latest_observation": latest_row,
+            "synthetic": True,
+            "category": "infusion_pump" if protocol == "bbraun-bcc" else logical_id,
         }
         devices.append(device)
         logical_devices.append(
             {
                 "id": logical_id,
                 "label": label,
-                "is_online": True,
-                "status": "online",
-                "data_status": "live",
-                "last_seen_ts": now,
-                "seconds_since_last": 0,
+                "is_online": online,
+                "status": "online" if online else "waiting",
+                "data_status": "live" if online else "waiting",
+                "last_seen_ts": now if online else None,
+                "seconds_since_last": 0 if online else None,
                 "total_samples": len(samples),
                 "samples_in_window": len(samples),
                 "device_count": 1,
@@ -213,7 +246,7 @@ def device_status(online_window_sec: int = Query(default=30, ge=1, le=3600)) -> 
             "total_observations": len(latest),
             "last_observation_ts": now,
             "total_devices": len(devices),
-            "online_devices": len(devices),
+            "online_devices": sum(d["is_online"] for d in devices),
         },
         "liveagent": {"online": True, "device_count": len(devices), "last_seen_ts": now},
         "logical_devices": logical_devices,

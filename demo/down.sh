@@ -13,3 +13,5 @@ parsers=$(docker ps -aq --filter label=flora.gateway.role=parser)
 docker compose -f flora-gateway/compose.yaml --profile demo down $flag
 docker compose -f flora-canopy/compose.yaml down $flag
 docker compose -f flora-root/compose.yaml down $flag
+# Release pins written by flora-updater point at registries that were just wiped.
+[ -n "$flag" ] && rm -rf flora-*/.release

@@ -19,7 +19,7 @@ class IacsM540Parser(Parser):
         if not source:
             raise ValueError("iacs_m540 requires source_ip to identify the monitor")
         self.source_ip = str(ipaddress.ip_address(source))
-        mapping = json.loads((Path(__file__).parent / "parameters.json").read_text())
+        mapping = json.loads((Path(__file__).parent / "flora_mapping.json").read_text())
         self.rules = self.options.get("parameters", mapping["parameters"])
         for rule in self.rules:
             if rule["ivy_param"] not in FLORA_PARAMS or not rule["source_keys"]:
@@ -36,6 +36,12 @@ class IacsM540Parser(Parser):
         if parsed.trailing_offset is not None:
             raise ValueError(f"unknown IACS block at {parsed.trailing_offset}")
         rows = []
+        for key, value in parsed.numeric_values.items():
+            rule = next((item for item in self.rules if key in item["source_keys"]), None)
+            self.record_measurement(frame, key, value, value,
+                                    definition={"name": None, "unit": None,
+                                                "evidence": "legacy IACS decoder; original name/unit not verified"},
+                                    mapping=rule)
         for rule in self.rules:
             key = next((key for key in rule["source_keys"] if key in parsed.numeric_values), None)
             if key is None:

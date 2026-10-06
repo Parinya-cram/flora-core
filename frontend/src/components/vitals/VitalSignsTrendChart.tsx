@@ -84,7 +84,9 @@ function initialVisibleGroups(
   const available = new Set(groups.map(group => group.key));
   if (storageKey && typeof window !== "undefined") {
     try {
-      const saved = JSON.parse(window.localStorage.getItem(storageKey) || "[]") as unknown;
+      // A missing key means "never chosen": fall through to account/configured defaults.
+      const stored = window.localStorage.getItem(storageKey);
+      const saved = stored == null ? null : JSON.parse(stored) as unknown;
       if (Array.isArray(saved)) {
         const valid = saved.filter((key): key is VitalGroup => typeof key === "string" && available.has(key as VitalGroup));
         return valid;

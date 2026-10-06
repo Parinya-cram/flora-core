@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
 """Opens one active demo case on each Leaf so device data flows into a chart.
 
-First run: signs in with the bootstrap admin, sets the demo password (the Leaf
-requires a password change on first login) and starts a manual-admission case.
-Re-running is safe: an existing active case is left alone.
+Signs in with the default admin / admin and starts a manual-admission case.
+Re-running is safe: an existing active case is left alone. If sign-in fails
+(password changed, or an install from before the demo default), run
+demo/reset-admins.sh.
 """
 import json
 import time
 import urllib.error
 import urllib.request
 
-BOOTSTRAP_PASSWORD = "admin"
-DEMO_PASSWORD = "FloraDemo-2026"  # local demo credential only
+DEMO_PASSWORD = "admin"  # local demo default for every Flora system
 LEAVES = [
-    {"name": "leaf-or-01", "api": "http://127.0.0.1:7301", "hn": "DEMO-OR-0001", "patient": "Demo Patient OR",
-     "operation": "Laparoscopic cholecystectomy", "diagnosis": "Symptomatic cholelithiasis"},
-    {"name": "leaf-icu-01", "api": "http://127.0.0.1:7311", "hn": "DEMO-ICU-0001", "patient": "Demo Patient ICU",
-     "operation": "Post-operative ventilation", "diagnosis": "Septic shock"},
+    {"name": "leaf-or-01", "api": "http://127.0.0.1:7301", "hn": "DEMO-OR-0001", "an": "AN-OR-0001",
+     "patient": "Demo Patient OR", "operation": "Laparoscopic cholecystectomy", "diagnosis": "Symptomatic cholelithiasis",
+     "location": {"careUnitName": "OR Suite", "roomName": "Operating Room 1", "bedName": "OR-1"}},
+    {"name": "leaf-icu-01", "api": "http://127.0.0.1:7311", "hn": "DEMO-ICU-0001", "an": "AN-ICU-0001",
+     "patient": "Demo Patient ICU", "operation": "Post-operative ventilation", "diagnosis": "Septic shock",
+     "location": {"careUnitName": "ICU", "roomName": "ICU Room 1", "bedName": "ICU Bed 1"}},
 ]
 
 
@@ -34,24 +36,23 @@ def call(api, path, body=None, token=None, method=None):
 
 
 def login(api):
-    for password in (DEMO_PASSWORD, BOOTSTRAP_PASSWORD):
-        status, body = call(api, "/api/auth/login", {"username": "admin", "password": password})
-        if status == 200:
-            token = body["session_token"]
-            if body["user"].get("mustChangePassword"):
-                status, body = call(api, "/api/auth/self/change-password",
-                                    {"current_password": password, "new_password": DEMO_PASSWORD}, token)
-                if status != 200:
-                    raise SystemExit(f"password change failed: {body}")
-                token = login(api)
-            return token
-    raise SystemExit(f"cannot sign in to {api}")
+    status, body = call(api, "/api/auth/login", {"username": "admin", "password": DEMO_PASSWORD})
+    if status != 200 or body["user"].get("mustChangePassword"):
+        raise SystemExit(f"cannot sign in to {api} as admin/admin; run demo/reset-admins.sh")
+    return body["session_token"]
 
 
 for leaf in LEAVES:
     token = login(leaf["api"])
+    # Ward shown in the Leaf header and browser tab.
+    status, body = call(leaf["api"], "/api/workstation/context", {
+        "hospitalName": "Demo Hospital", "buildingName": "Main building", **leaf["location"],
+        "timezone": "Asia/Bangkok", "dateFormat": "DD/MM/YYYY", "timeFormat": "24h"}, token, method="PUT")
+    if status != 200:
+        raise SystemExit(f"{leaf['name']}: workstation location failed {status} {body}")
     status, body = call(leaf["api"], "/api/case/start", {
         "start_time": int(time.time() * 1000), "admission_source": "manual", "hn": leaf["hn"],
+        "admission_number": leaf["an"],
         "patient_name": leaf["patient"], "sex": "F", "age_text": "54y", "weight_kg": 62,
         "operation": leaf["operation"], "diagnosis": leaf["diagnosis"], "asa_status": "3",
     }, token)

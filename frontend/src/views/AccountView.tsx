@@ -8,6 +8,7 @@ import {
   getSelfManagedUser,
   mergeStoredAuthUser,
   savePersonalThemeToAccount,
+  setOwnAdminPin,
   updateOwnPreferences,
   type ManagedAuthUser,
   type PersonalThemeRow,
@@ -66,6 +67,10 @@ export default function AccountView({ sessionUser }: { sessionUser: AuthUser | n
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [pinPassword, setPinPassword] = useState("");
+  const [pinValue, setPinValue] = useState("");
+  const [pinConfirm, setPinConfirm] = useState("");
+  const [pinSet, setPinSet] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -100,6 +105,29 @@ export default function AccountView({ sessionUser }: { sessionUser: AuthUser | n
       setReports(current => ({ ...current, ...(user.reportPreferences as Record<string, boolean>) }));
     }).catch(err => setError(err instanceof Error ? err.message : "Unable to load account"));
   }, [sessionUser?.username]);
+
+  const canManageUsers = sessionUser?.permissions?.includes("account.manage") === true;
+  const hasAdminPin = pinSet ?? (account?.hasAdminPin === true || sessionUser?.hasAdminPin === true);
+  const isLdapAccount = (account?.authSource || sessionUser?.authSource) === "ldap";
+
+  const saveAdminPin = async (clear: boolean) => {
+    if (!clear) {
+      if (!/^\d{4,8}$/.test(pinValue)) return setError("Admin PIN must be 4–8 digits.");
+      if (pinValue !== pinConfirm) return setError("Admin PINs do not match.");
+    }
+    setSaving(true); setError(""); setMessage("");
+    try {
+      await setOwnAdminPin(pinPassword, clear ? null : pinValue);
+      setPinSet(!clear);
+      if (sessionUser) {
+        mergeStoredAuthUser({ ...sessionUser, hasAdminPin: !clear });
+        window.dispatchEvent(new Event("flora:auth-changed"));
+      }
+      setPinPassword(""); setPinValue(""); setPinConfirm("");
+      setMessage(clear ? "Admin PIN cleared." : "Admin PIN saved.");
+    } catch (err) { setError(err instanceof Error ? err.message : "Unable to update admin PIN"); }
+    finally { setSaving(false); }
+  };
 
   const linkedStaff = useMemo(() => staff.find(row => row.id === account?.staffDirectoryId), [account?.staffDirectoryId, staff]);
   const selectableThemes = useMemo(() => [...(options?.themes || []), ...personalThemes], [options?.themes, personalThemes]);
@@ -222,6 +250,24 @@ export default function AccountView({ sessionUser }: { sessionUser: AuthUser | n
       </section>
     </div>
     <button type="button" onClick={() => void save()} disabled={saving || !name.trim()} className="w-fit rounded-lg bg-[var(--app-accent)] px-5 py-2.5 font-semibold text-[var(--app-accent-contrast)] disabled:opacity-50">{saving ? "Saving…" : "Save account"}</button>
-    <section className="space-y-3 rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-5"><h2 className="font-semibold">Password</h2><div className="grid max-w-3xl gap-3 sm:grid-cols-3"><input type="password" className="rounded-lg border border-[var(--app-border)] px-3 py-2" placeholder="Current password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} /><input type="password" className="rounded-lg border border-[var(--app-border)] px-3 py-2" placeholder="New password" value={newPassword} onChange={e => setNewPassword(e.target.value)} /><input type="password" className="rounded-lg border border-[var(--app-border)] px-3 py-2" placeholder="Confirm password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} /></div><button type="button" onClick={() => void changePassword()} disabled={saving || !currentPassword || !newPassword || !confirmPassword} className="rounded-lg border border-[var(--app-border)] px-4 py-2 text-sm font-semibold disabled:opacity-50">Change password</button></section>
+    {isLdapAccount
+      ? <section className="space-y-1 rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-5"><h2 className="font-semibold">Password</h2><p className="text-sm text-[var(--app-muted)]">This account signs in through the organisation directory (LDAP). Change your password in the directory service.</p></section>
+      : <section className="space-y-3 rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-5"><h2 className="font-semibold">Password</h2><div className="grid max-w-3xl gap-3 sm:grid-cols-3"><input type="password" className="rounded-lg border border-[var(--app-border)] px-3 py-2" placeholder="Current password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} /><input type="password" className="rounded-lg border border-[var(--app-border)] px-3 py-2" placeholder="New password" value={newPassword} onChange={e => setNewPassword(e.target.value)} /><input type="password" className="rounded-lg border border-[var(--app-border)] px-3 py-2" placeholder="Confirm password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} /></div><button type="button" onClick={() => void changePassword()} disabled={saving || !currentPassword || !newPassword || !confirmPassword} className="rounded-lg border border-[var(--app-border)] px-4 py-2 text-sm font-semibold disabled:opacity-50">Change password</button></section>}
+    {canManageUsers ? <section className="space-y-3 rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="font-semibold">Admin PIN</h2>
+        <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${hasAdminPin ? "border-emerald-400/35 bg-emerald-500/10 text-emerald-300" : "border-amber-400/35 bg-amber-500/10 text-amber-300"}`}>{hasAdminPin ? "PIN set" : "No PIN set"}</span>
+      </div>
+      <p className="text-xs text-[var(--app-muted)]">A 4–8 digit PIN that authorises user and ward changes made at a Leaf bedside. Confirm with your current password.</p>
+      <div className="grid max-w-3xl gap-3 sm:grid-cols-3">
+        <input type="password" autoComplete="current-password" className="rounded-lg border border-[var(--app-border)] px-3 py-2" placeholder="Current password" value={pinPassword} onChange={e => setPinPassword(e.target.value)} />
+        <input type="password" inputMode="numeric" autoComplete="off" maxLength={8} className="rounded-lg border border-[var(--app-border)] px-3 py-2" placeholder="New PIN (4–8 digits)" value={pinValue} onChange={e => setPinValue(e.target.value.replace(/\D/g, "").slice(0, 8))} />
+        <input type="password" inputMode="numeric" autoComplete="off" maxLength={8} className="rounded-lg border border-[var(--app-border)] px-3 py-2" placeholder="Confirm PIN" value={pinConfirm} onChange={e => setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 8))} />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => void saveAdminPin(false)} disabled={saving || !pinPassword || pinValue.length < 4 || !pinConfirm} className="rounded-lg border border-[var(--app-border)] px-4 py-2 text-sm font-semibold disabled:opacity-50">{hasAdminPin ? "Change PIN" : "Set PIN"}</button>
+        {hasAdminPin ? <button type="button" onClick={() => void saveAdminPin(true)} disabled={saving || !pinPassword} className="rounded-lg border border-rose-400/40 px-4 py-2 text-sm font-semibold text-rose-300 disabled:opacity-50">Clear PIN</button> : null}
+      </div>
+    </section> : null}
   </div>;
 }

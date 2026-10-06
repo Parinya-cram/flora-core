@@ -30,6 +30,10 @@ export type PreferenceOptions = {
   themes: ThemeSchemeOption[];
 };
 
+export type WardRef = { key: string; name: string };
+
+export type WardAccess = { allUnits: boolean; units: WardRef[] };
+
 export type AuthApiUser = {
   username: string;
   name: string;
@@ -43,6 +47,9 @@ export type AuthApiUser = {
   roleCodes?: string[];
   permissions?: string[];
   mustChangePassword?: boolean;
+  authSource?: string;
+  wardAccess?: WardAccess;
+  hasAdminPin?: boolean;
 };
 
 export type AuthRole = {
@@ -78,7 +85,21 @@ export type ManagedAuthUser = {
   roleCodes: string[];
   permissions: string[];
   mustChangePassword: boolean;
+  allUnits: boolean;
+  units: WardRef[];
+  hasAdminPin: boolean;
+  syncState: "synced" | "pending" | "local";
 };
+
+export type ManagedUserSyncState = ManagedAuthUser["syncState"];
+
+export type CanopyWardRow = WardRef & {
+  buildingName: string | null;
+  hospitalName: string | null;
+  leafCount: number;
+};
+
+export type WardOption = WardRef & { buildingName: string | null };
 
 const BASE = `${BACKEND_BASE}/api/auth`;
 const SESSION_TOKEN_KEY = "flora_auth_token";
@@ -111,6 +132,56 @@ function buildAuthHeaders(extra: Record<string, string> = {}) {
   };
 }
 
+function parseWardRefs(raw: unknown): WardRef[] {
+  return (Array.isArray(raw) ? raw : [])
+    .map(item => {
+      const row = (item || {}) as Record<string, unknown>;
+      const key = String(row.key ?? row.unit_key ?? "").trim();
+      return { key, name: String(row.name ?? row.unit_name ?? key).trim() || key };
+    })
+    .filter(row => row.key);
+}
+
+function parseWardAccess(raw: unknown): WardAccess {
+  const row = (raw || {}) as Record<string, unknown>;
+  return {
+    allUnits: row.allUnits === true || row.all_units === true,
+    units: parseWardRefs(row.units),
+  };
+}
+
+function optionalString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+/** Error raised when a Leaf user-management write is rejected for a missing or wrong admin PIN. */
+export class AdminPinError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AdminPinError";
+  }
+}
+
+function apiErrorMessage(data: unknown, fallback: string): string {
+  const payload = (data || {}) as { detail?: unknown; error?: unknown };
+  if (typeof payload.detail === "string" && payload.detail) return payload.detail;
+  if (typeof payload.error === "string" && payload.error) return payload.error;
+  return fallback;
+}
+
+function throwApiError(status: number, data: unknown, fallback: string): never {
+  const message = apiErrorMessage(data, fallback);
+  if (status === 403 && /admin pin/i.test(message)) throw new AdminPinError(message);
+  throw new Error(message);
+}
+
+/** Leaf user-management writes carry the admin PIN for this single request only. */
+function adminPinHeaders(adminPin?: string): Record<string, string> {
+  return adminPin ? { "x-flora-admin-pin": adminPin } : {};
+}
+
+export type ManagedWriteOptions = { adminPin?: string };
+
 function parseAuthUser(user: Partial<AuthApiUser> | undefined): AuthApiUser {
   if (!user || typeof user.username !== "string" || !user.username.trim()) {
     throw new Error("auth response missing user");
@@ -127,7 +198,11 @@ function parseAuthUser(user: Partial<AuthApiUser> | undefined): AuthApiUser {
     reportPreferences: user.reportPreferences && typeof user.reportPreferences === "object" ? user.reportPreferences : {},
     roleCodes: Array.isArray(user.roleCodes) ? user.roleCodes.map(String) : [],
     permissions: Array.isArray(user.permissions) ? user.permissions.map(String) : [],
-    mustChangePassword: user.mustChangePassword === true,
+    authSource: typeof user.authSource === "string" && user.authSource.trim() ? user.authSource.trim() : undefined,
+    // Directory (LDAP) accounts never rotate their password inside Flora.
+    mustChangePassword: user.mustChangePassword === true && user.authSource !== "ldap",
+    wardAccess: parseWardAccess(user.wardAccess ?? (user as Record<string, unknown>).ward_access),
+    hasAdminPin: user.hasAdminPin === true || (user as Record<string, unknown>).has_admin_pin === true,
   };
 }
 
@@ -469,6 +544,13 @@ function parseManagedUser(raw: Record<string, unknown>): ManagedAuthUser {
     roleCodes: (Array.isArray(raw.roleCodes) ? raw.roleCodes : Array.isArray(raw.role_codes) ? raw.role_codes : []).map(String),
     permissions: Array.isArray(raw.permissions) ? raw.permissions.map(String) : [],
     mustChangePassword: raw.mustChangePassword === true || Number(raw.must_change_password || 0) === 1,
+    allUnits: raw.allUnits === true || raw.all_units === true || Number(raw.all_units || 0) === 1,
+    units: parseWardRefs(raw.units),
+    hasAdminPin: raw.hasAdminPin === true || raw.has_admin_pin === true,
+    syncState: (() => {
+      const state = String(raw.syncState ?? raw.sync_state ?? "").trim();
+      return state === "pending" || state === "local" ? state : "synced";
+    })(),
   };
 }
 
@@ -495,14 +577,21 @@ export async function createManagedUser(input: {
   languageCode?: string;
   themeColor?: string;
   isActive?: boolean;
-}): Promise<ManagedAuthUser> {
+  allUnits?: boolean;
+  unitKeys?: string[];
+  authSource?: "local" | "ldap";
+}, opts: ManagedWriteOptions = {}): Promise<ManagedAuthUser> {
+  const isLdap = input.authSource === "ldap";
   const res = await fetch(`${BASE}/users`, {
     method: "POST",
-    headers: buildAuthHeaders({ "Content-Type": "application/json" }),
+    headers: buildAuthHeaders({ "Content-Type": "application/json", ...adminPinHeaders(opts.adminPin) }),
     body: JSON.stringify({
       username: input.username,
       name: input.name,
-      password: input.password,
+      ...(isLdap ? {} : { password: input.password }),
+      auth_source: isLdap ? "ldap" : "local",
+      ...(input.allUnits !== undefined ? { all_units: input.allUnits } : {}),
+      ...(input.unitKeys !== undefined ? { unit_keys: input.unitKeys } : {}),
       hospital_id: input.hospitalId || null,
       staff_directory_id: input.staffDirectoryId ?? null,
       role_codes: input.roleCodes,
@@ -512,19 +601,89 @@ export async function createManagedUser(input: {
     }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.detail || data?.error || `create user failed (${res.status})`);
+  if (!res.ok) throwApiError(res.status, data, `create user failed (${res.status})`);
   return parseManagedUser(data.row || {});
 }
 
-export async function updateManagedUserAccess(userId: number, roleCodes: string[]): Promise<ManagedAuthUser> {
+export async function updateManagedUserAccess(userId: number, roleCodes: string[], opts: ManagedWriteOptions = {}): Promise<ManagedAuthUser> {
   const res = await fetch(`${BASE}/users/${userId}/access`, {
     method: "PUT",
-    headers: buildAuthHeaders({ "Content-Type": "application/json" }),
+    headers: buildAuthHeaders({ "Content-Type": "application/json", ...adminPinHeaders(opts.adminPin) }),
     body: JSON.stringify({ role_codes: roleCodes }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.detail || data?.error || `update access failed (${res.status})`);
+  if (!res.ok) throwApiError(res.status, data, `update access failed (${res.status})`);
   return parseManagedUser(data.row || {});
+}
+
+export async function updateManagedUserWards(
+  userId: number,
+  input: { allUnits: boolean; unitKeys: string[] },
+  opts: ManagedWriteOptions = {},
+): Promise<ManagedAuthUser> {
+  const res = await fetch(`${BASE}/users/${userId}/wards`, {
+    method: "PUT",
+    headers: buildAuthHeaders({ "Content-Type": "application/json", ...adminPinHeaders(opts.adminPin) }),
+    body: JSON.stringify({ all_units: input.allUnits, unit_keys: input.unitKeys }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throwApiError(res.status, data, `update ward access failed (${res.status})`);
+  if (!data?.row) throw new Error("update ward access failed");
+  return parseManagedUser(data.row as Record<string, unknown>);
+}
+
+/** Care units available for assignment; on Leaf, `leafUnitKey` is this bedside's ward. */
+export async function getWardOptions(): Promise<{ rows: WardOption[]; leafUnitKey: string | null }> {
+  const res = await fetch(`${BASE}/ward-options`, { headers: buildAuthHeaders() });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throwApiError(res.status, data, `load wards failed (${res.status})`);
+  return {
+    rows: (Array.isArray(data?.rows) ? data.rows : []).map((raw: Record<string, unknown>) => ({
+      key: String(raw.key || "").trim(),
+      name: String(raw.name || raw.key || "").trim(),
+      buildingName: optionalString(raw.buildingName ?? raw.building_name),
+    })).filter((row: WardOption) => row.key),
+    leafUnitKey: optionalString(data?.leafUnitKey ?? data?.leaf_unit_key),
+  };
+}
+
+/** Canopy: wards the signed-in user may view. */
+export async function getAuthWards(): Promise<{ allUnits: boolean; rows: CanopyWardRow[] }> {
+  const res = await fetch(`${BASE}/wards`, { headers: buildAuthHeaders() });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throwApiError(res.status, data, `load wards failed (${res.status})`);
+  return {
+    allUnits: data?.allUnits === true || data?.all_units === true,
+    rows: (Array.isArray(data?.rows) ? data.rows : []).map((raw: Record<string, unknown>) => ({
+      key: String(raw.key || "").trim(),
+      name: String(raw.name || raw.key || "").trim(),
+      buildingName: optionalString(raw.buildingName ?? raw.building_name),
+      hospitalName: optionalString(raw.hospitalName ?? raw.hospital_name),
+      leafCount: Number(raw.leafCount ?? raw.leaf_count ?? 0) || 0,
+    })).filter((row: CanopyWardRow) => row.key),
+  };
+}
+
+/** Set (4–8 digits) or clear (null) the signed-in admin's PIN. */
+export async function setOwnAdminPin(currentPassword: string, pin: string | null): Promise<void> {
+  const res = await fetch(`${BASE}/self/admin-pin`, {
+    method: "PUT",
+    headers: buildAuthHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ current_password: currentPassword, pin }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(apiErrorMessage(data, `update admin PIN failed (${res.status})`));
+}
+
+export async function getLdapStatus(): Promise<{ enabled: boolean }> {
+  try {
+    const res = await fetch(`${BASE}/ldap/status`);
+    if (!res.ok) return { enabled: false };
+    const data = await res.json().catch(() => ({}));
+    return { enabled: data?.enabled === true };
+  } catch {
+    return { enabled: false };
+  }
 }
 
 export async function getManagedUsers(opts: {
@@ -571,32 +730,26 @@ export async function getSelfManagedUser(username: string): Promise<ManagedAuthU
   return parseManagedUser(data.row as Record<string, unknown>);
 }
 
-export async function setManagedUserActive(userId: number, isActive: boolean): Promise<ManagedAuthUser> {
+export async function setManagedUserActive(userId: number, isActive: boolean, opts: ManagedWriteOptions = {}): Promise<ManagedAuthUser> {
   const res = await fetch(`${BASE}/users/${userId}/active`, {
     method: "PUT",
-    headers: buildAuthHeaders({ "Content-Type": "application/json" }),
+    headers: buildAuthHeaders({ "Content-Type": "application/json", ...adminPinHeaders(opts.adminPin) }),
     body: JSON.stringify({ is_active: isActive }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const message =
-      data && typeof data.error === "string"
-        ? data.error
-        : `update user failed (${res.status})`;
-    throw new Error(message);
-  }
+  if (!res.ok) throwApiError(res.status, data, `update user failed (${res.status})`);
   if (!data?.row) throw new Error("update user failed");
   return parseManagedUser(data.row as Record<string, unknown>);
 }
 
-export async function linkManagedUserStaff(userId: number, staffDirectoryId: number | null): Promise<ManagedAuthUser> {
+export async function linkManagedUserStaff(userId: number, staffDirectoryId: number | null, opts: ManagedWriteOptions = {}): Promise<ManagedAuthUser> {
   const res = await fetch(`${BASE}/users/${userId}/staff-link`, {
     method: "PUT",
-    headers: buildAuthHeaders({ "Content-Type": "application/json" }),
+    headers: buildAuthHeaders({ "Content-Type": "application/json", ...adminPinHeaders(opts.adminPin) }),
     body: JSON.stringify({ staff_directory_id: staffDirectoryId }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.error || data?.detail || `link staff failed (${res.status})`);
+  if (!res.ok) throwApiError(res.status, data, `link staff failed (${res.status})`);
   if (!data?.row) throw new Error("link staff failed");
   return parseManagedUser(data.row as Record<string, unknown>);
 }
@@ -604,20 +757,15 @@ export async function linkManagedUserStaff(userId: number, staffDirectoryId: num
 export async function resetManagedUserPassword(
   userId: number,
   password?: string,
+  opts: ManagedWriteOptions = {},
 ): Promise<{ row: ManagedAuthUser; appliedPassword: string }> {
   const res = await fetch(`${BASE}/users/${userId}/reset-password`, {
     method: "POST",
-    headers: buildAuthHeaders({ "Content-Type": "application/json" }),
+    headers: buildAuthHeaders({ "Content-Type": "application/json", ...adminPinHeaders(opts.adminPin) }),
     body: JSON.stringify(password ? { password } : {}),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const message =
-      data && typeof data.error === "string"
-        ? data.error
-        : `reset password failed (${res.status})`;
-    throw new Error(message);
-  }
+  if (!res.ok) throwApiError(res.status, data, `reset password failed (${res.status})`);
   if (!data?.row) throw new Error("reset password failed");
   return {
     row: parseManagedUser(data.row as Record<string, unknown>),

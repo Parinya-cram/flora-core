@@ -794,7 +794,8 @@ export default function ManageView({ caseStatus, sessionUser }: Props) {
   const isEforl = edition.code === "eforl";
   const availableTabs = useMemo<ManageTab[]>(
     () => {
-      const tabs: ManageTab[] = surface.code === "leaf" ? ["user"] : [];
+      // Leaf shows the user tab to everyone (self-service account); Canopy manages all users, gated by account.manage.
+      const tabs: ManageTab[] = surface.code === "leaf" || isAdmin ? ["user"] : [];
       if (canConfigure) {
         if (surface.code === "leaf") tabs.push("location", "datetime");
         else tabs.push("language", "scheme");

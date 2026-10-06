@@ -1,11 +1,14 @@
 # Flora Gateway — low-level device integration, one per bedside/OR network.
 # Ports: 74xx (see ../demo/PORTS.md). Run: docker compose up -d --build
+# Once Haber has an approved gateway release, the updater swaps the Rust services
+# and gateway-service to the release images, and gateway-service restarts each
+# device parser on the parser image the release pins.
 name: flora-gateway
 
 x-rust: &rust
   build:
     context: ./rust
-  image: flora-gateway-rust:dev
+  image: ${FLORA_IMAGE_RUST:-flora-gateway-rust:dev}
   environment: &rust-env
     FLORA_GATEWAY_CONFIG: /config/${FLORA_GATEWAY_CONFIG_FILE:-gateway.toml}
     FLORA_GATEWAY_ID: ${FLORA_GATEWAY_ID:-gateway-hospital-01-a}
@@ -62,6 +65,7 @@ services:
     volumes:
       - gateway_db_data:/var/lib/postgresql/data
       - ./db/0001-gateway.sql:/docker-entrypoint-initdb.d/0001-gateway.sql:ro
+      - ./db/0002-device-measurements.sql:/docker-entrypoint-initdb.d/0002-device-measurements.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U flora_gateway -d flora_gateway"]
       interval: 5s
@@ -108,7 +112,7 @@ services:
   parser-image:
     build:
       context: ./python/device-medical-service
-    image: flora-gateway-parser:dev
+    image: ${FLORA_IMAGE_PARSER:-flora-gateway-parser:dev}
     command: ["true"]
     restart: "no"
 
@@ -165,7 +169,7 @@ services:
   gateway-service:
     build:
       context: ./python/gateway-service
-    image: flora-gateway-service:dev
+    image: ${FLORA_IMAGE_SERVICE:-flora-gateway-service:dev}
     environment:
       FLORA_GATEWAY_ID: ${FLORA_GATEWAY_ID:-gateway-hospital-01-a}
       FLORA_GATEWAY_DATABASE_URL: postgresql://flora_gateway:${FLORA_GATEWAY_DB_PASSWORD:-flora-gateway-local-only}@gateway-db:5432/flora_gateway
@@ -179,9 +183,11 @@ services:
       GATEWAY_LICENSE_REQUIRED: ${GATEWAY_LICENSE_REQUIRED:-true}
       GATEWAY_SYNC_INTERVAL_SEC: ${GATEWAY_SYNC_INTERVAL_SEC:-20}
       GATEWAY_ADMIN_KEY: ${GATEWAY_ADMIN_KEY:-}
+      GATEWAY_ADMIN_USERNAME: ${GATEWAY_ADMIN_USERNAME:-admin}
+      GATEWAY_ADMIN_PASSWORD: ${GATEWAY_ADMIN_PASSWORD:-admin}
       GATEWAY_DOCKER_NETWORK: flora-gateway_default
       GATEWAY_COMPOSE_PROJECT: flora-gateway
-      GATEWAY_PARSER_IMAGE: flora-gateway-parser:dev
+      GATEWAY_PARSER_IMAGE: ${FLORA_IMAGE_PARSER:-flora-gateway-parser:dev}
     volumes:
       - ./config:/config
       - /var/run/docker.sock:/var/run/docker.sock
@@ -211,6 +217,29 @@ services:
       - serial-controller
     restart: unless-stopped
 
+
+  # Keeps this project on the release approved in Haber (see ../flora-updater).
+  updater:
+    build:
+      context: ../flora-updater
+    image: ${FLORA_IMAGE_UPDATER:-flora-updater:dev}
+    environment:
+      FLORA_COMPONENT: gateway
+      FLORA_NODE_ID: ${FLORA_GATEWAY_ID:-gateway-hospital-01-a}
+      HABER_URL: ${HABER_URL:-http://host.docker.internal:7204}
+      HABER_NODE_TOKEN: ${HABER_NODE_TOKEN:-haber-node-demo-token}
+      FLORA_ROOT_PUBLIC_KEY: ${FLORA_ROOT_PUBLIC_KEY:-}
+      FLORA_UPDATER_WINDOW: ${FLORA_UPDATER_WINDOW:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # The compose project's parent directory; the updater re-runs compose against it.
+      - ..:/host
+      - updater_state:/state
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
 volumes:
+  updater_state:
   kafka_data:
   gateway_db_data:

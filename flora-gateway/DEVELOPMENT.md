@@ -32,11 +32,12 @@ parsers/
     iacs_m540/
       parser.py                # M540 observation mapping and source selection
       blocks.py                # IACS binary block decoder
-      parameters.json
+      flora_mapping.json
       README.md
     medibus/
+      device_parameters.json  # Legacy definitions + document evidence
       parser.py                # MEDIBUS framing, handshake, polling, decoding
-      parameters.json
+      flora_mapping.json
       README.md
   ge/
     carestation/
@@ -64,6 +65,9 @@ parsers/
       parser.py
       README.md
 ```
+
+Dräger original fields use `gw.measurements` independently of `gw.obs`; see
+[DRAEGER-PARAMETERS.md](DRAEGER-PARAMETERS.md) for storage and migration.
 
 Each protocol folder has a README with its device types, configuration files,
 and test command. `parameters.json`, where present, belongs to that protocol.

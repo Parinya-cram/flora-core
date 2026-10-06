@@ -18,7 +18,7 @@ from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from aiokafka.admin import AIOKafkaAdminClient, NewTopic
 from aiokafka.errors import KafkaConnectionError, TopicAlreadyExistsError
 
-from .envelope import LOG_TOPIC, OBS_TOPIC, RawFrame, cmd_topic, now_ms, raw_topic
+from .envelope import LOG_TOPIC, OBS_TOPIC, MEASUREMENT_TOPIC, RawFrame, cmd_topic, now_ms, raw_topic
 from .parsers import load_parser
 
 log = logging.getLogger("device-medical-service")
@@ -46,7 +46,7 @@ async def run() -> None:
 
     for attempt in range(30):
         try:
-            await ensure_topics(brokers, [source, commands, OBS_TOPIC, LOG_TOPIC])
+            await ensure_topics(brokers, [source, commands, OBS_TOPIC, MEASUREMENT_TOPIC, LOG_TOPIC])
             break
         except (KafkaConnectionError, OSError) as error:
             log.warning("kafka not ready (%s), retrying", error)
@@ -90,6 +90,8 @@ async def run() -> None:
                 continue
             for item in parser.drain_commands():
                 await producer.send_and_wait(commands, key=pod, value=item)
+            for measurement in parser.drain_measurements():
+                await producer.send_and_wait(MEASUREMENT_TOPIC, key=device_id, value=measurement)
             for row in rows:
                 await producer.send(OBS_TOPIC, key=device_id, value=row)
 

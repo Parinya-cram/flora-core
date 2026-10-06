@@ -1,9 +1,11 @@
 import unittest
+from unittest.mock import patch
 
 from app.main import observations_for_minute
 
 
 class LiveAgentTests(unittest.TestCase):
+    @patch('app.main.PROFILE', 'stable-anes')
     def test_snapshot_is_deterministic_and_contains_core_vitals(self):
         timestamp = 1_800_000_000_000
         first = observations_for_minute(timestamp)

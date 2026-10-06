@@ -44,8 +44,9 @@ class MedibusParser(Parser):
             raise ValueError("MEDIBUS poll and response timeouts must be positive and below session_timeout_sec")
         if self.max_frame < 5:
             raise ValueError("MEDIBUS max_frame_bytes must be at least 5")
-        mapping = json.loads((Path(__file__).parent / "parameters.json").read_text())
+        mapping = json.loads((Path(__file__).parent / "flora_mapping.json").read_text())
         self.parameters = {**mapping["parameters"], **self.options.get("parameters", {})}
+        self.definitions = json.loads((Path(__file__).parent / "device_parameters.json").read_text())["parameters"]
         for key, rule in self.parameters.items():
             if not re.fullmatch(r"(?:24|2B|29):[0-9A-F]{2}", key) or rule["ivy_param"] not in FLORA_PARAMS:
                 raise ValueError(f"invalid MEDIBUS parameter mapping: {key}")
@@ -103,14 +104,14 @@ class MedibusParser(Parser):
                 body, checksum = complete[:-2], complete[-2:]
                 if checksum != f"{sum(body) & 0xff:02X}".encode():
                     continue
-                rows.extend(self._message(body, frame.ts))
+                rows.extend(self._message(body, frame))
             elif len(self.buffer) >= self.max_frame:
                 self.buffer.clear()
             else:
                 self.buffer.append(byte)
         return rows
 
-    def _message(self, body, ts):
+    def _message(self, body, frame):
         start, code = body[:2]
         data = body[2:]
         self.last_receive = time.monotonic()
@@ -139,6 +140,9 @@ class MedibusParser(Parser):
         width = 7 if code == 0x29 else 6
         if len(data) % width:
             return []
+        # Reject the whole malformed response before recording any of its fields.
+        if any(not re.fullmatch(rb"[0-9A-F]{2}", data[i:i + 2]) for i in range(0, len(data), width)):
+            return []
         rows = []
         for offset in range(0, len(data), width):
             raw_code = data[offset:offset + 2].decode("ascii")
@@ -146,7 +150,12 @@ class MedibusParser(Parser):
                 return []
             key = f"{code:02X}:{raw_code}"
             rule = self.parameters.get(key)
-            value = data[offset + 2:offset + width].strip()
+            original = data[offset + 2:offset + width]
+            value = original.strip()
+            decoded = float(value) if NUMERIC.fullmatch(value) else None
+            self.record_measurement(frame, key, original.decode("ascii"), decoded,
+                                    definition=self.definitions.get(key, {"name": None, "unit": None, "evidence": "unknown code"}),
+                                    mapping=rule)
             if not rule or not NUMERIC.fullmatch(value):
                 continue  # blank, unavailable, out-of-range, or unmapped
             numeric = float(value) * rule.get("scale", 1)
@@ -154,7 +163,7 @@ class MedibusParser(Parser):
                 continue
             if "precision" in rule:
                 numeric = round(numeric, rule["precision"])
-            row = self.observation(key, rule["ivy_param"], numeric, rule["unit"], system_ts=ts)
+            row = self.observation(key, rule["ivy_param"], numeric, rule["unit"], system_ts=frame.ts)
             if row:
                 rows.append(row)
         return rows

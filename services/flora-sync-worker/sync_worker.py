@@ -17,6 +17,8 @@ LEAF_ID = os.getenv("FLORA_LEAF_ID", "leaf-dev-01").strip()
 HOSPITAL_ID = os.getenv("FLORA_HOSPITAL_ID", "hospital-dev").strip()
 DISPLAY_NAME = os.getenv("FLORA_LEAF_NAME", LEAF_ID).strip()
 INTERVAL_SECONDS = max(2, int(os.getenv("FLORA_SYNC_INTERVAL_SECONDS", "10")))
+# Discharged cases keep syncing this long so documentation finished after discharge reaches Canopy.
+RECENT_MS = max(0, int(float(os.getenv("FLORA_SYNC_RECENT_HOURS", "24")) * 3_600_000))
 LAST_DIGEST: dict[str, str] = {}
 PREVIOUS_ACTIVE_IDS: set[str] = set()
 INITIAL_SYNC_COMPLETE = False
@@ -48,7 +50,10 @@ def build_snapshot(client: httpx.Client, case: dict[str, Any]) -> dict[str, Any]
     case_id = case["case_id"]
     now_ms = time.time_ns() // 1_000_000
     start_ms = int(case.get("start_time") or now_ms)
-    end_ms = int(case.get("discharge_time") or (now_ms // 60_000) * 60_000)
+    # `to` is exclusive: include the discharge minute, or the current minute of an active
+    # case, so entries made in that minute sync on this pass rather than the next one.
+    last_minute = int(case["discharge_time"]) if case.get("discharge_time") else (now_ms // 60_000) * 60_000
+    end_ms = last_minute + 60_000
     # The live viewer follows the latest 24 hours; older readings remain in Leaf.
     from_ms = max(start_ms, end_ms - 24 * 60 * 60 * 1000)
     paths = {
@@ -80,7 +85,8 @@ def make_message(snapshot: dict[str, Any]) -> tuple[dict[str, Any], str]:
     canonical = json.dumps(snapshot, sort_keys=True, separators=(",", ":"), default=str)
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     case_id = str(snapshot["case"]["case_id"])
-    revision = int(snapshot["case"].get("updated_at") or snapshot["case"].get("created_at") or time.time_ns() // 1_000_000)
+    # Snapshot time: increases with every snapshot, so Canopy's "newest wins" check is meaningful.
+    revision = time.time_ns() // 1_000_000
     message_id = uuid.uuid5(uuid.NAMESPACE_URL, f"flora:{LEAF_ID}:case:{case_id}:{digest}")
     return {
         "message_id": str(message_id),
@@ -103,9 +109,15 @@ def synchronize() -> None:
             for case in cases
             if str(case.get("status") or "").upper() == "ACTIVE"
         }
+        recent_after = time.time_ns() // 1_000_000 - RECENT_MS
+        # After the first full pass: active cases, cases that just left active, cases never
+        # sent (e.g. started and discharged while Canopy was unreachable), and recently
+        # discharged cases that may still be edited.
         candidates = cases if not INITIAL_SYNC_COMPLETE else [
             case for case in cases
             if str(case["case_id"]) in active_ids | PREVIOUS_ACTIVE_IDS
+            or str(case["case_id"]) not in LAST_DIGEST
+            or int(case.get("discharge_time") or 0) >= recent_after
         ]
         pending: list[tuple[dict[str, Any], str, str]] = []
         for case in candidates:
@@ -142,9 +154,39 @@ def synchronize() -> None:
         print(f"sync leaf={LEAF_ID} cases={len(messages)} accepted={result['accepted']} duplicates={result['duplicates']}", flush=True)
 
 
+def synchronize_directory() -> None:
+    """Push user changes made on this Leaf, then cache this ward's users from Canopy."""
+    with httpx.Client(timeout=20) as client:
+        pending = get_json(client, "/api/auth/directory/pending").get("users", [])
+        response = client.post(
+            f"{CANOPY_SYNC_API}/api/sync/v1/directory",
+            headers={"Authorization": f"Bearer {SYNC_SECRET}"},
+            json={"leaf_id": LEAF_ID, "changes": pending},
+        )
+        response.raise_for_status()
+        directory = response.json()
+        applied = client.put(
+            f"{LEAF_API}/api/auth/directory",
+            headers={"X-FLORA-Service-Secret": LEAF_SERVICE_SECRET},
+            json=directory,
+        )
+        applied.raise_for_status()
+        result = applied.json()
+        if pending or result.get("removed") or result.get("failed") or directory.get("failed"):
+            print(
+                f"directory leaf={LEAF_ID} pushed={len(pending)} users={len(directory.get('users', []))} "
+                f"removed={result.get('removed')} failed={result.get('failed') or directory.get('failed')}",
+                flush=True,
+            )
+
+
 while True:
     try:
         synchronize()
     except Exception as error:
         print(f"sync failed: {type(error).__name__}: {error}", flush=True)
+    try:
+        synchronize_directory()
+    except Exception as error:
+        print(f"directory sync failed: {type(error).__name__}: {error}", flush=True)
     time.sleep(INTERVAL_SECONDS)
