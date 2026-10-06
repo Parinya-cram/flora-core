@@ -144,5 +144,45 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # ---- Canopy (central read-only viewer) ----
+  flora-canopy-api:
+    build:
+      context: ./services/flora-api
+    environment:
+      FLORA_DATABASE_URL: postgresql://flora_view:${FLORA_DB_VIEW_PASSWORD:-admin}@postgres:5432/${FLORA_POSTGRES_DB:-flora}
+      FLORA_API_ENV: development
+      FLORA_API_MODE: canopy
+      FLORA_CANOPY_SESSION_SECRET: ${FLORA_CANOPY_SESSION_SECRET:-admin}
+      FLORA_BOOTSTRAP_ADMIN_ENABLED: ${FLORA_BOOTSTRAP_ADMIN_ENABLED:-true}
+      FLORA_BOOTSTRAP_ADMIN_USERNAME: ${FLORA_BOOTSTRAP_ADMIN_USERNAME:-admin}
+      FLORA_BOOTSTRAP_ADMIN_PASSWORD: ${FLORA_BOOTSTRAP_ADMIN_PASSWORD:-admin}
+      FLORA_BOOTSTRAP_ADMIN_NAME: ${FLORA_BOOTSTRAP_ADMIN_NAME:-Administrator}
+    ports:
+      - "${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_CANOPY_API_PORT:-6895}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  flora-canopy:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend.dev
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      VITE_FLORA_SURFACE: canopy
+      VITE_API_PROXY_TARGET: http://flora-canopy-api:8000
+    ports:
+      - "${FLORA_CANOPY_PORT:-6894}:5173"
+    depends_on:
+      flora-canopy-api:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   flora_pgdata_v6:
