@@ -24,12 +24,18 @@ services:
     ports:
       - "${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_POSTGRES_PORT:-6892}:5432"
     volumes:
-      - flora_pgdata_v4:/var/lib/postgresql/data
+      - flora_pgdata_v5:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      # Check over TCP (-h 127.0.0.1), not the unix socket, so the container is
+      # only "healthy" once postgres accepts network connections. During a fresh
+      # init the temp server listens on the socket only, so a socket check would
+      # report healthy too early and dependents (leaf-api) would start before the
+      # DB is reachable and crash. start_period covers the long terminology init.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 30
+      start_period: 300s
     restart: unless-stopped
 
   flora-liveagent:
@@ -139,4 +145,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  flora_pgdata_v4:
+  flora_pgdata_v5:
