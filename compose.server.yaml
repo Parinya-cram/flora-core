@@ -24,7 +24,7 @@ services:
     ports:
       - "${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_POSTGRES_PORT:-6892}:5432"
     volumes:
-      - flora_pgdata_v2:/var/lib/postgresql/data
+      - flora_pgdata_v3:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -139,4 +139,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  flora_pgdata_v2:
+  flora_pgdata_v3:
