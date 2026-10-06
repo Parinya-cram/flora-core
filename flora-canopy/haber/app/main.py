@@ -51,6 +51,9 @@ REGISTRY_PUBLIC = os.getenv("HABER_REGISTRY_PUBLIC", "localhost:7205")
 ROOT_REGISTRY_URL = os.getenv("FLORA_ROOT_REGISTRY_URL", "").rstrip("/")  # empty = the one Root advertises
 COMPONENTS = ("canopy", "leaf", "gateway")
 CANOPY_DB_URL = os.getenv("CANOPY_DATABASE_URL", "")
+# Canopy keeps every gateway's configuration and can hand one back (clone / restore).
+CANOPY_SYNC_URL = os.getenv("FLORA_CANOPY_SYNC_URL", "").rstrip("/")
+SYNC_SECRET = os.getenv("FLORA_SYNC_SHARED_SECRET", "")
 SYNC_INTERVAL = int(os.getenv("HABER_ROOT_SYNC_SEC", "20"))
 DB_PATH = os.getenv("HABER_DB_PATH", "/data/haber.db")
 CATALOG = json.loads((Path(__file__).parent / "catalog.json").read_text())
@@ -94,6 +97,10 @@ def init_db() -> None:
               node_id TEXT PRIMARY KEY, component TEXT NOT NULL, project TEXT, release_id TEXT, target TEXT,
               state TEXT, detail TEXT, images TEXT NOT NULL DEFAULT '{}', last_seen INTEGER NOT NULL);
         """)
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(gateway)")}
+        if "site" not in columns:
+            # Where the gateway is installed, as configured on the gateway itself.
+            connection.execute("ALTER TABLE gateway ADD COLUMN site TEXT NOT NULL DEFAULT '{}'")
 
 
 def kv_get(key: str) -> Any:
@@ -279,7 +286,7 @@ def canopy_leaves() -> list[dict[str, Any]]:
 def gateways() -> list[dict[str, Any]]:
     with db() as connection:
         rows = connection.execute("SELECT * FROM gateway ORDER BY gateway_id").fetchall()
-    return [{**dict(row), "devices": json.loads(row["devices"])} for row in rows]
+    return [{**dict(row), "devices": json.loads(row["devices"]), "site": json.loads(row["site"] or "{}")} for row in rows]
 
 
 def usage() -> dict[str, Any]:
@@ -306,7 +313,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Flora Canopy Haber", lifespan=lifespan)
 basic_auth.install(app, "Canopy Haber", "HABER", [
-    r"/health", r"/api/haber/v1/gateways/[^/]+/checkin",  # gateways, token auth
+    r"/health", r"/api/haber/v1/gateways/[^/]+/(checkin|alerts)",  # gateways, token auth
     r"/api/haber/v1/root-keys", r"/api/haber/v1/nodes/[^/]+/(desired|report)",  # flora-updater, token auth
 ])
 
@@ -315,6 +322,9 @@ class Checkin(BaseModel):
     gateway_id: str
     version: str | None = None
     devices: list[dict[str, Any]] = []
+    site: dict[str, Any] = {}
+    applied_config_version: int = 0
+    data_api_url: str | None = None
 
 
 @app.post("/api/haber/v1/gateways/{gateway_id}/checkin")
@@ -332,10 +342,10 @@ def gateway_checkin(gateway_id: str, body: Checkin, request: Request):
     current = now_ms()
     with db() as connection:
         connection.execute(
-            """INSERT INTO gateway (gateway_id, first_seen, last_seen, version, devices) VALUES (?,?,?,?,?)
+            """INSERT INTO gateway (gateway_id, first_seen, last_seen, version, devices, site) VALUES (?,?,?,?,?,?)
                ON CONFLICT(gateway_id) DO UPDATE SET last_seen=excluded.last_seen, version=excluded.version,
-                 devices=excluded.devices""",
-            (gateway_id, current, current, body.version, json.dumps(body.devices)))
+                 devices=excluded.devices, site=excluded.site""",
+            (gateway_id, current, current, body.version, json.dumps(body.devices), json.dumps(body.site, default=str)))
     others = sum(len([d for d in gateway["devices"] if d.get("enabled", True)])
                  for gid, gateway in known.items() if gid != gateway_id)
     licensed = "gateway" in entitlements["modules"]
@@ -348,22 +358,67 @@ def gateway_checkin(gateway_id: str, body: Checkin, request: Request):
                    for item in release["device_types"]]
     else:
         catalog = CATALOG["device_types"]
+    license_grant = {
+        "max_devices": max_devices,
+        "allowed_types": sorted(allowed),
+        "expires_at": bundle["expires_at"],
+        "bundle_id": bundle["bundle_id"],
+        "revoked": bool(bundle.get("revoked")),
+        "issued_by": "flora-root",
+    }
     return {
         "gateway_id": gateway_id,
         "tenant_id": bundle["tenant"]["tenant_id"],
-        "license": {
-            "max_devices": max_devices,
-            "allowed_types": sorted(allowed),
-            "expires_at": bundle["expires_at"],
-            "bundle_id": bundle["bundle_id"],
-            "revoked": bool(bundle.get("revoked")),
-            "issued_by": "flora-root",
-        },
+        "license": license_grant,
+        "canopy_config": forward_to_canopy(gateway_id, body, license_grant),
         "device_types": [item for item in catalog if not allowed or item["code"] in allowed],
         "images": CATALOG["images"],
         "release_id": release["release_id"] if release else None,
         "global_config": bundle.get("global_config", {}),
     }
+
+
+def forward_to_canopy(gateway_id: str, body: Checkin, license_grant: dict[str, Any]) -> dict[str, Any] | None:
+    """Store this check-in in Canopy; return a configuration Canopy wants applied, if any."""
+    if not CANOPY_SYNC_URL or not SYNC_SECRET:
+        return None
+    try:
+        response = httpx.post(
+            f"{CANOPY_SYNC_URL}/api/sync/v1/gateways/{gateway_id}/config",
+            headers={"authorization": f"Bearer {SYNC_SECRET}"}, timeout=3,
+            json={"version": body.version, "site": body.site, "license": license_grant, "devices": body.devices,
+                  "applied_config_version": body.applied_config_version, "data_api_url": body.data_api_url},
+        )
+        response.raise_for_status()
+        return response.json().get("desired_config")
+    except Exception as error:  # Canopy down must not block device licensing
+        log.warning("canopy gateway sync failed for %s: %s", gateway_id, error)
+        return None
+
+
+class GatewayAlerts(BaseModel):
+    gateway_id: str
+    alerts: list[dict[str, Any]] = []
+
+
+@app.post("/api/haber/v1/gateways/{gateway_id}/alerts")
+def gateway_alerts(gateway_id: str, body: GatewayAlerts, request: Request):
+    """Relays a gateway's alert log to Canopy, the central log. Canopy's answer lists the
+    alert versions it stored; the gateway resends anything not listed."""
+    supplied = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    if not GATEWAY_TOKEN or not hmac.compare_digest(supplied, GATEWAY_TOKEN):
+        raise HTTPException(401, "invalid gateway token")
+    if not CANOPY_SYNC_URL or not SYNC_SECRET:
+        raise HTTPException(503, "Canopy sync is not configured; alerts stay queued on the gateway")
+    try:
+        response = httpx.post(f"{CANOPY_SYNC_URL}/api/sync/v1/gateways/{gateway_id}/alerts",
+                              headers={"authorization": f"Bearer {SYNC_SECRET}"}, timeout=5,
+                              json={"alerts": body.alerts})
+        response.raise_for_status()
+    except Exception as error:
+        log.warning("canopy alert relay failed for %s: %s", gateway_id, error)
+        raise HTTPException(502, f"Canopy unreachable: {error}") from None
+    return response.json()
 
 
 def require_node(request: Request) -> None:

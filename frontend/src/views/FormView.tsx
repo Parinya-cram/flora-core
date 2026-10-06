@@ -148,9 +148,45 @@ function normalizeEnabledForms(v: FormValue | undefined): FormTabId[] {
   return order.filter(id => seen.has(id));
 }
 
+export type FormDraftSnapshot = {
+  draft: Record<string, unknown> | null;
+  updated_at?: number | null;
+};
+
+/**
+ * Pluggable storage for the form draft. Without one, FormView edits the active
+ * Leaf case through /api/case/{id}/detail-draft.
+ */
+export type FormDataSource = {
+  /** localStorage cache key, e.g. `doctor_form_canopy_{admissionId}`. */
+  key: string;
+  hn: string;
+  load: () => Promise<FormDraftSnapshot>;
+  /** Receives only the keys changed locally; returns the merged server draft. */
+  patch: (patch: Record<string, unknown>) => Promise<{ draft?: Record<string, unknown> | null; updated_at?: number | null }>;
+  readOnly?: boolean;
+  /** Patient demographics are owned elsewhere: never send patient keys. */
+  patientFieldsReadOnly?: boolean;
+};
+
+export type FormSaveState = {
+  status: "idle" | "saving" | "saved" | "error";
+  at?: number;
+  message?: string;
+};
+
 interface FormViewProps {
-  caseStatus: CaseStatus;
+  caseStatus?: CaseStatus;
+  source?: FormDataSource;
+  /** Restrict the visible tabs (e.g. ["preop", "checklist"] on a ward tablet). */
+  allowedTabs?: readonly string[];
+  onSaveStateChange?: (state: FormSaveState) => void;
+  /** How often to pull edits made on the other side (Leaf <-> Canopy). */
+  refreshIntervalMs?: number;
 }
+
+const IDLE_CASE: CaseStatus = { status: "IDLE" };
+const FORM_REMOTE_REFRESH_MS = 10_000;
 
 const card =
   "rounded-2xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-4 space-y-4 shadow-sm";
@@ -1413,24 +1449,327 @@ function AirwayTechniquePanel({
   );
 }
 
-export default function FormView({ caseStatus }: FormViewProps) {
-  const storageKey = useMemo(() => {
-    if (caseStatus.status === "IDLE") return "";
-    return `doctor_form_${caseStatus.case_id}`;
-  }, [caseStatus]);
+/** Normalizes a stored or server draft (including legacy keys) into editor form state. */
+function buildFormFromDraft(parsed: FormState, hn: string): FormState {
+  const base = defaults(hn);
+  const merged: FormState = {
+    ...base,
+    ...parsed,
+    hn,
+  };
 
-  const [form, setForm] = useState<FormState>(() =>
-    caseStatus.status === "IDLE" ? defaults("") : defaults(caseStatus.hn),
+  if (!merged.clinic && typeof parsed.ipdClinic === "string") {
+    merged.clinic = parsed.ipdClinic.toUpperCase() === "OPD" ? "OPD" : "IPD";
+  }
+
+  merged.diagnosis = normalizeStringList(parsed.diagnosis);
+  merged.operation = normalizeStringList(parsed.operation);
+  merged.enabledForms = normalizeEnabledForms(parsed.enabledForms);
+  merged.monitoring = normalizeMonitoringList(parsed.monitoring);
+  if (Array.isArray(merged.ivSites)) {
+    merged.ivSites = normalizeCodeList(merged.ivSites)[0] || "";
+  }
+  if (Array.isArray(merged.arterialSites)) {
+    merged.arterialSites = normalizeCodeList(merged.arterialSites)[0] || "";
+  }
+  if (Array.isArray(merged.cvcSites)) {
+    merged.cvcSites = normalizeCodeList(merged.cvcSites)[0] || "";
+  }
+  if (Array.isArray(merged.cvcInsertionSites)) {
+    merged.cvcInsertionSites = normalizeCodeList(merged.cvcInsertionSites)[0] || "";
+  }
+  if (!normalizeCodeText(merged.neuraxialBlockType)) {
+    const legacyList = normalizeCodeList(merged.neuraxialTechniques);
+    const first = String(legacyList[0] || "").trim();
+    const map: Record<string, string> = {
+      "Spinal anesthesia": "Spinal",
+      "Epidural anesthesia": "Epidural",
+      "Combined spinal-epidural anesthesia": "Combined spinal-epidural",
+      "Caudal anesthesia": "Caudal",
+    };
+    if (first) {
+      merged.neuraxialBlockType = map[first] || first;
+    }
+  }
+  if (normalizeCodeList(merged.neuraxialSterilePrecautions).length === 0) {
+    const mergedLegacy = [
+      ...normalizeCodeList(merged.spinalSterileBarriers),
+      ...normalizeCodeList(merged.epiduralSterileBarriers),
+    ];
+    merged.neuraxialSterilePrecautions = Array.from(new Set(mergedLegacy));
+  }
+  const normalizeLumensLabel = (value: string) => {
+    const token = value.trim().toLowerCase();
+    if (token === "1" || token === "single") return "Single";
+    if (token === "2" || token === "double") return "Double";
+    if (token === "3" || token === "triple") return "Triple";
+    return value;
+  };
+  merged.cvcLumens = normalizeLumensLabel(normalizeCodeText(merged.cvcLumens));
+  merged.cvcInsertionLumens = normalizeLumensLabel(normalizeCodeText(merged.cvcInsertionLumens));
+
+  const hasLegacyIvLine =
+    normalizeCodeText(merged.ivSites) ||
+    normalizeCodeText(merged.ivCatheterSize) ||
+    normalizeCodeText(merged.ivWhereInserted) ||
+    normalizeCodeText(merged.ivAttempts);
+  if (!normalizeCodeText(merged.ivLineCount) && hasLegacyIvLine) {
+    merged.ivLineCount = "1";
+    if (!normalizeCodeText(merged.ivLine1Site)) merged.ivLine1Site = normalizeCodeText(merged.ivSites);
+    if (!normalizeCodeText(merged.ivLine1Gauge)) merged.ivLine1Gauge = normalizeCodeText(merged.ivCatheterSize);
+    if (!normalizeCodeText(merged.ivLine1Attempts)) merged.ivLine1Attempts = normalizeCodeText(merged.ivAttempts);
+    if (!normalizeCodeText(merged.ivLine1Inserted)) {
+      const inserted = normalizeCodeText(merged.ivWhereInserted);
+      merged.ivLine1Inserted = inserted === "In situ" ? "In-situ" : inserted === "OR" ? "Inserted in OR" : inserted;
+    }
+  }
+
+  const hasLegacyArterial =
+    normalizeCodeText(merged.arterialSites) ||
+    normalizeCodeText(merged.arterialCatheterSize) ||
+    normalizeCodeText(merged.arterialWhereInserted) ||
+    normalizeCodeText(merged.arterialAttempts);
+  if (!normalizeCodeText(merged.invasiveArterialCount) && hasLegacyArterial) {
+    merged.invasiveArterialCount = "1";
+    if (!normalizeCodeText(merged.invasiveArterial1Gauge)) merged.invasiveArterial1Gauge = normalizeCodeText(merged.arterialCatheterSize);
+    if (!normalizeCodeText(merged.invasiveArterial1Attempts)) merged.invasiveArterial1Attempts = normalizeCodeText(merged.arterialAttempts);
+    const arterialSite = normalizeCodeText(merged.arterialSites);
+    if (!normalizeCodeText(merged.invasiveArterial1Site) && arterialSite) {
+      const sideMatch = arterialSite.match(/^(Right|Left)\s+(.+)$/i);
+      if (sideMatch) {
+        merged.invasiveArterial1Side = sideMatch[1][0].toUpperCase() + sideMatch[1].slice(1).toLowerCase();
+        merged.invasiveArterial1Site = sideMatch[2];
+      } else {
+        merged.invasiveArterial1Site = arterialSite;
+      }
+    }
+    if (!normalizeCodeText(merged.invasiveArterial1Inserted)) {
+      const inserted = normalizeCodeText(merged.arterialWhereInserted);
+      merged.invasiveArterial1Inserted = inserted === "In situ" ? "In-situ" : inserted === "OR" ? "Inserted in OR" : inserted;
+    }
+  }
+
+  const hasLegacyInvasiveCvc =
+    normalizeCodeText(merged.cvcInsertionSites) ||
+    normalizeCodeText(merged.cvcInsertionLumens) ||
+    normalizeCodeText(merged.cvcInsertionCatheterSize) ||
+    normalizeCodeText(merged.cvcInsertionAttempts) ||
+    normalizeCodeText(merged.cvcInsertionEventNote);
+  if (!normalizeCodeText(merged.invasiveCvcCount) && hasLegacyInvasiveCvc) {
+    merged.invasiveCvcCount = "1";
+    if (!normalizeCodeText(merged.invasiveCvc1Type)) {
+      const lumens = normalizeLumensLabel(normalizeCodeText(merged.cvcInsertionLumens));
+      merged.invasiveCvc1Type = lumens === "Single" ? "1 Lumen" : lumens === "Double" ? "2 Lumens" : lumens === "Triple" ? "3 Lumens" : lumens;
+    }
+    if (!normalizeCodeText(merged.invasiveCvc1Size)) {
+      merged.invasiveCvc1Size = normalizeCodeText(merged.cvcInsertionCatheterSize).replace(/\s+Fr$/i, "F");
+    }
+    if (!normalizeCodeText(merged.invasiveCvc1Attempts)) {
+      merged.invasiveCvc1Attempts = normalizeCodeText(merged.cvcInsertionAttempts);
+    }
+    if (!normalizeCodeText(merged.invasiveCvc1SkinPreparation)) {
+      merged.invasiveCvc1SkinPreparation = normalizeCodeText(merged.cvcSkinPreparation);
+    }
+    const cvcSite = normalizeCodeText(merged.cvcInsertionSites);
+    if (!normalizeCodeText(merged.invasiveCvc1Site) && cvcSite) {
+      const sideMatch = cvcSite.match(/^(Right|Left)\s+(.+)$/i);
+      if (sideMatch) {
+        merged.invasiveCvc1Side = sideMatch[1][0].toUpperCase() + sideMatch[1].slice(1).toLowerCase();
+        merged.invasiveCvc1Site = sideMatch[2].replace(/^internal jugular$/i, "Internal jugular vein");
+      } else {
+        merged.invasiveCvc1Site = cvcSite;
+      }
+    }
+    if (!normalizeCodeText(merged.invasiveCvc1Note)) {
+      merged.invasiveCvc1Note = normalizeCodeText(merged.cvcInsertionEventNote);
+    }
+  }
+
+  const parsedDob = parseClinicalDate(typeof merged.dob === "string" ? merged.dob : "");
+  if (parsedDob) {
+    merged.dob = toClinicalDate(parsedDob);
+    const age = ageFromDob(parsedDob);
+    merged.ageY = age ? String(age.years) : "";
+    merged.ageM = age ? String(age.months) : "";
+  } else {
+    const derivedDob = dobFromAge(
+      typeof merged.ageY === "string" ? merged.ageY : "",
+      typeof merged.ageM === "string" ? merged.ageM : "",
+    );
+    if (derivedDob) {
+      merged.dob = toClinicalDate(derivedDob);
+      const age = ageFromDob(derivedDob);
+      merged.ageY = age ? String(age.years) : normalizeAgeText(String(merged.ageY || ""), 3);
+      merged.ageM = age ? String(age.months) : normalizeAgeMonthText(String(merged.ageM || ""));
+    }
+  }
+
+  if (normalizeCodeList(merged.pre_induction).length === 0) {
+    const legacy = normalizeCodeList(merged.preInductionChecks);
+    if (legacy.length > 0) merged.pre_induction = legacy;
+  }
+
+  if (normalizeCodeList(merged.induction).length === 0) {
+    const legacy = normalizeCodeList(merged.inductionMethods);
+    if (legacy.length > 0) merged.induction = legacy;
+  }
+
+  if (!normalizeCodeText(merged.mask_ventilation_difficulty)) {
+    const legacy = mapLegacyMaskDifficulty(normalizeCodeText(merged.maskVentilationDifficulty));
+    if (legacy) merged.mask_ventilation_difficulty = legacy;
+  }
+
+  if (!normalizeCodeText(merged.primary_airway_device)) {
+    const mapped = mapLegacyPrimaryAirway(
+      normalizeCodeText(merged.airwayType),
+      normalizeCodeText(merged.intubationRoute),
+    );
+    if (mapped) merged.primary_airway_device = mapped;
+  }
+  if (!normalizeCodeText(merged.extubation_time)) {
+    const legacy = normalizeCodeText(merged.extubationTime);
+    if (legacy) merged.extubation_time = legacy;
+  }
+  if (!normalizeCodeText(merged.extubation_location)) {
+    const legacy = normalizeCodeText(merged.extubationDisposition);
+    if (legacy === "Extubated in PACU/ICU") {
+      merged.extubation_location = "Extubated in PACU";
+    } else if (legacy) {
+      merged.extubation_location = legacy;
+    }
+  }
+  if (!normalizeCodeText(merged.airway_device_removed)) {
+    const legacy = normalizeCodeText(merged.extubationAirway).toUpperCase();
+    if (legacy === "ETT") merged.airway_device_removed = "oral_endotracheal_tube";
+    else if (legacy === "LMA") merged.airway_device_removed = "lma";
+    else if (legacy === "TRACHEOSTOMY") merged.airway_device_removed = "tracheostomy_tube";
+  }
+  if (!normalizeCodeText(merged.extubation_note)) {
+    const legacy = normalizeCodeText(merged.extubationNote);
+    if (legacy) merged.extubation_note = legacy;
+  }
+  if (!normalizeCodeText(merged.airway_device_removed) && normalizeCodeText(merged.primary_airway_device)) {
+    merged.airway_device_removed = normalizeCodeText(merged.primary_airway_device);
+  }
+
+  merged.primary_airway_techniques = JSON.stringify(
+    parseTechniqueList(merged.primary_airway_techniques),
   );
+  merged.secondary_airway_techniques = JSON.stringify(
+    parseTechniqueList(merged.secondary_airway_techniques),
+  );
+  return merged;
+}
+
+/** Applies the same normalization a save writes (dates, age, airway techniques). */
+function normalizeFormForSave(current: FormState, finalize: boolean): FormState {
+  const read = (name: string) => (typeof current[name] === "string" ? (current[name] as string) : "");
+  const normalized: FormState = { ...current };
+  normalized.monitoring = normalizeMonitoringList(normalized.monitoring);
+  const ageY = normalizeAgeText(read("ageY"), 3);
+  const ageM = normalizeAgeMonthText(read("ageM"));
+  const parsedDob = parseClinicalDate(read("dob"));
+  const finalDob = parsedDob || dobFromAge(ageY, ageM);
+  if (finalDob) {
+    const age = ageFromDob(finalDob);
+    normalized.dob = toClinicalDate(finalDob);
+    normalized.ageY = age ? String(age.years) : ageY;
+    normalized.ageM = age ? String(age.months) : ageM;
+  } else {
+    normalized.ageY = ageY;
+    normalized.ageM = ageM;
+  }
+  normalized.primary_airway_techniques = JSON.stringify(
+    parseTechniqueList(normalized.primary_airway_techniques),
+  );
+  normalized.secondary_airway_techniques = JSON.stringify(
+    parseTechniqueList(normalized.secondary_airway_techniques),
+  );
+  if (
+    !normalizeCodeText(normalized.airway_device_removed) &&
+    normalizeCodeText(normalized.primary_airway_device)
+  ) {
+    normalized.airway_device_removed = normalizeCodeText(normalized.primary_airway_device);
+  }
+  if (finalize) {
+    const extubationTime = normalizeTimeInputHHMM(read("extubation_time"));
+    if (extubationTime) normalized.extubation_time = extubationTime;
+  }
+  return normalized;
+}
+
+function isEmptyFormValue(value: unknown): boolean {
+  return value == null || value === "" || value === false || value === "[]"
+    || (Array.isArray(value) && value.length === 0);
+}
+
+function sameFormValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a === undefined || b === undefined) return isEmptyFormValue(a) && isEmptyFormValue(b);
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** Keys whose value differs from the last state known to be on the server. */
+function changedFormKeys(current: FormState, baseline: FormState): string[] {
+  return Object.keys(current).filter(key => !sameFormValue(current[key], baseline[key]));
+}
+
+
+export default function FormView({
+  caseStatus = IDLE_CASE,
+  source,
+  allowedTabs,
+  onSaveStateChange,
+  refreshIntervalMs = FORM_REMOTE_REFRESH_MS,
+}: FormViewProps) {
+  const leafCaseId = !source && caseStatus.status !== "IDLE" ? caseStatus.case_id : null;
+  const idle = !source && leafCaseId == null;
+  const formHn = source ? source.hn : caseStatus.status === "IDLE" ? "" : caseStatus.hn;
+  const storageKey = source ? source.key : leafCaseId != null ? `doctor_form_${leafCaseId}` : "";
+  const readOnly = Boolean(source?.readOnly);
+  const patientFieldsReadOnly = Boolean(source?.patientFieldsReadOnly);
+
+  /**
+   * Where the draft lives. Leaf cases use /api/case/{id}/detail-draft; other
+   * hosts (e.g. the Canopy admission tablet editor) inject their own source.
+   */
+  const dataSource = useMemo<FormDataSource | null>(() => {
+    if (source) return source;
+    if (leafCaseId == null) return null;
+    return {
+      key: `doctor_form_${leafCaseId}`,
+      hn: formHn,
+      load: async () => ({ draft: await getCaseDetailDraft(leafCaseId) }),
+      patch: async (patch) => ({ draft: await patchCaseDetailDraft(leafCaseId, patch) }),
+    };
+  }, [source, leafCaseId, formHn]);
+
+  const [form, setForm] = useState<FormState>(() => defaults(formHn));
   const [saveNote, setSaveNote] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const autoSaveReadyRef = useRef(false);
-  const lastSyncedFormRef = useRef("");
-  const patientSharedDirtyRef = useRef(new Set<string>());
+  /** Last form state known to match the server; keys that differ are local edits. */
+  const baselineRef = useRef<FormState | null>(null);
+  const formRef = useRef(form);
+  const dataSourceRef = useRef(dataSource);
+  const readOnlyRef = useRef(readOnly);
+  const onSaveStateChangeRef = useRef(onSaveStateChange);
+  const savingRef = useRef(false);
+  /** Bumped by every save so a refresh started before it is discarded. */
+  const syncSeqRef = useRef(0);
   const [showSavedPreview, setShowSavedPreview] = useState(false);
   const [savedPreview, setSavedPreview] = useState("");
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<FormTabId>(FORM_REQUIRED_TAB);
+
+  useEffect(() => {
+    formRef.current = form;
+  }, [form]);
+  useEffect(() => {
+    dataSourceRef.current = dataSource;
+    readOnlyRef.current = readOnly;
+    onSaveStateChangeRef.current = onSaveStateChange;
+  }, [dataSource, readOnly, onSaveStateChange]);
 
   const text = (name: string) => (typeof form[name] === "string" ? (form[name] as string) : "");
   const bool = (name: string) => form[name] === true;
@@ -1439,6 +1778,11 @@ export default function FormView({ caseStatus }: FormViewProps) {
     () => normalizeEnabledForms(form.enabledForms),
     [form.enabledForms],
   );
+  const visibleTabs = useMemo<FormTabId[]>(() => {
+    if (!allowedTabs) return enabledTabs;
+    return FORM_TAB_DEFS.map(tab => tab.id).filter(id => allowedTabs.includes(id));
+  }, [allowedTabs, enabledTabs]);
+
   const completionByTab = useMemo(() => {
     const complete = (key: string) => {
       const value = form[key];
@@ -1446,27 +1790,21 @@ export default function FormView({ caseStatus }: FormViewProps) {
       if (Array.isArray(value)) return value.some(item => typeof item === "string" && item.trim() !== "");
       return typeof value === "string" && value.trim() !== "";
     };
-    return Object.fromEntries(enabledTabs.map(tabId => {
+    return Object.fromEntries(visibleTabs.map(tabId => {
       const fields = TAB_REQUIRED_FIELDS[tabId] || [];
       const done = fields.filter(complete).length;
       return [tabId, { done, total: fields.length, percent: fields.length ? Math.round(done / fields.length * 100) : null }];
     })) as Record<FormTabId, { done: number; total: number; percent: number | null }>;
-  }, [enabledTabs, form]);
+  }, [visibleTabs, form]);
   const coreCompletion = useMemo(() => {
-    const totals = CORE_FORM_TABS.map(tabId => completionByTab[tabId]).filter(Boolean);
+    const totals = CORE_FORM_TABS.filter(tabId => visibleTabs.includes(tabId)).map(tabId => completionByTab[tabId]).filter(Boolean);
     const done = totals.reduce((sum, item) => sum + item.done, 0);
     const total = totals.reduce((sum, item) => sum + item.total, 0);
     return total ? Math.round(done / total * 100) : 0;
-  }, [completionByTab]);
+  }, [completionByTab, visibleTabs]);
   const activeGaTab = enabledTabs.find(id => GA_TAB_IDS.includes(id)) ?? null;
 
-  const markPatientSharedDirty = (...names: string[]) => {
-    for (const name of names) {
-      if (SHARED_PATIENT_FORM_FIELD_KEYS.has(name)) patientSharedDirtyRef.current.add(name);
-    }
-  };
   const setText = (name: string, value: string) => {
-    markPatientSharedDirty(name);
     setForm((p) => ({ ...p, [name]: value }));
   };
   const setBool = (name: string, value: boolean) => setForm((p) => ({ ...p, [name]: value }));
@@ -1542,7 +1880,6 @@ export default function FormView({ caseStatus }: FormViewProps) {
 
   };
   const setDob = (value: string, normalize = false) => {
-    markPatientSharedDirty("dob", "ageY", "ageM");
     setForm((p) => {
       const inputValue = formatDateInputDDMMYYYY(value);
       const parsed = parseClinicalDate(inputValue);
@@ -1561,7 +1898,6 @@ export default function FormView({ caseStatus }: FormViewProps) {
     });
   };
   const applyAgeToDob = (ageYRaw: string, ageMRaw: string) => {
-    markPatientSharedDirty("dob", "ageY", "ageM");
     setForm((p) => {
       const ageY = normalizeAgeText(ageYRaw, 3);
       const ageM = normalizeAgeMonthText(ageMRaw);
@@ -1576,258 +1912,81 @@ export default function FormView({ caseStatus }: FormViewProps) {
       };
     });
   };
+  const reportSaveState = useCallback((state: FormSaveState) => {
+    onSaveStateChangeRef.current?.(state);
+  }, []);
+
+  const writeCache = useCallback((draft: Record<string, unknown>) => {
+    if (!storageKey) return;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(draft));
+    } catch {
+      // Storage may be unavailable; the in-memory form still works.
+    }
+  }, [storageKey]);
+
+  /**
+   * Applies a server (or freshly cached) draft. In "merge" mode keys the user
+   * changed locally since the last sync keep their local value; every other key
+   * takes the server value, so edits made on the other side (Leaf or Canopy
+   * tablet) appear without clobbering what is being typed here.
+   */
+  const applyServerDraft = useCallback((draft: Record<string, unknown>, mode: "merge" | "replace" = "merge") => {
+    const remote = buildFormFromDraft(draft as FormState, formHn);
+    const previousBaseline = baselineRef.current;
+    baselineRef.current = remote;
+    setForm(prev => {
+      if (mode === "replace" || !previousBaseline) return remote;
+      let changed = false;
+      const next: FormState = { ...prev };
+      for (const key of Object.keys(remote)) {
+        if (!sameFormValue(prev[key], previousBaseline[key])) continue;
+        if (sameFormValue(prev[key], remote[key])) continue;
+        next[key] = remote[key];
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [formHn]);
+
   const loadDraftFromStorage = useCallback(() => {
-    patientSharedDirtyRef.current.clear();
-    if (caseStatus.status === "IDLE") {
+    if (!storageKey) {
       autoSaveReadyRef.current = false;
+      baselineRef.current = null;
       setForm(defaults(""));
       setSaveNote("");
       return;
     }
-    const base = defaults(caseStatus.hn);
-    const raw = storageKey ? localStorage.getItem(storageKey) : null;
-    if (!raw) {
-      lastSyncedFormRef.current = JSON.stringify(base);
-      setForm(base);
-      setSaveNote("");
-      return;
-    }
+    let parsed: FormState | null = null;
     try {
-      const parsed = JSON.parse(raw) as FormState;
-      const merged: FormState = {
-        ...base,
-        ...parsed,
-        hn: caseStatus.hn,
-      };
-
-      if (!merged.clinic && typeof parsed.ipdClinic === "string") {
-        merged.clinic = parsed.ipdClinic.toUpperCase() === "OPD" ? "OPD" : "IPD";
-      }
-
-      merged.diagnosis = normalizeStringList(parsed.diagnosis);
-      merged.operation = normalizeStringList(parsed.operation);
-      merged.enabledForms = normalizeEnabledForms(parsed.enabledForms);
-      merged.monitoring = normalizeMonitoringList(parsed.monitoring);
-      if (Array.isArray(merged.ivSites)) {
-        merged.ivSites = normalizeCodeList(merged.ivSites)[0] || "";
-      }
-      if (Array.isArray(merged.arterialSites)) {
-        merged.arterialSites = normalizeCodeList(merged.arterialSites)[0] || "";
-      }
-      if (Array.isArray(merged.cvcSites)) {
-        merged.cvcSites = normalizeCodeList(merged.cvcSites)[0] || "";
-      }
-      if (Array.isArray(merged.cvcInsertionSites)) {
-        merged.cvcInsertionSites = normalizeCodeList(merged.cvcInsertionSites)[0] || "";
-      }
-      if (!normalizeCodeText(merged.neuraxialBlockType)) {
-        const legacyList = normalizeCodeList(merged.neuraxialTechniques);
-        const first = String(legacyList[0] || "").trim();
-        const map: Record<string, string> = {
-          "Spinal anesthesia": "Spinal",
-          "Epidural anesthesia": "Epidural",
-          "Combined spinal-epidural anesthesia": "Combined spinal-epidural",
-          "Caudal anesthesia": "Caudal",
-        };
-        if (first) {
-          merged.neuraxialBlockType = map[first] || first;
-        }
-      }
-      if (normalizeCodeList(merged.neuraxialSterilePrecautions).length === 0) {
-        const mergedLegacy = [
-          ...normalizeCodeList(merged.spinalSterileBarriers),
-          ...normalizeCodeList(merged.epiduralSterileBarriers),
-        ];
-        merged.neuraxialSterilePrecautions = Array.from(new Set(mergedLegacy));
-      }
-      const normalizeLumensLabel = (value: string) => {
-        const token = value.trim().toLowerCase();
-        if (token === "1" || token === "single") return "Single";
-        if (token === "2" || token === "double") return "Double";
-        if (token === "3" || token === "triple") return "Triple";
-        return value;
-      };
-      merged.cvcLumens = normalizeLumensLabel(normalizeCodeText(merged.cvcLumens));
-      merged.cvcInsertionLumens = normalizeLumensLabel(normalizeCodeText(merged.cvcInsertionLumens));
-
-      const hasLegacyIvLine =
-        normalizeCodeText(merged.ivSites) ||
-        normalizeCodeText(merged.ivCatheterSize) ||
-        normalizeCodeText(merged.ivWhereInserted) ||
-        normalizeCodeText(merged.ivAttempts);
-      if (!normalizeCodeText(merged.ivLineCount) && hasLegacyIvLine) {
-        merged.ivLineCount = "1";
-        if (!normalizeCodeText(merged.ivLine1Site)) merged.ivLine1Site = normalizeCodeText(merged.ivSites);
-        if (!normalizeCodeText(merged.ivLine1Gauge)) merged.ivLine1Gauge = normalizeCodeText(merged.ivCatheterSize);
-        if (!normalizeCodeText(merged.ivLine1Attempts)) merged.ivLine1Attempts = normalizeCodeText(merged.ivAttempts);
-        if (!normalizeCodeText(merged.ivLine1Inserted)) {
-          const inserted = normalizeCodeText(merged.ivWhereInserted);
-          merged.ivLine1Inserted = inserted === "In situ" ? "In-situ" : inserted === "OR" ? "Inserted in OR" : inserted;
-        }
-      }
-
-      const hasLegacyArterial =
-        normalizeCodeText(merged.arterialSites) ||
-        normalizeCodeText(merged.arterialCatheterSize) ||
-        normalizeCodeText(merged.arterialWhereInserted) ||
-        normalizeCodeText(merged.arterialAttempts);
-      if (!normalizeCodeText(merged.invasiveArterialCount) && hasLegacyArterial) {
-        merged.invasiveArterialCount = "1";
-        if (!normalizeCodeText(merged.invasiveArterial1Gauge)) merged.invasiveArterial1Gauge = normalizeCodeText(merged.arterialCatheterSize);
-        if (!normalizeCodeText(merged.invasiveArterial1Attempts)) merged.invasiveArterial1Attempts = normalizeCodeText(merged.arterialAttempts);
-        const arterialSite = normalizeCodeText(merged.arterialSites);
-        if (!normalizeCodeText(merged.invasiveArterial1Site) && arterialSite) {
-          const sideMatch = arterialSite.match(/^(Right|Left)\s+(.+)$/i);
-          if (sideMatch) {
-            merged.invasiveArterial1Side = sideMatch[1][0].toUpperCase() + sideMatch[1].slice(1).toLowerCase();
-            merged.invasiveArterial1Site = sideMatch[2];
-          } else {
-            merged.invasiveArterial1Site = arterialSite;
-          }
-        }
-        if (!normalizeCodeText(merged.invasiveArterial1Inserted)) {
-          const inserted = normalizeCodeText(merged.arterialWhereInserted);
-          merged.invasiveArterial1Inserted = inserted === "In situ" ? "In-situ" : inserted === "OR" ? "Inserted in OR" : inserted;
-        }
-      }
-
-      const hasLegacyInvasiveCvc =
-        normalizeCodeText(merged.cvcInsertionSites) ||
-        normalizeCodeText(merged.cvcInsertionLumens) ||
-        normalizeCodeText(merged.cvcInsertionCatheterSize) ||
-        normalizeCodeText(merged.cvcInsertionAttempts) ||
-        normalizeCodeText(merged.cvcInsertionEventNote);
-      if (!normalizeCodeText(merged.invasiveCvcCount) && hasLegacyInvasiveCvc) {
-        merged.invasiveCvcCount = "1";
-        if (!normalizeCodeText(merged.invasiveCvc1Type)) {
-          const lumens = normalizeLumensLabel(normalizeCodeText(merged.cvcInsertionLumens));
-          merged.invasiveCvc1Type = lumens === "Single" ? "1 Lumen" : lumens === "Double" ? "2 Lumens" : lumens === "Triple" ? "3 Lumens" : lumens;
-        }
-        if (!normalizeCodeText(merged.invasiveCvc1Size)) {
-          merged.invasiveCvc1Size = normalizeCodeText(merged.cvcInsertionCatheterSize).replace(/\s+Fr$/i, "F");
-        }
-        if (!normalizeCodeText(merged.invasiveCvc1Attempts)) {
-          merged.invasiveCvc1Attempts = normalizeCodeText(merged.cvcInsertionAttempts);
-        }
-        if (!normalizeCodeText(merged.invasiveCvc1SkinPreparation)) {
-          merged.invasiveCvc1SkinPreparation = normalizeCodeText(merged.cvcSkinPreparation);
-        }
-        const cvcSite = normalizeCodeText(merged.cvcInsertionSites);
-        if (!normalizeCodeText(merged.invasiveCvc1Site) && cvcSite) {
-          const sideMatch = cvcSite.match(/^(Right|Left)\s+(.+)$/i);
-          if (sideMatch) {
-            merged.invasiveCvc1Side = sideMatch[1][0].toUpperCase() + sideMatch[1].slice(1).toLowerCase();
-            merged.invasiveCvc1Site = sideMatch[2].replace(/^internal jugular$/i, "Internal jugular vein");
-          } else {
-            merged.invasiveCvc1Site = cvcSite;
-          }
-        }
-        if (!normalizeCodeText(merged.invasiveCvc1Note)) {
-          merged.invasiveCvc1Note = normalizeCodeText(merged.cvcInsertionEventNote);
-        }
-      }
-
-      const parsedDob = parseClinicalDate(typeof merged.dob === "string" ? merged.dob : "");
-      if (parsedDob) {
-        merged.dob = toClinicalDate(parsedDob);
-        const age = ageFromDob(parsedDob);
-        merged.ageY = age ? String(age.years) : "";
-        merged.ageM = age ? String(age.months) : "";
-      } else {
-        const derivedDob = dobFromAge(
-          typeof merged.ageY === "string" ? merged.ageY : "",
-          typeof merged.ageM === "string" ? merged.ageM : "",
-        );
-        if (derivedDob) {
-          merged.dob = toClinicalDate(derivedDob);
-          const age = ageFromDob(derivedDob);
-          merged.ageY = age ? String(age.years) : normalizeAgeText(String(merged.ageY || ""), 3);
-          merged.ageM = age ? String(age.months) : normalizeAgeMonthText(String(merged.ageM || ""));
-        }
-      }
-
-      if (normalizeCodeList(merged.pre_induction).length === 0) {
-        const legacy = normalizeCodeList(merged.preInductionChecks);
-        if (legacy.length > 0) merged.pre_induction = legacy;
-      }
-
-      if (normalizeCodeList(merged.induction).length === 0) {
-        const legacy = normalizeCodeList(merged.inductionMethods);
-        if (legacy.length > 0) merged.induction = legacy;
-      }
-
-      if (!normalizeCodeText(merged.mask_ventilation_difficulty)) {
-        const legacy = mapLegacyMaskDifficulty(normalizeCodeText(merged.maskVentilationDifficulty));
-        if (legacy) merged.mask_ventilation_difficulty = legacy;
-      }
-
-      if (!normalizeCodeText(merged.primary_airway_device)) {
-        const mapped = mapLegacyPrimaryAirway(
-          normalizeCodeText(merged.airwayType),
-          normalizeCodeText(merged.intubationRoute),
-        );
-        if (mapped) merged.primary_airway_device = mapped;
-      }
-      if (!normalizeCodeText(merged.extubation_time)) {
-        const legacy = normalizeCodeText(merged.extubationTime);
-        if (legacy) merged.extubation_time = legacy;
-      }
-      if (!normalizeCodeText(merged.extubation_location)) {
-        const legacy = normalizeCodeText(merged.extubationDisposition);
-        if (legacy === "Extubated in PACU/ICU") {
-          merged.extubation_location = "Extubated in PACU";
-        } else if (legacy) {
-          merged.extubation_location = legacy;
-        }
-      }
-      if (!normalizeCodeText(merged.airway_device_removed)) {
-        const legacy = normalizeCodeText(merged.extubationAirway).toUpperCase();
-        if (legacy === "ETT") merged.airway_device_removed = "oral_endotracheal_tube";
-        else if (legacy === "LMA") merged.airway_device_removed = "lma";
-        else if (legacy === "TRACHEOSTOMY") merged.airway_device_removed = "tracheostomy_tube";
-      }
-      if (!normalizeCodeText(merged.extubation_note)) {
-        const legacy = normalizeCodeText(merged.extubationNote);
-        if (legacy) merged.extubation_note = legacy;
-      }
-      if (!normalizeCodeText(merged.airway_device_removed) && normalizeCodeText(merged.primary_airway_device)) {
-        merged.airway_device_removed = normalizeCodeText(merged.primary_airway_device);
-      }
-
-      merged.primary_airway_techniques = JSON.stringify(
-        parseTechniqueList(merged.primary_airway_techniques),
-      );
-      merged.secondary_airway_techniques = JSON.stringify(
-        parseTechniqueList(merged.secondary_airway_techniques),
-      );
-
-      lastSyncedFormRef.current = JSON.stringify(merged);
-      setForm(merged);
-      setSaveNote("Loaded saved draft");
+      const raw = localStorage.getItem(storageKey);
+      parsed = raw ? (JSON.parse(raw) as FormState) : null;
     } catch {
-      lastSyncedFormRef.current = JSON.stringify(base);
-      setForm(base);
-      setSaveNote("");
+      parsed = null;
     }
-  }, [caseStatus, storageKey]);
-
-  useEffect(() => {
-    loadDraftFromStorage();
-  }, [loadDraftFromStorage]);
+    applyServerDraft(parsed || {}, "replace");
+    setSaveNote(parsed ? "Loaded saved draft" : "");
+  }, [storageKey, applyServerDraft]);
 
   useEffect(() => {
     let alive = true;
+    autoSaveReadyRef.current = false;
+    loadDraftFromStorage();
     async function loadDraftFromBackend() {
-      if (caseStatus.status === "IDLE" || !storageKey) return;
+      const ds = dataSourceRef.current;
+      if (!storageKey || !ds) return;
       try {
-        const backendDraft = await getCaseDetailDraft(caseStatus.case_id);
+        const snapshot = await ds.load();
         if (!alive) return;
-        if (backendDraft) {
-          localStorage.setItem(storageKey, JSON.stringify(backendDraft));
-          loadDraftFromStorage();
+        // The server copy wins over the cache: it carries edits made elsewhere
+        // (e.g. a pre-op form filled on a Canopy tablet before the case started).
+        if (snapshot.draft) {
+          writeCache(snapshot.draft);
+          applyServerDraft(snapshot.draft);
+          setSaveNote(Object.keys(snapshot.draft).length > 0 ? "Loaded saved draft" : "");
         }
       } catch {
-        // keep local fallback behavior
+        if (alive) setSaveNote("Offline – showing the cached draft");
       } finally {
         if (alive) autoSaveReadyRef.current = true;
       }
@@ -1836,22 +1995,21 @@ export default function FormView({ caseStatus }: FormViewProps) {
     return () => {
       alive = false;
     };
-  }, [caseStatus, storageKey, loadDraftFromStorage]);
+  }, [storageKey, loadDraftFromStorage, applyServerDraft, writeCache]);
 
   useEffect(() => {
     let alive = true;
     async function loadSharedPatientRecord() {
-      if (caseStatus.status === "IDLE") return;
+      if (leafCaseId == null) return;
       try {
-        const info = await getCasePatientInfo(caseStatus.case_id);
+        const info = await getCasePatientInfo(leafCaseId);
         if (!alive || !info) return;
         setForm(prev => {
           const dob = info.dob ? formatDateInputDDMMYYYY(info.dob) : normalizeCodeText(prev.dob);
           const parsedDob = parseClinicalDate(dob);
           const age = parsedDob ? ageFromDob(parsedDob) : null;
-          const next = {
-            ...prev,
-            hn: info.hn || caseStatus.hn,
+          const fields: FormState = {
+            hn: info.hn || formHn,
             an: info.an || normalizeCodeText(prev.an),
             dob,
             ageY: age ? String(age.years) : normalizeCodeText(prev.ageY),
@@ -1861,10 +2019,10 @@ export default function FormView({ caseStatus }: FormViewProps) {
             bloodGroupABO: info.blood_group_abo || normalizeCodeText(prev.bloodGroupABO),
             bloodGroupRh: info.blood_group_rh || normalizeCodeText(prev.bloodGroupRh),
           };
-          lastSyncedFormRef.current = JSON.stringify(next);
-          return next;
+          // These values come from the server's patient record, so they are not local edits.
+          if (baselineRef.current) baselineRef.current = { ...baselineRef.current, ...fields };
+          return { ...prev, ...fields };
         });
-        patientSharedDirtyRef.current.clear();
       } catch {
         // The shared draft remains the offline fallback when patient API data is unavailable.
       }
@@ -1873,67 +2031,219 @@ export default function FormView({ caseStatus }: FormViewProps) {
     return () => {
       alive = false;
     };
-  }, [caseStatus]);
+  }, [leafCaseId, formHn]);
 
   useEffect(() => {
-    if (caseStatus.status === "IDLE") return;
+    if (leafCaseId == null || !storageKey) return;
     const onStorageChanged = (event: Event) => {
       const custom = event as CustomEvent<{ caseId?: unknown; source?: unknown }>;
       const changedCaseId = Number(custom.detail?.caseId);
-      const source = String(custom.detail?.source || "");
-      if (source === "form") return;
-      if (!Number.isFinite(changedCaseId) || changedCaseId !== caseStatus.case_id) return;
-      loadDraftFromStorage();
+      const changeSource = String(custom.detail?.source || "");
+      if (changeSource === "form") return;
+      if (!Number.isFinite(changedCaseId) || changedCaseId !== leafCaseId) return;
+      try {
+        const raw = localStorage.getItem(storageKey);
+        if (raw) applyServerDraft(JSON.parse(raw) as Record<string, unknown>);
+      } catch {
+        return;
+      }
       setSaveNote("Synced from Patient/HIS");
     };
     window.addEventListener("flora:form-storage-changed", onStorageChanged);
     return () => window.removeEventListener("flora:form-storage-changed", onStorageChanged);
-  }, [caseStatus, loadDraftFromStorage]);
+  }, [leafCaseId, storageKey, applyServerDraft]);
 
   useEffect(() => {
     if (activeTab === "invasive") {
       setActiveTab("line");
       return;
     }
-    if (enabledTabs.length === 0) return;
-    if (!enabledTabs.includes(activeTab)) {
-      setActiveTab(enabledTabs[0]);
+    if (visibleTabs.length === 0) return;
+    if (!visibleTabs.includes(activeTab)) {
+      setActiveTab(visibleTabs[0]);
     }
-  }, [activeTab, enabledTabs]);
+  }, [activeTab, visibleTabs]);
 
+  const save = useCallback(async (auto = false) => {
+    const ds = dataSourceRef.current;
+    if (!ds || !storageKey || readOnlyRef.current) return;
+    if (savingRef.current) return;
+    const current = formRef.current;
+    const read = (name: string) => (typeof current[name] === "string" ? (current[name] as string) : "");
+    if (!auto) {
+      const normalizedExtubationTime = normalizeTimeInputHHMM(read("extubation_time"));
+      const service = read("service");
+      if (service && !isServiceOption(service)) {
+        setSaveNote("Service must be selected from the list");
+        return;
+      }
+      if (read("extubation_time").trim() !== "" && !normalizedExtubationTime) {
+        setSaveNote("Extubation time must be HH:mm (24-hour)");
+        return;
+      }
+    }
+    const normalized = normalizeFormForSave(current, !auto);
 
-  // Auto-save: debounced 2s after any form change, once initial load is done
+    // Only the keys changed since the last sync go to the server: it stamps a
+    // version per key and the other side merges field by field (newest wins),
+    // so re-sending untouched keys would overwrite edits made elsewhere.
+    const baseline = baselineRef.current;
+    let changedKeys = baseline ? changedFormKeys(normalized, baseline) : Object.keys(normalized);
+    if (patientFieldsReadOnly) changedKeys = changedKeys.filter(key => !PATIENT_DRAFT_FIELD_KEYS.has(key));
+    if (changedKeys.length === 0) {
+      if (!auto) setSaveNote(`Saved ${fmt(Date.now())}`);
+      return;
+    }
+    const draftPatch: Record<string, unknown> = Object.fromEntries(changedKeys.map(key => [key, normalized[key]]));
+
+    savingRef.current = true;
+    syncSeqRef.current += 1;
+    setIsSaving(true);
+    reportSaveState({ status: "saving" });
+    try {
+      if (leafCaseId != null) {
+        const dirtyPatientKeys = new Set(changedKeys.filter(key => SHARED_PATIENT_FORM_FIELD_KEYS.has(key)));
+        if (dirtyPatientKeys.size > 0) {
+          const patientPatch: Parameters<typeof updateCasePatientInfo>[1] = {
+            hn: normalizeCodeText(normalized.hn) || formHn,
+          };
+          if (dirtyPatientKeys.has("an")) patientPatch.an = normalizeCodeText(normalized.an);
+          if (["dob", "ageY", "ageM"].some(key => dirtyPatientKeys.has(key))) {
+            patientPatch.dob = normalizeCodeText(normalized.dob);
+            patientPatch.ageText = [
+              normalizeCodeText(normalized.ageY) ? `${normalizeCodeText(normalized.ageY)}y` : "",
+              normalizeCodeText(normalized.ageM) ? `${normalizeCodeText(normalized.ageM)}m` : "",
+            ].filter(Boolean).join(" ");
+          }
+          if (dirtyPatientKeys.has("weightKg")) patientPatch.weightKg = normalizeCodeText(normalized.weightKg);
+          if (dirtyPatientKeys.has("heightCm")) patientPatch.heightCm = normalizeCodeText(normalized.heightCm);
+          if (dirtyPatientKeys.has("bloodGroupABO")) patientPatch.bloodGroupABO = normalizeCodeText(normalized.bloodGroupABO);
+          if (dirtyPatientKeys.has("bloodGroupRh")) patientPatch.bloodGroupRh = normalizeCodeText(normalized.bloodGroupRh);
+          await updateCasePatientInfo(leafCaseId, patientPatch);
+        }
+      }
+
+      const result = await ds.patch(draftPatch);
+      // What was sent is now on the server.
+      baselineRef.current = { ...(baselineRef.current || normalized), ...(draftPatch as FormState) };
+      if (!auto) {
+        // Show normalized values (dates, times) unless the field changed again meanwhile.
+        setForm(prev => {
+          let changed = false;
+          const next: FormState = { ...prev };
+          for (const key of changedKeys) {
+            if (!sameFormValue(prev[key], current[key]) || sameFormValue(prev[key], normalized[key])) continue;
+            next[key] = normalized[key];
+            changed = true;
+          }
+          return changed ? next : prev;
+        });
+      }
+      if (result.draft) {
+        writeCache(result.draft);
+        applyServerDraft(result.draft);
+      }
+      if (leafCaseId != null) {
+        window.dispatchEvent(
+          new CustomEvent("flora:form-storage-changed", {
+            detail: { caseId: leafCaseId, source: "form" },
+          }),
+        );
+      }
+      const at = Date.now();
+      setSaveNote(auto ? `Auto-saved ${fmt(at)}` : `Saved ${fmt(at)}`);
+      reportSaveState({ status: "saved", at });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "";
+      setSaveNote(auto ? "Auto-save failed – will retry" : "Save failed");
+      reportSaveState({ status: "error", message: message || "Save failed" });
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
+    }
+  }, [storageKey, patientFieldsReadOnly, leafCaseId, formHn, reportSaveState, writeCache, applyServerDraft]);
+
+  // Flush pending local edits when the editor closes (view switch, tablet editor closed).
+  const saveRef = useRef(save);
   useEffect(() => {
-    if (!autoSaveReadyRef.current || caseStatus.status === "IDLE") return;
-    const signature = JSON.stringify(form);
-    if (signature === lastSyncedFormRef.current) return;
+    saveRef.current = save;
+  }, [save]);
+  useEffect(() => () => {
+    const baseline = baselineRef.current;
+    if (!autoSaveReadyRef.current || readOnlyRef.current || !baseline) return;
+    if (changedFormKeys(normalizeFormForSave(formRef.current, false), baseline).length > 0) {
+      void saveRef.current(true);
+    }
+  }, []);
+
+  /** Pulls edits made on the other side; local unsaved keys are kept. */
+  const refreshFromServer = useCallback(async () => {
+    const ds = dataSourceRef.current;
+    if (!ds || !autoSaveReadyRef.current || savingRef.current) return;
+    const seq = syncSeqRef.current;
+    try {
+      const snapshot = await ds.load();
+      if (seq !== syncSeqRef.current || savingRef.current || !snapshot.draft) return;
+      writeCache(snapshot.draft);
+      applyServerDraft(snapshot.draft, readOnlyRef.current ? "replace" : "merge");
+    } catch {
+      // Keep the local copy; the next tick retries.
+    }
+  }, [applyServerDraft, writeCache]);
+
+  // Remote sync: every few seconds (and when the window regains focus) either
+  // retry pending local edits or pull the latest server draft.
+  useEffect(() => {
+    if (!storageKey) return;
+    const tick = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      if (!autoSaveReadyRef.current || savingRef.current) return;
+      const baseline = baselineRef.current;
+      const dirty = !readOnlyRef.current && baseline
+        && changedFormKeys(normalizeFormForSave(formRef.current, false), baseline).length > 0;
+      if (dirty) {
+        void save(true);
+        return;
+      }
+      void refreshFromServer();
+    };
+    const timer = window.setInterval(tick, Math.max(2000, refreshIntervalMs));
+    window.addEventListener("focus", tick);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", tick);
+    };
+  }, [storageKey, refreshIntervalMs, refreshFromServer, save]);
+
+  // Auto-save: debounced 2s after any local edit, once the initial load is done.
+  useEffect(() => {
+    if (!autoSaveReadyRef.current || idle || readOnly) return;
+    const baseline = baselineRef.current;
+    if (!baseline || changedFormKeys(normalizeFormForSave(form, false), baseline).length === 0) return;
     const timer = setTimeout(() => {
       if (!autoSaveReadyRef.current) return;
-      lastSyncedFormRef.current = signature;
-      setIsSaving(true);
-      void save(true).finally(() => setIsSaving(false));
+      void save(true);
     }, 2000);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form]);
+  }, [form, idle, readOnly, save]);
 
-  if (caseStatus.status === "IDLE") {
+  if (idle) {
     return <div className="p-6 text-gray-400">No active case</div>;
   }
 
   const reset = () => {
+    if (leafCaseId == null) return;
     const patientFields = pickDraftFields(form as Record<string, unknown>, PATIENT_DRAFT_FIELD_KEYS);
-    const next = { ...defaults(caseStatus.hn), ...patientFields, hn: caseStatus.hn } as FormState;
-    lastSyncedFormRef.current = JSON.stringify(next);
+    const next = { ...defaults(formHn), ...patientFields, hn: formHn } as FormState;
+    baselineRef.current = next;
     setForm(next);
-    localStorage.setItem(storageKey, JSON.stringify(next));
-    patientSharedDirtyRef.current.clear();
-    void saveCaseDetailDraft(caseStatus.case_id, next as Record<string, unknown>).catch(() => {
+    writeCache(next);
+    void saveCaseDetailDraft(leafCaseId, next as Record<string, unknown>).catch(() => {
       // Keep the local reset while retaining the shared patient fields.
     });
     window.dispatchEvent(
       new CustomEvent("flora:form-storage-changed", {
-        detail: { caseId: caseStatus.case_id, source: "form" },
+        detail: { caseId: leafCaseId, source: "form" },
       }),
     );
     setSaveNote("Draft reset");
@@ -1941,104 +2251,14 @@ export default function FormView({ caseStatus }: FormViewProps) {
     setSavedPreview("");
   };
 
-  const save = async (auto = false) => {
-    if (!storageKey) return;
-    const normalizedExtubationTime = normalizeTimeInputHHMM(text("extubation_time"));
-    if (!auto) {
-      const service = text("service");
-      if (service && !isServiceOption(service)) {
-        setSaveNote("Service must be selected from the list");
-        return;
-      }
-      if (text("extubation_time").trim() !== "" && !normalizedExtubationTime) {
-        setSaveNote("Extubation time must be HH:mm (24-hour)");
-        return;
-      }
-    }
-    try {
-      const normalized: FormState = { ...form };
-      normalized.monitoring = normalizeMonitoringList(normalized.monitoring);
-      const ageY = normalizeAgeText(text("ageY"), 3);
-      const ageM = normalizeAgeMonthText(text("ageM"));
-      const parsedDob = parseClinicalDate(text("dob"));
-      const finalDob = parsedDob || dobFromAge(ageY, ageM);
-      if (finalDob) {
-        const age = ageFromDob(finalDob);
-        normalized.dob = toClinicalDate(finalDob);
-        normalized.ageY = age ? String(age.years) : ageY;
-        normalized.ageM = age ? String(age.months) : ageM;
-      } else {
-        normalized.ageY = ageY;
-        normalized.ageM = ageM;
-      }
-      normalized.primary_airway_techniques = JSON.stringify(
-        parseTechniqueList(normalized.primary_airway_techniques),
-      );
-      normalized.secondary_airway_techniques = JSON.stringify(
-        parseTechniqueList(normalized.secondary_airway_techniques),
-      );
-      if (
-        !normalizeCodeText(normalized.airway_device_removed) &&
-        normalizeCodeText(normalized.primary_airway_device)
-      ) {
-        normalized.airway_device_removed = normalizeCodeText(normalized.primary_airway_device);
-      }
-      if (!auto && normalizedExtubationTime) {
-        normalized.extubation_time = normalizedExtubationTime;
-      }
-      const dirtyPatientKeys = new Set(patientSharedDirtyRef.current);
-      if (dirtyPatientKeys.size > 0) {
-        const patientPatch: Parameters<typeof updateCasePatientInfo>[1] = {
-          hn: normalizeCodeText(normalized.hn) || caseStatus.hn,
-        };
-        if (dirtyPatientKeys.has("an")) patientPatch.an = normalizeCodeText(normalized.an);
-        if (["dob", "ageY", "ageM"].some(key => dirtyPatientKeys.has(key))) {
-          patientPatch.dob = normalizeCodeText(normalized.dob);
-          patientPatch.ageText = [
-            normalizeCodeText(normalized.ageY) ? `${normalizeCodeText(normalized.ageY)}y` : "",
-            normalizeCodeText(normalized.ageM) ? `${normalizeCodeText(normalized.ageM)}m` : "",
-          ].filter(Boolean).join(" ");
-        }
-        if (dirtyPatientKeys.has("weightKg")) patientPatch.weightKg = normalizeCodeText(normalized.weightKg);
-        if (dirtyPatientKeys.has("heightCm")) patientPatch.heightCm = normalizeCodeText(normalized.heightCm);
-        if (dirtyPatientKeys.has("bloodGroupABO")) patientPatch.bloodGroupABO = normalizeCodeText(normalized.bloodGroupABO);
-        if (dirtyPatientKeys.has("bloodGroupRh")) patientPatch.bloodGroupRh = normalizeCodeText(normalized.bloodGroupRh);
-        await updateCasePatientInfo(caseStatus.case_id, patientPatch);
-      }
-
-      const draftPatch = Object.fromEntries(
-        Object.entries(normalized).filter(([key]) => !PATIENT_DRAFT_FIELD_KEYS.has(key)),
-      );
-      for (const key of dirtyPatientKeys) {
-        draftPatch[key] = normalized[key];
-      }
-      const mergedDraft = await patchCaseDetailDraft(caseStatus.case_id, draftPatch);
-      localStorage.setItem(storageKey, JSON.stringify(mergedDraft));
-      patientSharedDirtyRef.current.clear();
-      if (!auto) {
-        const next = { ...normalized, ...mergedDraft } as FormState;
-        lastSyncedFormRef.current = JSON.stringify(next);
-        setForm(next);
-      }
-      window.dispatchEvent(
-        new CustomEvent("flora:form-storage-changed", {
-          detail: { caseId: caseStatus.case_id, source: "form" },
-        }),
-      );
-      setSaveNote(auto ? `Auto-saved ${fmt(Date.now())}` : `Saved ${fmt(Date.now())}`);
-    } catch {
-      if (!auto) setSaveNote("Save failed");
-    }
-  };
-
   const viewSaved = async () => {
     if (!storageKey) return;
     let raw = localStorage.getItem(storageKey);
     if (!raw) {
       try {
-        const backendDraft = await getCaseDetailDraft(caseStatus.case_id);
-        if (backendDraft) {
-          raw = JSON.stringify(backendDraft);
+        const snapshot = await dataSourceRef.current?.load();
+        if (snapshot?.draft) {
+          raw = JSON.stringify(snapshot.draft);
           localStorage.setItem(storageKey, raw);
         }
       } catch {
@@ -2461,11 +2681,11 @@ export default function FormView({ caseStatus }: FormViewProps) {
             <div className="min-w-48 flex-1">
               <div className="h-1.5 overflow-hidden rounded-full bg-[var(--app-border)]"><div className="h-full rounded-full bg-[var(--app-accent)] transition-all" style={{ width: `${coreCompletion}%` }} /></div>
             </div>
-            <div className="text-xs font-medium text-[var(--app-muted)]">{isSaving ? "Saving…" : saveNote || "Auto-save ready"}</div>
+            <div className="text-xs font-medium text-[var(--app-muted)]">{readOnly ? "Read-only" : isSaving ? "Saving…" : saveNote || "Auto-save ready"}</div>
           </div>
 
           <div className="mt-3 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Anesthesia record sections">
-            {enabledTabs.map(tabId => {
+            {visibleTabs.map(tabId => {
               const tab = FORM_TAB_DEFS.find(item => item.id === tabId);
               const progress = completionByTab[tabId];
               if (!tab) return null;
@@ -2478,7 +2698,7 @@ export default function FormView({ caseStatus }: FormViewProps) {
             })}
           </div>
 
-          <details className="mt-2 rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] px-3 py-2">
+          {!allowedTabs && !readOnly ? <details className="mt-2 rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] px-3 py-2">
             <summary className="cursor-pointer text-xs font-bold text-[var(--app-muted)]">Configure procedure-specific sections</summary>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[var(--app-border)] pt-2">
             {/* GA type — radio, mutually exclusive */}
@@ -2512,10 +2732,11 @@ export default function FormView({ caseStatus }: FormViewProps) {
               </label>
             ))}
             </div>
-          </details>
+          </details> : null}
           </div>
       </div>
 
+      <fieldset disabled={readOnly} className="m-0 min-w-0 space-y-4 border-0 p-0">
       <section className={`${card} ${activeTab === "caseInfo" ? "" : "hidden"}`}>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
@@ -3235,6 +3456,7 @@ export default function FormView({ caseStatus }: FormViewProps) {
           </div>
         </section>
       ) : null}
+      </fieldset>
 
       {showSavedPreview ? (
         <div className="fixed inset-0 z-30 bg-black/40 flex items-center justify-center p-4">
@@ -3263,13 +3485,13 @@ export default function FormView({ caseStatus }: FormViewProps) {
               {isSaving ? "Saving…" : saveNote}
             </div>
           ) : null}
-          <button
+          {!readOnly ? <button
             type="button"
             className={primaryButton}
             onClick={() => void save()}
           >
             Save
-          </button>
+          </button> : null}
           <button
             type="button"
             className={secondaryButton}
@@ -3277,13 +3499,13 @@ export default function FormView({ caseStatus }: FormViewProps) {
           >
             View Saved
           </button>
-          <button
+          {leafCaseId != null ? <button
             type="button"
             className={dangerButton}
             onClick={() => setIsResetConfirmOpen(true)}
           >
             Reset
-          </button>
+          </button> : null}
         </div>
       </div>
 

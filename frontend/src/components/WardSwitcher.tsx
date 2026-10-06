@@ -9,6 +9,15 @@ function WardIcon() {
   </svg>;
 }
 
+/** Shown while the synthetic demo ward is selected: its data is for report examples only. */
+function DemoBadge() {
+  return <ClinicalReferenceTooltip text="Demo ward: synthetic data for report examples, excluded from all-ward statistics" compact>
+    <span className="inline-flex h-8 shrink-0 items-center rounded-lg border border-amber-500/50 bg-amber-500/15 px-2 text-[10px] font-extrabold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-300">
+      Demo data
+    </span>
+  </ClinicalReferenceTooltip>;
+}
+
 /** Canopy top-bar ward scope: a select for multi-ward users, a static chip for single-ward users. */
 export default function WardSwitcher({ ward }: { ward: CanopyWardState }) {
   const { t } = useLanguage();
@@ -17,15 +26,19 @@ export default function WardSwitcher({ ward }: { ward: CanopyWardState }) {
 
   if (!ward.allUnits && ward.rows.length <= 1) {
     const name = ward.rows[0]?.name || t("ward.none");
-    return <ClinicalReferenceTooltip text={t("ward.label")} compact>
-      <span className={chipClass} aria-label={`${t("ward.label")}: ${name}`}>
-        <WardIcon />
-        <span className="truncate">{name}</span>
-      </span>
-    </ClinicalReferenceTooltip>;
+    return <>
+      <ClinicalReferenceTooltip text={t("ward.label")} compact>
+        <span className={chipClass} aria-label={`${t("ward.label")}: ${name}`}>
+          <WardIcon />
+          <span className="truncate">{name}</span>
+        </span>
+      </ClinicalReferenceTooltip>
+      {ward.selectedIsDemo ? <DemoBadge /> : null}
+    </>;
   }
 
-  return <ClinicalReferenceTooltip text={t("ward.choose")} compact>
+  return <>
+  <ClinicalReferenceTooltip text={t("ward.choose")} compact>
     <label className={`${chipClass} relative pr-0 focus-within:border-[var(--app-accent)]`}>
       <WardIcon />
       <span className="sr-only">{t("ward.choose")}</span>
@@ -38,11 +51,13 @@ export default function WardSwitcher({ ward }: { ward: CanopyWardState }) {
         {ward.allUnits ? <option value={ALL_WARDS} className="bg-[var(--app-panel-bg)] text-[var(--app-text)]">{t("ward.all")}</option> : null}
         {ward.rows.map(row => (
           <option key={row.key} value={row.key} className="bg-[var(--app-panel-bg)] text-[var(--app-text)]">
-            {row.name}{row.buildingName ? ` · ${row.buildingName}` : ""}
+            {row.name}{row.isDemo ? " · DEMO" : row.buildingName ? ` · ${row.buildingName}` : ""}
           </option>
         ))}
       </select>
       <span aria-hidden="true" className="pointer-events-none absolute right-[8px] text-[var(--app-muted)]">⌄</span>
     </label>
-  </ClinicalReferenceTooltip>;
+  </ClinicalReferenceTooltip>
+  {ward.selectedIsDemo ? <DemoBadge /> : null}
+  </>;
 }

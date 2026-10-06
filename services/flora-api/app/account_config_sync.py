@@ -271,3 +271,32 @@ def apply_account_config(database: Connection, user_id: int, config: dict[str, A
         ),
     )
     return True
+
+
+def _claim_admission(admission_id: str) -> str:
+    request = urllib.request.Request(
+        f"{CANOPY_SYNC_URL}/api/sync/v1/admissions/{urllib.parse.quote(admission_id, safe='')}/claim",
+        data=json.dumps({"leaf_id": LEAF_ID}).encode("utf-8"),
+        headers={"Authorization": f"Bearer {SYNC_SECRET}", "Accept": "application/json",
+                 "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=SYNC_TIMEOUT_SECONDS * 2) as response:
+            return "ok" if response.status == 200 else "unavailable"
+    except urllib.error.HTTPError as error:
+        return "taken" if error.code in {404, 409} else "unavailable"
+    except (OSError, ValueError, urllib.error.URLError):
+        return "unavailable"
+
+
+def claim_canopy_admission(admission_id: str) -> str:
+    """Reserve a Canopy admission for this Leaf: "ok" | "taken" | "unavailable" (start offline)."""
+    if not CANOPY_SYNC_URL or not SYNC_SECRET or not LEAF_ID:
+        return "unavailable"
+    future = SYNC_EXECUTOR.submit(_claim_admission, admission_id)
+    try:
+        return future.result(timeout=SYNC_TIMEOUT_SECONDS * 2 + 0.5)
+    except concurrent.futures.TimeoutError:
+        future.cancel()
+        return "unavailable"

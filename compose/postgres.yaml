@@ -50,6 +50,14 @@ services:
       - ../infrastructure/postgres/0036-complete-innovian-clinical-archive.sql:/docker-entrypoint-initdb.d/0036-complete-innovian-clinical-archive.sql:ro
       - ../infrastructure/postgres/0037-archive-year-release-gate.sql:/docker-entrypoint-initdb.d/0037-archive-year-release-gate.sql:ro
       - ../infrastructure/postgres/0038-ward-access-directory-sync.sql:/docker-entrypoint-initdb.d/0038-ward-access-directory-sync.sql:ro
+      - ../infrastructure/postgres/0039-canopy-gateway-config.sql:/docker-entrypoint-initdb.d/0039-canopy-gateway-config.sql:ro
+      - ../infrastructure/postgres/0040-canopy-demo-ward.sql:/docker-entrypoint-initdb.d/0040-canopy-demo-ward.sql:ro
+      - ../infrastructure/postgres/0041-ai-service-config.sql:/docker-entrypoint-initdb.d/0041-ai-service-config.sql:ro
+      - ../infrastructure/postgres/0042-canopy-admission.sql:/docker-entrypoint-initdb.d/0042-canopy-admission.sql:ro
+      - ../infrastructure/postgres/0043-canopy-gateway-alerts.sql:/docker-entrypoint-initdb.d/0043-canopy-gateway-alerts.sql:ro
+      - ../infrastructure/postgres/0044-ward-handover-gateway-link.sql:/docker-entrypoint-initdb.d/0044-ward-handover-gateway-link.sql:ro
+      - ../infrastructure/postgres/0050-hl7-admission-interface.sql:/docker-entrypoint-initdb.d/0050-hl7-admission-interface.sql:ro
+      - ../infrastructure/postgres/0051-canopy-public-api.sql:/docker-entrypoint-initdb.d/0051-canopy-public-api.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s

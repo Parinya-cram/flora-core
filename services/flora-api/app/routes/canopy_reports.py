@@ -11,6 +11,7 @@ from fastapi.responses import Response
 from psycopg import Connection
 
 from ..database import connection
+from ..demo_ward import DEMO_SOURCE
 from .auth_canopy import read_token
 
 router = APIRouter(prefix="/api/reports", tags=["canopy-reports"], dependencies=[Depends(read_token)])
@@ -45,9 +46,27 @@ def _integer(query: dict[str, str], name: str, default: int, low: int, high: int
         raise HTTPException(status_code=422, detail=f"Invalid {name}") from error
 
 
+def _source_system(request: Request, database: Connection) -> str:
+    """Archive source for the selected ward: the demo ward reports on its synthetic
+    'flora-demo' cases only; every other selection reports on the Innovian archive."""
+    ward = request.headers.get("x-flora-ward", "").strip()
+    if ward and ward.lower() != "all" and database.execute(
+        "SELECT 1 FROM canopy_location WHERE id::text=%s AND kind='care_unit' AND is_demo", (ward,)
+    ).fetchone():
+        return DEMO_SOURCE
+    return "innovian"
+
+
+def _query(request: Request, database: Connection) -> dict[str, str]:
+    query = dict(request.query_params)
+    query.pop("format", None)
+    query["_source"] = _source_system(request, database)
+    return query
+
+
 def _filters(query: dict[str, str]) -> tuple[str, dict[str, Any]]:
-    clauses = ["a.source_system='innovian'"]
-    params: dict[str, Any] = {}
+    clauses = ["a.source_system=%(source_system)s"]
+    params: dict[str, Any] = {"source_system": query.get("_source") or "innovian"}
     if query.get("from"):
         clauses.append("a.started_at >= %(from_date)s::date")
         params["from_date"] = query["from"]
@@ -378,12 +397,14 @@ def report_library(database: Connection = Depends(connection)):
 
 @router.get("/filter-options/staff")
 def report_staff_options(
+    request: Request,
     q: str = Query(default="", max_length=120),
     role: str = Query(default="", max_length=160),
     limit: int = Query(default=30, ge=1, le=100),
     database: Connection = Depends(connection),
 ):
     needle = f"%{q.strip()}%"
+    source = _source_system(request, database)
     staff = database.execute(
         """WITH candidates AS (
              SELECT staff_name AS name,coalesce(nullif(staff_role,''),r.display_name) AS role,
@@ -392,8 +413,8 @@ def report_staff_options(
              WHERE d.is_active=1 AND d.staff_name IS NOT NULL
              UNION ALL
              SELECT display_name AS name,role,count(*) AS uses,false AS in_master
-             FROM archive_staff_assignment
-             WHERE NOT source_deleted AND display_name IS NOT NULL
+             FROM archive_staff_assignment s JOIN archive_case a ON a.id=s.archive_case_id
+             WHERE NOT source_deleted AND display_name IS NOT NULL AND a.source_system=%s
              GROUP BY display_name,role
            )
            SELECT name,role,bool_or(in_master) AS in_master,sum(uses) AS usage_count
@@ -403,14 +424,15 @@ def report_staff_options(
            GROUP BY name,role
            ORDER BY bool_or(in_master) DESC,sum(uses) DESC,name
            LIMIT %s""",
-        (q.strip(), needle, needle, role.strip(), role.strip(), limit),
+        (source, q.strip(), needle, needle, role.strip(), role.strip(), limit),
     ).fetchall()
     roles = database.execute(
         """SELECT role FROM (
              SELECT nullif(btrim(display_name),'') AS role FROM staff_role
              UNION SELECT nullif(btrim(staff_role),'') FROM staff_directory WHERE is_active=1
-             UNION SELECT nullif(btrim(role),'') FROM archive_staff_assignment WHERE NOT source_deleted
-           ) roles WHERE role IS NOT NULL ORDER BY role"""
+             UNION SELECT nullif(btrim(role),'') FROM archive_staff_assignment s
+               JOIN archive_case a ON a.id=s.archive_case_id WHERE NOT source_deleted AND a.source_system=%s
+           ) roles WHERE role IS NOT NULL ORDER BY role""", (source,)
     ).fetchall()
     return {"staff": staff, "roles": [row["role"] for row in roles]}
 
@@ -433,6 +455,7 @@ def report_metadata(database: Connection = Depends(connection)):
 @router.get("/metadata/fields/{field_id}/values")
 def report_field_values(
     field_id: str,
+    request: Request,
     q: str = Query(default="", max_length=120),
     limit: int = Query(default=50, ge=1, le=200),
     database: Connection = Depends(connection),
@@ -454,6 +477,8 @@ def report_field_values(
         return {"field_id": field_id, "rows": options}
     config = field["source_config"] or {}
     resolver = config.get("resolver")
+    source = _source_system(request, database)
+    in_source = "archive_case_id IN (SELECT id FROM archive_case WHERE source_system=%s)"
     if resolver == "context_column":
         columns = {"hn", "patient_name", "asa_status", "case_type", "procedure_name", "location"}
         column = str(config.get("column") or "")
@@ -461,9 +486,9 @@ def report_field_values(
             raise HTTPException(status_code=422, detail="Unsupported report field resolver")
         rows = database.execute(
             f"SELECT DISTINCT {column} AS value,{column} AS label FROM archive_case_context "
-            f"WHERE {column} IS NOT NULL AND btrim({column})<>'' AND (%s='' OR {column} ILIKE %s) "
+            f"WHERE {in_source} AND {column} IS NOT NULL AND btrim({column})<>'' AND (%s='' OR {column} ILIKE %s) "
             f"ORDER BY {column} LIMIT %s",
-            (q.strip(), needle, limit),
+            (source, q.strip(), needle, limit),
         ).fetchall()
     elif resolver == "staff_assignment":
         column = config.get("column")
@@ -471,9 +496,9 @@ def report_field_values(
             raise HTTPException(status_code=422, detail="Unsupported report field resolver")
         rows = database.execute(
             f"SELECT DISTINCT {column} AS value,{column} AS label FROM archive_staff_assignment "
-            f"WHERE NOT source_deleted AND {column} IS NOT NULL AND btrim({column})<>'' "
+            f"WHERE {in_source} AND NOT source_deleted AND {column} IS NOT NULL AND btrim({column})<>'' "
             f"AND (%s='' OR {column} ILIKE %s) ORDER BY {column} LIMIT %s",
-            (q.strip(), needle, limit),
+            (source, q.strip(), needle, limit),
         ).fetchall()
     elif resolver == "archive_form_components":
         component_ids = config.get("component_ids") or []
@@ -482,9 +507,10 @@ def report_field_values(
             f"""SELECT DISTINCT decoded AS value,decoded AS label FROM (
                    SELECT {decoded} AS decoded FROM archive_form_field
                    WHERE source_component_id=ANY(%s)
+                     AND archive_form_id IN (SELECT id FROM archive_form WHERE {in_source})
                  ) values WHERE decoded IS NOT NULL AND btrim(decoded)<>''
                    AND (%s='' OR decoded ILIKE %s) ORDER BY decoded LIMIT %s""",
-            (component_ids, q.strip(), needle, limit),
+            (component_ids, source, q.strip(), needle, limit),
         ).fetchall()
     elif resolver == "form_presence":
         names = config.get("form_names") or []
@@ -503,15 +529,12 @@ def report_definition(report_id: str, database: Connection = Depends(connection)
 
 @router.get("/{report_id}/run")
 def run_report(report_id: str, request: Request, database: Connection = Depends(connection)):
-    query = dict(request.query_params)
-    query.pop("format", None)
-    return _execute(database, report_id, query)
+    return _execute(database, report_id, _query(request, database))
 
 
 @router.get("/{report_id}/export")
 def export_report(report_id: str, request: Request, export_format: str = Query(alias="format", pattern="^(csv|xlsx)$"), database: Connection = Depends(connection)):
-    query = dict(request.query_params)
-    query.pop("format", None)
+    query = _query(request, database)
     query.update(page="1", page_size="500")
     rows = _execute(database, report_id, query).get("rows") or []
     if export_format == "csv":

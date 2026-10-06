@@ -107,6 +107,30 @@ for the last 15 minutes and the latest 200 payloads per pod as text with visible
 control characters, or as hex. It is held in memory only, starts empty when
 gateway-service restarts, and never replays history to parsers.
 
+**Devices → Monitor** shows one device's output. The history (1 h per minute, 6 h per
+5 min, 24 h per 15 min) is counted from what the collector stored in
+`gateway_observation` / `gateway_measurement`, so it survives restarts. It also lists
+the latest value and sample count per parameter, and the live messages the parser
+publishes to `gw.obs` and `gw.measurements` for the collector, shown exactly as sent
+(`GET /api/devices/<id>/monitor?hours=`, `GET /api/devices/<id>/payloads`).
+
+**Overview → Status history** shows when each part was up, down or stopped over 1, 6 or
+24 hours, with uptime and a list of outages. The parts are gateway-service, the Canopy
+connection, each controller, and each enabled device (data within 2 minutes).
+gateway-service writes a sample every 30 s to `gateway_status_sample` and keeps 7 days.
+A stretch with no samples at all is shown as the gateway service being down.
+
+**Alerts** opens an alert when a part stays down for two samples (about a minute):
+Canopy connection lost, a controller down, or an enabled device silent. It also records
+"Gateway service was not running" after an outage. Alerts close when the part recovers,
+or when the device is removed. Operators can acknowledge them. Every change (open, ack,
+resolve) bumps a version in `gateway_alert` and is sent through Haber
+(`POST /api/haber/v1/gateways/<id>/alerts`) to Canopy's central log
+(`canopy_gateway_alert`, **Gateway Alerts** in the Canopy UI). While Canopy is
+unreachable, alerts stay queued on the gateway and are resent until Canopy confirms
+the version. Existing Canopy databases need
+`infrastructure/postgres/0043-canopy-gateway-alerts.sql` applied once.
+
 Each device type also stores `connection_defaults` for its controller, using the same
 keys as the pods in `gateway.toml`: serial `baud`, `data_bits`, `parity` (none/even/odd),
 `stop_bits`, `flow_control`, `rts`, `dtr`, `idle_ms`; socket `transport`, `framing`,
@@ -119,6 +143,21 @@ Overview layers (`POST /api/controllers/<service>/stop|start`). Stopping one who
 still have running parsers returns 409 with the device list; the page asks again and
 then retries with `?force=true`. A stopped controller stays down across Docker
 restarts until it is started, but `docker compose up` starts it again.
+
+## Connect to Canopy
+
+On the gateway, an admin sets three things under **Overview → Station → Canopy
+connection**: the Canopy address (a host name means `https://<host>`, the Canopy edge), the
+gateway ID and the gateway key. Saving them checks in right away and reports whether Canopy
+accepted the gateway. The values are stored in `gateway_canopy_link` and override `HABER_URL`,
+`FLORA_GATEWAY_ID` and `HABER_GATEWAY_TOKEN`. The key is never shown again. After a gateway ID
+change, restart the controllers so frames carry the new ID.
+
+From then on Canopy owns the location: on the gateway it is read-only. At Canopy, go to
+**Topology → gateway → Set location…**, pick a ward from Canopy's location tree, and add a
+station name, unit type, floor, room and contact
+(`PUT /api/fleet/control/gateways/<id>/site`). The gateway applies it at its next check-in.
+A location-only configuration never touches the gateway's devices.
 
 ## Add a device
 

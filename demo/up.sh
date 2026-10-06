@@ -4,10 +4,16 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Root and Canopy each have one TLS edge (443 in production). On this one machine they
+# cannot both own 443, so the demo publishes Root on 8443 and Canopy on 9443.
+export ROOT_HTTPS_PORT=${ROOT_HTTPS_PORT:-8443} ROOT_HTTP_PORT=${ROOT_HTTP_PORT:-8080}
+export CANOPY_HTTPS_PORT=${CANOPY_HTTPS_PORT:-9443} CANOPY_HTTP_PORT=${CANOPY_HTTP_PORT:-9080}
+export HABER_URL=${HABER_URL:-https://host.docker.internal:$CANOPY_HTTPS_PORT}
+
 wait_for() {
-  local name=$1 url=$2
+  local name=$1 url=$2 ca=${3:-flora-canopy/edge/certs/ca.crt}
   for _ in $(seq 1 120); do
-    if curl -fsS "$url" >/dev/null 2>&1; then echo "  ok  $name"; return 0; fi
+    if curl -fsS --cacert "$ca" "$url" >/dev/null 2>&1; then echo "  ok  $name"; return 0; fi
     sleep 2
   done
   echo "  !!  $name did not become healthy: $url" >&2
@@ -27,12 +33,19 @@ up_app() {
 }
 
 echo "[1/4] flora-root (cloud)"
+# TLS edge: dev CA + certificate on first run, trusted by this machine's Canopy (Haber).
+flora-root/edge/make-dev-cert.sh
+demo/install-root-ca.sh >/dev/null
 up_app flora-root flora-root ""
 wait_for "root api" http://localhost:7100/health
+wait_for "root edge ($ROOT_HTTPS_PORT)" "https://localhost:$ROOT_HTTPS_PORT/api/v1/keys" flora-root/edge/certs/ca.crt
 
 echo "[2/4] flora-canopy (hospital)"
+# TLS edge: dev CA + certificate on first run, trusted by this machine's Leaf/Gateway.
+flora-canopy/edge/make-dev-cert.sh
+demo/install-canopy-ca.sh >/dev/null
 up_app flora-canopy flora-canopy ""
-wait_for "canopy sync api" http://localhost:7203/health
+wait_for "canopy edge ($CANOPY_HTTPS_PORT)" "https://localhost:$CANOPY_HTTPS_PORT/api/sync/v1/fingerprint"
 wait_for "haber" http://localhost:7204/health
 
 echo "[3/4] flora-gateway (devices) + simulator"
@@ -50,11 +63,12 @@ wait_for "leaf-icu-01 api" http://localhost:7311/health
 echo "Opening demo cases"
 python3 demo/seed-cases.py
 
-cat <<'URLS'
+cat <<URLS
 
 Flora demo is running (all data is synthetic):
-  Root admin            http://localhost:7100   (admin / admin)
-  Canopy viewer         http://localhost:7200   (admin / admin)
+  Root (TLS edge)       https://localhost:$ROOT_HTTPS_PORT   (admin / admin)  443 in production
+  Canopy (TLS edge)     https://localhost:$CANOPY_HTTPS_PORT   (admin / admin)  443 in production
+  Canopy viewer (dev)   http://localhost:7200   (admin / admin)
   Canopy Haber          http://localhost:7204   (admin / admin)  releases · nodes
   Gateway admin         http://localhost:7400   (admin / admin)
   Device simulator      http://localhost:7420

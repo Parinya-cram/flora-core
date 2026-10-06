@@ -10,6 +10,8 @@ export type CanopyWardState = {
   /** "all" or a care-unit key. */
   selected: string;
   selectedName: string | null;
+  /** The selected ward is the synthetic demo ward. */
+  selectedIsDemo: boolean;
   select: (key: string) => void;
 };
 
@@ -67,6 +69,7 @@ export function useCanopyWard(user: AuthApiUser | null, enabled: boolean): Canop
     rows: active?.rows || [],
     selected,
     selectedName: selected === ALL_WARDS ? null : active?.rows.find(row => row.key === selected)?.name || selected,
+    selectedIsDemo: selected !== ALL_WARDS && active?.rows.find(row => row.key === selected)?.isDemo === true,
     select,
   };
 }

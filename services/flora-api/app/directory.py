@@ -69,7 +69,7 @@ def ward_options(database: Connection) -> dict[str, Any]:
         }
     rows = database.execute(
         """SELECT unit.id::text AS key, unit.name, building.name AS building_name,
-                  hospital.name AS hospital_name,
+                  hospital.name AS hospital_name, unit.is_demo,
                   (SELECT count(*) FROM canopy_leaf_unit lu WHERE lu.unit_key=unit.id::text) AS leaf_count
            FROM canopy_location unit
            LEFT JOIN canopy_location building ON building.id=unit.parent_id
@@ -80,7 +80,8 @@ def ward_options(database: Connection) -> dict[str, Any]:
     return {
         "rows": [
             {"key": row["key"], "name": row["name"], "buildingName": row["building_name"],
-             "hospitalName": row["hospital_name"], "leafCount": int(row["leaf_count"] or 0)}
+             "hospitalName": row["hospital_name"], "leafCount": int(row["leaf_count"] or 0),
+             "isDemo": bool(row["is_demo"])}
             for row in rows
         ],
         "leafUnitKey": None,

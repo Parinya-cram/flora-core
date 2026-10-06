@@ -79,11 +79,12 @@ services:
     command: ["serial-controller"]
     environment:
       <<: *rust-env
-      # Demo only: virtual RS-232 port /dev/ttyV0 bridged to TCP 7430.
-      FLORA_SERIAL_BRIDGES: ${FLORA_SERIAL_BRIDGES:-ttyV0:7430}
+      # Demo only: virtual RS-232 ports bridged to TCP (simulator devices plug in here).
+      FLORA_SERIAL_BRIDGES: ${FLORA_SERIAL_BRIDGES:-ttyV0:7430 ttyV1:7431}
     ports:
       - "127.0.0.1:7401:5001"
       - "127.0.0.1:7430:7430"
+      - "127.0.0.1:7431:7431"
     # Real hardware on Linux: map the device, e.g.  devices: ["/dev/ttyUSB0:/dev/ttyUSB0"]
 
   feeder-controller:
@@ -170,6 +171,11 @@ services:
     build:
       context: ./python/gateway-service
     image: ${FLORA_IMAGE_SERVICE:-flora-gateway-service:dev}
+    # Optional private CA for Canopy's TLS edge (demo/install-canopy-ca.sh). With a
+    # publicly trusted Canopy certificate, certs/ stays empty and nothing changes.
+    env_file:
+      - path: ./certs/trust.env
+        required: false
     environment:
       FLORA_GATEWAY_ID: ${FLORA_GATEWAY_ID:-gateway-hospital-01-a}
       FLORA_GATEWAY_DATABASE_URL: postgresql://flora_gateway:${FLORA_GATEWAY_DB_PASSWORD:-flora-gateway-local-only}@gateway-db:5432/flora_gateway
@@ -178,7 +184,9 @@ services:
       FLORA_GATEWAY_SEED: /config/${FLORA_GATEWAY_SEED_FILE:-instances.json}
       SERIAL_ADMIN_URL: ${SERIAL_ADMIN_URL:-http://serial-controller:5001}
       SOCKET_ADMIN_URL: ${SOCKET_ADMIN_URL:-http://socket-controller:5004}
-      HABER_URL: ${HABER_URL:-http://host.docker.internal:7204}
+      HABER_URL: ${HABER_URL:-https://host.docker.internal:9443}
+      # Address Leaves on this LAN use for the data-api (shown in the Leaf gateway wizard).
+      GATEWAY_DATA_API_URL: ${GATEWAY_DATA_API_URL:-http://host.docker.internal:7410/data-api}
       HABER_GATEWAY_TOKEN: ${HABER_GATEWAY_TOKEN:-haber-gateway-demo-token}
       GATEWAY_LICENSE_REQUIRED: ${GATEWAY_LICENSE_REQUIRED:-true}
       GATEWAY_SYNC_INTERVAL_SEC: ${GATEWAY_SYNC_INTERVAL_SEC:-20}
@@ -189,6 +197,7 @@ services:
       GATEWAY_COMPOSE_PROJECT: flora-gateway
       GATEWAY_PARSER_IMAGE: ${FLORA_IMAGE_PARSER:-flora-gateway-parser:dev}
     volumes:
+      - ./certs:/etc/flora/certs:ro
       - ./config:/config
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
@@ -223,14 +232,20 @@ services:
     build:
       context: ../flora-updater
     image: ${FLORA_IMAGE_UPDATER:-flora-updater:dev}
+    # Optional private CA for Canopy's TLS edge (demo/install-canopy-ca.sh). With a
+    # publicly trusted Canopy certificate, certs/ stays empty and nothing changes.
+    env_file:
+      - path: ./certs/trust.env
+        required: false
     environment:
       FLORA_COMPONENT: gateway
       FLORA_NODE_ID: ${FLORA_GATEWAY_ID:-gateway-hospital-01-a}
-      HABER_URL: ${HABER_URL:-http://host.docker.internal:7204}
+      HABER_URL: ${HABER_URL:-https://host.docker.internal:9443}
       HABER_NODE_TOKEN: ${HABER_NODE_TOKEN:-haber-node-demo-token}
       FLORA_ROOT_PUBLIC_KEY: ${FLORA_ROOT_PUBLIC_KEY:-}
       FLORA_UPDATER_WINDOW: ${FLORA_UPDATER_WINDOW:-}
     volumes:
+      - ./certs:/etc/flora/certs:ro
       - /var/run/docker.sock:/var/run/docker.sock
       # The compose project's parent directory; the updater re-runs compose against it.
       - ..:/host

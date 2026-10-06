@@ -1,3 +1,5 @@
+import AiServiceTab from "../components/AiServiceTab";
+import ApiKeysTab from "../components/ApiKeysTab";
 import { useEffect, useMemo, useState } from "react";
 import type { CaseStatus } from "../api/caseApi";
 import type { AuthUser } from "../auth/useAuth";
@@ -43,7 +45,7 @@ import {
   readLocalSmartContrast,
 } from "../utils/chartPreferences";
 
-type ManageTab = "user" | "location" | "datetime" | "language" | "scheme" | "chart" | "terminology" | "staff" | "database" | "license";
+type ManageTab = "user" | "location" | "datetime" | "language" | "scheme" | "ai" | "api" | "chart" | "terminology" | "staff" | "database" | "license";
 
 type Props = {
   caseStatus: CaseStatus;
@@ -56,6 +58,8 @@ const tabLabel: Record<ManageTab, string> = {
   datetime: "Date & time",
   language: "Language",
   scheme: "Scheme",
+  ai: "AI service",
+  api: "API & MCP",
   chart: "Chart layout",
   terminology: "Clinical codes",
   staff: "Staff",
@@ -792,6 +796,8 @@ export default function ManageView({ caseStatus, sessionUser }: Props) {
   const canManageClinical = permissions.includes("clinical_master.manage") || isAdmin;
   const canManageStaff = permissions.includes("staff.manage") || isAdmin;
   const isEforl = edition.code === "eforl";
+  // Public API keys are managed by Canopy administrators only (backend: role admin / system_admin).
+  const isCanopyAdmin = surface.code === "canopy" && ["admin", "system_admin"].includes(String(sessionUser?.role || "").trim().toLowerCase());
   const availableTabs = useMemo<ManageTab[]>(
     () => {
       // Leaf shows the user tab to everyone (self-service account); Canopy manages all users, gated by account.manage.
@@ -799,13 +805,15 @@ export default function ManageView({ caseStatus, sessionUser }: Props) {
       if (canConfigure) {
         if (surface.code === "leaf") tabs.push("location", "datetime");
         else tabs.push("language", "scheme");
+        tabs.push("ai");
       }
+      if (isCanopyAdmin) tabs.push("api");
       if (surface.code === "leaf" && canManageClinical) tabs.push("chart", "terminology");
       if (surface.code === "leaf" && canManageStaff) tabs.push("staff");
       if (isAdmin && isEforl) tabs.push("database", "license");
       return tabs;
     },
-    [canConfigure, canManageClinical, canManageStaff, isAdmin, isEforl, surface.code],
+    [canConfigure, canManageClinical, canManageStaff, isAdmin, isCanopyAdmin, isEforl, surface.code],
   );
   const [tab, setTab] = useState<ManageTab>("user");
   const activeTab = availableTabs.includes(tab) ? tab : availableTabs[0];
@@ -849,6 +857,10 @@ export default function ManageView({ caseStatus, sessionUser }: Props) {
           <TerminologyTab />
         ) : activeTab === "staff" ? (
           <StaffView caseStatus={caseStatus} sessionUser={sessionUser} defaultTab="master" />
+        ) : activeTab === "ai" ? (
+          <AiServiceTab />
+        ) : activeTab === "api" ? (
+          <ApiKeysTab />
         ) : activeTab === "database" ? (
           <DatabaseTab />
         ) : (

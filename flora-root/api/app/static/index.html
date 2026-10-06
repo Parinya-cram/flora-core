@@ -60,21 +60,32 @@
     .sysmenu { margin:0 0 0 auto; padding:0; border:0 } nav .sysbtn span { display:none }
     .syspop { left:auto; right:0; bottom:auto; top:calc(100% + 6px) }
   }
+  body.viewer .admin-only { display:none !important }
+  header .me { margin-left:auto; display:flex; gap:8px; align-items:center; font-size:12px; color:var(--muted) }
+  header .me b { color:var(--ink); font-weight:600 }
+  .role { font-size:11px; padding:1px 8px; border-radius:999px; background:var(--chip); color:var(--ink) } .role.admin { color:var(--accent) }
+  form.op { display:flex; gap:8px; flex-wrap:wrap; align-items:end; margin:0 0 14px } form.op label { display:grid; gap:3px; font-size:12px; color:var(--muted) }
+  form.op input, form.op select, #auditFilter { padding:5px 8px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--ink); font:inherit }
   nav.tabs { min-height:calc(100vh - 64px) } nav .syspop button[aria-selected="true"] { background:var(--chip); font-weight:600 }
   @media (max-width:720px) { nav.tabs { min-height:0 } }
 </style>
 </head>
 <body>
-<header><h1>Flora Root</h1><span>Cloud control plane · tenants, licenses, releases, global configuration</span><span id="ts" class="muted"></span></header>
+<header><h1>Flora Root</h1><span>Cloud control plane · tenants, licenses, releases, global configuration</span><span id="ts" class="muted"></span>
+  <span class="me" id="me"></span></header>
 <div class="layout">
 <nav class="tabs" role="tablist" aria-label="Root sections">
   <button role="tab" data-go="tenants">Tenants<span class="badge" hidden></span></button>
   <button role="tab" data-go="releases">Releases<span class="badge" hidden></span></button>
   <div class="sysmenu">
     <div class="syspop" id="syspop" role="menu" hidden>
-      <div class="who"><b>Flora Root</b><span class="muted">Settings</span></div>
+      <div class="who"><b>Signed in</b><span id="whoName">…</span></div>
       <button role="tab" data-go="config">Global configuration<span class="badge" hidden></span></button>
       <button role="tab" data-go="keys">Signing key<span class="badge" hidden></span></button>
+      <button role="tab" data-go="operators" class="admin-only">Operators<span class="badge" hidden></span></button>
+      <button role="tab" data-go="audit" class="admin-only">Audit log<span class="badge" hidden></span></button>
+      <button type="button" onclick="location.href='/login?change=1'">Change password</button>
+      <button type="button" class="danger" onclick="signOut()">Sign out</button>
     </div>
     <button class="sysbtn" id="sysbtn" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.6a1.7 1.7 0 0 1 3.4 0l.2 1.1a7 7 0 0 1 1.7 1l1.1-.4a1.7 1.7 0 0 1 2 .8l.2.3a1.7 1.7 0 0 1-.4 2.2l-.9.7a7 7 0 0 1 0 2l.9.7a1.7 1.7 0 0 1 .4 2.2l-.2.3a1.7 1.7 0 0 1-2 .8l-1.1-.4a7 7 0 0 1-1.7 1l-.2 1.1a1.7 1.7 0 0 1-3.4 0l-.2-1.1a7 7 0 0 1-1.7-1l-1.1.4a1.7 1.7 0 0 1-2-.8l-.2-.3a1.7 1.7 0 0 1 .4-2.2l.9-.7a7 7 0 0 1 0-2l-.9-.7a1.7 1.7 0 0 1-.4-2.2l.2-.3a1.7 1.7 0 0 1 2-.8l1.1.4a7 7 0 0 1 1.7-1Z"/><circle cx="12" cy="12" r="2.6"/></svg><span>System</span></button>
   </div>
@@ -86,6 +97,19 @@
     (<code>flora-root/scripts/publish_release.py</code>). Each hospital's Haber mirrors the digests and the hospital approves the rollout.</div></section>
   <section data-tab="config"><h2>Global configuration</h2><div id="config"></div></section>
   <section data-tab="keys"><h2>Signing key</h2><div id="keys"></div></section>
+  <section data-tab="operators"><h2>Operators</h2>
+    <form class="op" onsubmit="return addOperator(event)">
+      <label>Username<input name="username" required pattern="[A-Za-z0-9._-]{3,40}"></label>
+      <label>Name<input name="display_name"></label>
+      <label>Role<select name="role"><option value="viewer">viewer</option><option value="admin">admin</option></select></label>
+      <label>Temporary password<input name="password" type="password" required minlength="10" autocomplete="new-password"></label>
+      <button class="primary">Add operator</button></form>
+    <div id="operators"></div>
+    <div class="muted" style="margin-top:8px">New operators and password resets must set their own password at first sign-in.
+      Five wrong passwords lock an account for 15 minutes.</div></section>
+  <section data-tab="audit"><h2>Audit log</h2>
+    <p><input id="auditFilter" placeholder="Filter by user, action or IP" oninput="renderAudit()"> <button onclick="loadAudit()">Refresh</button></p>
+    <div id="audit"></div></section>
 </main>
 </div>
 <script>
@@ -93,11 +117,21 @@ const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
 const when = (ms) => ms ? new Date(ms).toLocaleString() : "—";
 const ago = (ms) => { if (!ms) return "never"; const s = Math.round((Date.now() - ms) / 1000); return s < 90 ? `${s}s ago` : `${Math.round(s / 60)} min ago`; };
-let editing = null;
+let editing = null, me = null, auditRows = [];
+// Every API call: a lost session sends the operator back to the sign-in page.
+const rawFetch = window.fetch.bind(window);
+window.fetch = async (...args) => {
+  const response = await rawFetch(...args);
+  if (response.status === 401) location.href = `/login?next=${encodeURIComponent(location.pathname + location.hash)}`;
+  return response;
+};
+async function signOut() { await rawFetch("api/auth/logout", { method: "POST" }); location.href = "/login"; }
 // Left tab navigation: one tab visible at a time; remembered in the URL hash.
 const tabButtons = [...document.querySelectorAll("nav.tabs button[data-go]")];
 function showTab(name) {
   if (!tabButtons.some((b) => b.dataset.go === name)) name = "tenants";
+  if (name === "operators") loadOperators();
+  if (name === "audit") loadAudit();
   tabButtons.forEach((b) => b.setAttribute("aria-selected", String(b.dataset.go === name)));
   document.querySelectorAll("main [data-tab]").forEach((s) => { s.hidden = s.dataset.tab !== name; });
   document.getElementById("sysbtn").classList.toggle("active", !!document.querySelector(`#syspop [data-go="${name}"]`));
@@ -133,7 +167,7 @@ async function load() {
         <td><span class="${online ? "ok" : "warn"}">${ago(t.last_seen_at)}</span><div class="muted">${esc(t.canopy_version || "")}</div></td>
         <td><span class="chip">channel ${esc(t.release_channel)}</span>${(u.nodes || []).map((n) =>
           `<div><b>${esc(n.node_id)}</b> <code>${esc(n.release_id || "unmanaged")}</code>${n.state && n.state !== "current" ? ` <span class="warn">${esc(n.state)}</span>` : ""}</div>`).join("")}</td>
-        <td><button onclick="edit('${esc(t.tenant_id)}')">Edit license</button> <button class="danger" onclick="revoke('${esc(t.tenant_id)}')">Revoke</button></td></tr>
+        <td><span class="admin-only"><button onclick="edit('${esc(t.tenant_id)}')">Edit license</button> <button class="danger" onclick="revoke('${esc(t.tenant_id)}')">Revoke</button></span></td></tr>
         ${editing === t.tenant_id ? `<tr><td colspan="8"><form class="lic" onsubmit="return save(event,'${esc(t.tenant_id)}')">
           <label>Max leaves<input name="max_leaves" type="number" value="${t.max_leaves}"></label>
           <label>Max gateways<input name="max_gateways" type="number" value="${t.max_gateways}"></label>
@@ -150,7 +184,7 @@ async function load() {
       <td><span class="chip">${esc(r.channel)}</span></td>
       <td>${Object.entries(r.services).map(([k, v]) => `<div>${esc(k)} <code>${esc(v.repository)}@${esc(v.digest.slice(7, 19))}</code></div>`).join("")}</td>
       <td class="num">${r.device_types || "—"}</td><td>${when(r.created_at)}</td>
-      <td>${r.withdrawn_at ? `withdrawn ${when(r.withdrawn_at)}` : `<button class="danger" onclick="withdraw('${esc(r.release_id)}')">Withdraw</button>`}</td></tr>`).join("")}</table>`
+      <td>${r.withdrawn_at ? `withdrawn ${when(r.withdrawn_at)}` : `<button class="danger admin-only" onclick="withdraw('${esc(r.release_id)}')">Withdraw</button>`}</td></tr>`).join("")}</table>`
     : `<span class="muted">No releases yet.</span>`;
   window.tenants = Object.fromEntries(data.tenants.map((t) => [t.tenant_id, t]));
   $("config").innerHTML = `<table>${data.global_config.map((c) => `<tr><td><b>${esc(c.key)}</b></td><td><pre>${esc(JSON.stringify(c.value, null, 2))}</pre></td><td class="muted">${when(c.updated_at)}</td></tr>`).join("")}</table>`;
@@ -175,6 +209,63 @@ async function withdraw(id) {
   if (!confirm(`Withdraw ${id}? Hospitals stop seeing it; nodes already running it keep running until another release is approved.`)) return;
   const r = await fetch(`api/v1/releases/${id}/withdraw`, { method: "POST" }); if (!r.ok) alert(await r.text()); load();
 }
+// ---------------------------------------------------------------- operators + audit
+async function loadOperators() {
+  const r = await fetch("api/v1/users"); if (!r.ok) return;
+  const rows = (await r.json()).rows;
+  badge("operators", String(rows.length));
+  $("operators").innerHTML = `<table><tr><th>Operator</th><th>Role</th><th>Status</th><th>Last sign-in</th><th>Sessions</th><th></th></tr>${rows.map((u) => {
+    const locked = u.locked_until && u.locked_until > Date.now();
+    const state = !u.enabled ? `<span class="bad">disabled</span>` : locked ? `<span class="bad">locked until ${new Date(u.locked_until).toLocaleTimeString()}</span>`
+      : u.must_change_password ? `<span class="warn">must set password</span>` : `<span class="ok">active</span>`;
+    const self = me && me.id === u.id;
+    return `<tr><td><b>${esc(u.display_name || u.username)}</b><div class="muted">${esc(u.username)}${self ? " · you" : ""}</div></td>
+      <td><span class="role ${esc(u.role)}">${esc(u.role)}</span></td><td>${state}</td><td>${when(u.last_login_at)}</td><td class="num">${u.sessions}</td>
+      <td>${self ? "" : `<button onclick="patchOp(${u.id}, {role: '${u.role === "admin" ? "viewer" : "admin"}'})">Make ${u.role === "admin" ? "viewer" : "admin"}</button>
+        <button onclick="patchOp(${u.id}, {enabled: ${!u.enabled}})">${u.enabled ? "Disable" : "Enable"}</button>
+        <button onclick="resetOp(${u.id}, '${esc(u.username)}')">Reset password</button>`}
+        ${locked ? `<button onclick="unlockOp(${u.id})">Unlock</button>` : ""}</td></tr>`;
+  }).join("")}</table>`;
+}
+async function addOperator(event) {
+  event.preventDefault();
+  const body = Object.fromEntries(new FormData(event.target));
+  const r = await fetch("api/v1/users", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (!r.ok) { alert((await r.json().catch(() => ({}))).detail || "Could not add operator"); return false; }
+  event.target.reset(); loadOperators(); return false;
+}
+async function patchOp(id, body) {
+  const r = await fetch(`api/v1/users/${id}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (!r.ok) alert((await r.json().catch(() => ({}))).detail || "Update failed");
+  loadOperators();
+}
+function resetOp(id, name) {
+  const password = prompt(`Temporary password for ${name} (10+ characters). They must change it at next sign-in; their sessions end now.`);
+  if (password) patchOp(id, { password });
+}
+async function unlockOp(id) { await fetch(`api/v1/users/${id}/unlock`, { method: "POST" }); loadOperators(); }
+const auditTone = (a) => a.startsWith("login.failed") || a.startsWith("login.locked") || a.startsWith("login.throttled") ? "bad"
+  : a.startsWith("login.ok") ? "ok" : a.startsWith("password") ? "warn" : "";
+async function loadAudit() {
+  const r = await fetch("api/v1/audit?limit=300"); if (!r.ok) return;
+  auditRows = (await r.json()).rows; renderAudit();
+}
+function renderAudit() {
+  const q = ($("auditFilter").value || "").toLowerCase();
+  const rows = auditRows.filter((a) => !q || [a.username, a.action, a.ip, a.target].some((v) => String(v || "").toLowerCase().includes(q)));
+  $("audit").innerHTML = rows.length ? `<table><tr><th>When</th><th>Operator</th><th>Action</th><th>From</th><th>Detail</th></tr>${rows.map((a) =>
+    `<tr><td>${when(a.at)}</td><td>${esc(a.username || "—")}</td><td class="${auditTone(a.action)}"><code>${esc(a.action)}</code>${a.target ? ` <span class="muted">${esc(a.target)}</span>` : ""}</td>
+     <td><code>${esc(a.ip || "")}</code></td><td class="muted"><code>${esc(Object.keys(a.detail || {}).length ? JSON.stringify(a.detail) : "")}</code></td></tr>`).join("")}</table>`
+    : `<p class="muted">No entries.</p>`;
+}
+(async () => {
+  const r = await fetch("api/auth/me"); if (!r.ok) return;
+  me = (await r.json()).user;
+  document.body.classList.toggle("viewer", me.role !== "admin");
+  $("whoName").textContent = `${me.display_name || me.username} · ${me.role}`;
+  $("me").innerHTML = `<b>${esc(me.display_name || me.username)}</b><span class="role ${esc(me.role)}">${esc(me.role)}</span>`;
+  showTab(location.hash.slice(1));
+})();
 load(); setInterval(() => { if (!editing) load(); }, 5000);
 // ---------------------------------------------------------------- system menu
 (() => {

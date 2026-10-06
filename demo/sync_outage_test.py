@@ -50,6 +50,7 @@ for _ in range(30):
 check("case A synced while online", canopy(f"select count(*) from sync_case_index where leaf_id='{LEAF_ID}' and hn='{hn_a}'") == "1")
 
 print("== offline: stop Canopy sync API", flush=True)
+offline_since = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
 sh("docker compose -f flora-canopy/compose.yaml stop sync-api")
 time.sleep(6)
 n1 = note(a, "A note 1"); n2 = note(a, "A note 2"); n3 = note(a, "A note 3")
@@ -63,7 +64,7 @@ if RESTART_WORKER_OFFLINE:
     print("== restarting sync worker while offline (in-memory state lost)", flush=True)
     sh("docker restart flora-leaf-test-01-leaf-sync-1")
 time.sleep(12)
-check("worker kept retrying while offline", "sync failed" in sh("docker logs --since 20s flora-leaf-test-01-leaf-sync-1 2>&1"))
+check("worker kept retrying while offline", "sync failed" in sh(f"docker logs --since {offline_since} flora-leaf-test-01-leaf-sync-1 2>&1"))
 
 print("== network back: start sync API, no worker restart", flush=True)
 sh("docker compose -f flora-canopy/compose.yaml start sync-api")

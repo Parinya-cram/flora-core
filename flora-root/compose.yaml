@@ -33,11 +33,11 @@ services:
       ROOT_SEED_DEMO: ${ROOT_SEED_DEMO:-true}
       ROOT_DEMO_TENANT_ID: ${ROOT_DEMO_TENANT_ID:-hospital-01}
       ROOT_DEMO_TENANT_KEY: ${ROOT_DEMO_TENANT_KEY:-root-tenant-demo-key}
-      # Registry address handed to every Haber in the signed release manifest.
-      ROOT_REGISTRY_URL: ${ROOT_REGISTRY_URL:-http://host.docker.internal:7105}
+      # Registry address handed to every Haber in the signed release manifest (via the edge).
+      ROOT_REGISTRY_URL: ${ROOT_REGISTRY_URL:-https://host.docker.internal:${ROOT_HTTPS_PORT:-443}}
     ports:
-      # Published on all interfaces: every Canopy calls Root here.
-      - "${FLORA_ROOT_PORT:-7100}:8000"
+      # Local debugging only; Canopies reach Root through the edge (443).
+      - "127.0.0.1:${FLORA_ROOT_PORT:-7100}:8000"
     depends_on:
       root-db: {condition: service_healthy}
     restart: unless-stopped
@@ -50,9 +50,28 @@ services:
       REGISTRY_STORAGE_DELETE_ENABLED: "true"
       OTEL_TRACES_EXPORTER: none
     ports:
-      - "${FLORA_ROOT_REGISTRY_PORT:-7105}:5000"
+      - "127.0.0.1:${FLORA_ROOT_REGISTRY_PORT:-7105}:5000"
     volumes:
       - root_registry_data:/var/lib/registry
+    restart: unless-stopped
+
+  # Single public entry point: 443 in production (8443 on a dev machine that also runs
+  # Canopy). Canopies (Haber) reach Root as https://<root-host>; see edge/nginx.conf.
+  edge:
+    image: nginx:1.27-alpine
+    ports:
+      - "${ROOT_HTTPS_PORT:-443}:443"
+      - "${ROOT_HTTP_PORT:-80}:80"
+    volumes:
+      - ./edge/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./edge/certs:/etc/nginx/certs:ro
+    depends_on:
+      - root-api
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --no-check-certificate -O /dev/null https://127.0.0.1/api/v1/keys || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
 volumes:

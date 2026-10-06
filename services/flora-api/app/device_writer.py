@@ -49,7 +49,9 @@ PARAMETERS = {
 class DeviceWriter:
     def __init__(self):
         self.enabled = os.getenv("FLORA_DEVICE_INGEST_ENABLED", "true").lower() == "true"
+        # Fallback when the gateway wizard has not stored a source (leaf_device_source).
         self.base = os.getenv("VECTOR_READ_URL", "http://host.docker.internal:6789/api/observations").rstrip("/")
+        self.leaf_id = os.getenv("FLORA_LEAF_ID", "").strip()
         self.interval = max(.5, float(os.getenv("DEVICE_WRITER_POLL_SECONDS", "2")))
         self.timeout = max(1, float(os.getenv("DEVICE_WRITER_TIMEOUT_SECONDS", "5")))
         self.states = {}
@@ -75,14 +77,29 @@ class DeviceWriter:
         rows = [dict(caseId=key, **value) for key, value in self.states.items()]
         return next((row for row in rows if row["caseId"] == case_id), None) if case_id else rows
 
+    def source(self, database=None):
+        """(observations URL, extra query) — the wizard's gateway first, else VECTOR_READ_URL."""
+        try:
+            if database is not None:
+                row = database.execute("SELECT data_api_url FROM leaf_device_source WHERE id=1").fetchone()
+            else:
+                with pool.connection() as connection:
+                    row = connection.execute("SELECT data_api_url FROM leaf_device_source WHERE id=1").fetchone()
+        except Exception:
+            row = None
+        if row and row["data_api_url"]:
+            return row["data_api_url"].rstrip("/") + "/api/observations", ({"leaf_id": self.leaf_id} if self.leaf_id else {})
+        return self.base, {}
+
     def source_status(self, online_window_sec=30):
-        parsed = urllib.parse.urlsplit(self.base)
+        base, extra = self.source()
+        parsed = urllib.parse.urlsplit(base)
         path = parsed.path
         if path.endswith("/api/observations"):
             path = path[:-len("/api/observations")] + "/api/devices/status"
         else:
             path = "/api/devices/status"
-        query = urllib.parse.urlencode({"online_window_sec": online_window_sec})
+        query = urllib.parse.urlencode({"online_window_sec": online_window_sec, **extra})
         url = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, path, query, ""))
         with urllib.request.urlopen(url, timeout=self.timeout) as response:
             payload = json.load(response)
@@ -128,7 +145,8 @@ class DeviceWriter:
                     state["running"] = False
 
     def _write_minute(self, database, case, minute):
-        url = self.base + "?" + urllib.parse.urlencode({"from": minute, "to": minute + 60000})
+        base, extra = self.source(database)
+        url = base + "?" + urllib.parse.urlencode({"from": minute, "to": minute + 60000, **extra})
         created = int(time.time()*1000)
         try:
             with urllib.request.urlopen(url, timeout=self.timeout) as response:

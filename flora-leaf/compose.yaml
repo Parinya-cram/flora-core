@@ -38,6 +38,11 @@ services:
     build:
       context: ../services/flora-api
     image: ${FLORA_IMAGE_API:-flora-leaf-api:dev}
+    # Optional private CA for Canopy's TLS edge (demo/install-canopy-ca.sh). With a
+    # publicly trusted Canopy certificate, certs/ stays empty and nothing changes.
+    env_file:
+      - path: ./certs/trust.env
+        required: false
     environment:
       FLORA_DATABASE_URL: postgresql://flora_app:${LEAF_DB_APP_PASSWORD:-flora-leaf-app-local-only}@leaf-db:5432/flora
       FLORA_API_ENV: development
@@ -50,7 +55,7 @@ services:
       FLORA_BOOTSTRAP_ADMIN_NAME: Administrator
       FLORA_DEVICE_INGEST_ENABLED: "true"
       FLORA_LEAF_SERVICE_SECRET: ${FLORA_LEAF_SERVICE_SECRET:-flora-leaf-service-demo-secret-change-me}
-      FLORA_CANOPY_SYNC_URL: ${CANOPY_SYNC_URL:-http://host.docker.internal:7203}
+      FLORA_CANOPY_SYNC_URL: ${CANOPY_SYNC_URL:-https://host.docker.internal}
       FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-flora-sync-demo-secret-change-me}
       FLORA_ACCOUNT_CONFIG_SYNC_TIMEOUT_SECONDS: "1.5"
       # Leaf identity for directory sign-in (users of this Leaf's ward, checked by Canopy).
@@ -72,7 +77,8 @@ services:
       timeout: 3s
       retries: 15
     restart: unless-stopped
-
+    volumes:
+      - ./certs:/etc/flora/certs:ro
   leaf-web:
     build:
       context: ..
@@ -95,9 +101,14 @@ services:
     build:
       context: ../services/flora-sync-worker
     image: ${FLORA_IMAGE_SYNC:-flora-leaf-sync:dev}
+    # Optional private CA for Canopy's TLS edge (demo/install-canopy-ca.sh). With a
+    # publicly trusted Canopy certificate, certs/ stays empty and nothing changes.
+    env_file:
+      - path: ./certs/trust.env
+        required: false
     environment:
       FLORA_LEAF_API_URL: http://leaf-api:8000
-      FLORA_CANOPY_SYNC_URL: ${CANOPY_SYNC_URL:-http://host.docker.internal:7203}
+      FLORA_CANOPY_SYNC_URL: ${CANOPY_SYNC_URL:-https://host.docker.internal}
       FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-flora-sync-demo-secret-change-me}
       FLORA_LEAF_SERVICE_SECRET: ${FLORA_LEAF_SERVICE_SECRET:-flora-leaf-service-demo-secret-change-me}
       FLORA_LEAF_ID: ${FLORA_LEAF_ID:-leaf-or-01}
@@ -112,14 +123,21 @@ services:
 
 
   # Keeps this project on the release approved in Haber (see ../flora-updater).
+    volumes:
+      - ./certs:/etc/flora/certs:ro
   updater:
     build:
       context: ../flora-updater
     image: ${FLORA_IMAGE_UPDATER:-flora-updater:dev}
+    # Optional private CA for Canopy's TLS edge (demo/install-canopy-ca.sh). With a
+    # publicly trusted Canopy certificate, certs/ stays empty and nothing changes.
+    env_file:
+      - path: ./certs/trust.env
+        required: false
     environment:
       FLORA_COMPONENT: leaf
       FLORA_NODE_ID: ${FLORA_LEAF_ID:-leaf-or-01}
-      HABER_URL: ${HABER_URL:-http://host.docker.internal:7204}
+      HABER_URL: ${HABER_URL:-https://host.docker.internal}
       HABER_NODE_TOKEN: ${HABER_NODE_TOKEN:-haber-node-demo-token}
       FLORA_ROOT_PUBLIC_KEY: ${FLORA_ROOT_PUBLIC_KEY:-}
       FLORA_UPDATER_WINDOW: ${FLORA_UPDATER_WINDOW:-}
@@ -127,6 +145,7 @@ services:
       FLORA_UPDATER_GATE_URL: http://leaf-api:8000/api/case/status
       FLORA_UPDATER_GATE_HEADER: "x-flora-service-secret: ${FLORA_LEAF_SERVICE_SECRET:-flora-leaf-service-demo-secret-change-me}"
     volumes:
+      - ./certs:/etc/flora/certs:ro
       - /var/run/docker.sock:/var/run/docker.sock
       # The compose project's parent directory; the updater re-runs compose against it.
       - ..:/host

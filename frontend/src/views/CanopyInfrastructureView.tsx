@@ -15,8 +15,10 @@ import {
   type ControlPlaneLocation,
   type ControlPlaneLeaf,
 } from "../api/fleetApi";
+import { generateDemoWard, getDemoWardStatus, removeDemoWard, type DemoWardStatus } from "../api/demoApi";
+import CanopyHl7InterfacePanel from "./CanopyHl7InterfacePanel";
 
-type Tab = "locations" | "leaves" | "groups";
+type Tab = "locations" | "leaves" | "groups" | "hl7";
 type LocationKind = ControlPlaneLocation["kind"];
 
 const kindLabel: Record<LocationKind, string> = {
@@ -58,6 +60,70 @@ function statusStyle(status: ControlPlaneLeaf["config_status"]) {
   if (status === "synced") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
   if (status === "pending" || status === "outdated") return "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300";
   return "border-[var(--app-border)] bg-[var(--app-control-bg)] text-[var(--app-muted)]";
+}
+
+function formatDay(value: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString();
+}
+
+/** Demo mode: generate or remove the synthetic "Demo Ward" used for example report statistics. */
+function DemoModeCard({ onChanged }: { onChanged: () => Promise<void> }) {
+  const [status, setStatus] = useState<DemoWardStatus | null>(null);
+  const [busy, setBusy] = useState<"" | "generate" | "remove">("");
+  const [error, setError] = useState("");
+  const [note, setNote] = useState("");
+
+  const refresh = useCallback(async () => {
+    try { setStatus(await getDemoWardStatus()); setError(""); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to load demo mode status."); }
+  }, []);
+  useEffect(() => { void refresh(); }, [refresh]);
+
+  const run = async (action: "generate" | "remove") => {
+    const question = action === "generate"
+      ? `${status?.exists ? "Replace the existing demo ward with" : "Create a demo ward with"} 200 synthetic cases from the past 30 days (3 still active today)?`
+      : "Remove the demo ward and all of its synthetic Leafs, cases and report data?";
+    if (!window.confirm(question)) return;
+    setBusy(action); setError(""); setNote("");
+    try {
+      const result = action === "generate" ? await generateDemoWard({ cases: 200, days: 30, active: 3 }) : await removeDemoWard();
+      setStatus(result);
+      setNote(action === "generate"
+        ? `Demo ward created: ${result.cases} cases (${result.active_cases} active) on ${result.leaves} demo Leafs in ${result.elapsed_seconds ?? "–"} s. Reload to select it in the ward switcher.`
+        : "Demo data removed.");
+      await onChanged();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Demo mode request failed.");
+    } finally { setBusy(""); }
+  };
+
+  const button = "rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:opacity-50";
+  return <section className="rounded-2xl border border-amber-500/40 bg-[var(--app-panel-bg)] p-5">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2"><h2 className="font-semibold text-[var(--app-text)]">Demo mode</h2><span className="rounded-full border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-300">Demo data</span></div>
+        <p className="mt-1 max-w-3xl text-xs text-[var(--app-muted)]">Creates a “Demo Ward” with 200 synthetic cases over the past month (vital signs and events from patient in to patient out; 3 cases still active today). It is used only for example report statistics and is excluded from the Canopy centre’s statistics — select the demo ward to view it.</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className={`${button} border-[var(--app-accent)] bg-[var(--app-accent)] font-bold text-[var(--app-accent-contrast)]`} disabled={!!busy} onClick={() => void run("generate")}>{busy === "generate" ? "Generating…" : status?.exists ? "Regenerate demo ward" : "Generate demo ward"}</button>
+        <button type="button" className={`${button} border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300`} disabled={!!busy || !status?.exists} onClick={() => void run("remove")}>{busy === "remove" ? "Removing…" : "Remove demo data"}</button>
+      </div>
+    </div>
+    <div className="mt-4 grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-5">
+      {[
+        ["Status", status ? (status.exists ? status.ward?.name || "Demo Ward" : "Not created") : "Loading…"],
+        ["Demo Leafs", status ? String(status.leaves) : "—"],
+        ["Cases", status ? `${status.cases} (${status.active_cases} active)` : "—"],
+        ["Report records", status ? String(status.archive_cases) : "—"],
+        ["Period", status?.exists ? `${formatDay(status.first_case_at)} – ${formatDay(status.last_case_at)}` : "—"],
+      ].map(([label, value]) => <div key={label} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] px-3 py-2"><div className="text-[10px] font-bold uppercase tracking-wide text-[var(--app-muted)]">{label}</div><div className="mt-0.5 truncate font-semibold text-[var(--app-text)]">{value}</div></div>)}
+    </div>
+    {busy === "generate" ? <div className="mt-3 text-xs text-[var(--app-muted)]">Generating cases, vital signs and report records…</div> : null}
+    {error ? <div className="mt-3 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">{error}</div> : null}
+    {note ? <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300"><span>{note}</span><button type="button" className="rounded-lg border border-emerald-500/40 px-3 py-1 text-xs font-bold" onClick={() => window.location.reload()}>Reload</button></div> : null}
+  </section>;
 }
 
 export default function CanopyInfrastructureView() {
@@ -208,7 +274,7 @@ export default function CanopyInfrastructureView() {
     <main className="h-full overflow-y-auto bg-[var(--app-bg)] p-3 sm:p-5">
       <div className="mx-auto max-w-7xl space-y-4">
         <header className="flex flex-wrap items-end justify-between gap-3"><div><div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">Flora Canopy · control plane</div><h1 className="mt-1 text-2xl font-semibold text-[var(--app-text)]">Infrastructure</h1><p className="mt-1 text-sm text-[var(--app-muted)]">Define hospital locations, assign Leafs, and deploy shared configuration.</p></div><button type="button" className={secondary} disabled={loading} onClick={() => void load()}>{loading ? "Refreshing…" : "Refresh"}</button></header>
-        <nav className="flex gap-2 border-b border-[var(--app-border)] pb-2" aria-label="Infrastructure sections">{(["locations", "leaves", "groups"] as const).map(item => <button key={item} type="button" onClick={() => { setTab(item); setNote(""); }} className={`rounded-xl px-4 py-2 text-sm font-bold capitalize ${tab === item ? "bg-[var(--app-accent)] text-[var(--app-accent-contrast)]" : "text-[var(--app-muted)] hover:bg-[var(--app-control-bg)]"}`}>{item === "leaves" ? "Leaf assignments" : item}</button>)}</nav>
+        <nav className="flex flex-wrap gap-2 border-b border-[var(--app-border)] pb-2" aria-label="Infrastructure sections">{(["locations", "leaves", "groups", "hl7"] as const).map(item => <button key={item} type="button" onClick={() => { setTab(item); setNote(""); }} className={`rounded-xl px-4 py-2 text-sm font-bold ${item === "hl7" ? "" : "capitalize"} ${tab === item ? "bg-[var(--app-accent)] text-[var(--app-accent-contrast)]" : "text-[var(--app-muted)] hover:bg-[var(--app-control-bg)]"}`}>{item === "leaves" ? "Leaf assignments" : item === "hl7" ? "HL7 interface" : item}</button>)}</nav>
         {error ? <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">{error}</div> : null}
         {note ? <div className="rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">{note}</div> : null}
 
@@ -221,6 +287,8 @@ export default function CanopyInfrastructureView() {
           <section className="space-y-2">{data.leaves.map(leaf => <button key={leaf.leaf_id} type="button" onClick={() => selectLeaf(leaf)} className={`w-full rounded-2xl border p-4 text-left ${leafId === leaf.leaf_id ? "border-[var(--app-accent)] bg-[var(--app-hover-bg)]" : "border-[var(--app-border)] bg-[var(--app-panel-bg)]"}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="truncate font-semibold text-[var(--app-text)]">{leaf.display_name}</div><div className="text-xs text-[var(--app-muted)]">{leaf.leaf_id}</div></div><span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${statusStyle(leaf.config_status)}`}>{leaf.config_status}</span></div><div className="mt-3 truncate text-xs text-[var(--app-muted)]">{locationPath(leaf.bed_location_id, locationMap)}</div></button>)}{!loading && !data.leaves.length ? <div className="rounded-2xl border border-dashed border-[var(--app-border)] px-6 py-12 text-center text-sm text-[var(--app-muted)]">No registered Leafs.</div> : null}</section>
           <section className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-5">{selectedLeaf ? <><div className="flex items-start justify-between gap-3"><div><div className="text-xs font-extrabold uppercase tracking-[0.12em] text-[var(--app-accent)]">Desired configuration</div><h2 className="mt-1 text-xl font-semibold text-[var(--app-text)]">{selectedLeaf.display_name}</h2></div><span className={`rounded-full border px-2.5 py-1 text-xs font-bold uppercase ${statusStyle(selectedLeaf.config_status)}`}>{selectedLeaf.config_status}</span></div><div className="mt-5 rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] p-4"><label className="block text-xs font-semibold text-[var(--app-muted)]">Leaf name<input className={inputClass} value={leafName} onChange={event => setLeafName(event.target.value)} maxLength={160} /></label><div className="mt-2 text-xs text-[var(--app-muted)]">Leaf ID: {selectedLeaf.leaf_id} · Reported name: {selectedLeaf.reported_display_name || selectedLeaf.display_name}</div><button type="button" className={`${secondary} mt-3`} disabled={saving || !leafName.trim()} onClick={() => void saveLeafName()}>Save Leaf name</button></div>{selectedLeaf.config_status === "unassigned" ? <div className="mt-5 rounded-xl border border-sky-500/35 bg-sky-500/10 p-4"><div className="font-semibold text-[var(--app-text)]">Existing Leaf configuration detected</div><p className="mt-1 text-xs text-[var(--app-muted)]">Adopt its current hospital and workstation location to create the hierarchy automatically.</p><button type="button" className={`${secondary} mt-3`} disabled={saving} onClick={() => void adoptLeaf()}>{saving ? "Adopting…" : "Adopt current location"}</button></div> : null}<div className="mt-5 space-y-4"><label className="block text-xs font-semibold text-[var(--app-muted)]">Assigned bed<select className={inputClass} value={bedId} onChange={event => setBedId(event.target.value)}><option value="">Select a bed</option>{beds.map(bed => <option key={bed.id} value={bed.id}>{locationPath(bed.id, locationMap)}</option>)}</select></label><div className="grid gap-3 sm:grid-cols-3"><label className="text-xs font-semibold text-[var(--app-muted)]">Timezone<input className={inputClass} value={timezone} onChange={event => setTimezone(event.target.value)} /></label><label className="text-xs font-semibold text-[var(--app-muted)]">Date format<select className={inputClass} value={dateFormat} onChange={event => setDateFormat(event.target.value)}><option>DD/MM/YYYY</option><option>MM/DD/YYYY</option><option>YYYY-MM-DD</option></select></label><label className="text-xs font-semibold text-[var(--app-muted)]">Time format<select className={inputClass} value={timeFormat} onChange={event => setTimeFormat(event.target.value)}><option>24h</option><option>12h</option></select></label></div><div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] p-3 text-xs text-[var(--app-muted)]"><div>Desired version: <strong className="text-[var(--app-text)]">{selectedLeaf.desired_version || "—"}</strong></div><div className="mt-1">Applied version: <strong className="text-[var(--app-text)]">{selectedLeaf.applied_version || "—"}</strong></div></div><button type="button" className={primary} disabled={saving || !bedId} onClick={() => void saveAssignment()}>{saving ? "Publishing…" : "Publish to Leaf"}</button></div></> : <div className="py-20 text-center text-sm text-[var(--app-muted)]">Select a Leaf to assign its location.</div>}</section>
         </div> : null}
+
+        {tab === "hl7" ? <CanopyHl7InterfacePanel /> : <DemoModeCard onChanged={load} />}
 
         {tab === "groups" ? <div className="grid gap-4 lg:grid-cols-[minmax(300px,.75fr)_minmax(460px,1.25fr)]"><section className="overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[var(--app-panel-bg)]"><div className="flex items-center justify-between border-b border-[var(--app-border)] px-4 py-3"><div><h2 className="font-semibold text-[var(--app-text)]">Leaf groups</h2><p className="text-xs text-[var(--app-muted)]">Deploy shared settings together.</p></div><button type="button" className={secondary} onClick={startGroup}>+ Group</button></div><div className="p-2">{data.groups.map(group => <button key={group.id} type="button" onClick={() => selectGroup(group)} className={`mb-1 w-full rounded-xl border px-3 py-3 text-left ${groupId === group.id ? "border-[var(--app-accent)] bg-[var(--app-hover-bg)]" : "border-transparent hover:bg-[var(--app-control-bg)]"}`}><div className="font-semibold text-[var(--app-text)]">{group.name}</div><div className="mt-1 text-xs text-[var(--app-muted)]">{group.leaf_ids.length} Leaf{group.leaf_ids.length === 1 ? "" : "s"}</div></button>)}</div></section><section className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-5"><div className="text-xs font-extrabold uppercase tracking-[0.12em] text-[var(--app-accent)]">{groupId ? "Edit group" : "New group"}</div><div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="text-xs font-semibold text-[var(--app-muted)]">Group name<input className={inputClass} value={groupDraft.name} onChange={event => setGroupDraft(current => ({ ...current, name: event.target.value }))} /></label><label className="text-xs font-semibold text-[var(--app-muted)]">Description<input className={inputClass} value={groupDraft.description} onChange={event => setGroupDraft(current => ({ ...current, description: event.target.value }))} /></label></div><div className="mt-5"><div className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">Members</div><div className="grid gap-2 sm:grid-cols-2">{data.leaves.map(leaf => <label key={leaf.leaf_id} className="flex items-center gap-3 rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] px-3 py-3 text-sm text-[var(--app-text)]"><input type="checkbox" checked={groupDraft.leaf_ids.includes(leaf.leaf_id)} onChange={() => toggleGroupLeaf(leaf.leaf_id)} /><span className="min-w-0"><span className="block truncate font-semibold">{leaf.display_name}</span><span className="block truncate text-xs text-[var(--app-muted)]">{locationPath(leaf.bed_location_id, locationMap)}</span></span></label>)}</div></div><div className="mt-5 flex gap-2"><button type="button" className={primary} disabled={saving || !groupDraft.name.trim()} onClick={() => void saveGroup()}>{saving ? "Saving…" : "Save group"}</button></div>{groupId ? <div className="mt-6 border-t border-[var(--app-border)] pt-5"><div className="text-xs font-extrabold uppercase tracking-[0.12em] text-[var(--app-accent)]">Group configuration</div><p className="mt-1 text-xs text-[var(--app-muted)]">Publish common regional settings while retaining each Leaf’s assigned bed.</p><div className="mt-3 grid gap-3 sm:grid-cols-3"><label className="text-xs font-semibold text-[var(--app-muted)]">Timezone<input className={inputClass} value={timezone} onChange={event => setTimezone(event.target.value)} /></label><label className="text-xs font-semibold text-[var(--app-muted)]">Date format<select className={inputClass} value={dateFormat} onChange={event => setDateFormat(event.target.value)}><option>DD/MM/YYYY</option><option>MM/DD/YYYY</option><option>YYYY-MM-DD</option></select></label><label className="text-xs font-semibold text-[var(--app-muted)]">Time format<select className={inputClass} value={timeFormat} onChange={event => setTimeFormat(event.target.value)}><option>24h</option><option>12h</option></select></label></div><button type="button" className={`${secondary} mt-3`} disabled={saving} onClick={() => void publishGroupSettings()}>Publish to group</button></div> : null}</section></div> : null}
       </div>

@@ -1,3 +1,7 @@
+import base64
+import json
+import os
+import urllib.request
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -17,8 +21,20 @@ router = APIRouter(
 )
 
 # A Leaf belongs to the ward of its assigned bed; unassigned Leafs are visible only
-# to users with access to every ward (scope None).
-IN_SCOPE = "(%s::text[] IS NULL OR scope_unit.unit_key = ANY(%s))"
+# to users with access to every ward (scope None). Demo-ward Leafs (and their cases)
+# never count towards the all-ward view: they appear only when that ward is selected.
+IN_SCOPE = ("((%s::text[] IS NULL AND NOT coalesce(scope_unit.is_demo, false))"
+            " OR scope_unit.unit_key = ANY(%s))")
+
+
+def fleet_scope(
+    scope: list[str] | None = Depends(ward_scope),
+    database: Connection = Depends(connection),
+) -> list[str] | None:
+    """ward_scope, keeping demo Leafs and their active cases live while a demo ward is viewed."""
+    if scope:
+        database.execute("SELECT canopy_demo_heartbeat(%s)", (scope,))
+    return scope
 
 
 def _record(value: Any) -> dict[str, Any]:
@@ -206,7 +222,7 @@ def _chart_summary(snapshot: dict[str, Any], patient: dict[str, Any]) -> dict[st
 @router.get("/icu-overview")
 def icu_overview(
     limit_points: int = Query(default=30, ge=12, le=120),
-    scope: list[str] | None = Depends(ward_scope),
+    scope: list[str] | None = Depends(fleet_scope),
     database: Connection = Depends(connection),
 ) -> dict[str, Any]:
     rows = database.execute(
@@ -273,7 +289,7 @@ def icu_overview(
 
 
 @router.get("/leaves")
-def leaves(scope: list[str] | None = Depends(ward_scope), database: Connection = Depends(connection)) -> dict:
+def leaves(scope: list[str] | None = Depends(fleet_scope), database: Connection = Depends(connection)) -> dict:
     rows = database.execute(
         """
         SELECT leaf.leaf_id, leaf.hospital_id,
@@ -310,7 +326,7 @@ def leaves(scope: list[str] | None = Depends(ward_scope), database: Connection =
 
 
 @router.get("/active-cases")
-def active_cases(scope: list[str] | None = Depends(ward_scope), database: Connection = Depends(connection)) -> dict:
+def active_cases(scope: list[str] | None = Depends(fleet_scope), database: Connection = Depends(connection)) -> dict:
     rows = database.execute(
         """
         SELECT c.global_case_id, c.hospital_id, c.leaf_id,
@@ -338,7 +354,7 @@ def active_cases(scope: list[str] | None = Depends(ward_scope), database: Connec
 def cases(
     status: str | None = Query(default=None, max_length=24),
     limit: int = Query(default=50, ge=1, le=500),
-    scope: list[str] | None = Depends(ward_scope),
+    scope: list[str] | None = Depends(fleet_scope),
     database: Connection = Depends(connection),
 ) -> dict:
     normalized_status = str(status or "").strip().upper()
@@ -371,7 +387,7 @@ def cases(
 @router.get("/cases/{global_case_id}/snapshot")
 def case_snapshot(
     global_case_id: uuid.UUID,
-    scope: list[str] | None = Depends(ward_scope),
+    scope: list[str] | None = Depends(fleet_scope),
     database: Connection = Depends(connection),
 ) -> dict:
     row = database.execute(
@@ -389,3 +405,146 @@ def case_snapshot(
     if not row:
         raise HTTPException(status_code=404, detail="synchronized case not found")
     return row
+
+
+HABER_URL = os.getenv("FLORA_HABER_URL", "http://haber:8000").rstrip("/")
+
+
+def _haber_overview() -> tuple[dict[str, Any] | None, str | None]:
+    """Gateways and their devices come from Haber, the hospital device registry."""
+    credentials = f"{os.getenv('HABER_ADMIN_USERNAME', 'admin')}:{os.getenv('HABER_ADMIN_PASSWORD', 'admin')}"
+    request = urllib.request.Request(
+        f"{HABER_URL}/api/haber/v1/overview",
+        headers={"Authorization": "Basic " + base64.b64encode(credentials.encode()).decode(), "Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=3) as response:
+            return json.load(response), None
+    except Exception as error:  # Haber down must not break the rest of the page
+        return None, f"{type(error).__name__}: {error}"
+
+
+@router.get("/topology")
+def topology(scope: list[str] | None = Depends(fleet_scope), database: Connection = Depends(connection)) -> dict[str, Any]:
+    """Canopy -> ward -> Leaf -> Gateway -> device, for the wards the viewer may see."""
+    leaves_rows = database.execute(
+        """
+        SELECT leaf.leaf_id, leaf.hospital_id,
+               coalesce(nullif(leaf.canopy_display_name,''),leaf.display_name) AS display_name,
+               leaf.software_version, leaf.last_seen_at,
+               scope_unit.unit_key, scope_unit.unit_name,
+               assignment.desired_config#>>'{location,hospitalName}' AS hospital_name,
+               assignment.desired_config#>>'{location,roomName}' AS room_name,
+               assignment.desired_config#>>'{location,bedName}' AS bed_name,
+               CASE WHEN leaf.last_seen_at >= now() - interval '90 seconds' THEN 'online'
+                    WHEN leaf.last_seen_at >= now() - interval '10 minutes' THEN 'delayed'
+                    ELSE 'offline' END AS connection_status,
+               (SELECT count(*) FROM sync_case_index c
+                 WHERE c.leaf_id=leaf.leaf_id AND upper(c.status)='ACTIVE') AS active_cases
+        FROM sync_leaf_node leaf
+        LEFT JOIN canopy_leaf_assignment assignment ON assignment.leaf_id=leaf.leaf_id
+        LEFT JOIN canopy_leaf_unit scope_unit ON scope_unit.leaf_id=leaf.leaf_id
+        WHERE {IN_SCOPE}
+        ORDER BY scope_unit.unit_name NULLS LAST, coalesce(nullif(leaf.canopy_display_name,''),leaf.display_name)
+        """.replace("{IN_SCOPE}", IN_SCOPE),
+        (scope, scope),
+    ).fetchall()
+    wards = database.execute(
+        """SELECT unit.id::text AS key, unit.name, building.name AS building_name
+           FROM canopy_location unit LEFT JOIN canopy_location building ON building.id=unit.parent_id
+           WHERE unit.kind='care_unit' AND unit.is_active
+             AND ((%s::text[] IS NULL AND NOT unit.is_demo) OR unit.id::text = ANY(%s))
+           ORDER BY unit.sort_order, unit.name""",
+        (scope, scope),
+    ).fetchall()
+    hospital = database.execute(
+        "SELECT name FROM canopy_location WHERE kind='hospital' AND is_active ORDER BY sort_order,id LIMIT 1"
+    ).fetchone()
+
+    overview, haber_error = _haber_overview()
+    gateways = gateway_rows(database, scope)
+    catalog = (overview or {}).get("catalog") or {}
+    device_types = {
+        item["code"]: {key: item.get(key) for key in ("label", "category", "protocol", "controller", "parser")}
+        for item in catalog.get("device_types") or [] if isinstance(item, dict) and item.get("code")
+    }
+    return {
+        "server_time": datetime.now(timezone.utc),
+        "canopy": {
+            "name": (hospital or {}).get("name") or (overview or {}).get("bundle", {}).get("tenant", {}).get("name") or "Flora Canopy",
+            "tenant_id": (overview or {}).get("tenant_id"),
+        },
+        "haber": {"status": "ok" if overview is not None else "unavailable", "error": haber_error},
+        "wards": [{"key": row["key"], "name": row["name"], "building_name": row["building_name"]} for row in wards],
+        "leaves": leaves_rows,
+        "gateways": gateways,
+        "device_types": device_types,
+    }
+
+
+def gateway_rows(database: Connection, scope: list[str] | None) -> list[dict[str, Any]]:
+    """Gateways as last reported to Canopy (through Haber), devices tagged with their ward.
+
+    Ward-scoped viewers only see the devices feeding Leafs of their wards, and only
+    gateways that feed at least one of them.
+    """
+    gateways = database.execute(
+        """SELECT gateway_id, version, site, license, config_hash, first_seen_at, last_seen_at, config_changed_at,
+                  desired_version, desired_source, applied_version,
+                  (desired_config IS NOT NULL AND desired_version > applied_version) AS config_pending
+           FROM canopy_gateway ORDER BY gateway_id"""
+    ).fetchall()
+    devices = database.execute(
+        """SELECT device.*, unit.unit_key, unit.unit_name,
+                  coalesce(nullif(leaf.canopy_display_name,''),leaf.display_name) AS leaf_name
+           FROM canopy_gateway_device device
+           LEFT JOIN canopy_leaf_unit unit ON unit.leaf_id=device.leaf_id
+           LEFT JOIN sync_leaf_node leaf ON leaf.leaf_id=device.leaf_id
+           WHERE ((%s::text[] IS NULL AND NOT coalesce(unit.is_demo, false)) OR unit.unit_key = ANY(%s))
+           ORDER BY device.gateway_id, device.device_id""",
+        (scope, scope),
+    ).fetchall()
+    by_gateway: dict[str, list[dict[str, Any]]] = {}
+    for device in devices:
+        by_gateway.setdefault(device["gateway_id"], []).append(dict(device))
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    result = []
+    for gateway in gateways:
+        own = by_gateway.get(gateway["gateway_id"], [])
+        if scope is not None and not own:
+            continue
+        age = now_ms - int(gateway["last_seen_at"] or 0)
+        status = "pending" if not gateway["last_seen_at"] else "online" if age <= 90_000 else "delayed" if age <= 600_000 else "offline"
+        enabled = [device for device in own if device["enabled"]]
+        by_ward: dict[str, int] = {}
+        for device in enabled:
+            ward = device.get("unit_name") or "Unassigned"
+            by_ward[ward] = by_ward.get(ward, 0) + 1
+        result.append({
+            **dict(gateway),
+            "connection_status": status,
+            "devices": own,
+            "license_usage": {"enabled": len(enabled), "max_devices": (gateway["license"] or {}).get("max_devices"),
+                              "by_ward": by_ward},
+        })
+    return result
+
+
+@router.get("/gateways")
+def gateways_list(scope: list[str] | None = Depends(fleet_scope), database: Connection = Depends(connection)) -> dict[str, Any]:
+    return {"rows": gateway_rows(database, scope)}
+
+
+@router.get("/gateways/{gateway_id}/snapshots")
+def gateway_snapshots(
+    gateway_id: str, scope: list[str] | None = Depends(fleet_scope), database: Connection = Depends(connection)
+) -> dict[str, Any]:
+    if scope is not None:
+        # A snapshot holds every ward's devices; only all-ward users may read it.
+        raise HTTPException(status_code=403, detail="configuration history requires access to all wards")
+    rows = database.execute(
+        """SELECT id, config_hash, captured_at, jsonb_array_length(config->'devices') AS device_count, config
+           FROM canopy_gateway_config_snapshot WHERE gateway_id=%s ORDER BY captured_at DESC LIMIT 50""",
+        (gateway_id,),
+    ).fetchall()
+    return {"rows": rows}

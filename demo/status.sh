@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # One-line health per tier plus the end-to-end data path.
-check() { if curl -fsS --max-time 3 "$2" >/dev/null 2>&1; then printf '  %-28s up\n' "$1"; else printf '  %-28s DOWN  (%s)\n' "$1" "$2"; fi; }
+check() { if curl -fsS --cacert "${3:-flora-canopy/edge/certs/ca.crt}" --max-time 3 "$2" >/dev/null 2>&1; then printf '  %-28s up\n' "$1"; else printf '  %-28s DOWN  (%s)\n' "$1" "$2"; fi; }
+ROOT_HTTPS_PORT=${ROOT_HTTPS_PORT:-8443} CANOPY_HTTPS_PORT=${CANOPY_HTTPS_PORT:-9443}
 echo "Flora Root";    check "root api :7100"          http://localhost:7100/health
+                      check "root edge :$ROOT_HTTPS_PORT"      "https://localhost:$ROOT_HTTPS_PORT/api/v1/keys" flora-root/edge/certs/ca.crt
                       check "root registry :7105"     http://localhost:7105/v2/
-echo "Flora Canopy";  check "canopy web :7200"        http://localhost:7200
+echo "Flora Canopy";  check "edge https :$CANOPY_HTTPS_PORT"    "https://localhost:$CANOPY_HTTPS_PORT/api/sync/v1/fingerprint"
+                      check "canopy web :7200"        http://localhost:7200
                       check "sync api :7203"          http://localhost:7203/health
                       check "haber :7204"             http://localhost:7204/health
                       check "haber registry :7205"    http://localhost:7205/v2/

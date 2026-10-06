@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Flora Root · Sign in</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2307130f'/%3E%3Cpath d='M32 10v20M32 30c-6 6-14 8-18 20M32 30c6 6 14 8 18 20M32 30v24' stroke='%23e6b75c' stroke-width='4' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='12' r='5' fill='%235fd3a6'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#eaf1ee; --bg-deep:#d7e6e0; --panel:rgba(255,255,255,.86); --panel-solid:#fff; --control:rgba(240,246,243,.9);
+    --text:#0b231e; --muted:#4a645d; --border:rgba(31,74,62,.22); --accent:#1d6b57; --accent-contrast:#fff;
+    --gold:#b07a22; --ok:#16a34a; --bad:#dc2626; --warn:#d97706; --root-line:rgba(29,107,87,.30); --node:#1d6b57;
+    --shadow:0 30px 80px -30px rgba(11,35,30,.35);
+    --font:"Inter","Noto Sans Thai","Segoe UI",system-ui,sans-serif; --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg:#06110e; --bg-deep:#020806; --panel:rgba(9,24,20,.78); --panel-solid:#0b1d18; --control:rgba(18,40,34,.75);
+    --text:#e7f2ed; --muted:#93aba3; --border:rgba(126,190,166,.18); --accent:#5fd3a6; --accent-contrast:#04241a;
+    --gold:#e6b75c; --ok:#4ade80; --bad:#f87171; --warn:#fbbf24; --root-line:rgba(95,211,166,.22); --node:#5fd3a6;
+    --shadow:0 40px 120px -30px rgba(0,0,0,.8);
+  } }
+  :root[data-theme="dark"] {
+    --bg:#06110e; --bg-deep:#020806; --panel:rgba(9,24,20,.78); --panel-solid:#0b1d18; --control:rgba(18,40,34,.75);
+    --text:#e7f2ed; --muted:#93aba3; --border:rgba(126,190,166,.18); --accent:#5fd3a6; --accent-contrast:#04241a;
+    --gold:#e6b75c; --ok:#4ade80; --bad:#f87171; --warn:#fbbf24; --root-line:rgba(95,211,166,.22); --node:#5fd3a6;
+    --shadow:0 40px 120px -30px rgba(0,0,0,.8);
+  }
+  * { box-sizing:border-box }
+  html, body { height:100% }
+  body { margin:0; min-height:100dvh; color:var(--text); font:14px/1.5 var(--font); -webkit-font-smoothing:antialiased;
+         background:radial-gradient(1200px 700px at 50% -10%, var(--bg) 0%, var(--bg-deep) 70%); background-color:var(--bg-deep);
+         display:flex; align-items:center; justify-content:center; padding:16px; overflow-x:hidden }
+
+  /* ---------- the root network behind the card ---------- */
+  #roots { position:fixed; inset:0; width:100%; height:100%; z-index:0; pointer-events:none }
+  #roots path { fill:none; stroke:var(--root-line); stroke-linecap:round }
+  #roots .node { fill:var(--panel-solid); stroke:var(--node); stroke-width:1.5 }
+  #roots .halo { fill:var(--node); opacity:.0; animation:halo 4.8s ease-out infinite }
+  #roots .spark { fill:var(--gold) }
+  #roots .seed { fill:var(--gold) }
+  @keyframes halo { 0% { opacity:.35; r:4 } 100% { opacity:0; r:22 } }
+  @media (prefers-reduced-motion: reduce) { #roots .halo { animation:none } #roots .spark { display:none } .card { animation:none !important } }
+
+  /* ---------- card ---------- */
+  .card { position:relative; z-index:1; width:100%; max-width:980px; background:var(--panel); border:1px solid var(--border);
+          border-radius:22px; box-shadow:var(--shadow); overflow:hidden; backdrop-filter:blur(18px) saturate(1.2);
+          -webkit-backdrop-filter:blur(18px) saturate(1.2); animation:rise .7s cubic-bezier(.2,.8,.2,1) both }
+  @keyframes rise { from { opacity:0; transform:translateY(14px) scale(.985) } to { opacity:1; transform:none } }
+  .card::before { content:""; position:absolute; inset:0 0 auto 0; height:2px;
+                  background:linear-gradient(90deg, transparent, var(--gold), var(--accent), transparent); opacity:.8 }
+
+  header { display:flex; align-items:center; gap:14px; padding:16px 22px; border-bottom:1px solid var(--border) }
+  .mark { width:44px; height:44px; border-radius:12px; display:grid; place-items:center; background:var(--control); border:1px solid var(--border); flex:none }
+  .brand b { display:block; font-size:18px; line-height:22px; font-weight:800; letter-spacing:-.01em }
+  .brand span { display:block; font-size:11.5px; color:var(--muted) }
+  .tools { margin-left:auto; display:flex; gap:8px; align-items:center }
+  .chip { font-size:11px; font-weight:600; color:var(--muted); border:1px solid var(--border); border-radius:999px; padding:3px 10px;
+          display:inline-flex; gap:6px; align-items:center; white-space:nowrap }
+  .chip.plain i { background:var(--warn); box-shadow:0 0 0 3px color-mix(in srgb, var(--warn) 20%, transparent) }
+  .chip i { width:7px; height:7px; border-radius:50%; background:var(--ok); box-shadow:0 0 0 3px color-mix(in srgb, var(--ok) 20%, transparent) }
+  .icon-btn { height:38px; min-width:46px; padding:0 10px; border-radius:10px; border:1px solid var(--border); background:var(--control);
+              color:var(--text); font:600 12px var(--font); cursor:pointer; display:grid; place-items:center }
+  .icon-btn:hover { border-color:var(--accent); color:var(--accent) }
+  .icon-btn:focus-visible, button:focus-visible, input:focus-visible { outline:2px solid var(--accent); outline-offset:2px }
+
+  .body { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(260px,.9fr) }
+  .main { padding:30px 34px 28px; min-height:430px; display:flex; flex-direction:column }
+  aside { border-left:1px solid var(--border); background:color-mix(in srgb, var(--control) 45%, transparent); padding:28px 24px }
+
+  h1 { font-size:26px; line-height:32px; margin:0; font-weight:800; letter-spacing:-.02em }
+  .lede { color:var(--muted); margin:6px 0 22px; font-size:13.5px }
+  .field { margin-bottom:14px }
+  label { display:block; font-size:12px; font-weight:600; margin-bottom:6px }
+  .input { position:relative }
+  input { width:100%; font:15px/22px var(--font); padding:11px 13px; border-radius:11px; border:1px solid var(--border);
+          background:var(--control); color:var(--text); transition:border-color .15s, box-shadow .15s }
+  input:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent) }
+  input.pw { padding-right:72px }
+  .reveal { position:absolute; inset:0 6px 0 auto; margin:auto 0; height:32px; padding:0 10px; border:0; border-radius:8px;
+            background:transparent; color:var(--muted); font:600 11.5px var(--font); cursor:pointer }
+  .reveal:hover { color:var(--text) }
+  .hint { font-size:12px; color:var(--warn); margin-top:6px; display:none } .hint.on { display:block }
+  .alert { border-radius:12px; padding:10px 14px; font-size:13px; margin:2px 0 14px; display:none }
+  .alert.on { display:block } .alert.bad { border:1px solid color-mix(in srgb, var(--bad) 40%, transparent); background:color-mix(in srgb, var(--bad) 10%, transparent); color:var(--bad) }
+  .alert.warn { border:1px solid color-mix(in srgb, var(--warn) 40%, transparent); background:color-mix(in srgb, var(--warn) 10%, transparent); color:var(--warn) }
+  .primary { width:100%; height:46px; border:0; border-radius:12px; font:700 14px var(--font); cursor:pointer; color:var(--accent-contrast);
+             background:linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, var(--gold)));
+             box-shadow:0 10px 30px -12px var(--accent); display:flex; align-items:center; justify-content:center; gap:10px;
+             transition:transform .15s, filter .15s }
+  .primary:hover:not(:disabled) { filter:brightness(1.08); transform:translateY(-1px) }
+  .primary:disabled { opacity:.55; cursor:not-allowed; box-shadow:none }
+  .spin { width:16px; height:16px; border-radius:50%; border:2px solid currentColor; border-right-color:transparent; animation:spin .7s linear infinite; display:none }
+  .busy .spin { display:inline-block }
+  @keyframes spin { to { transform:rotate(360deg) } }
+  .foot { margin-top:auto; padding-top:20px; display:flex; gap:8px; align-items:center; color:var(--muted); font-size:12px }
+  .foot svg { flex:none }
+
+  aside h2 { font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 12px; font-weight:700 }
+  .row { display:flex; align-items:center; gap:10px; min-height:44px; padding:8px 12px; border-radius:11px; border:1px solid var(--border);
+         background:var(--control); margin-bottom:8px }
+  .dot { width:9px; height:9px; border-radius:50%; background:var(--warn); flex:none }
+  .dot.ok { background:var(--ok); box-shadow:0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent) } .dot.bad { background:var(--bad) }
+  .row b { font-size:13px; font-weight:600 } .row span { margin-left:auto; font-size:11.5px; font-weight:600; color:var(--muted) }
+  .key { margin-top:16px; padding:12px 14px; border-radius:12px; border:1px dashed var(--border) }
+  .key small { display:block; font-size:11px; color:var(--muted); margin-bottom:4px }
+  .key code { font:600 13px var(--mono); color:var(--gold); letter-spacing:.04em }
+  .clock { margin-top:16px; font:600 22px var(--mono); letter-spacing:.02em } .clock small { display:block; font:500 11px var(--font); color:var(--muted) }
+
+  /* strength meter for new passwords */
+  .meter { height:6px; border-radius:3px; background:var(--control); border:1px solid var(--border); overflow:hidden; margin-top:8px }
+  .meter i { display:block; height:100%; width:0; background:var(--bad); transition:width .2s, background .2s }
+
+  /* welcome */
+  .welcome { text-align:left }
+  .welcome .badge { width:58px; height:58px; border-radius:16px; display:grid; place-items:center; margin-bottom:18px;
+                    background:color-mix(in srgb, var(--accent) 16%, transparent); color:var(--accent) }
+  .facts { display:grid; gap:8px; margin:18px 0 22px }
+  .facts div { display:flex; justify-content:space-between; gap:12px; padding:10px 12px; border-radius:11px; background:var(--control); border:1px solid var(--border); font-size:13px }
+  .facts div span:first-child { color:var(--muted) }
+  [hidden] { display:none !important }
+
+  @media (max-width: 760px) {
+    .body { grid-template-columns:1fr } aside { border-left:0; border-top:1px solid var(--border) }
+    .main { padding:24px 20px; min-height:0 } header { padding:14px 16px } .chip.env { display:none } h1 { font-size:22px }
+  }
+</style>
+</head>
+<body>
+<svg id="roots" aria-hidden="true"></svg>
+
+<main class="card" aria-labelledby="title">
+  <header>
+    <div class="mark" aria-hidden="true">
+      <svg width="28" height="28" viewBox="0 0 64 64"><path d="M32 8v22M32 30c-6 6-14 9-19 22M32 30c6 6 14 9 19 22M32 30v26M32 38c-4 4-9 6-11 12M32 38c4 4 9 6 11 12"
+        stroke="var(--gold)" stroke-width="3.5" fill="none" stroke-linecap="round"/><circle cx="32" cy="9" r="6" fill="var(--accent)"/></svg>
+    </div>
+    <div class="brand"><b>Flora Root</b><span data-i18n="tagline"></span></div>
+    <div class="tools">
+      <span class="chip env" id="env"><i></i><span data-i18n="secure"></span></span>
+      <button class="icon-btn" id="lang" type="button" aria-label="Language"></button>
+      <button class="icon-btn" id="theme" type="button" aria-label="Theme"></button>
+    </div>
+  </header>
+
+  <div class="body">
+    <section class="main">
+      <!-- sign in -->
+      <form id="signin" novalidate>
+        <h1 id="title" data-i18n="signin"></h1>
+        <p class="lede" data-i18n="lede"></p>
+        <div class="alert" id="error" role="alert"></div>
+        <div class="field"><label for="username" data-i18n="username"></label>
+          <input id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+        <div class="field"><label for="password" data-i18n="password"></label>
+          <div class="input"><input id="password" class="pw" name="password" type="password" autocomplete="current-password" required>
+            <button class="reveal" type="button" data-for="password" data-i18n="show"></button></div>
+          <div class="hint" id="caps" data-i18n="caps"></div></div>
+        <button class="primary" id="submit" type="submit" disabled><span class="spin"></span><span data-i18n="signinBtn"></span></button>
+      </form>
+
+      <!-- forced or requested password change -->
+      <form id="change" novalidate hidden>
+        <h1 data-i18n="changeTitle"></h1>
+        <p class="lede" data-i18n="changeLede"></p>
+        <div class="alert" id="changeError" role="alert"></div>
+        <div class="field"><label for="current" data-i18n="current"></label>
+          <div class="input"><input id="current" class="pw" type="password" autocomplete="current-password" required>
+            <button class="reveal" type="button" data-for="current" data-i18n="show"></button></div></div>
+        <div class="field"><label for="next" data-i18n="newPw"></label>
+          <div class="input"><input id="next" class="pw" type="password" autocomplete="new-password" required minlength="10">
+            <button class="reveal" type="button" data-for="next" data-i18n="show"></button></div>
+          <div class="meter"><i id="meter"></i></div></div>
+        <div class="field"><label for="confirm" data-i18n="confirm"></label>
+          <input id="confirm" type="password" autocomplete="new-password" required></div>
+        <button class="primary" id="changeSubmit" type="submit" disabled><span class="spin"></span><span data-i18n="changeBtn"></span></button>
+      </form>
+
+      <!-- welcome -->
+      <div id="welcome" class="welcome" hidden>
+        <div class="badge"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+        <h1 id="hello"></h1>
+        <p class="lede" id="roleLine"></p>
+        <div class="alert warn" id="failedWarn"></div>
+        <div class="facts" id="facts"></div>
+        <button class="primary" id="continue" type="button"><span data-i18n="continue"></span></button>
+      </div>
+
+      <div class="foot"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+        <span data-i18n="recorded"></span></div>
+    </section>
+
+    <aside aria-labelledby="statusTitle">
+      <h2 id="statusTitle" data-i18n="status"></h2>
+      <div class="row"><i class="dot" id="dotApi"></i><b data-i18n="api"></b><span id="valApi"></span></div>
+      <div class="row"><i class="dot" id="dotDb"></i><b data-i18n="db"></b><span id="valDb"></span></div>
+      <div class="row"><i class="dot" id="dotReg"></i><b data-i18n="registry"></b><span id="valReg"></span></div>
+      <div class="key"><small data-i18n="keyLabel"></small><code id="fingerprint">—</code><small id="keyId" style="margin:6px 0 0"></small></div>
+      <div class="clock" id="clock">--:--:--<small data-i18n="serverTime"></small></div>
+    </aside>
+  </div>
+</main>
+
+<script>
+const T = {
+  en: { tagline:"Cloud control plane · tenants, licenses, releases", secure:"TLS · Ed25519 signed", plain:"No TLS · local access", signin:"Sign in to Root",
+        lede:"Operators only. Root signs the licenses and releases every hospital runs.", username:"Username", password:"Password",
+        show:"Show", hide:"Hide", caps:"Caps Lock is on", signinBtn:"Sign in", signingIn:"Signing in…", waiting:"Waiting for Root…",
+        changeTitle:"Set a new password", changeLede:"Your password must be changed before you continue. Other sessions will be signed out.",
+        current:"Current password", newPw:"New password (10+ characters)", confirm:"Confirm new password", changeBtn:"Save password",
+        mismatch:"The new passwords do not match", continue:"Open Root", recorded:"Every sign-in and change on Root is recorded in the audit log.",
+        status:"Control plane", api:"Root API", db:"Database", registry:"Image registry", ready:"Ready", unavailable:"Unavailable",
+        checking:"Checking", keyLabel:"Active signing key fingerprint", serverTime:"Server time (UTC)", failed:"Sign-in failed",
+        welcome:"Welcome back, {name}", firstTime:"Welcome, {name}", role:{ admin:"Administrator · full control", viewer:"Viewer · read only" },
+        lastLogin:"Previous sign-in", from:"from", never:"First sign-in", sessionIdle:"Session",
+        idle:"signs out after {n} min idle", failedSince:"{n} failed sign-in attempt(s) since your last visit. If that wasn't you, change your password." },
+  th: { tagline:"ศูนย์ควบคุมกลางบนคลาวด์ · ผู้เช่า ไลเซนส์ และรีลีส", secure:"TLS · ลงนาม Ed25519", plain:"ไม่มี TLS · เข้าถึงภายในเครื่อง", signin:"เข้าสู่ระบบ Root",
+        lede:"สำหรับผู้ดูแลระบบเท่านั้น Root เป็นผู้ลงนามไลเซนส์และรีลีสที่ทุกโรงพยาบาลใช้งาน", username:"ชื่อผู้ใช้", password:"รหัสผ่าน",
+        show:"แสดง", hide:"ซ่อน", caps:"Caps Lock เปิดอยู่", signinBtn:"เข้าสู่ระบบ", signingIn:"กำลังเข้าสู่ระบบ…", waiting:"กำลังรอ Root…",
+        changeTitle:"ตั้งรหัสผ่านใหม่", changeLede:"ต้องเปลี่ยนรหัสผ่านก่อนใช้งานต่อ เซสชันอื่นของบัญชีนี้จะถูกออกจากระบบ",
+        current:"รหัสผ่านปัจจุบัน", newPw:"รหัสผ่านใหม่ (อย่างน้อย 10 ตัวอักษร)", confirm:"ยืนยันรหัสผ่านใหม่", changeBtn:"บันทึกรหัสผ่าน",
+        mismatch:"รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน", continue:"เข้าสู่ Root", recorded:"ทุกการเข้าสู่ระบบและการเปลี่ยนแปลงใน Root ถูกบันทึกใน audit log",
+        status:"สถานะระบบ", api:"Root API", db:"ฐานข้อมูล", registry:"Image registry", ready:"พร้อม", unavailable:"ไม่พร้อม",
+        checking:"กำลังตรวจสอบ", keyLabel:"ลายนิ้วมือกุญแจลงนามที่ใช้งาน", serverTime:"เวลาเซิร์ฟเวอร์ (UTC)", failed:"เข้าสู่ระบบไม่สำเร็จ",
+        welcome:"ยินดีต้อนรับกลับ {name}", firstTime:"ยินดีต้อนรับ {name}", role:{ admin:"ผู้ดูแลระบบ · ควบคุมได้ทั้งหมด", viewer:"ผู้ชม · อ่านอย่างเดียว" },
+        lastLogin:"เข้าสู่ระบบครั้งก่อน", from:"จาก", never:"เข้าสู่ระบบครั้งแรก", sessionIdle:"เซสชัน",
+        idle:"ออกจากระบบอัตโนมัติเมื่อไม่ใช้งาน {n} นาที", failedSince:"มีการพยายามเข้าสู่ระบบผิด {n} ครั้งตั้งแต่ครั้งก่อน หากไม่ใช่คุณ ควรเปลี่ยนรหัสผ่าน" },
+};
+const $ = (id) => document.getElementById(id);
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+let lang = store.get("flora.root.lang") || ((navigator.language || "").startsWith("th") ? "th" : "en");
+const t = (key) => key.split(".").reduce((o, k) => o?.[k], T[lang]) ?? key;
+const fmt = (s, vars) => s.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
+let status = null, loginResult = null;
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = t(el.dataset.i18n); });
+  $("lang").textContent = lang === "en" ? "ไทย" : "EN";
+  document.querySelectorAll(".reveal").forEach((b) => { b.textContent = $(b.dataset.for).type === "password" ? t("show") : t("hide"); });
+  renderStatus(); validate();
+  if (loginResult) renderWelcome();
+}
+$("lang").addEventListener("click", () => { lang = lang === "en" ? "th" : "en"; store.set("flora.root.lang", lang); applyLang(); });
+
+// theme: auto -> dark -> light
+const themes = ["auto", "dark", "light"], themeIcon = { auto:"◐", dark:"☾", light:"☀" };
+let theme = store.get("flora.root.theme") || "auto";
+function applyTheme() {
+  if (theme === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = theme;
+  $("theme").textContent = themeIcon[theme]; $("theme").title = `Theme: ${theme}`;
+}
+$("theme").addEventListener("click", () => { theme = themes[(themes.indexOf(theme) + 1) % 3]; store.set("flora.root.theme", theme); applyTheme(); drawRoots(); });
+
+document.querySelectorAll(".reveal").forEach((b) => b.addEventListener("click", () => {
+  const input = $(b.dataset.for); input.type = input.type === "password" ? "text" : "password";
+  b.textContent = input.type === "password" ? t("show") : t("hide"); input.focus();
+}));
+$("password").addEventListener("keyup", (e) => $("caps").classList.toggle("on", !!e.getModifierState?.("CapsLock")));
+
+// ---------- status panel ----------
+function setRow(dot, val, state) {
+  $(dot).className = "dot " + (state === "ready" ? "ok" : state === "checking" ? "" : "bad");
+  $(val).textContent = t(state === "ready" ? "ready" : state === "checking" ? "checking" : "unavailable");
+}
+function renderStatus() {
+  if (!status) { ["Api", "Db", "Reg"].forEach((k) => setRow("dot" + k, "val" + k, "checking")); return; }
+  setRow("dotApi", "valApi", status.api); setRow("dotDb", "valDb", status.database); setRow("dotReg", "valReg", status.registry);
+  if (status.signing_key) { $("fingerprint").textContent = status.signing_key.fingerprint; $("keyId").textContent = status.signing_key.key_id; }
+}
+let skew = 0;
+async function loadStatus() {
+  try {
+    const r = await fetch("api/auth/status", { cache: "no-store" });
+    status = { ...(await r.json()), api: r.ok ? "ready" : "unavailable" };
+    skew = status.server_ts - Date.now();
+  } catch { status = { api: "unavailable", database: "unavailable", registry: "unavailable" }; }
+  renderStatus(); validate();
+}
+setInterval(() => {
+  const d = new Date(Date.now() + skew);
+  $("clock").firstChild.nodeValue = d.toISOString().slice(11, 19);
+}, 1000);
+
+// ---------- sign in ----------
+const nextUrl = (() => { const n = new URLSearchParams(location.search).get("next") || "/";
+  return n.startsWith("/") && !n.startsWith("//") && !n.startsWith("/login") ? n : "/"; })();
+function validate() {
+  const ready = status?.api === "ready";
+  const btn = $("submit");
+  btn.disabled = !ready || btn.classList.contains("busy") || !$("username").value.trim() || !$("password").value;
+  btn.lastElementChild.textContent = btn.classList.contains("busy") ? t("signingIn") : ready ? t("signinBtn") : t("waiting");
+}
+["username", "password"].forEach((id) => $(id).addEventListener("input", validate));
+function showError(el, message) { el.textContent = message; el.className = "alert bad on"; }
+
+$("signin").addEventListener("submit", async (e) => {
+  e.preventDefault(); if ($("submit").disabled) return;
+  $("error").className = "alert"; $("submit").classList.add("busy"); validate();
+  try {
+    const r = await fetch("api/auth/login", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: $("username").value.trim(), password: $("password").value }) });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) { showError($("error"), body.detail || t("failed")); $("password").select(); return; }
+    loginResult = body;
+    if (body.user.must_change_password) { show("change"); $("current").value = $("password").value; $("next").focus(); }
+    else { show("welcome"); renderWelcome(); }
+  } catch { showError($("error"), t("failed")); }
+  finally { $("submit").classList.remove("busy"); validate(); }
+});
+
+// ---------- password change ----------
+function strength(pw) {
+  let s = 0; if (pw.length >= 10) s++; if (pw.length >= 14) s++; if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) s++;
+  if (/\d/.test(pw)) s++; if (/[^A-Za-z0-9]/.test(pw)) s++; return s;
+}
+function validateChange() {
+  const s = strength($("next").value), colors = ["var(--bad)", "var(--bad)", "var(--warn)", "var(--warn)", "var(--ok)", "var(--ok)"];
+  $("meter").style.width = `${(s / 5) * 100}%`; $("meter").style.background = colors[s];
+  $("changeSubmit").disabled = !$("current").value || $("next").value.length < 10 || !$("confirm").value;
+}
+["current", "next", "confirm"].forEach((id) => $(id).addEventListener("input", validateChange));
+$("change").addEventListener("submit", async (e) => {
+  e.preventDefault(); if ($("changeSubmit").disabled) return;
+  if ($("next").value !== $("confirm").value) return showError($("changeError"), t("mismatch"));
+  $("changeSubmit").classList.add("busy");
+  const r = await fetch("api/auth/password", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ current_password: $("current").value, new_password: $("next").value }) });
+  $("changeSubmit").classList.remove("busy");
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) return showError($("changeError"), body.detail || t("failed"));
+  if (!loginResult) { location.href = nextUrl; return; }
+  loginResult.user.must_change_password = false; show("welcome"); renderWelcome();
+});
+
+// ---------- welcome ----------
+function renderWelcome() {
+  const u = loginResult.user, prev = loginResult.previous_login;
+  $("hello").textContent = fmt(t(prev ? "welcome" : "firstTime"), { name: u.display_name || u.username });
+  $("roleLine").textContent = t("role." + u.role);
+  const when = (ms) => new Date(ms).toLocaleString(lang === "th" ? "th-TH" : undefined, { dateStyle: "medium", timeStyle: "short" });
+  $("facts").innerHTML = "";
+  const fact = (k, v) => { const d = document.createElement("div"); d.innerHTML = "<span></span><span></span>";
+    d.children[0].textContent = k; d.children[1].textContent = v; $("facts").append(d); };
+  fact(t("lastLogin"), prev ? `${when(prev.at)}${prev.ip ? ` · ${t("from")} ${prev.ip}` : ""}` : t("never"));
+  fact(t("sessionIdle"), fmt(t("idle"), { n: loginResult.idle_minutes }));
+  const failed = loginResult.failed_since_previous;
+  $("failedWarn").textContent = fmt(t("failedSince"), { n: failed });
+  $("failedWarn").classList.toggle("on", failed > 0);
+  $("continue").focus();
+}
+$("continue").addEventListener("click", () => { location.href = nextUrl; });
+
+function show(view) { ["signin", "change", "welcome"].forEach((v) => { $(v).hidden = v !== view; }); }
+
+// ---------- the root network ----------
+function drawRoots() {
+  const svg = $("roots"), W = innerWidth, H = innerHeight, ns = "http://www.w3.org/2000/svg";
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.innerHTML = "";
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const origin = { x: W / 2, y: -20 };
+  const leaves = [];
+  const mk = (tag, attrs) => { const el = document.createElementNS(ns, tag); for (const k in attrs) el.setAttribute(k, attrs[k]); svg.append(el); return el; };
+  function grow(x, y, angle, len, depth, width) {
+    if (depth === 0 || y > H + 40) { leaves.push({ x, y }); return; }
+    const x2 = x + Math.cos(angle) * len, y2 = y + Math.sin(angle) * len;
+    const cx = x + Math.cos(angle + (rnd() - .5) * .9) * len * .6, cy = y + Math.sin(angle + (rnd() - .5) * .9) * len * .6;
+    const d = `M${x.toFixed(1)},${y.toFixed(1)} Q${cx.toFixed(1)},${cy.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}`;
+    const path = mk("path", { d, "stroke-width": width.toFixed(2) });
+    if (depth >= 3 && rnd() > .45) {  // signed bundles flowing outward
+      const spark = mk("circle", { r: 1.8, class: "spark", opacity: .9 });
+      const motion = document.createElementNS(ns, "animateMotion");
+      motion.setAttribute("dur", `${(3 + rnd() * 4).toFixed(1)}s`); motion.setAttribute("repeatCount", "indefinite");
+      motion.setAttribute("begin", `${(rnd() * 4).toFixed(1)}s`); motion.setAttribute("path", d);
+      spark.append(motion);
+    }
+    const n = depth > 3 ? 2 : (rnd() > .35 ? 2 : 1);
+    for (let i = 0; i < n; i++) grow(x2, y2, angle + (i - (n - 1) / 2) * (.55 + rnd() * .35) + (rnd() - .5) * .3,
+                                      len * (.78 + rnd() * .12), depth - 1, Math.max(.6, width * .72));
+  }
+  const spread = Math.min(1.25, W / H * .75);
+  for (let i = 0; i < 5; i++) grow(origin.x, origin.y, Math.PI / 2 + (i - 2) * spread * .32, Math.min(W, H) * .2, 6, 3.2);
+  mk("circle", { cx: origin.x, cy: 6, r: 10, class: "seed" });
+  // hospitals at the root tips that stay on screen
+  leaves.filter((p) => p.x > 30 && p.x < W - 30 && p.y > H * .35 && p.y < H - 20)
+        .filter((_, i) => i % 3 === 0).slice(0, 14).forEach((p, i) => {
+    mk("circle", { cx: p.x, cy: p.y, r: 4, class: "halo", style: `animation-delay:${(i * .37) % 4.8}s` });
+    mk("circle", { cx: p.x, cy: p.y, r: 3.6, class: "node" });
+  });
+}
+let resizeTimer; addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(drawRoots, 150); });
+
+// ---------- start ----------
+if (location.protocol !== "https:") { $("env").classList.add("plain"); $("env").lastElementChild.dataset.i18n = "plain"; }
+applyTheme(); applyLang(); drawRoots(); loadStatus(); setInterval(loadStatus, 15000);
+if (new URLSearchParams(location.search).get("change") === "1") { show("change"); }
+fetch("api/auth/me").then((r) => r.ok ? r.json() : null).then((me) => {
+  if (me && !me.user.must_change_password && !new URLSearchParams(location.search).has("change")) location.replace(nextUrl);
+}).catch(() => {});
+$("username").focus();
+</script>
+</body>
+</html>

@@ -6,6 +6,7 @@ Each device uses a different gateway ingress path:
   or-anesthesia     JSON POST             → webhook-controller pod 9003
   icu-ventilator    JSON served here, polled by feeder-controller
   or-temp-module    RS-232 KEY=VALUE, answers only when polled ("?\\r\\n")
+  or-t200           RS-232 Acme T-200 ($T200,…*CS), answers each "R\\r" poll (virtual COM2)
 It also receives the publisher's pushed batches at POST /receiver.
 """
 from __future__ import annotations
@@ -28,6 +29,7 @@ SOCKET_HOST = os.getenv("SIM_SOCKET_HOST", "socket-controller")
 WEBHOOK_URL = os.getenv("SIM_WEBHOOK_URL", "http://webhook-controller:9003/anesthesia")
 SERIAL_HOST = os.getenv("SIM_SERIAL_HOST", "serial-controller")
 SERIAL_PORT = int(os.getenv("SIM_SERIAL_PORT", "7430"))
+T200_PORT = int(os.getenv("SIM_T200_PORT", "7431"))
 INTERVAL = float(os.getenv("SIM_INTERVAL_SEC", "5"))
 
 STATS: dict[str, dict[str, Any]] = {}
@@ -166,6 +168,28 @@ async def serial_module() -> None:
             await asyncio.sleep(3)
 
 
+async def acme_t200() -> None:
+    """Fictional Acme T-200 on the second virtual COM port: one checksummed line per "R" poll."""
+    while True:
+        try:
+            reader, writer = await asyncio.open_connection(SERIAL_HOST, T200_PORT)
+            log.info("acme t-200 attached to %s:%s", SERIAL_HOST, T200_PORT)
+            while True:
+                request = await reader.readuntil(b"\r")
+                if request.strip() != b"R":
+                    continue
+                body = f"T200,TEMP={37.0 + wave(30, 0.3, 0.8):.1f},CVP={round(10 + wave(10, 2, 1.1))}"
+                checksum = 0
+                for byte in body.encode():
+                    checksum ^= byte
+                writer.write(f"${body}*{checksum:02X}\r\n".encode())
+                await writer.drain()
+                bump("or-t200", True)
+        except Exception as error:
+            bump("or-t200", False, str(error))
+            await asyncio.sleep(3)
+
+
 # ------------------------------------------------------------------ app
 
 @asynccontextmanager
@@ -176,6 +200,7 @@ async def lifespan(_: FastAPI):
         asyncio.create_task(hl7_monitor("icu-monitor", int(os.getenv("SIM_ICU_MONITOR_PORT", "9002")))),
         asyncio.create_task(anesthesia_machine()),
         asyncio.create_task(serial_module()),
+        asyncio.create_task(acme_t200()),
     ]
     yield
     for task in tasks:

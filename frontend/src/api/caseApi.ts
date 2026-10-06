@@ -55,7 +55,47 @@ export type StartCaseOptions = {
   asaStatus?: string;
   asaEmergency?: boolean;
   surgicalPriority?: string;
+  /** Start from an admission prepared in Canopy (fills patient + copies its forms). */
+  canopyAdmissionId?: string;
 };
+
+/** An admission prepared in Canopy that this Leaf may start. */
+export type CanopyAdmissionRow = {
+  id: string;
+  hn: string;
+  admissionNumber: string | null;
+  patient: {
+    patient_name: string;
+    sex?: string | null;
+    dob?: string | null;
+    age_text?: string | null;
+    weight_kg?: number | null;
+    height_cm?: number | null;
+  };
+  admission: {
+    diagnosis?: string | null;
+    operation?: string | null;
+    anaesthesia_technique?: string | null;
+    asa_status?: string | null;
+    asa_emergency?: boolean;
+    surgical_priority?: string | null;
+    surgeon?: string | null;
+  };
+  unitName: string | null;
+  targetLeafId: string | null;
+  scheduledAt: number | null;
+  note: string | null;
+  createdBy: string | null;
+  formFieldCount: number;
+  preopFilled: boolean;
+};
+
+export async function getCanopyAdmissions(): Promise<CanopyAdmissionRow[]> {
+  const res = await fetch(`${BASE}/canopy-admissions`);
+  if (!res.ok) return [];
+  const data = (await res.json().catch(() => ({}))) as { rows?: unknown };
+  return Array.isArray(data.rows) ? (data.rows as CanopyAdmissionRow[]) : [];
+}
 
 export type CaseStartOverlap = {
   previous_case_id: number;
@@ -126,6 +166,7 @@ export async function startCase(
       ...(options?.asaStatus ? { asa_status: options.asaStatus } : {}),
       ...(options?.asaEmergency ? { asa_emergency: true } : {}),
       ...(options?.surgicalPriority ? { surgical_priority: options.surgicalPriority } : {}),
+      ...(options?.canopyAdmissionId ? { canopy_admission_id: options.canopyAdmissionId } : {}),
     }),
   });
   const data = await res.json().catch(() => ({}));

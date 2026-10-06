@@ -74,12 +74,29 @@
   .chart .grid line { stroke:var(--line) } .chart text { fill:var(--muted); font-size:10px; font-variant-numeric:tabular-nums }
   .tip { position:absolute; pointer-events:none; background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:6px 8px;
          font-size:12px; white-space:nowrap; box-shadow:0 2px 8px rgba(0,0,0,.15); font-variant-numeric:tabular-nums }
-  .frames td { font-size:12px; padding:5px 8px } .frames tr.frame { cursor:pointer } .frames tr.frame:hover td { background:var(--chip) }
+  .frames td { font-size:12px; padding:5px 8px } .frames td:not(.preview) { white-space:nowrap } .frames tr.frame { cursor:pointer } .frames tr.frame:hover td { background:var(--chip) }
   .frames .preview { font:12px ui-monospace,Menlo,monospace; max-width:0; width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
   .frames pre { padding:10px; background:var(--bg); border-radius:6px; max-height:360px; overflow:auto }
   .ctl { color:var(--warn) }
   body.operator .admin-only { display:none !important }
   .role { font-size:11px; padding:0 6px; border-radius:999px; background:var(--chip) }
+  :root { --st-ok:#0ca30c; --st-down:#d03b3b; --st-stopped:#b9bfba; --st-none:#e2e6e1 }
+  @media (prefers-color-scheme: dark) { :root { --st-stopped:#59625d; --st-none:#2a332e } }
+  .legend { display:flex; flex-wrap:wrap; gap:14px; font-size:12px; color:var(--muted); margin-bottom:8px }
+  .legend span { display:inline-flex; align-items:center; gap:5px }
+  .legend i { width:12px; height:12px; border-radius:3px; display:inline-grid; place-items:center; font-style:normal; font-size:9px; color:#fff; font-weight:700 }
+  .timeline { position:relative } .timeline svg { display:block; width:100%; overflow:visible }
+  .timeline text { fill:var(--ink); font-size:11px } .timeline text.muted { fill:var(--muted); font-size:10px; font-variant-numeric:tabular-nums }
+  .timeline text.group { fill:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.06em }
+  .incidents { margin-top:12px } .incidents td { font-size:12px; padding:5px 8px }
+  nav .badge { margin-left:auto; min-width:18px; padding:0 6px; border-radius:999px; background:var(--st-down); color:#fff; font-size:11px; font-weight:700; text-align:center; line-height:18px }
+  .sev { display:inline-flex; align-items:center; gap:5px; font-weight:600; font-size:12px }
+  .sev i { width:16px; height:16px; border-radius:50%; display:inline-grid; place-items:center; font-style:normal; font-size:10px; color:#fff }
+  .sev.critical i { background:var(--st-down) } .sev.warning i { background:#fab219; color:#1d2621 } .sev.info i { background:var(--muted) }
+  .alert-card { display:grid; grid-template-columns:auto 1fr auto; gap:4px 14px; align-items:start; padding:10px 12px; border:1px solid var(--line); border-left:4px solid var(--st-down); border-radius:8px; margin-bottom:8px }
+  .alert-card.warning { border-left-color:#fab219 } .alert-card.acked { opacity:.75 }
+  .alert-card .title { font-weight:600 } .alert-card .meta { grid-column:2; font-size:12px; color:var(--muted) }
+  .sent { font-size:11px } .sent.ok { color:var(--ok) } .sent.wait { color:var(--warn) }
   fieldset.conn { border:1px solid var(--line); border-radius:8px; padding:4px 12px 10px; margin:12px 0 0 }
   fieldset.conn legend { font-size:12px; color:var(--muted); padding:0 4px }
   .formerror { color:var(--bad); min-height:18px; margin-top:10px; font-size:13px }
@@ -123,6 +140,7 @@
     <button data-tab="overview"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Overview</button>
     <button data-tab="devices"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Devices</button>
     <button data-tab="streams"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7c3 0 3 3 6 3s3-3 6-3 3 3 6 3M3 14c3 0 3 3 6 3s3-3 6-3 3 3 6 3"/></svg>Streams</button>
+    <button data-tab="alerts"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2zM10 20a2 2 0 0 0 4 0"/></svg>Alerts<span class="badge" id="alert-badge" hidden></span></button>
   </nav>
   <div class="sysmenu">
     <div class="syspop" id="syspop" role="menu" hidden>
@@ -139,7 +157,14 @@
 <header><h2 id="title">Overview</h2><span id="gw">Station admin</span><span id="ts" class="muted"></span></header>
 
 <main data-panel="overview">
-  <section><div class="head"><h2>Station</h2><button class="admin-only" onclick="editSite()">Edit location</button></div><div id="site"></div></section>
+  <section><div class="head"><h2>Station</h2><span style="margin-left:auto; display:flex; gap:6px">
+      <button class="admin-only" onclick="editCanopyLink()">Canopy connection</button>
+      <button class="admin-only" id="edit-site" onclick="editSite()">Edit location</button></span></div><div id="site"></div></section>
+  <section><div class="head"><h2>Status history</h2>
+      <label class="muted" style="margin-left:auto">Range <select id="tl-hours"><option value="1">1 hour</option><option value="6" selected>6 hours</option><option value="24">24 hours</option></select></label></div>
+    <div class="legend" id="tl-legend"></div>
+    <div class="timeline" id="timeline"></div>
+    <div id="incidents"></div></section>
   <section><h2>License (from Haber at Canopy)</h2><div id="license">Loading…</div></section>
   <section><h2>Layers</h2><div id="layers" class="layers"></div></section>
   <section><h2>Live device data</h2><div id="instances"></div></section>
@@ -147,6 +172,36 @@
 </main>
 <main data-panel="devices" hidden>
   <section><div class="head"><h2>Installed devices</h2><button class="primary" onclick="editDevice()">Add device</button></div><div id="devices"></div></section>
+  <section id="device-monitor" hidden>
+    <div class="head" style="flex-wrap:wrap"><h2 id="dm-title"></h2>
+      <span style="margin-left:auto; display:flex; gap:6px; align-items:center; flex-wrap:wrap">
+        <label class="muted">Range <select id="dm-hours"><option value="1">1 hour</option><option value="6">6 hours</option><option value="24">24 hours</option></select></label>
+        <button id="dm-stream" onclick="openPodStream()">Ingress stream</button>
+        <button id="dm-pause" onclick="toggleDevicePause()">Pause</button>
+        <button onclick="selectDevice(null)">Close</button></span></div>
+    <div id="dm-sub" class="muted" style="margin:-6px 0 12px"></div>
+    <div class="tiles" id="dm-tiles"></div>
+    <figure><figcaption id="dm-caption">Stored per minute</figcaption><div class="chart" id="dm-chart"></div></figure>
+    <div class="head" style="margin-top:16px"><h2>Parameters in range</h2></div>
+    <div id="dm-params"></div>
+    <div class="head" style="margin-top:16px"><h2>Payloads to collector</h2>
+      <label class="muted" style="margin-left:auto"><select id="dm-kind"><option value="">observations + measurements</option>
+        <option value="obs">observations (gw.obs)</option><option value="measurement">measurements (gw.measurements)</option></select></label></div>
+    <p class="muted" style="margin-top:0">Live messages this device's parser publishes for the collector, exactly as sent. Collected since the gateway service started.</p>
+    <div id="dm-payloads"></div>
+  </section>
+</main>
+<main data-panel="alerts" hidden>
+  <section><div class="head"><h2>Active alerts</h2><span id="alert-delivery" class="muted"></span>
+      <button class="admin-only" style="margin-left:auto" onclick="pushAlerts()">Send to Canopy now</button></div>
+    <p class="muted" style="margin-top:0">Opened when a part stays down for a minute (connection lost, controller down, device silent) and
+      closed when it recovers. Every alert and change is sent to Canopy as the hospital's central log; while Canopy is unreachable they wait here and are sent later.</p>
+    <div id="alerts-open"></div></section>
+  <section><div class="head"><h2>Alert log</h2>
+      <label class="muted" style="margin-left:auto"><select id="alert-filter"><option value="">all categories</option>
+        <option value="canopy">Canopy connection</option><option value="controller">controllers</option>
+        <option value="device">devices</option><option value="gateway">gateway service</option></select></label></div>
+    <div id="alerts-log"></div></section>
 </main>
 <main data-panel="streams" hidden>
   <section><div class="head"><h2>Ingress streams</h2><span id="monitor" class="muted"></span>
@@ -419,7 +474,8 @@ function renderDevices() {
       <td><code>${esc(d.pod)}</code><div>→ ${esc(d.leaf_id || "unassigned")}</div></td>
       <td>${day(d.installed_at)}</td>
       <td>${d.enabled ? "" : `<span class="warn">disabled</span> `}${d.container ? `<span class="${d.container.status === "running" ? "ok" : "warn"}">${esc(d.container.status)}</span>` : `<span class="muted">not started</span>`}</td>
-      <td class="actions"><button onclick='editDevice(cache.devices.find((x) => x.device_id === ${JSON.stringify(d.device_id)}))'>Edit</button>
+      <td class="actions"><button onclick="selectDevice('${esc(d.device_id)}')">Monitor</button>
+        <button onclick='editDevice(cache.devices.find((x) => x.device_id === ${JSON.stringify(d.device_id)}))'>Edit</button>
         <button onclick="act('api/instances/${enc(d.device_id)}/enabled/${!d.enabled}')">${d.enabled ? "Disable" : "Enable"}</button>
         <button class="danger" onclick="act('api/instances/${enc(d.device_id)}', 'DELETE', 'Remove ${esc(d.device_id)} and stop its parser?')">Remove</button></td></tr>`;
   }).join("")}</table>` : `<span class="muted">No devices installed yet.</span>`;
@@ -756,10 +812,34 @@ async function loadSite() {
     ["Ward / unit", esc([site.unit, UNIT_TYPES.find(([v]) => v === site.unit_type)?.[1]].filter((v) => v && v !== "—").join(" · ") || "—")],
     ["Building · floor · room", esc([site.building, site.floor && `floor ${site.floor}`, site.room].filter(Boolean).join(" · ") || "—")],
     ["Contact", esc(site.contact || "—")]];
-  $("site").innerHTML = `${site.label ? `<div style="font-size:16px; font-weight:600; margin-bottom:8px">${esc(site.label)}</div>` : `<div class="warn" style="margin-bottom:8px">Location not set. ${me.role === "admin" ? "Use Edit location so staff can tell this gateway apart." : "Ask an admin to set it."}</div>`}
+  const link = await get("api/canopy-link").catch(() => ({}));
+  $("edit-site").hidden = !!site.managed_by_canopy;
+  const canopy = link.canopy_url
+    ? `<span class="dot ${link.haber?.status === "ok" ? "on" : ""}"></span>${esc(link.canopy_url.replace(/^https?:\/\//, ""))} · ${esc(link.haber?.status || "—")}`
+    : `<span class="warn">not connected</span>`;
+  rows.splice(1, 0, ["Canopy", canopy]);
+  const hint = site.managed_by_canopy
+    ? "Location not set yet. Set it at Canopy → Topology → this gateway → Location; it arrives at the next check-in."
+    : me.role === "admin" ? "Connect this gateway to Canopy (Canopy connection), then set its location at Canopy." : "Ask an admin to connect this gateway to Canopy.";
+  $("site").innerHTML = `${site.label ? `<div style="font-size:16px; font-weight:600; margin-bottom:8px">${esc(site.label)}</div>` : `<div class="warn" style="margin-bottom:8px">${esc(hint)}</div>`}
+    ${site.label && site.managed_by_canopy ? `<div class="muted" style="font-size:12px; margin:-4px 0 8px">Location is managed at Canopy.</div>` : ""}
     <div class="tiles">${rows.map(([k, v]) => `<div class="tile"><span>${esc(k)}</span><div>${v}</div></div>`).join("")}</div>
     ${site.notes ? `<div class="muted">${esc(site.notes)}</div>` : ""}
-    ${site.updated_at ? `<div class="muted" style="font-size:12px">Updated ${ago(site.updated_at)} by ${esc(site.updated_by || "—")}</div>` : ""}`;
+    ${site.updated_at ? `<div class="muted" style="font-size:12px">Updated ${ago(site.updated_at)} by ${esc(site.updated_by === "canopy" ? "Canopy" : site.updated_by || "—")}</div>` : ""}
+    ${link.haber?.error ? `<div class="bad" style="font-size:12px">Canopy: ${esc(link.haber.error)}</div>` : ""}`;
+}
+async function editCanopyLink() {
+  const link = await get("api/canopy-link");
+  openForm("Canopy connection", [
+    { name: "canopy_url", label: "Canopy address (host name or URL)", wide: true, required: true, placeholder: "canopy.hospital.local" },
+    { name: "gateway_id", label: "Gateway ID (as registered at Canopy)", wide: true, required: true, placeholder: "gateway-hospital-01-a" },
+    { name: "gateway_key", label: link.has_key ? "Gateway key (blank = keep the current key)" : "Gateway key", type: "password", wide: true, required: !link.has_key },
+  ], { canopy_url: link.canopy_url, gateway_id: link.gateway_id }, async (values) => {
+    const result = await api("api/canopy-link", "PUT", values);
+    if (!result.connected) throw new Error(`Saved, but Canopy did not accept the check-in: ${result.error}`);
+    alert(`Connected to Canopy as ${result.gateway_id}.${result.gateway_id_changed ? " Restart the controllers so device frames carry the new gateway ID." : ""} The location and device settings now come from Canopy.`);
+    await loadSite();
+  });
 }
 function editSite() {
   openForm("Station location", [
@@ -775,10 +855,180 @@ function editSite() {
   ], site, async (values) => { await api("api/site", "PUT", values); await loadSite(); });
 }
 
+
+// ---------------------------------------------------------------- device monitor
+const dmon = { selected: null, rows: [], lastId: 0, paused: false, open: new Set(), pod: null };
+const BUCKET_LABEL = { 1: "per minute", 6: "per 5 minutes", 24: "per 15 minutes" };
+function selectDevice(id) {
+  Object.assign(dmon, { selected: id, rows: [], lastId: 0, paused: false, pod: null }); dmon.open.clear();
+  $("dm-pause").textContent = "Pause";
+  $("device-monitor").hidden = !id;
+  if (id) { renderDeviceMonitor(); $("device-monitor").scrollIntoView({ behavior: "smooth", block: "start" }); }
+}
+function toggleDevicePause() { dmon.paused = !dmon.paused; $("dm-pause").textContent = dmon.paused ? "Resume" : "Pause"; }
+function openPodStream() { if (!dmon.pod) return; show("streams"); setTimeout(() => selectStream(dmon.pod), 300); }
+function payloadSummary(r) {
+  const m = r.message;
+  if (r.kind === "obs") return `${m.ivy_param} = ${JSON.stringify(m.value)}${m.unit ? " " + m.unit : ""}  (${m.raw_code || "—"})`;
+  return `${m.raw_code} = ${JSON.stringify(m.raw_value)}${m.definition?.name ? "  " + m.definition.name : ""}`;
+}
+function renderDevicePayloads() {
+  const kind = $("dm-kind").value, rows = dmon.rows.filter((r) => !kind || r.kind === kind);
+  $("dm-payloads").innerHTML = rows.length ? `<table class="frames"><tr><th>Time</th><th>Topic</th><th>Payload</th></tr>${rows.map((r) => `
+    <tr class="frame" data-id="${r.id}"><td class="muted">${new Date(r.received_at).toLocaleTimeString()}</td>
+      <td><span class="key ${r.kind === "obs" ? "in" : "out"}"></span>${esc(r.topic)}</td><td class="preview">${esc(payloadSummary(r))}</td></tr>
+    ${dmon.open.has(r.id) ? `<tr><td colspan="3"><pre>${esc(JSON.stringify(r.message, null, 2))}</pre></td></tr>` : ""}`).join("")}</table>`
+    : `<span class="muted">No messages yet${kind ? " of this kind" : ""}. They appear as the parser decodes data${dmon.paused ? "" : " (updates every few seconds)"}.</span>`;
+}
+$("dm-payloads").addEventListener("click", (e) => {
+  const row = e.target.closest("tr.frame"); if (!row) return;
+  const id = Number(row.dataset.id); dmon.open.has(id) ? dmon.open.delete(id) : dmon.open.add(id); renderDevicePayloads();
+});
+$("dm-kind").addEventListener("change", renderDevicePayloads);
+$("dm-hours").addEventListener("change", () => renderDeviceMonitor());
+
+async function renderDeviceMonitor() {
+  if (!dmon.selected) return;
+  const id = dmon.selected, hours = Number($("dm-hours").value);
+  const [m, p] = await Promise.all([get(`api/devices/${enc(id)}/monitor?hours=${hours}`), get(`api/devices/${enc(id)}/payloads?after=${dmon.lastId}`)]);
+  if (dmon.selected !== id) return;
+  const d = m.device, type = cache.types.find((t) => t.code === d.device_type);
+  dmon.pod = d.pod;
+  $("dm-title").textContent = d.label || d.device_id;
+  $("dm-sub").innerHTML = `<code>${esc(d.device_id)}</code> · ${esc(type?.label || d.device_type)} · <code>${esc(d.pod)}</code> → ${esc(d.leaf_id || "unassigned")}${d.enabled ? "" : ` · <span class="warn">disabled</span>`}`;
+  const lastStored = Math.max(0, ...m.parameters.map((x) => x.system_ts));
+  $("dm-tiles").innerHTML = [
+    [m.totals.observations.toLocaleString(), `observations stored (${hours} h)`],
+    [m.totals.measurements.toLocaleString(), `measurements stored (${hours} h)`],
+    [fmtRate(m.live.rate.obs_per_min, "/min"), "observations live (1 min)"],
+    [m.parameters.length, "parameters"],
+    [lastStored ? ago(lastStored) : "—", "last stored"],
+  ].map(([v, label]) => `<div class="tile"><b>${esc(v)}</b><span>${esc(label)}</span></div>`).join("");
+  $("dm-caption").innerHTML = `Stored by the collector, ${BUCKET_LABEL[hours]} (complete intervals) — <span class="key in"></span>observations <span class="key out"></span>measurements`;
+  const count = (v) => Math.round(v).toLocaleString();
+  lineChart($("dm-chart"), m.series, [
+    { label: "observations", key: 1, color: "var(--series-in)", format: count },
+    { label: "measurements", key: 2, color: "var(--series-out)", format: count }], 1);
+  $("dm-params").innerHTML = m.parameters.length ? `<table><tr><th>Parameter</th><th>Raw code</th><th>Latest</th><th>Samples</th><th>Last</th></tr>${m.parameters.map((x) => `<tr>
+    <td><code>${esc(x.ivy_param)}</code></td><td class="muted">${esc(x.raw_code || "—")}</td>
+    <td><b>${esc(typeof x.value === "object" ? JSON.stringify(x.value) : x.value)}</b> ${esc(x.unit || "")}</td>
+    <td>${x.n.toLocaleString()}</td><td class="muted">${ago(x.system_ts)}</td></tr>`).join("")}</table>`
+    : `<span class="muted">Nothing stored for this device in the last ${hours} h.</span>`;
+  if (!dmon.paused && p.rows.length) {
+    dmon.rows = [...p.rows, ...dmon.rows].slice(0, 300);
+    dmon.lastId = Math.max(dmon.lastId, ...p.rows.map((r) => r.id));
+  }
+  if (!dmon.paused || !dmon.rows.length) renderDevicePayloads();
+}
+
+
+// ---------------------------------------------------------------- status history
+const ST = { ok: ["var(--st-ok)", "✓", "Up"], down: ["var(--st-down)", "✕", "Down / unreachable"],
+             stopped: ["var(--st-stopped)", "■", "Stopped or disabled"], none: ["url(#tl-hatch)", "", "No record"] };
+const hhmm = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const dur = (ms) => ms < 3600000 ? `${Math.max(1, Math.round(ms / 60000))} min` : `${(ms / 3600000).toFixed(1)} h`;
+$("tl-legend").innerHTML = Object.entries(ST).map(([k, [color, icon, label]]) =>
+  `<span><i style="background:${k === "none" ? "var(--st-none)" : color}">${icon}</i>${label}</span>`).join("") +
+  `<span class="muted">· a gap in “Gateway service” means the service itself was not running</span>`;
+$("tl-hours").addEventListener("change", () => renderTimeline());
+
+async function renderTimeline() {
+  const t = await get(`api/status/timeline?hours=${$("tl-hours").value}`);
+  const el = $("timeline"), W = Math.max(320, el.clientWidth || 800), LABEL = Math.min(170, W * 0.32), RIGHT = 52;
+  const ROW = 18, GAP = 5, GROUP = 18, cw = (W - LABEL - RIGHT) / t.buckets;
+  let y = 0, body = "", prevKind = null;
+  const kindTitle = { gateway: "Gateway", canopy: "Gateway", controller: "Controllers", device: "Devices" };
+  for (const lane of t.lanes) {
+    const group = kindTitle[lane.kind];
+    if (group !== prevKind) { body += `<text class="group" x="0" y="${y + 12}">${esc(group)}</text>`; y += GROUP; prevKind = group; }
+    body += `<text x="0" y="${y + 13}">${esc(lane.label.length > 26 ? lane.label.slice(0, 25) + "…" : lane.label)}</text>`;
+    // Runs of the same state become one bar, with a 1px surface gap only where the state changes.
+    for (let i = 0; i < lane.states.length;) {
+      let j = i; while (j + 1 < lane.states.length && lane.states[j + 1] === lane.states[i]) j++;
+      const x0 = LABEL + i * cw, x1 = LABEL + (j + 1) * cw - (j + 1 < lane.states.length ? 1 : 0);
+      body += `<rect x="${x0.toFixed(2)}" y="${y}" width="${Math.max(0.8, x1 - x0).toFixed(2)}" height="${ROW}" rx="2" fill="${ST[lane.states[i]][0]}" data-lane="${esc(lane.lane)}"/>`;
+      i = j + 1;
+    }
+    body += `<text class="muted" x="${W}" y="${y + 13}" text-anchor="end">${lane.uptime == null ? "—" : lane.uptime + "%"}</text>`;
+    y += ROW + GAP;
+  }
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => t.start + f * t.buckets * t.bucket_ms);
+  body += ticks.map((ms, k) => `<text class="muted" x="${LABEL + (ms - t.start) / t.bucket_ms * cw}" y="${y + 12}" text-anchor="${k === 0 ? "start" : k === 4 ? "end" : "middle"}">${k === 4 ? "now" : hhmm(ms)}</text>`).join("");
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${y + 18}" height="${y + 18}" role="img" aria-label="Status of each gateway part over the last ${t.hours} hours; incidents are listed below">
+    <defs><pattern id="tl-hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="4" height="4" fill="var(--st-none)"/><line x1="0" y1="0" x2="0" y2="4" stroke="var(--line)" stroke-width="1.5"/></pattern></defs>
+    <text class="muted" x="${W}" y="-4" text-anchor="end">uptime</text>${body}</svg><div class="tip" hidden></div>`;
+  const tip = el.querySelector(".tip"), byLane = Object.fromEntries(t.lanes.map((l) => [l.lane, l]));
+  el.querySelector("svg").addEventListener("mousemove", (ev) => {
+    const r = ev.target.closest("rect[data-lane]"); if (!r) { tip.hidden = true; return; }
+    const box = el.querySelector("svg").getBoundingClientRect(), px = (ev.clientX - box.left) / box.width * W;
+    const lane = byLane[r.dataset.lane], i = Math.max(0, Math.min(t.buckets - 1, Math.floor((px - LABEL) / cw)));
+    const st = lane.states[i], from = t.start + i * t.bucket_ms;
+    tip.hidden = false;
+    tip.innerHTML = `<b>${esc(lane.label)}</b><div class="muted">${hhmm(from)}–${hhmm(from + t.bucket_ms)}</div>
+      <div><span class="key" style="background:${st === "none" ? "var(--st-none)" : ST[st][0]}"></span>${ST[st][1]} ${esc(ST[st][2])}</div>
+      ${lane.details[i] ? `<div class="muted">${esc(lane.details[i])}</div>` : ""}`;
+    const outer = el.getBoundingClientRect(), x = ev.clientX - outer.left;
+    tip.style.left = `${x > box.width / 2 ? x - tip.offsetWidth - 12 : x + 12}px`; tip.style.top = `${ev.clientY - outer.top + 12}px`;
+  });
+  el.querySelector("svg").addEventListener("mouseleave", () => tip.hidden = true);
+  const incidents = t.lanes.flatMap((l) => l.incidents.map((x) => ({ ...x, label: l.label, kind: l.kind }))).sort((a, b) => b.start - a.start);
+  const since = t.recording_since ? `Recording since ${new Date(t.recording_since).toLocaleString()}.` : "Recording starts within 30 seconds.";
+  $("incidents").innerHTML = incidents.length ? `<table class="incidents"><tr><th>Down</th><th>From</th><th>To</th><th>Duration</th><th>Detail</th></tr>${incidents.slice(0, 30).map((x) => `<tr>
+      <td><span class="bad">✕</span> ${esc(x.label)}</td><td>${hhmm(x.start)}</td><td>${Date.now() - x.end < t.bucket_ms * 1.5 ? "<b class='bad'>ongoing</b>" : hhmm(x.end)}</td>
+      <td>${dur(x.end - x.start)}</td><td class="muted">${esc(x.detail || "")}</td></tr>`).join("")}</table>
+      <div class="muted" style="font-size:12px">${since}${incidents.length > 30 ? ` Showing the latest 30 of ${incidents.length}.` : ""}</div>`
+    : `<div class="ok" style="margin-top:8px">✓ No outages in the last ${t.hours} h.</div><div class="muted" style="font-size:12px">${since}</div>`;
+}
+
+
+// ---------------------------------------------------------------- alerts
+const SEV = { critical: ["✕", "Critical"], warning: ["!", "Warning"], info: ["i", "Info"] };
+const sevBadge = (s) => `<span class="sev ${s}"><i>${SEV[s][0]}</i>${SEV[s][1]}</span>`;
+const sentBadge = (a) => a.delivered_version >= a.version ? `<span class="sent ok" title="Canopy holds this version">✓ in Canopy</span>`
+  : `<span class="sent wait" title="Queued; sent when Canopy is reachable">◷ queued for Canopy</span>`;
+let alertCache = [];
+async function loadAlertBadge() {
+  const d = await get("api/alerts?status=open&limit=1");
+  const b = $("alert-badge"); b.hidden = !d.counts.open; b.textContent = d.counts.open;
+  return d;
+}
+async function renderAlerts() {
+  const d = await get("api/alerts?limit=300");
+  alertCache = d.rows;
+  const b = $("alert-badge"); b.hidden = !d.counts.open; b.textContent = d.counts.open;
+  const del = d.delivery;
+  $("alert-delivery").innerHTML = !d.haber_url ? "Canopy not configured" : del?.error
+    ? `<span class="warn">Canopy unreachable — ${d.counts.undelivered} queued</span>`
+    : `${d.counts.undelivered ? `${d.counts.undelivered} queued · ` : "all sent to Canopy · "}last send ${ago(del?.at)}`;
+  const open = d.rows.filter((a) => !a.resolved_at);
+  $("alerts-open").innerHTML = open.length ? open.map((a) => `<div class="alert-card ${a.severity} ${a.acknowledged_at ? "acked" : ""}">
+      ${sevBadge(a.severity)}<div><div class="title">${esc(a.title)}</div><div class="muted">${esc(a.detail || "")}</div></div>
+      <div style="text-align:right">${a.acknowledged_at ? `<span class="muted" style="font-size:12px">ack by ${esc(a.acknowledged_by)}</span>` : `<button onclick="act('api/alerts/${a.id}/ack')">Acknowledge</button>`}</div>
+      <div class="meta">since ${new Date(a.opened_at).toLocaleString()} (${dur(Date.now() - a.opened_at)}) · ${sentBadge(a)}</div></div>`).join("")
+    : `<div class="ok">✓ No active alerts.</div>`;
+  renderAlertLog();
+}
+function renderAlertLog() {
+  const cat = $("alert-filter").value, rows = alertCache.filter((a) => a.resolved_at && (!cat || a.category === cat));
+  $("alerts-log").innerHTML = rows.length ? `<table><tr><th>Severity</th><th>Alert</th><th>From</th><th>To</th><th>Duration</th><th>Ack</th><th>Canopy</th></tr>${rows.map((a) => `<tr>
+    <td>${sevBadge(a.severity)}</td><td><b>${esc(a.title)}</b><div class="muted" style="font-size:12px">${esc(a.detail || "")}</div></td>
+    <td>${new Date(a.opened_at).toLocaleString()}</td><td>${hhmm(a.resolved_at)}</td><td>${dur(a.resolved_at - a.opened_at)}</td>
+    <td class="muted">${esc(a.acknowledged_by || "—")}</td><td>${sentBadge(a)}</td></tr>`).join("")}</table>`
+    : `<span class="muted">No resolved alerts${cat ? " in this category" : ""} yet.</span>`;
+}
+$("alert-filter").addEventListener("change", renderAlertLog);
+async function pushAlerts() {
+  try { const r = await api("api/alerts/push", "POST"); alert(`Sent ${r.sent} alert change(s) to Canopy.`); }
+  catch (error) { alert(error.message); }
+  render();
+}
+
 async function render() {
   try {
-    if (tab === "overview") { loadSite().catch(() => {}); return await renderOverview(); }
+    if (tab === "overview") { loadSite().catch(() => {}); renderTimeline().catch((e) => console.error(e)); return await renderOverview(); }
     if (tab === "streams") return await renderStreams();
+    if (tab === "alerts") return await renderAlerts();
     if (tab === "users") return me.role === "admin" ? await renderUsers() : undefined;
     await loadRegistry();
     ({ devices: renderDevices, types: renderTypes, manufacturers: renderManufacturers })[tab]();
@@ -796,6 +1046,9 @@ loadRegistry().catch(() => {});
 show(tab);
 setInterval(() => tab === "overview" && !dialog.open && render(), 5000);
 setInterval(() => tab === "streams" && !dialog.open && render(), 2000);
+setInterval(() => tab === "alerts" ? !dialog.open && render() : loadAlertBadge().catch(() => {}), 10000);
+loadAlertBadge().catch(() => {});
+setInterval(() => tab === "devices" && dmon.selected && !dialog.open && renderDeviceMonitor().catch(() => {}), 4000);
 </script>
 </body>
 </html>

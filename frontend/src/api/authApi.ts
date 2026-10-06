@@ -97,6 +97,8 @@ export type CanopyWardRow = WardRef & {
   buildingName: string | null;
   hospitalName: string | null;
   leafCount: number;
+  /** Synthetic demo ward: its data is excluded from all-ward views and reports. */
+  isDemo?: boolean;
 };
 
 export type WardOption = WardRef & { buildingName: string | null };
@@ -660,6 +662,7 @@ export async function getAuthWards(): Promise<{ allUnits: boolean; rows: CanopyW
       buildingName: optionalString(raw.buildingName ?? raw.building_name),
       hospitalName: optionalString(raw.hospitalName ?? raw.hospital_name),
       leafCount: Number(raw.leafCount ?? raw.leaf_count ?? 0) || 0,
+      isDemo: raw.isDemo === true || raw.is_demo === true,
     })).filter((row: CanopyWardRow) => row.key),
   };
 }

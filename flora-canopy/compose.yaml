@@ -44,6 +44,10 @@ services:
       FLORA_BOOTSTRAP_ADMIN_PASSWORD: ${CANOPY_ADMIN_PASSWORD:-admin}
       FLORA_BOOTSTRAP_ADMIN_MUST_CHANGE_PASSWORD: ${FLORA_BOOTSTRAP_ADMIN_MUST_CHANGE_PASSWORD:-false}
       FLORA_BOOTSTRAP_ADMIN_NAME: Canopy Administrator
+      # Topology page reads gateways and their devices from Haber.
+      FLORA_HABER_URL: http://haber:8000
+      HABER_ADMIN_USERNAME: ${HABER_ADMIN_USERNAME:-admin}
+      HABER_ADMIN_PASSWORD: ${HABER_ADMIN_PASSWORD:-admin}
       # LDAP / Active Directory sign-in (search with the service account, then bind as the user).
       FLORA_LDAP_ENABLED: ${FLORA_LDAP_ENABLED:-false}
       FLORA_LDAP_URL: ${FLORA_LDAP_URL:-}
@@ -90,7 +94,7 @@ services:
       FLORA_LDAP_AUTO_PROVISION: ${FLORA_LDAP_AUTO_PROVISION:-false}
       FLORA_LDAP_DEFAULT_ROLE: ${FLORA_LDAP_DEFAULT_ROLE:-viewer}
     ports:
-      - "${CANOPY_SYNC_PORT:-7203}:8000"
+      - "127.0.0.1:${CANOPY_SYNC_PORT:-7203}:8000"
     depends_on:
       canopy-db: {condition: service_healthy}
     healthcheck: *api-health
@@ -105,7 +109,7 @@ services:
       VITE_FLORA_SURFACE: canopy
       VITE_API_PROXY_TARGET: http://canopy-api:8000
     ports:
-      - "${CANOPY_WEB_PORT:-7200}:5173"
+      - "127.0.0.1:${CANOPY_WEB_PORT:-7200}:5173"
     volumes:
       - ../frontend:/app/frontend:ro
       - canopy_frontend_modules:/app/frontend/node_modules
@@ -120,12 +124,21 @@ services:
     build:
       context: ./haber
     image: ${FLORA_IMAGE_HABER:-flora-canopy-haber:dev}
+    # Optional private CA for Root's TLS edge (demo/install-root-ca.sh). With a publicly
+    # trusted Root certificate, root-certs/ stays empty and nothing changes.
+    env_file:
+      - path: ./root-certs/trust.env
+        required: false
     environment:
-      FLORA_ROOT_URL: ${FLORA_ROOT_URL:-http://host.docker.internal:7100}
+      # Root's TLS edge: 443 in production (8443 on a dev machine that also runs Root).
+      FLORA_ROOT_URL: ${FLORA_ROOT_URL:-https://host.docker.internal:${ROOT_HTTPS_PORT:-443}}
       FLORA_TENANT_ID: ${FLORA_TENANT_ID:-hospital-01}
       FLORA_ROOT_TENANT_KEY: ${FLORA_ROOT_TENANT_KEY:-root-tenant-demo-key}
       FLORA_ROOT_PUBLIC_KEY: ${FLORA_ROOT_PUBLIC_KEY:-}
       HABER_GATEWAY_TOKEN: ${HABER_GATEWAY_TOKEN:-haber-gateway-demo-token}
+      # Gateway check-ins are stored in Canopy, which can hand back a configuration (clone).
+      FLORA_CANOPY_SYNC_URL: http://sync-api:8000
+      FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-flora-sync-demo-secret-change-me}
       HABER_ADMIN_USERNAME: ${HABER_ADMIN_USERNAME:-admin}
       HABER_ADMIN_PASSWORD: ${HABER_ADMIN_PASSWORD:-admin}
       CANOPY_DATABASE_URL: postgresql://flora_view:${CANOPY_DB_VIEW_PASSWORD:-flora-canopy-view-local-only}@canopy-db:5432/flora
@@ -136,9 +149,10 @@ services:
       HABER_REGISTRY_PUBLIC: ${HABER_REGISTRY_PUBLIC:-localhost:7205}
       FLORA_ROOT_REGISTRY_URL: ${FLORA_ROOT_REGISTRY_URL:-}
     ports:
-      - "${HABER_PORT:-7204}:8000"
+      - "127.0.0.1:${HABER_PORT:-7204}:8000"
     volumes:
       - haber_data:/data
+      - ./root-certs:/etc/flora/root-certs:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -153,7 +167,7 @@ services:
     environment:
       OTEL_TRACES_EXPORTER: none
     ports:
-      - "${HABER_REGISTRY_PORT:-7205}:5000"
+      - "127.0.0.1:${HABER_REGISTRY_PORT:-7205}:5000"
     volumes:
       - haber_registry_data:/var/lib/registry
     restart: unless-stopped
@@ -177,6 +191,43 @@ services:
       - updater_state:/state
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # MCP server for AI agents (Streamable HTTP, https://<canopy-host>/mcp through the edge).
+  # Authenticates with a Canopy API key and reads everything through the public API v1.
+  flora-mcp:
+    build:
+      context: ../services/flora-mcp
+    image: ${FLORA_IMAGE_MCP:-flora-canopy-mcp:dev}
+    environment:
+      FLORA_API_URL: http://canopy-api:8000
+    ports:
+      - "127.0.0.1:${CANOPY_MCP_PORT:-7206}:8000"
+    depends_on:
+      canopy-api: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # Single public entry point (443). Every other port above is bound to 127.0.0.1
+  # for local debugging only. Leaves and Gateways reach Canopy as https://<canopy-host>.
+  edge:
+    image: nginx:1.27-alpine
+    ports:
+      - "${CANOPY_HTTPS_PORT:-443}:443"
+      - "${CANOPY_HTTP_PORT:-80}:80"
+    volumes:
+      - ./edge/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./edge/certs:/etc/nginx/certs:ro
+    healthcheck:
+      # 127.0.0.1, not localhost: alpine resolves localhost to ::1 and nginx listens on IPv4.
+      test: ["CMD-SHELL", "wget -q --no-check-certificate -O /dev/null https://127.0.0.1/api/sync/v1/fingerprint || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
 volumes:

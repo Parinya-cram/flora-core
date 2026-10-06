@@ -127,8 +127,10 @@ python scripts/validate_config.py config/gateway.hidro.toml config/instances.hid
 3. Implement `feed()` and, when needed, `poll()`. Queue immediate protocol
    replies in the driver and expose them through `drain_commands()`. Follow the existing drivers for
    bounded buffering, invalid-frame handling, and transport reconnect events.
-4. Register the class in `parsers/__init__.py`, then add its parser/device type
-   to `flora-canopy/haber/app/catalog.json`. Keep identifiers stable once used.
+4. Register the class in `parsers/__init__.py`, then add its device type to
+   [device-types.json](device-types.json) with `"image": "parser"`. That file ships
+   inside every gateway release; Haber's `catalog.json` is only the fallback used
+   before any release is approved. Keep identifiers stable once used.
 5. Add disabled connection and instance examples under `config/`, document
    options/units, and add any required source attribution and license.
 6. Put synthetic protocol tests under the matching `tests/` folder. Cover

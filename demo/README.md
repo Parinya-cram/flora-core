@@ -107,6 +107,51 @@ curl -X POST localhost:7400/api/haber/sync
 curl -X POST localhost:7400/api/instances/reconcile
 ```
 
+## Leaf Ward page, gateway wizard and case handover
+
+**Ward page** (Leaf home, before the case). Everything comes from the Leaf's own
+database first, so it works with no network: this workstation's case, prepared
+admissions, recent cases, bedside devices, and the other beds of the ward as last
+received from Canopy. The sync worker refreshes it every `FLORA_SYNC_INTERVAL_SECONDS`;
+**Sync now** runs a full sync immediately (about 1 s).
+
+**Set up gateway** (Ward page → Bedside devices). Five steps: choose a gateway
+registered in Canopy → test the connection from this Leaf → assign this bed's
+devices (saved in Canopy; the gateway applies it on its next check-in, no inbound
+connection) → check live readings → save. The device writer then reads
+`<data-api>/api/observations?leaf_id=<this leaf>`; without a saved source it falls
+back to `VECTOR_READ_URL`. Gateways report their LAN data-api address with
+`GATEWAY_DATA_API_URL`.
+
+**Take over a case** (Ward page → Other beds → Take over), e.g. when a workstation
+fails. Each Leaf sends Canopy a full copy of its active case (every row, not only
+the 24 h viewer window). The new Leaf imports that copy, translating local ids
+(I/O items by code, concepts by domain/local id), and continues the case; Canopy
+marks the original handed over and, optionally, moves the bed's devices in the
+gateway configuration. The old Leaf locks its copy read-only when it next connects.
+Needs Canopy online; entries made on the old Leaf after its last sync are not
+included. Only one open handover per case; the receiving Leaf must be idle.
+
+## Canopy on 443 only
+
+Canopy has one public port: an nginx edge on 443 (`flora-canopy/edge/`). Leaves,
+Gateways and updaters all connect out to it, so they can sit behind NAT; Canopy
+never opens a connection to them.
+
+| Path | Goes to | Used by |
+| --- | --- | --- |
+| `/api/sync/` | sync-api | Leaf sync worker, Leaf login/directory |
+| `/api/haber/` | Haber | Gateway check-in, flora-updater |
+| `/haber/` | Haber admin page | browser |
+| `/v2/` | haber-registry | Docker pulls (set `HABER_REGISTRY_PUBLIC=<canopy-host>`) |
+| `/api/`, `/` | canopy-api, viewer | browser |
+
+`demo/up.sh` creates a private dev CA (`flora-canopy/edge/make-dev-cert.sh`) and
+trusts it on this machine's Leaf and Gateway (`demo/install-canopy-ca.sh`). For a
+real site, put a publicly trusted certificate in `flora-canopy/edge/certs/` as
+`canopy.crt` / `canopy.key`; Leaves and Gateways then need only
+`CANOPY_SYNC_URL=https://<canopy-host>` and `HABER_URL=https://<canopy-host>`.
+
 ## Port map
 
 Each app owns one block, so everything fits on one machine next to the original
@@ -117,10 +162,11 @@ Each app owns one block, so everything fits on one machine next to the original
 | 71xx | flora-root | 7100 | Root API + admin page | all interfaces (Canopy calls it) |
 | | | 7102 | root-db (Postgres) | 127.0.0.1 |
 | | | 7105 | Root registry (CI pushes, Haber mirrors) | all |
-| 72xx | flora-canopy | 7200 | Canopy web (Vite) | all |
+| 72xx | flora-canopy | **443** | **edge (nginx, TLS): the only public port**, 80 redirects | all |
+| | | 7200 | Canopy web (Vite) | 127.0.0.1 |
 | | | 7201 | canopy-api | 127.0.0.1 |
 | | | 7202 | canopy-db | 127.0.0.1 |
-| | | 7203 | sync-api (Leaves push here) | all |
+| | | 7203 | sync-api (Leaves reach it as `https://<canopy>/api/sync/`) | 127.0.0.1 |
 | | | 7204 | Haber (gateways check in, updaters ask here) | all |
 | | | 7205 | haber-registry (nodes pull images here) | all |
 | 73xx | flora-leaf `leaf-or-01` | 7300 / 7301 / 7302 | web / API (Electron) / db | web all, rest 127.0.0.1 |

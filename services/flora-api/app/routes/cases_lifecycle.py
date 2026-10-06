@@ -12,6 +12,9 @@ from fastapi.responses import JSONResponse
 from psycopg import Connection
 from pydantic import BaseModel, Field
 
+from psycopg.types.json import Jsonb
+
+from ..account_config_sync import claim_canopy_admission
 from ..database import connection
 from .auth_leaf import now_ms, require_permission
 from .cases_read import floor_minute, rate_to_ml_per_hour
@@ -40,6 +43,8 @@ class StartCase(StartTime):
     asa_status: str | None = Field(default=None, max_length=16)
     asa_emergency: bool = False
     surgical_priority: str | None = Field(default=None, max_length=80)
+    # Start a case admitted in Canopy (listed under "Prepared patients").
+    canopy_admission_id: str | None = Field(default=None, max_length=64)
 
 
 class CaseId(BaseModel):
@@ -110,6 +115,35 @@ def overlap_check(payload: StartTime, _: dict = Depends(require_permission("case
 
 @router.post("/start")
 def start_case(payload: StartCase, actor: dict = Depends(require_permission("case.create")), database: Connection = Depends(connection)):
+    admission = None
+    if payload.canopy_admission_id:
+        admission = database.execute(
+            "SELECT * FROM canopy_admission_inbox WHERE id::text=%s", (payload.canopy_admission_id,)
+        ).fetchone()
+        if admission is None or admission["status"] != "pending":
+            raise HTTPException(409, "this admission is no longer available")
+        # Reserve it in Canopy so another Leaf of the ward cannot start it too; offline starts are reported later.
+        claim = claim_canopy_admission(payload.canopy_admission_id)
+        if claim == "taken":
+            database.execute("UPDATE canopy_admission_inbox SET status='withdrawn',updated_at=%s WHERE id=%s",
+                             (now_ms(), admission["id"]))
+            raise HTTPException(409, "this admission was already started at another Leaf")
+        header = admission["header"] or {}
+        patient = header.get("patient") or {}
+        details = header.get("admission") or {}
+        payload = payload.model_copy(update={
+            "admission_source": "prepared",
+            "hn": payload.hn or header.get("hn"),
+            "admission_number": payload.admission_number or header.get("admission_number"),
+            "patient_name": payload.patient_name or patient.get("patient_name"),
+            "sex": payload.sex or patient.get("sex"),
+            "date_of_birth": payload.date_of_birth or patient.get("dob"),
+            "age_text": payload.age_text or patient.get("age_text"),
+            "weight_kg": payload.weight_kg or patient.get("weight_kg"),
+            **{key: getattr(payload, key) or details.get(key) for key in
+               ("diagnosis", "operation", "anaesthesia_technique", "asa_status", "surgical_priority")},
+            "asa_emergency": payload.asa_emergency or bool(details.get("asa_emergency")),
+        })
     start = payload.start_time // 900000 * 900000
     local_start = datetime.fromtimestamp(start/1000, ZoneInfo("Asia/Bangkok"))
     hn = (payload.hn or "").strip()
@@ -167,7 +201,31 @@ def start_case(payload: StartCase, actor: dict = Depends(require_permission("cas
             (code,hn,start,capture,current,current,payload.admission_source,identity_status,
              (payload.admission_number or "").strip() or None,patient_name or None,actor["username"],json.dumps(admission_metadata)),
         ).fetchone()["id"]
-        if payload.admission_source in {"manual", "emergency"}:
+        if admission is not None:
+            header = admission["header"] or {}
+            patient = header.get("patient") or {}
+            database.execute("UPDATE cases SET canopy_admission_id=%s WHERE id=%s", (admission["id"], case_id))
+            database.execute(
+                """INSERT INTO case_his_patient
+                   (case_id,hn,an,patient_name,sex,dob,age_text,weight_kg,source,created_at,updated_at)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'CANOPY',%s,%s)""",
+                (case_id, hn, (payload.admission_number or "").strip() or None, patient_name or None,
+                 (payload.sex or "").strip() or "unknown", (payload.date_of_birth or "").strip() or None,
+                 (payload.age_text or "").strip() or None, payload.weight_kg, current, current),
+            )
+            # Forms already filled in Canopy (e.g. pre-op on a tablet) carry over with their field versions.
+            database.execute(
+                """INSERT INTO case_detail(case_id,created_at,updated_at,form_draft_json,field_versions)
+                   VALUES (%s,%s,%s,%s,%s)""",
+                (case_id, current, current, json.dumps(admission["form_values"] or {}),
+                 Jsonb(admission["form_versions"] or {})),
+            )
+            database.execute(
+                """UPDATE canopy_admission_inbox SET status='claimed',case_id=%s,claim_acknowledged=false,updated_at=%s
+                   WHERE id=%s""",
+                (case_id, current, admission["id"]),
+            )
+        elif payload.admission_source in {"manual", "emergency"}:
             database.execute(
                 """INSERT INTO case_his_patient
                    (case_id,hn,an,patient_name,sex,dob,age_text,weight_kg,source,created_at,updated_at)

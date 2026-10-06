@@ -23,7 +23,7 @@ import canopyConfigIcon from "../assets/canopy-menu-config.png";
 import canopyInfrastructureIcon from "../assets/canopy-menu-infrastructure.png";
 import canopyMonitoringIcon from "../assets/canopy-menu-monitoring.png";
 
-export type AppView = "case" | "form" | "diagnosis" | "staff" | "io" | "patient" | "report" | "master" | "account" | "dashboard" | "monitoring" | "fleet" | "infrastructure" | "history";
+export type AppView = "ward" | "case" | "form" | "diagnosis" | "staff" | "io" | "patient" | "report" | "master" | "account" | "dashboard" | "admissions" | "monitoring" | "fleet" | "infrastructure" | "topology" | "gateway-alerts" | "history";
 
 type Props = {
   activeView: AppView;
@@ -38,7 +38,7 @@ type Props = {
   wardName?: string | null;
 };
 
-type NavIconName = "chart" | "io" | "clinical" | "form" | "staff" | "patient" | "report" | "config" | "archive" | "start" | "fleet" | "dashboard" | "canopy-dashboard" | "canopy-monitoring" | "canopy-charts" | "canopy-reports" | "canopy-config" | "canopy-infrastructure";
+type NavIconName = "ward" | "chart" | "io" | "clinical" | "form" | "staff" | "patient" | "report" | "config" | "archive" | "start" | "fleet" | "dashboard" | "canopy-dashboard" | "canopy-monitoring" | "canopy-charts" | "canopy-reports" | "canopy-config" | "canopy-infrastructure";
 type NavItem = { view: AppView; label: string; icon: NavIconName };
 type CanopyCasePanelId = "chart" | "io" | "diagnosis" | "forms" | "staff" | "patient" | "report";
 
@@ -93,6 +93,7 @@ function NavIcon({ name }: { name: NavIconName }) {
       : name === "patient" ? <><circle cx="12" cy="8" r="3.2"/><path d="M5 21c.5-5 2.8-7.5 7-7.5s6.5 2.5 7 7.5"/></>
       : name === "report" ? <><path d="M5 3h11l3 3v15H5Z"/><path d="M16 3v4h4M8 17v-3M12 17v-6M16 17V9"/></>
       : name === "config" ? <><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></>
+      : name === "ward" ? <><path d="M3 18V8"/><path d="M3 14h18v4"/><path d="M21 14v-3a2 2 0 0 0-2-2h-8v5"/><circle cx="7" cy="11" r="1.8"/></>
       : name === "archive" ? <><path d="M4 6h16v15H4Z"/><path d="M3 3h18v4H3ZM9 11h6"/></>
       : name === "start" ? <><circle cx="9" cy="8" r="3"/><path d="M3.5 20c.4-4 2.2-6 5.5-6 1.3 0 2.4.3 3.2.8M18 13v7M14.5 16.5h7"/></>
       : <><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M7 12l3-3 2 2 4-4"/></>}
@@ -192,17 +193,22 @@ function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, colla
   const items: NavItem[] = surface.code === "canopy"
     ? [
         { view: "dashboard", label: "Dashboard", icon: "canopy-dashboard" },
+        { view: "admissions", label: "Admissions", icon: "start" },
         { view: "monitoring", label: "Central Charting", icon: "canopy-monitoring" },
         { view: "fleet", label: "Case List", icon: "canopy-charts" },
         { view: "report", label: "Reports", icon: "canopy-reports" },
+        { view: "topology", label: "Topology", icon: "canopy-monitoring" },
+        { view: "gateway-alerts", label: "Gateway Alerts", icon: "canopy-infrastructure" },
         { view: "infrastructure", label: "Infrastructure", icon: "canopy-infrastructure" },
       ]
     : isIdleLeaf
       ? [
+          { view: "ward", label: t("system.ward"), icon: "ward" },
           { view: "case", label: t("topbar.startCase"), icon: "start" },
           { view: "history", label: t("topbar.archive"), icon: "archive" },
         ]
       : [
+          { view: "ward", label: t("system.ward"), icon: "ward" },
           { view: "case", label: "Chart", icon: "chart" },
           { view: "io", label: "I/O", icon: "io" },
           { view: "diagnosis", label: "Diag/Ops", icon: "clinical" },

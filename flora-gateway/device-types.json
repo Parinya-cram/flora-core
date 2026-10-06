@@ -299,5 +299,26 @@
       "auto_ack": true
     },
     "version": "1"
+  },
+  {
+    "code": "acme-t200",
+    "label": "Acme T-200 temperature / CVP (RS-232, polled)",
+    "category": "temperature_module",
+    "protocol": "acme-t200",
+    "controller": "serial",
+    "parser": "acme_t200",
+    "image": "parser",
+    "default_options": {
+      "poll_interval_sec": 2
+    },
+    "connection_defaults": {
+      "baud": 9600,
+      "data_bits": 8,
+      "parity": "none",
+      "stop_bits": 1,
+      "flow_control": "none",
+      "idle_ms": 50
+    },
+    "version": "1"
   }
 ]

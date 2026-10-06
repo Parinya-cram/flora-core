@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 
-from .. import central_auth, directory, ldap_auth
+from .. import ai_service, central_auth, directory, form_sync, ldap_auth
 from ..database import connection
 
 
@@ -100,6 +100,22 @@ def ingest_batch(batch: SyncBatch, database: Connection = Depends(connection)) -
             (batch.applied_config_version, batch.leaf_id),
         )
         for message in batch.messages:
+            if message.entity_type == "case_export":
+                # Full copy for handover: only the newest matters, so it is not kept in sync_message.
+                export_id = _global_case_id(batch.hospital_id, batch.leaf_id, message.entity_id)
+                stored = database.execute(
+                    """INSERT INTO canopy_case_export (global_case_id, leaf_id, source_case_id, revision, export, updated_at)
+                       VALUES (%s, %s, %s, %s, %s, %s)
+                       ON CONFLICT (global_case_id) DO UPDATE SET revision=excluded.revision, export=excluded.export,
+                         updated_at=excluded.updated_at
+                       WHERE excluded.revision > canopy_case_export.revision
+                       RETURNING 1""",
+                    (export_id, batch.leaf_id, message.entity_id, message.revision, Jsonb(message.payload),
+                     int(now.timestamp() * 1000)),
+                ).fetchone()
+                accepted += 1 if stored else 0
+                duplicates += 0 if stored else 1
+                continue
             inserted = database.execute(
                 """
                 INSERT INTO sync_message
@@ -127,6 +143,11 @@ def ingest_batch(batch: SyncBatch, database: Connection = Depends(connection)) -
                 continue
             case = message.payload.get("case") or {}
             global_case_id = _global_case_id(batch.hospital_id, batch.leaf_id, message.entity_id)
+            if database.execute(
+                """SELECT 1 FROM canopy_case_handover WHERE global_case_id=%s AND from_leaf_id=%s
+                   AND status IN ('claimed','imported','released')""", (global_case_id, batch.leaf_id)).fetchone():
+                # Another Leaf continues this case; late snapshots from the old Leaf must not overwrite it.
+                continue
             database.execute(
                 """
                 INSERT INTO sync_case_index
@@ -313,6 +334,8 @@ def exchange_directory(payload: DirectoryExchange, database: Connection = Depend
                              "directory_version": int(change.get("directory_version") or 0)})
     result = directory.leaf_directory(database, payload.leaf_id)
     result["ldap_enabled"] = ldap_auth.enabled()
+    # The shared AI service (including its key) travels with the directory to every Leaf.
+    result["ai_service"] = ai_service.load(database)
     # Only acknowledge pushes that Canopy now holds (applied, or superseded by a newer central edit).
     result["acknowledged"] = [item for item in acknowledged if item["status"] in {"applied", "stale"}]
     result["failed"] = [item for item in acknowledged if item["status"] == "failed"]
@@ -325,3 +348,197 @@ def authenticate_for_leaf(payload: DirectoryAuthentication, database: Connection
     if not directory.in_leaf_scope(database, user["id"], payload.leaf_id):
         raise HTTPException(status_code=403, detail="user is not assigned to this ward")
     return {"user": directory.record(database, user)}
+
+
+class GatewayConfig(BaseModel):
+    version: str | None = None
+    site: dict[str, Any] = Field(default_factory=dict)
+    license: dict[str, Any] = Field(default_factory=dict)
+    devices: list[dict[str, Any]] = Field(default_factory=list, max_length=500)
+    applied_config_version: int = Field(default=0, ge=0)
+    # How a Leaf on the gateway's LAN reaches its data-api; not part of the cloned config.
+    data_api_url: str | None = Field(default=None, max_length=300)
+
+
+DEVICE_FIELDS = ("leaf_id", "device_type", "pod", "label", "enabled", "options", "serial_number",
+                 "asset_tag", "station", "location", "installed_at", "notes")
+
+
+@router.post("/gateways/{gateway_id}/config", dependencies=[Depends(require_sync_secret)])
+def store_gateway_config(gateway_id: str, payload: GatewayConfig, database: Connection = Depends(connection)) -> dict[str, Any]:
+    """Haber forwards each gateway check-in; Canopy keeps the configuration and license grant."""
+    import json
+
+    devices = sorted((device for device in payload.devices if device.get("device_id")),
+                     key=lambda device: str(device["device_id"]))
+    # Only the configuration counts for change history, not runtime state.
+    config = {
+        "site": {key: value for key, value in payload.site.items()
+                 if key not in {"id", "updated_at", "updated_by", "canopy_config_version"}},
+        "devices": [{"device_id": device["device_id"], **{field: device.get(field) for field in DEVICE_FIELDS}}
+                    for device in devices],
+    }
+    config_hash = hashlib.sha256(json.dumps(config, sort_keys=True, default=str).encode()).hexdigest()
+    current = directory.now_ms()
+    with database.transaction():
+        previous = database.execute(
+            "SELECT config_hash,first_seen_at FROM canopy_gateway WHERE gateway_id=%s FOR UPDATE", (gateway_id,)
+        ).fetchone()
+        changed = previous is None or previous["config_hash"] != config_hash
+        database.execute(
+            """INSERT INTO canopy_gateway(gateway_id,version,site,license,config_hash,first_seen_at,last_seen_at,config_changed_at,
+                                         data_api_url)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+               ON CONFLICT(gateway_id) DO UPDATE SET version=excluded.version,site=excluded.site,
+                 data_api_url=coalesce(excluded.data_api_url,canopy_gateway.data_api_url),
+                 license=excluded.license,config_hash=excluded.config_hash,last_seen_at=excluded.last_seen_at,
+                 first_seen_at=CASE WHEN canopy_gateway.first_seen_at=0 THEN excluded.first_seen_at
+                                    ELSE canopy_gateway.first_seen_at END,
+                 applied_version=GREATEST(canopy_gateway.applied_version,%s),
+                 config_changed_at=CASE WHEN canopy_gateway.config_hash IS DISTINCT FROM excluded.config_hash
+                                        THEN excluded.config_changed_at ELSE canopy_gateway.config_changed_at END""",
+            (gateway_id, payload.version, Jsonb(payload.site), Jsonb(payload.license), config_hash,
+             current, current, current, payload.data_api_url, payload.applied_config_version),
+        )
+        database.execute("DELETE FROM canopy_gateway_device WHERE gateway_id=%s", (gateway_id,))
+        for device in devices:
+            database.execute(
+                """INSERT INTO canopy_gateway_device(gateway_id,device_id,leaf_id,device_type,pod,label,enabled,options,
+                         serial_number,asset_tag,station,location,installed_at,notes,parser_status,updated_at)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                (gateway_id, str(device["device_id"]), device.get("leaf_id"), str(device.get("device_type") or "unknown"),
+                 device.get("pod"), device.get("label"), bool(device.get("enabled", True)),
+                 Jsonb(device.get("options") if isinstance(device.get("options"), dict) else {}),
+                 device.get("serial_number"), device.get("asset_tag"), device.get("station"), device.get("location"),
+                 device.get("installed_at"), device.get("notes"), device.get("parser_status"), device.get("updated_at")),
+            )
+        if changed:
+            database.execute(
+                """INSERT INTO canopy_gateway_config_snapshot(gateway_id,config_hash,config,captured_at)
+                   VALUES (%s,%s,%s,%s)""",
+                (gateway_id, config_hash, Jsonb(config), current),
+            )
+        desired = database.execute(
+            "SELECT desired_config,desired_version,applied_version FROM canopy_gateway WHERE gateway_id=%s",
+            (gateway_id,),
+        ).fetchone()
+    pending = desired and desired["desired_config"] and desired["desired_version"] > desired["applied_version"]
+    return {
+        "ok": True, "changed": changed, "config_hash": config_hash,
+        "desired_config": {**desired["desired_config"], "version": desired["desired_version"]} if pending else None,
+    }
+
+
+# --- Canopy admissions: Leafs pick them up and sync their forms ----------------
+
+class AdmissionClaim(BaseModel):
+    leaf_id: str = Field(min_length=1, max_length=120)
+
+
+class AdmissionExchange(BaseModel):
+    leaf_id: str = Field(min_length=1, max_length=120)
+    hospital_id: str | None = None
+    cases: list[dict[str, Any]] = Field(default_factory=list, max_length=500)
+    claims: list[dict[str, Any]] = Field(default_factory=list, max_length=500)
+
+
+def _admission_for_leaf(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": str(row["id"]),
+        "header": {
+            "hn": row["hn"], "admission_number": row["admission_number"], "patient": row["patient"] or {},
+            "admission": row["admission"] or {}, "unit_key": row["unit_key"], "unit_name": row.get("unit_name"),
+            "target_leaf_id": row["target_leaf_id"], "scheduled_at": row["scheduled_at"], "note": row["note"],
+            "created_by": row["created_by"],
+        },
+        "form_values": row["form_values"] or {},
+        "form_versions": row["form_versions"] or {},
+    }
+
+
+def _claim(database: Connection, admission_id: str, leaf_id: str, case: dict[str, Any] | None = None) -> str:
+    """claimed | already | taken | missing"""
+    row = database.execute(
+        "SELECT * FROM canopy_admission WHERE id::text=%s FOR UPDATE", (admission_id,)
+    ).fetchone()
+    if row is None:
+        return "missing"
+    if row["claimed_leaf_id"] and row["claimed_leaf_id"] != leaf_id:
+        if case is not None and row["status"] != "conflict":
+            # Started offline at two Leafs: keep the first, flag for review.
+            database.execute("UPDATE canopy_admission SET status='conflict',updated_at=%s WHERE id=%s",
+                             (directory.now_ms(), row["id"]))
+        return "taken"
+    if row["status"] == "cancelled" and not row["claimed_leaf_id"]:
+        return "taken"
+    current = directory.now_ms()
+    database.execute(
+        """UPDATE canopy_admission SET status=CASE WHEN status='conflict' THEN status ELSE 'started' END,
+             claimed_leaf_id=%s, claimed_at=coalesce(claimed_at,%s), updated_at=%s WHERE id=%s""",
+        (leaf_id, current, current, row["id"]),
+    )
+    return "already" if row["claimed_leaf_id"] == leaf_id else "claimed"
+
+
+@router.post("/admissions/{admission_id}/claim", dependencies=[Depends(require_sync_secret)])
+def claim_admission(admission_id: str, payload: AdmissionClaim, database: Connection = Depends(connection)) -> dict[str, Any]:
+    with database.transaction():
+        result = _claim(database, admission_id, payload.leaf_id)
+    if result in {"taken", "missing"}:
+        raise HTTPException(status_code=409, detail="admission already started elsewhere or cancelled")
+    return {"ok": True, "result": result}
+
+
+@router.post("/admissions", dependencies=[Depends(require_sync_secret)])
+def exchange_admissions(payload: AdmissionExchange, database: Connection = Depends(connection)) -> dict[str, Any]:
+    """Store form changes of Leaf cases started from Canopy admissions, then return
+    the admissions this Leaf may start and Canopy-side form changes for its cases."""
+    acknowledged, conflicts = [], []
+    with database.transaction():
+        for claim in payload.claims:
+            result = _claim(database, str(claim.get("admission_id")), payload.leaf_id, case=claim)
+            (conflicts if result in {"taken", "missing"} else acknowledged).append(str(claim.get("admission_id")))
+        for case in payload.cases:
+            admission_id = str(case.get("admission_id") or "")
+            result = _claim(database, admission_id, payload.leaf_id, case=case)
+            if result in {"taken", "missing"}:
+                conflicts.append(admission_id)
+                continue
+            acknowledged.append(admission_id)
+            row = database.execute(
+                "SELECT form_values,form_versions FROM canopy_admission WHERE id::text=%s FOR UPDATE", (admission_id,)
+            ).fetchone()
+            values, versions, changed = form_sync.merge(
+                row["form_values"] or {}, row["form_versions"] or {}, case.get("values") or {}, case.get("versions") or {})
+            hospital = payload.hospital_id or database.execute(
+                "SELECT hospital_id FROM sync_leaf_node WHERE leaf_id=%s", (payload.leaf_id,)).fetchone()["hospital_id"]
+            database.execute(
+                """UPDATE canopy_admission SET form_values=%s,form_versions=%s,
+                     form_updated_at=CASE WHEN %s THEN %s ELSE form_updated_at END,
+                     leaf_case_id=%s,global_case_id=%s,case_status=%s,updated_at=%s WHERE id::text=%s""",
+                (Jsonb(values), Jsonb(versions), changed, directory.now_ms(), case.get("case_id"),
+                 _global_case_id(hospital, payload.leaf_id, str(case.get("case_id"))), case.get("status"),
+                 directory.now_ms(), admission_id),
+            )
+        unit = directory.leaf_unit(database, payload.leaf_id)
+        pending = database.execute(
+            """SELECT a.*, unit.name AS unit_name FROM canopy_admission a
+               LEFT JOIN canopy_location unit ON unit.id::text=a.unit_key
+               WHERE a.status='pending' AND a.claimed_leaf_id IS NULL
+                 AND (a.target_leaf_id=%s OR (a.target_leaf_id IS NULL AND a.unit_key=%s))
+               ORDER BY a.scheduled_at NULLS LAST, a.created_at""",
+            (payload.leaf_id, (unit or {}).get("key")),
+        ).fetchall()
+        linked = database.execute(
+            """SELECT id, form_values, form_versions FROM canopy_admission
+               WHERE claimed_leaf_id=%s AND status IN ('started','conflict')
+                 AND coalesce(case_status,'active') <> 'archived'""",
+            (payload.leaf_id,),
+        ).fetchall()
+    return {
+        "pending": [_admission_for_leaf(row) for row in pending],
+        "linked": [{"admission_id": str(row["id"]), "values": row["form_values"] or {},
+                    "versions": row["form_versions"] or {}} for row in linked],
+        "acknowledged": acknowledged,
+        "conflicts": conflicts,
+    }

@@ -29,6 +29,21 @@ docker compose up -d --build      # http://localhost:7100
 | `POST /api/v1/tenants`, `PUT .../license`, `POST .../license/revoke`, `PUT /api/v1/global-config/{key}` | Root admin (`x-root-key` when `ROOT_ADMIN_KEY` is set) |
 | `GET /api/v1/overview` | Root admin page |
 
+## Operator sign-in
+
+Open Root through the edge (`https://<root-host>/`, port 443 by default) and sign in at `/login`
+(demo: `admin` / `admin` from `ROOT_ADMIN_USERNAME` / `ROOT_ADMIN_PASSWORD`, created only when no operator exists).
+
+- Operators are `admin` (full control) or `viewer` (read only), managed under **System → Operators**.
+  New operators and password resets must set their own password (10+ characters) at first sign-in.
+- Server-side sessions in an HttpOnly, SameSite=Strict cookie: 30 min idle (`ROOT_SESSION_IDLE_MIN`),
+  8 h maximum (`ROOT_SESSION_HOURS`). Signing out or changing a password ends them for real.
+- 5 wrong passwords lock the account for 15 min (`ROOT_MAX_FAILED_LOGINS`, `ROOT_LOCK_MIN`);
+  each IP is throttled too. Cookie writes must come from Root's own origin.
+- Every sign-in, failure, lockout and change lands in **System → Audit log** (`root_audit`).
+- Scripts keep working without a browser session: HTTP Basic with an operator account, or
+  `x-root-key: $ROOT_ADMIN_KEY` (acts as admin `root-ci`). Haber keeps its tenant key.
+
 Revocation and tenant suspension are delivered as a bundle with `expires_at = 0`,
 so every tier enforces them the same way as expiry.
 

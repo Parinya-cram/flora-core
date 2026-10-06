@@ -6,6 +6,7 @@ from psycopg import Connection
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
+from .. import demo_ward
 from ..clinical import text
 from ..database import connection
 from .auth_canopy import read_token
@@ -361,3 +362,148 @@ def apply_group_settings(group_id: int, payload: GroupSettingsInput, database: C
                 "time_format": payload.time_format,
             })
     return {"ok": True, "updated": len(assignments)}
+
+
+class GatewayCloneInput(BaseModel):
+    source_gateway_id: str = Field(min_length=1, max_length=120)
+    snapshot_id: int | None = None
+    include_site: bool = True
+
+
+@router.post("/gateways/{target_gateway_id}/clone", dependencies=[Depends(require_admin)])
+def clone_gateway_config(
+    target_gateway_id: str,
+    payload: GatewayCloneInput,
+    user: dict[str, Any] = Depends(read_token),
+    database: Connection = Depends(connection),
+) -> dict[str, Any]:
+    """Queue a stored configuration for a gateway; it is applied at the gateway's next check-in.
+
+    The target may be a gateway Canopy has never seen: a new gateway started with that
+    id picks the configuration up on its first check-in.
+    """
+    import re
+
+    target = target_gateway_id.strip()
+    if re.fullmatch(r"[A-Za-z0-9_.-]{1,120}", target) is None:
+        raise HTTPException(status_code=400, detail="invalid gateway id")
+    snapshot = database.execute(
+        """SELECT id, config FROM canopy_gateway_config_snapshot
+           WHERE gateway_id=%s AND (%s::bigint IS NULL OR id=%s)
+           ORDER BY captured_at DESC LIMIT 1""",
+        (payload.source_gateway_id, payload.snapshot_id, payload.snapshot_id),
+    ).fetchone()
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="no stored configuration for the source gateway")
+    config = dict(snapshot["config"] or {})
+    if not payload.include_site:
+        current_site = database.execute("SELECT site FROM canopy_gateway WHERE gateway_id=%s", (target,)).fetchone()
+        config["site"] = (current_site or {}).get("site") or {}
+    version = now_ms()
+    source = f"{payload.source_gateway_id}#{snapshot['id']} by {user.get('username')}"
+    with database.transaction():
+        database.execute(
+            """INSERT INTO canopy_gateway(gateway_id,site,license,first_seen_at,last_seen_at,config_changed_at)
+               VALUES (%s,'{}'::jsonb,'{}'::jsonb,0,0,0) ON CONFLICT(gateway_id) DO NOTHING""",
+            (target,),
+        )
+        database.execute(
+            """UPDATE canopy_gateway SET desired_config=%s,desired_version=%s,desired_source=%s
+               WHERE gateway_id=%s""",
+            (Jsonb(config), version, source, target),
+        )
+    return {"ok": True, "gateway_id": target, "desired_version": version, "source": source,
+            "devices": len(config.get("devices") or [])}
+
+
+class GatewaySiteInput(BaseModel):
+    unit_id: int | None = None                       # a care_unit in canopy_location; fills ward, building, hospital
+    display_name: str | None = Field(default=None, max_length=120)
+    unit_type: Literal["or", "icu", "er", "ward", "other"] | None = None
+    floor: str | None = Field(default=None, max_length=40)
+    room: str | None = Field(default=None, max_length=80)
+    contact: str | None = Field(default=None, max_length=200)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+@router.put("/gateways/{gateway_id}/site", dependencies=[Depends(require_admin)])
+def set_gateway_site(
+    gateway_id: str,
+    payload: GatewaySiteInput,
+    user: dict[str, Any] = Depends(read_token),
+    database: Connection = Depends(connection),
+) -> dict[str, Any]:
+    """Set where a gateway is installed. Canopy owns the location: the gateway applies it at
+    its next check-in. A site-only configuration leaves the gateway's devices untouched; if a
+    clone is still pending, its devices are kept and only the site is replaced."""
+    site: dict[str, Any] = {key: getattr(payload, key) for key in ("display_name", "unit_type", "floor", "room", "contact", "notes")}
+    site.update(hospital=None, building=None, unit=None, canopy_unit_id=None)
+    if payload.unit_id is not None:
+        lineage = database.execute(
+            """WITH RECURSIVE lineage AS (
+                 SELECT id, parent_id, kind, name FROM canopy_location WHERE id=%s AND is_active
+                 UNION ALL
+                 SELECT parent.id, parent.parent_id, parent.kind, parent.name
+                 FROM canopy_location parent JOIN lineage child ON child.parent_id=parent.id)
+               SELECT kind, name FROM lineage""",
+            (payload.unit_id,),
+        ).fetchall()
+        names = {row["kind"]: row["name"] for row in lineage}
+        if "care_unit" not in names:
+            raise HTTPException(status_code=404, detail="ward not found")
+        site.update(hospital=names.get("hospital"), building=names.get("building"), unit=names["care_unit"],
+                    canopy_unit_id=payload.unit_id)
+    version = now_ms()
+    source = f"location by {user.get('username')}"
+    with database.transaction():
+        database.execute(
+            """INSERT INTO canopy_gateway(gateway_id,site,license,first_seen_at,last_seen_at,config_changed_at)
+               VALUES (%s,'{}'::jsonb,'{}'::jsonb,0,0,0) ON CONFLICT(gateway_id) DO NOTHING""",
+            (gateway_id,),
+        )
+        current = database.execute(
+            "SELECT desired_config, desired_version, applied_version FROM canopy_gateway WHERE gateway_id=%s FOR UPDATE",
+            (gateway_id,),
+        ).fetchone()
+        pending = current and current["desired_config"] and (current["desired_version"] or 0) > (current["applied_version"] or 0)
+        config = {**(current["desired_config"] if pending else {}), "site": site}
+        database.execute(
+            "UPDATE canopy_gateway SET desired_config=%s,desired_version=%s,desired_source=%s WHERE gateway_id=%s",
+            (Jsonb(config), version, source, gateway_id),
+        )
+    return {"ok": True, "gateway_id": gateway_id, "desired_version": version, "site": site}
+
+
+class DemoWardInput(BaseModel):
+    cases: int = Field(default=200, ge=10, le=1000)
+    days: int = Field(default=30, ge=1, le=365)
+    active: int = Field(default=3, ge=0, le=12)
+    seed: int | None = None
+
+
+@router.get("/demo-ward", dependencies=[Depends(require_admin)])
+def demo_ward_status(database: Connection = Depends(connection)) -> dict[str, Any]:
+    return demo_ward.status(database)
+
+
+@router.post("/demo-ward", dependencies=[Depends(require_admin)])
+def generate_demo_ward(
+    payload: DemoWardInput | None = Body(default=None),
+    database: Connection = Depends(connection),
+) -> dict[str, Any]:
+    """Replace the demo ward with freshly generated cases (report examples only).
+
+    Demo Leafs, cases and archive rows are excluded from all-ward views and from the
+    Innovian report source; they appear only when the demo ward is selected.
+    """
+    payload = payload or DemoWardInput()
+    with database.transaction():
+        return demo_ward.generate(database, cases=payload.cases, days=payload.days,
+                                  active=payload.active, seed=payload.seed)
+
+
+@router.delete("/demo-ward", dependencies=[Depends(require_admin)])
+def remove_demo_ward(database: Connection = Depends(connection)) -> dict[str, Any]:
+    with database.transaction():
+        removed = database.execute("SELECT canopy_demo_reset() AS removed").fetchone()["removed"]
+    return {"ok": True, "removed": removed, **demo_ward.status(database)}

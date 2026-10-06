@@ -63,3 +63,43 @@ CREATE TABLE IF NOT EXISTS root_release (
 );
 
 ALTER TABLE root_tenant ADD COLUMN IF NOT EXISTS release_channel text NOT NULL DEFAULT 'stable';
+
+-- Root operators. Passwords are scrypt hashes; the browser holds only an opaque
+-- session token whose sha256 is stored here.
+CREATE TABLE IF NOT EXISTS root_user (
+  id                    bigserial PRIMARY KEY,
+  username              text NOT NULL UNIQUE,
+  password_hash         text NOT NULL,                    -- scrypt$n$r$p$salt$hash
+  display_name          text,
+  role                  text NOT NULL DEFAULT 'viewer' CHECK (role IN ('admin', 'viewer')),
+  enabled               boolean NOT NULL DEFAULT true,
+  must_change_password  boolean NOT NULL DEFAULT false,
+  failed_logins         integer NOT NULL DEFAULT 0,
+  locked_until          bigint,
+  created_at            bigint NOT NULL,
+  updated_at            bigint NOT NULL,
+  last_login_at         bigint
+);
+
+CREATE TABLE IF NOT EXISTS root_session (
+  token_hash    text PRIMARY KEY,
+  user_id       bigint NOT NULL REFERENCES root_user(id) ON DELETE CASCADE,
+  created_at    bigint NOT NULL,
+  expires_at    bigint NOT NULL,
+  last_seen_at  bigint NOT NULL,
+  ip            text,
+  user_agent    text
+);
+CREATE INDEX IF NOT EXISTS root_session_expiry ON root_session (expires_at);
+
+-- Who did what on Root: sign-ins (including failures) and every admin change.
+CREATE TABLE IF NOT EXISTS root_audit (
+  id        bigserial PRIMARY KEY,
+  at        bigint NOT NULL,
+  username  text,
+  action    text NOT NULL,
+  target    text,
+  ip        text,
+  detail    jsonb NOT NULL DEFAULT '{}'::jsonb
+);
+CREATE INDEX IF NOT EXISTS root_audit_at ON root_audit (at DESC);

@@ -1,16 +1,8 @@
-# Flora Gateway pods. Edited by the Gateway Service (PUT /api/config/<section>);
-# each controller re-reads this file when it restarts.
-#
-# Container ports below are inside the gateway network. compose.yaml publishes
-# the device-facing ones on the host (see the port map in README.md).
-
 gateway_id = "gateway-hospital-01-a"
 
 [kafka]
 brokers = "kafka:9092"
 
-# RS-232. In the demo, /dev/ttyV0 is a virtual port bridged to TCP 7430 so the
-# simulator can act as a serial device. On a Windows workstation use path = "COM1".
 [serial]
 admin_port = 5001
 
@@ -20,7 +12,16 @@ path = "/dev/ttyV0"
 baud = 9600
 idle_ms = 80
 
-# HTTP pull from device/vendor endpoints.
+[[serial.pods]]
+id = "COM2"
+path = "/dev/ttyV1"
+baud = 9600
+parity = "none"
+idle_ms = 50
+data_bits = 8
+stop_bits = 1
+flow_control = "none"
+
 [feeder]
 admin_port = 5002
 
@@ -29,29 +30,18 @@ id = "icu-ventilator"
 url = "http://simulator:8000/devices/icu-ventilator"
 interval_ms = 5000
 
-# HTTP push from devices/vendor systems, one port per pod.
 [webhook]
 admin_port = 5003
+pods = [
+    { id = "or-anesthesia", port = 9003 },
+]
 
-[[webhook.pods]]
-id = "or-anesthesia"
-port = 9003
-
-# TCP listeners, HL7 v2 over MLLP.
 [socket]
 admin_port = 5004
-
-[[socket.pods]]
-id = "or-monitor"
-port = 9001
-framing = "mllp"
-auto_ack = true
-
-[[socket.pods]]
-id = "icu-monitor"
-port = 9002
-framing = "mllp"
-auto_ack = true
+pods = [
+    { id = "or-monitor", port = 9001, framing = "mllp", auto_ack = true },
+    { id = "icu-monitor", port = 9002, framing = "mllp", auto_ack = true },
+]
 
 [collector]
 admin_port = 5005
@@ -63,9 +53,6 @@ listen = "0.0.0.0:8080"
 
 [publisher]
 admin_port = 5006
-
-# Push every observation to the simulator's receiver to demonstrate `pod:uri` egress.
-[[publisher.targets]]
-id = "demo-receiver"
-url = "http://simulator:8000/receiver"
-flush_ms = 2000
+targets = [
+    { id = "demo-receiver", url = "http://simulator:8000/receiver", flush_ms = 2000 },
+]

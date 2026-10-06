@@ -21,6 +21,7 @@ import logging
 import os
 import secrets
 import time
+import urllib.request
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -35,13 +36,13 @@ from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
 from pydantic import BaseModel, Field
 
-from . import basic_auth
+from . import auth
 
 log = logging.getLogger("flora-root")
 DATABASE_URL = os.getenv("FLORA_ROOT_DATABASE_URL", "postgresql://flora_root:flora-root-local-only@root-db:5432/flora_root")
-ADMIN_KEY = os.getenv("ROOT_ADMIN_KEY", "").strip()
 # Where Haber pulls release images from (the Root registry as seen by hospitals).
 REGISTRY_URL = os.getenv("ROOT_REGISTRY_URL", "http://host.docker.internal:7105").rstrip("/")
+REGISTRY_INTERNAL = os.getenv("ROOT_REGISTRY_INTERNAL_URL", "http://root-registry:5000").rstrip("/")
 RELEASES_PER_COMPONENT = int(os.getenv("ROOT_RELEASES_PER_COMPONENT", "5"))
 DAY_MS = 86_400_000
 pool = ConnectionPool(DATABASE_URL, min_size=1, max_size=5, open=False, kwargs={"row_factory": dict_row, "autocommit": True})
@@ -99,6 +100,7 @@ def bootstrap() -> None:
                 (DEMO_TENANT["tenant_id"], DEMO_TENANT["name"], DEMO_TENANT["region"], key_hash(DEMO_TENANT["api_key"]), current, current))
             issue_license(connection, DEMO_TENANT["tenant_id"], LicenseIn(device_types=DEMO_DEVICE_TYPES))
             log.info("seeded demo tenant %s", DEMO_TENANT["tenant_id"])
+    auth.ensure_bootstrap_admin()
 
 
 @asynccontextmanager
@@ -111,16 +113,15 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Flora Root", lifespan=lifespan)
-basic_auth.install(app, "Flora Root", "ROOT", [
+auth.install(app, pool, [
     r"/health", r"/api/v1/keys", r"/api/v1/tenants/[^/]+/(bundle|heartbeat|releases)",  # Canopy, tenant key auth
+    r"/api/auth/status",                                                                # login page status panel
 ])
+app.include_router(auth.router)
+require_admin = auth.require_admin  # signed-in admin operator, or Root CI with x-root-key / Basic
 
 
 # ------------------------------------------------------------------ auth
-
-def require_admin(request: Request) -> None:
-    if ADMIN_KEY and not hmac.compare_digest(request.headers.get("x-root-key", ""), ADMIN_KEY):
-        raise HTTPException(401, "x-root-key required")
 
 
 def require_tenant(tenant_id: str, request: Request) -> dict[str, Any]:
@@ -396,6 +397,33 @@ def overview():
             "notes, created_at, withdrawn_at FROM root_release ORDER BY created_at DESC LIMIT 30").fetchall()
     return {"server_ts": now_ms(), "tenants": tenants, "global_config": config, "signing_keys": keys,
             "registry": REGISTRY_URL, "releases": releases}
+
+
+@app.get("/api/auth/status")
+def auth_status():
+    """Public readiness for the sign-in page. Shows nothing about tenants."""
+    status: dict[str, Any] = {"server_ts": now_ms(), "database": "ready", "registry": "unreachable", "signing_key": None}
+    try:
+        with pool.connection() as connection:
+            key = connection.execute(
+                "SELECT key_id, public_raw FROM root_signing_key WHERE active ORDER BY created_at DESC LIMIT 1").fetchone()
+        if key:
+            fingerprint = hashlib.sha256(base64.b64decode(key["public_raw"])).hexdigest()
+            status["signing_key"] = {"key_id": key["key_id"], "fingerprint": ":".join(
+                fingerprint[i:i + 4] for i in range(0, 16, 4)).upper()}
+    except Exception:
+        status["database"] = "unavailable"
+    try:
+        with urllib.request.urlopen(REGISTRY_INTERNAL + "/v2/", timeout=2) as response:
+            status["registry"] = "ready" if response.status == 200 else "unreachable"
+    except Exception:
+        pass
+    return status
+
+
+@app.get("/login")
+def login_page():
+    return FileResponse(Path(__file__).parent / "static" / "login.html", headers={"cache-control": "no-store"})
 
 
 @app.get("/health")

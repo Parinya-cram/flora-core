@@ -20,6 +20,10 @@ INTERVAL_SECONDS = max(2, int(os.getenv("FLORA_SYNC_INTERVAL_SECONDS", "10")))
 # Discharged cases keep syncing this long so documentation finished after discharge reaches Canopy.
 RECENT_MS = max(0, int(float(os.getenv("FLORA_SYNC_RECENT_HOURS", "24")) * 3_600_000))
 LAST_DIGEST: dict[str, str] = {}
+# Full raw export of active cases, so another Leaf can take a case over (handover).
+LAST_EXPORT_DIGEST: dict[str, str] = {}
+# Handovers whose old case this Leaf has locked; acknowledged on the next ward exchange.
+RELEASED_ACK: list[int] = []
 PREVIOUS_ACTIVE_IDS: set[str] = set()
 INITIAL_SYNC_COMPLETE = False
 
@@ -120,12 +124,23 @@ def synchronize() -> None:
             or int(case.get("discharge_time") or 0) >= recent_after
         ]
         pending: list[tuple[dict[str, Any], str, str]] = []
+        exports: list[tuple[dict[str, Any], str, str]] = []
         for case in candidates:
             message, digest = make_message(build_snapshot(client, case))
             case_id = str(case["case_id"])
             if LAST_DIGEST.get(case_id) != digest:
                 pending.append((message, digest, case_id))
-        messages = [message for message, _, _ in pending]
+            if case_id in active_ids:
+                export = get_json(client, f"/api/ward/cases/{case_id}/export")
+                export_digest = hashlib.sha256(json.dumps(export, sort_keys=True, default=str).encode()).hexdigest()
+                if LAST_EXPORT_DIGEST.get(case_id) != export_digest:
+                    exports.append(({
+                        "message_id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"flora:{LEAF_ID}:export:{case_id}:{export_digest}")),
+                        "entity_type": "case_export", "entity_id": case_id, "operation": "upsert",
+                        "revision": time.time_ns() // 1_000_000,
+                        "occurred_at": datetime.now(timezone.utc).isoformat(), "payload": export,
+                    }, export_digest, case_id))
+        messages = [message for message, _, _ in pending] + [message for message, _, _ in exports]
         response = client.post(
             f"{CANOPY_SYNC_API}/api/sync/v1/batch",
             headers={"Authorization": f"Bearer {SYNC_SECRET}"},
@@ -149,9 +164,13 @@ def synchronize() -> None:
             print(f"config applied leaf={LEAF_ID} version={desired_version}", flush=True)
         for _, digest, case_id in pending:
             LAST_DIGEST[case_id] = digest
+        for _, digest, case_id in exports:
+            LAST_EXPORT_DIGEST[case_id] = digest
         PREVIOUS_ACTIVE_IDS = active_ids
         INITIAL_SYNC_COMPLETE = True
-        print(f"sync leaf={LEAF_ID} cases={len(messages)} accepted={result['accepted']} duplicates={result['duplicates']}", flush=True)
+        print(f"sync leaf={LEAF_ID} cases={len(pending)} exports={len(exports)} accepted={result['accepted']} "
+              f"duplicates={result['duplicates']}", flush=True)
+        return {"cases": len(pending), "exports": len(exports), "accepted": result["accepted"]}
 
 
 def synchronize_directory() -> None:
@@ -180,13 +199,93 @@ def synchronize_directory() -> None:
             )
 
 
+def synchronize_admissions() -> None:
+    """Exchange Canopy admissions: push form changes of cases started from them, then
+    receive admissions this Leaf may start and form edits made in Canopy (tablet)."""
+    with httpx.Client(timeout=20) as client:
+        outbox = get_json(client, "/api/case/canopy-sync/outbox")
+        response = client.post(
+            f"{CANOPY_SYNC_API}/api/sync/v1/admissions",
+            headers={"Authorization": f"Bearer {SYNC_SECRET}"},
+            json={"leaf_id": LEAF_ID, "hospital_id": HOSPITAL_ID, **outbox},
+        )
+        response.raise_for_status()
+        exchange = response.json()
+        applied = client.put(
+            f"{LEAF_API}/api/case/canopy-sync/inbox",
+            headers={"X-FLORA-Service-Secret": LEAF_SERVICE_SECRET},
+            json=exchange,
+        )
+        applied.raise_for_status()
+        result = applied.json()
+        if result.get("updated_forms") or result.get("withdrawn") or exchange.get("conflicts"):
+            print(f"admissions leaf={LEAF_ID} pending={len(exchange.get('pending', []))} "
+                  f"forms_from_canopy={result.get('updated_forms')} withdrawn={result.get('withdrawn')} "
+                  f"conflicts={exchange.get('conflicts')}", flush=True)
+
+
+
+def synchronize_ward() -> dict[str, Any]:
+    """Ward peers, registered gateways and released handovers for the Leaf Ward page."""
+    global RELEASED_ACK
+    with httpx.Client(timeout=20) as client:
+        response = client.post(
+            f"{CANOPY_SYNC_API}/api/sync/v1/ward",
+            headers={"Authorization": f"Bearer {SYNC_SECRET}"},
+            json={"leaf_id": LEAF_ID, "hospital_id": HOSPITAL_ID, "released_ack": RELEASED_ACK},
+        )
+        response.raise_for_status()
+        ward = response.json()
+        RELEASED_ACK = []
+        applied = client.put(f"{LEAF_API}/api/ward/state", headers={"X-FLORA-Service-Secret": LEAF_SERVICE_SECRET}, json=ward)
+        applied.raise_for_status()
+        locked = set(applied.json().get("released") or [])
+        RELEASED_ACK = [item["handover_id"] for item in ward.get("released") or [] if int(item["source_case_id"]) in locked]
+        if ward.get("released"):
+            print(f"ward leaf={LEAF_ID} released={sorted(locked)} (handed over)", flush=True)
+        return {"peers": len(ward.get("leaves") or []), "gateways": len(ward.get("gateways") or []),
+                "released": len(ward.get("released") or [])}
+
+
+def leaf(method: str, path: str, **kwargs: Any) -> Any:
+    response = httpx.request(method, f"{LEAF_API}{path}", headers={"X-FLORA-Service-Secret": LEAF_SERVICE_SECRET},
+                             timeout=5, **kwargs)
+    response.raise_for_status()
+    return response.json()
+
+
+STEPS = (
+    ("ward", synchronize_ward, "ward sync failed"),
+    ("cases", synchronize, "sync failed"),
+    ("directory", synchronize_directory, "directory sync failed"),
+    ("admissions", synchronize_admissions, "admission sync failed"),
+)
+
+
+def run_cycle() -> None:
+    components: dict[str, dict[str, Any]] = {}
+    for name, step, label in STEPS:
+        try:
+            components[name] = {"ok": True, "detail": step() or {}}
+        except Exception as error:
+            print(f"{label}: {type(error).__name__}: {error}", flush=True)
+            components[name] = {"ok": False, "error": f"{type(error).__name__}: {error}"}
+    try:
+        leaf("PUT", "/api/ward/sync-status", json={"components": components})
+    except Exception as error:
+        print(f"status report failed: {type(error).__name__}: {error}", flush=True)
+
+
+# Automatic sync every INTERVAL_SECONDS; "Sync now" on the Ward page runs a cycle at once.
+last_cycle = 0.0
+last_request = 0
 while True:
     try:
-        synchronize()
-    except Exception as error:
-        print(f"sync failed: {type(error).__name__}: {error}", flush=True)
-    try:
-        synchronize_directory()
-    except Exception as error:
-        print(f"directory sync failed: {type(error).__name__}: {error}", flush=True)
-    time.sleep(INTERVAL_SECONDS)
+        requested = int(leaf("GET", "/api/ward/sync-control").get("requested_at") or 0)
+    except Exception:
+        requested = 0
+    if requested > last_request or time.monotonic() - last_cycle >= INTERVAL_SECONDS:
+        last_request = max(last_request, requested)
+        last_cycle = time.monotonic()
+        run_cycle()
+    time.sleep(1)

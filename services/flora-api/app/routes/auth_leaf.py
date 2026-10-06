@@ -14,7 +14,7 @@ from psycopg import Connection
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel
 
-from .. import directory, ldap_auth
+from .. import ai_service, directory, ldap_auth
 from ..database import connection
 from ..account_config_sync import (
     apply_account_config, authenticate_with_canopy, pull_account_config, push_personal_theme,
@@ -1167,6 +1167,12 @@ def directory_apply(
              synced_at=excluded.synced_at""",
         (leaf_unit.get("key"), leaf_unit.get("name"), Jsonb(units), 1 if payload.get("ldap_enabled") else 0, current),
     )
+    central_ai = payload.get("ai_service")
+    if isinstance(central_ai, dict) and int(central_ai.get("version") or 0) > int(ai_service.load(database).get("version") or 0):
+        ai_service.save(database, api_format=str(central_ai.get("api_format") or "anthropic"),
+                        host=str(central_ai.get("host") or ""), model=str(central_ai.get("model") or ""),
+                        api_key=str(central_ai.get("api_key") or ""), actor=central_ai.get("updated_by"),
+                        version=int(central_ai["version"]))
     # Canopy accepted these pushes; clear the pending flag unless edited again since.
     for ack in payload.get("acknowledged") or []:
         database.execute(

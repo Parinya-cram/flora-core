@@ -1,8 +1,10 @@
-"""Live view of each ingress stream (pod) for the station admin.
+"""Live view of each ingress stream (pod) and each device's output for the station admin.
 
 Tails `gw.raw.<pod>` (device → gateway) and `gw.cmd.<pod>` (gateway → device:
 polls, ACKs, settings) from Kafka and keeps, per pod, per-second frame/byte
 counters for the last WINDOW_SEC and the most recent frames with their payloads.
+It also tails `gw.obs` and `gw.measurements` (parser → collector), keyed by device,
+so the device monitor can show exactly what is handed to the collector.
 Everything is in memory and starts empty when gateway-service restarts; the
 consumer reads from the latest offset, so it never replays history into parsers.
 """
@@ -25,7 +27,8 @@ log = logging.getLogger("gateway-service.streams")
 WINDOW_SEC = 900
 RECENT_FRAMES = 200
 PAYLOAD_LIMIT = 8192           # characters kept per frame; the size field keeps the real byte count
-TOPIC_PATTERN = r"^gw\.(raw|cmd)\..+"
+RECENT_OUTPUT = 300
+TOPIC_PATTERN = r"^gw\.(raw|cmd)\..+|^gw\.(obs|measurements)$"
 
 
 def payload_bytes(encoding: str, payload: str) -> int:
@@ -87,9 +90,42 @@ class PodStream:
                 "rate": self.rate(), "series": self.series(window)}
 
 
+class DeviceOutput:
+    """What one device's parser sends to the collector: observations and original measurements."""
+    __slots__ = ("device_id", "seconds", "recent", "totals", "last_ts", "next_id")
+
+    def __init__(self, device_id: str) -> None:
+        self.device_id = device_id
+        self.seconds: deque[list[int]] = deque()   # [epoch_sec, observations, measurements]
+        self.recent: deque[dict[str, Any]] = deque(maxlen=RECENT_OUTPUT)
+        self.totals = {"obs": 0, "measurement": 0}
+        self.last_ts: int | None = None
+        self.next_id = 0
+
+    def add(self, kind: str, message: dict[str, Any], topic: str) -> None:
+        now_sec = int(time.time())
+        if not self.seconds or self.seconds[-1][0] != now_sec:
+            self.seconds.append([now_sec, 0, 0])
+        while self.seconds and self.seconds[0][0] <= now_sec - WINDOW_SEC:
+            self.seconds.popleft()
+        self.seconds[-1][1 if kind == "obs" else 2] += 1
+        self.totals[kind] += 1
+        self.last_ts = int(time.time() * 1000)
+        self.next_id += 1
+        self.recent.append({"id": self.next_id, "kind": kind, "topic": topic, "received_at": self.last_ts,
+                            "message": message})
+
+    def rate(self, seconds: int = 60) -> dict[str, float]:
+        since = int(time.time()) - seconds
+        rows = [row for row in self.seconds if row[0] > since]
+        return {"obs_per_min": sum(r[1] for r in rows) * 60 / seconds,
+                "measurements_per_min": sum(r[2] for r in rows) * 60 / seconds}
+
+
 class StreamMonitor:
     def __init__(self) -> None:
         self.pods: dict[str, PodStream] = {}
+        self.devices: dict[str, DeviceOutput] = {}
         self.status: dict[str, Any] = {"state": "starting", "error": None, "started_at": int(time.time() * 1000)}
         self._task: asyncio.Task | None = None
 
@@ -134,7 +170,20 @@ class StreamMonitor:
             await asyncio.sleep(delay)
             delay = min(delay * 2, 30)
 
+    def device(self, device_id: str) -> DeviceOutput:
+        if device_id not in self.devices:
+            self.devices[device_id] = DeviceOutput(device_id)
+        return self.devices[device_id]
+
     def _handle(self, topic: str, value: bytes | None) -> None:
+        if topic in ("gw.obs", "gw.measurements"):
+            try:
+                message = json.loads(value or b"{}")
+            except ValueError:
+                return
+            if message.get("device_id"):
+                self.device(message["device_id"]).add("obs" if topic == "gw.obs" else "measurement", message, topic)
+            return
         direction = "in" if topic.startswith("gw.raw.") else "out"
         try:
             frame = json.loads(value or b"{}")

@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, HTTPException
 from psycopg import Connection, sql
 from psycopg.types.json import Jsonb
+from .. import form_sync
 from ..database import connection
 from ..clinical import insert,update,text,number,timestamp,case_audit
 from .auth_leaf import now_ms,require_permission
@@ -54,11 +55,15 @@ def patient(case_id:int,payload:dict=Body(...),actor:dict=Depends(require_permis
 def save_draft(db,case_id,draft,actor):
     with db.transaction():
         editable_case(db,case_id)
-        old=db.execute("SELECT form_draft_json FROM case_detail WHERE case_id=%s",(case_id,)).fetchone()
+        old=db.execute("SELECT form_draft_json,field_versions FROM case_detail WHERE case_id=%s FOR UPDATE",(case_id,)).fetchone()
         now=now_ms()
-        db.execute("""INSERT INTO case_detail(case_id,created_at,updated_at,form_draft_json) VALUES (%s,%s,%s,%s)
-            ON CONFLICT(case_id) DO UPDATE SET updated_at=excluded.updated_at,form_draft_json=excluded.form_draft_json""",
-            (case_id,now,now,json.dumps(draft) if draft is not None else None))
+        # Per-field versions let Canopy (tablet) and the Leaf edit the same form; see form_sync.
+        versions=form_sync.stamp_changes(form_sync.parse(old and old["form_draft_json"]),draft or {},
+                                         (old or {}).get("field_versions") or {},now)
+        db.execute("""INSERT INTO case_detail(case_id,created_at,updated_at,form_draft_json,field_versions) VALUES (%s,%s,%s,%s,%s)
+            ON CONFLICT(case_id) DO UPDATE SET updated_at=excluded.updated_at,form_draft_json=excluded.form_draft_json,
+              field_versions=excluded.field_versions""",
+            (case_id,now,now,json.dumps(draft) if draft is not None else None,Jsonb(versions)))
         case_audit(db,case_id,"form.draft",old,draft,actor)
     return {"ok":True,"case_id":case_id,"updated_at":now}
 
@@ -75,7 +80,7 @@ def patch_draft(case_id:int,payload:dict=Body(...),actor:dict=Depends(require_pe
     if not isinstance(patch,dict): raise HTTPException(400,"patch object required")
     with database.transaction():
         editable_case(database,case_id)
-        row=database.execute("SELECT form_draft_json FROM case_detail WHERE case_id=%s FOR UPDATE",(case_id,)).fetchone()
+        row=database.execute("SELECT form_draft_json,field_versions FROM case_detail WHERE case_id=%s FOR UPDATE",(case_id,)).fetchone()
         old={}
         if row and row.get("form_draft_json"):
             try:
@@ -85,9 +90,11 @@ def patch_draft(case_id:int,payload:dict=Body(...),actor:dict=Depends(require_pe
                 old={}
         merged={**old,**patch}
         now=now_ms()
-        database.execute("""INSERT INTO case_detail(case_id,created_at,updated_at,form_draft_json) VALUES (%s,%s,%s,%s)
-            ON CONFLICT(case_id) DO UPDATE SET updated_at=excluded.updated_at,form_draft_json=excluded.form_draft_json""",
-            (case_id,now,now,json.dumps(merged)))
+        versions=form_sync.stamp_changes(old,merged,(row or {}).get("field_versions") or {},now,set(patch))
+        database.execute("""INSERT INTO case_detail(case_id,created_at,updated_at,form_draft_json,field_versions) VALUES (%s,%s,%s,%s,%s)
+            ON CONFLICT(case_id) DO UPDATE SET updated_at=excluded.updated_at,form_draft_json=excluded.form_draft_json,
+              field_versions=excluded.field_versions""",
+            (case_id,now,now,json.dumps(merged),Jsonb(versions)))
         case_audit(database,case_id,"form.draft.patch",old,merged,actor)
     return {"ok":True,"case_id":case_id,"updated_at":now,"draft":merged}
 

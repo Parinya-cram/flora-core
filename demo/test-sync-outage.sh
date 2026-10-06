@@ -10,7 +10,7 @@ cleanup() {
   docker compose -f flora-canopy/compose.yaml start sync-api >/dev/null 2>&1 || true
   "${leaf[@]}" down --volumes >/dev/null 2>&1 || true
   docker exec flora-canopy-canopy-db-1 psql -U flora_admin -d flora -qAtc \
-    "DELETE FROM sync_case_index WHERE leaf_id='leaf-test-01'; DELETE FROM sync_message WHERE leaf_id='leaf-test-01'; DELETE FROM sync_leaf_node WHERE leaf_id='leaf-test-01';" >/dev/null 2>&1 || true
+    "DELETE FROM canopy_case_handover WHERE from_leaf_id='leaf-test-01' OR to_leaf_id='leaf-test-01'; DELETE FROM canopy_case_export WHERE leaf_id='leaf-test-01'; DELETE FROM sync_case_index WHERE leaf_id='leaf-test-01'; DELETE FROM sync_message WHERE leaf_id='leaf-test-01'; DELETE FROM sync_leaf_node WHERE leaf_id='leaf-test-01';" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 "${leaf[@]}" up -d --build leaf-db leaf-api leaf-sync

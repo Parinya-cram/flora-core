@@ -135,6 +135,7 @@ export const messages: Record<string, Record<string, string>> = {
     "topbar.accountSettings": "Account settings",
     "topbar.signOut": "Sign out",
     "system.menu": "System",
+    "system.ward": "Ward",
     "system.settings": "System settings",
     "system.workstation": "Workstation",
     "topbar.identityPending": "Identity pending",
@@ -172,6 +173,9 @@ export const messages: Record<string, Record<string, string>> = {
     "admit.allergyUnknown": "Allergy and demographics remain unknown",
     "admit.startEmergency": "Start emergency record",
     "admit.localIdOnStart": "Local ID assigned when started",
+    "landing.canopyBadge": "Canopy",
+    "landing.preopFilled": "Pre-op filled",
+    "landing.canopySource": "Canopy admission",
   },
   th: {
     "login.title": "เข้าสู่ระบบ",
@@ -288,6 +292,7 @@ export const messages: Record<string, Record<string, string>> = {
     "topbar.accountSettings": "ตั้งค่าบัญชี",
     "topbar.signOut": "ออกจากระบบ",
     "system.menu": "ระบบ",
+    "system.ward": "หอผู้ป่วย",
     "system.settings": "ตั้งค่าระบบ",
     "system.workstation": "เครื่องปฏิบัติงาน",
     "topbar.identityPending": "รอยืนยันตัวตน",
@@ -325,6 +330,9 @@ export const messages: Record<string, Record<string, string>> = {
     "admit.allergyUnknown": "การแพ้และข้อมูลประชากรยังไม่ทราบ",
     "admit.startEmergency": "เริ่มบันทึกฉุกเฉิน",
     "admit.localIdOnStart": "ระบบจะสร้างรหัสในเครื่องเมื่อเริ่มเคส",
+    "landing.canopyBadge": "Canopy",
+    "landing.preopFilled": "กรอก Pre-op แล้ว",
+    "landing.canopySource": "รับผู้ป่วยจาก Canopy",
   },
 };
 

@@ -1,0 +1,58 @@
+/* Canopy and Leaf sign-in: Root's branching network (tree for Canopy, flower for Leaf) and the glass card.
+   Every colour comes from the active app theme (--app-*), so all theme schemes work. */
+
+.canopy-login {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  font-family: var(--app-font);
+}
+
+.canopy-tree {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.canopy-tree__branch { fill: none; stroke: color-mix(in srgb, var(--app-accent) 26%, transparent); stroke-linecap: round }
+.canopy-tree__node { fill: var(--app-panel-bg); stroke: var(--app-accent); stroke-width: 1.5 }
+.canopy-tree__halo { fill: var(--app-accent); opacity: 0; animation: canopy-halo 4.8s ease-out infinite }
+.canopy-tree__spark, .canopy-tree__seed { fill: color-mix(in srgb, var(--app-accent) 45%, #e6b75c) }
+@keyframes canopy-halo { 0% { opacity: .35; r: 4 } 100% { opacity: 0; r: 22 } }
+
+/* ---------- card ---------- */
+.canopy-card {
+  position: relative;
+  background: color-mix(in srgb, var(--app-panel-bg) 88%, transparent);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  box-shadow: 0 40px 100px -40px color-mix(in srgb, var(--app-text) 45%, transparent);
+  animation: canopy-card-in .7s cubic-bezier(.2, .8, .2, 1) both;
+}
+.canopy-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #e6b75c, var(--app-accent), transparent);
+  opacity: .8;
+}
+@keyframes canopy-card-in { from { opacity: 0; transform: translateY(14px) scale(.985) } to { opacity: 1; transform: none } }
+
+.canopy-submit {
+  background: linear-gradient(135deg, var(--app-accent), color-mix(in srgb, var(--app-accent) 72%, var(--app-text)));
+  box-shadow: 0 12px 30px -14px var(--app-accent);
+}
+.canopy-spin {
+  width: 15px; height: 15px; border-radius: 50%;
+  border: 2px solid currentColor; border-right-color: transparent;
+  animation: canopy-spin .7s linear infinite;
+}
+@keyframes canopy-spin { to { transform: rotate(360deg) } }
+
+@media (prefers-reduced-motion: reduce) {
+  .canopy-tree__halo, .canopy-card { animation: none }
+  .canopy-tree__spark { display: none }
+}

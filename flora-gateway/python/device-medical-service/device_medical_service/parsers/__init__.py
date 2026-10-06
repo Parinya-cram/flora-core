@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from device_medical_service.parsers.acme.t200.parser import AcmeT200Parser
 from device_medical_service.parsers.generic.ascii_kv.parser import AsciiKvParser
 from device_medical_service.parsers.shared.base import Parser
 from device_medical_service.parsers.hl7.parser import Hl7v2Parser
@@ -25,6 +26,7 @@ PARSERS: dict[str, type[Parser]] = {
         HidroHl7Parser,
         AsciiKvParser,
         JsonFieldsParser,
+        AcmeT200Parser,
     )
 }
 

@@ -9,13 +9,17 @@ import CanopyFleetView from "../views/CanopyFleetView";
 import CanopyDashboardView from "../views/CanopyDashboardView";
 import CanopyHomeView from "../views/CanopyHomeView";
 import CanopyInfrastructureView from "../views/CanopyInfrastructureView";
+import CanopyTopologyView from "../views/CanopyTopologyView";
+import CanopyGatewayAlertsView from "../views/CanopyGatewayAlertsView";
 import IdleCaseLanding from "../views/IdleCaseLanding";
 import AccountView from "../views/AccountView";
 import CanopyReportsView from "../views/CanopyReportsView";
+import CanopyAdmissionsView from "../views/CanopyAdmissionsView";
 import { getSurfaceInfo } from "../edition/config";
 
 const ClinicalChartView = lazy(() => import("../views/ClinicalChartView"));
 const FormView = lazy(() => import("../views/FormView"));
+const WardView = lazy(() => import("../views/WardView"));
 const DiagnosisView = lazy(() => import("../views/DiagnosisView"));
 const ReportView = lazy(() => import("../views/ReportView"));
 const PatientView = lazy(() => import("../views/PatientView"));
@@ -23,6 +27,7 @@ const PatientView = lazy(() => import("../views/PatientView"));
 interface Props {
   caseStatus: CaseStatus;
   activeView:
+    | "ward"
     | "case"
     | "form"
     | "diagnosis"
@@ -33,9 +38,12 @@ interface Props {
     | "master"
     | "account"
     | "dashboard"
+    | "admissions"
     | "monitoring"
     | "fleet"
     | "infrastructure"
+    | "topology"
+    | "gateway-alerts"
     | "history";
   sessionUser: AuthUser | null;
   onCaseDischargeTimeUpdated?: (caseId: number, dischargeTime: number) => void;
@@ -43,7 +51,7 @@ interface Props {
   onStartNextCase?: () => void;
   onOpenCase?: (c: Exclude<CaseStatus, { status: "IDLE" }>) => void;
   onCaseStarted?: () => Promise<void> | void;
-  onNavigate?: (view: "patient" | "diagnosis" | "io") => void;
+  onNavigate?: (view: "patient" | "diagnosis" | "io" | "case") => void;
 }
 
 class ViewErrorBoundary extends Component<
@@ -109,7 +117,14 @@ export default function MainArea({
   return (
     <ViewErrorBoundary resetKey={resetKey}>
       <Suspense fallback={<div className="p-4 text-sm text-gray-400">Loading…</div>}>
-      {activeView === "case" && caseStatus.status === "IDLE" ? (
+      {activeView === "ward" ? (
+        <WardView
+          caseStatus={caseStatus}
+          sessionUser={sessionUser}
+          onOpenCase={() => onNavigate?.("case")}
+          onCaseChanged={async () => { await onCaseStarted?.(); }}
+        />
+      ) : activeView === "case" && caseStatus.status === "IDLE" ? (
         <IdleCaseLanding
           key={caseScopedKey}
           sessionUser={sessionUser}
@@ -138,10 +153,16 @@ export default function MainArea({
           />
       ) : activeView === "dashboard" ? (
         <CanopyHomeView />
+      ) : activeView === "admissions" ? (
+        <CanopyAdmissionsView sessionUser={sessionUser} />
       ) : activeView === "monitoring" ? (
         <CanopyDashboardView />
       ) : activeView === "fleet" ? (
         <CanopyFleetView />
+      ) : activeView === "topology" ? (
+        <CanopyTopologyView sessionUser={sessionUser} />
+      ) : activeView === "gateway-alerts" ? (
+        <CanopyGatewayAlertsView />
       ) : activeView === "infrastructure" ? (
         <CanopyInfrastructureView />
       ) : activeView === "history" ? (

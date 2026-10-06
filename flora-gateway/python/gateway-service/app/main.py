@@ -22,7 +22,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from psycopg.types.json import Jsonb
 
-from . import auth, connection, db, docker_ops, settings
+from . import alerts, auth, connection, db, docker_ops, settings
 from .streams import WINDOW_SEC, monitor
 
 log = logging.getLogger("gateway-service")
@@ -37,11 +37,14 @@ async def lifespan(_: FastAPI):
     db.pool.open(wait=True, timeout=60)
     for name in db.migrate():
         log.info("applied migration %s", name)
+    load_canopy_link()
     auth.ensure_default_admin()
     task = asyncio.create_task(background_loop())
+    sampler = asyncio.create_task(status_sampler())
     monitor.start()
     yield
     task.cancel()
+    sampler.cancel()
     await monitor.stop()
     if STATE["producer"]:
         await STATE["producer"].stop()
@@ -73,24 +76,281 @@ async def background_loop() -> None:
             await asyncio.to_thread(reconcile)
         except Exception as error:
             log.warning("reconcile failed: %s", error)
+        try:
+            STATE["alerts_push"] = {**await alerts.push(), "at": db.now_ms(), "error": None}
+        except Exception as error:  # Canopy unreachable: alerts stay queued and are resent next round
+            STATE["alerts_push"] = {"sent": 0, "at": db.now_ms(), "error": str(error)}
         await asyncio.sleep(settings.SYNC_INTERVAL_SEC)
 
 
+# ------------------------------------------------------------------ status history
+
+STATUS_SAMPLE_SEC = 30
+STATUS_RETENTION_MS = 7 * 86_400_000
+DEVICE_SILENT_MS = 120_000          # an enabled device with no data for this long counts as down
+CONTROLLER_LABELS = {"serial-controller": "Serial (RS-232)", "feeder-controller": "Feeder (HTTP poll)",
+                     "webhook-controller": "Webhook (HTTP push)", "socket-controller": "Socket (TCP/UDP)",
+                     "collector": "Collector", "publisher": "Publisher"}
+
+
+async def sample_status() -> list[tuple[str, str, str | None]]:
+    """One (lane, state, detail) row per part of the gateway, as it is right now."""
+    rows: list[tuple[str, str, str | None]] = [("gateway", "ok", None)]
+    haber, now = STATE["haber"], db.now_ms()
+    if haber["status"] == "disabled":
+        rows.append(("canopy", "stopped", "Haber URL not configured"))
+    elif haber["status"] == "ok" and haber.get("last_sync") and now - haber["last_sync"] < 3 * settings.SYNC_INTERVAL_SEC * 1000:
+        rows.append(("canopy", "ok", None))
+    else:
+        rows.append(("canopy", "down", haber.get("error") or f"no check-in since {haber.get('last_sync') or 'start'}"))
+    for name, result in (await controllers()).items():
+        status = result.get("container_status")
+        if status and status != "running":
+            rows.append((f"controller:{name}", "stopped", f"container {status}"))
+        elif result.get("reachable"):
+            rows.append((f"controller:{name}", "ok", None))
+        else:
+            rows.append((f"controller:{name}", "down", str(result.get("error") or "unreachable")[:200]))
+    seen = {r["device_id"]: r["last_seen_ts"] for r in db.fetch_all("SELECT device_id, last_seen_ts FROM gateway_device_seen")}
+    for instance in db.fetch_all("SELECT device_id, enabled FROM gateway_device_instance"):
+        last = seen.get(instance["device_id"])
+        if not instance["enabled"]:
+            rows.append((f"device:{instance['device_id']}", "stopped", "disabled"))
+        elif last and now - last < DEVICE_SILENT_MS:
+            rows.append((f"device:{instance['device_id']}", "ok", None))
+        else:
+            rows.append((f"device:{instance['device_id']}", "down",
+                         f"no data for {round((now - last) / 60000)} min" if last else "no data yet"))
+    return rows
+
+
+async def status_sampler() -> None:
+    await asyncio.sleep(5)   # let the first Haber check-in finish
+    try:
+        alerts.record_downtime(db.fetch_one("SELECT max(ts) AS ts FROM gateway_status_sample")["ts"], db.now_ms())
+    except Exception as error:
+        log.warning("downtime alert failed: %s", error)
+    count = 0
+    while True:
+        try:
+            now = db.now_ms()
+            rows = await sample_status()
+            try:
+                labels = {f"device:{r['device_id']}": r["label"] or r["device_id"]
+                          for r in db.fetch_all("SELECT device_id, label FROM gateway_device_instance")}
+                labels |= {f"controller:{name}": label for name, label in CONTROLLER_LABELS.items()}
+                alerts.observe(now, rows, labels)
+            except Exception as error:
+                log.warning("alert update failed: %s", error)
+            with db.pool.connection() as connection:
+                connection.cursor().executemany(
+                    "INSERT INTO gateway_status_sample (ts, lane, state, detail) VALUES (%s,%s,%s,%s)",
+                    [(now, lane, state, detail) for lane, state, detail in rows])
+                if count % 120 == 0:
+                    connection.execute("DELETE FROM gateway_status_sample WHERE ts < %s", (now - STATUS_RETENTION_MS,))
+            count += 1
+        except Exception as error:
+            log.warning("status sample failed: %s", error)
+        await asyncio.sleep(STATUS_SAMPLE_SEC)
+
+
+@app.get("/api/alerts")
+def list_alerts(status: str = "all", limit: int = 200):
+    where = {"open": "WHERE resolved_at IS NULL", "resolved": "WHERE resolved_at IS NOT NULL"}.get(status, "")
+    rows = db.fetch_all(f"SELECT * FROM gateway_alert {where} ORDER BY resolved_at IS NOT NULL, opened_at DESC LIMIT %s",
+                        (max(1, min(limit, 1000)),))
+    counts = db.fetch_one(
+        """SELECT count(*) FILTER (WHERE resolved_at IS NULL) AS open,
+                  count(*) FILTER (WHERE resolved_at IS NULL AND acknowledged_at IS NULL) AS unacknowledged,
+                  count(*) FILTER (WHERE delivered_version < version) AS undelivered
+           FROM gateway_alert""")
+    return {"rows": rows, "counts": counts, "delivery": STATE.get("alerts_push"), "haber_url": bool(settings.HABER_URL)}
+
+
+@app.post("/api/alerts/{alert_id}/ack")
+def acknowledge_alert(alert_id: int, request: Request):
+    if not alerts.acknowledge(alert_id, request.state.user["username"]):
+        raise HTTPException(409, "alert not found or already acknowledged")
+    return {"acknowledged": alert_id}
+
+
+@app.post("/api/alerts/push", dependencies=[Depends(require_admin)])
+async def push_alerts():
+    try:
+        STATE["alerts_push"] = {**await alerts.push(), "at": db.now_ms(), "error": None}
+    except Exception as error:
+        STATE["alerts_push"] = {"sent": 0, "at": db.now_ms(), "error": str(error)}
+        raise HTTPException(502, f"Canopy did not accept the alerts: {error}") from None
+    return STATE["alerts_push"]
+
+
+# hours -> bucket size; each bucket holds several 30 s samples.
+TIMELINE_BUCKETS = {1: 60_000, 6: 120_000, 24: 600_000}
+
+
+def lane_label(lane: str, labels: dict[str, str]) -> tuple[str, str]:
+    kind, _, name = lane.partition(":")
+    if kind == "gateway":
+        return "Gateway service", "gateway"
+    if kind == "canopy":
+        return "Canopy connection", "canopy"
+    if kind == "controller":
+        return CONTROLLER_LABELS.get(name, name), "controller"
+    return labels.get(name) or name, "device"
+
+
+@app.get("/api/status/timeline")
+def status_timeline(hours: int = 6):
+    """Per-lane state per bucket: down wins over ok, ok over stopped; 'none' = no sample.
+    A bucket with no samples from any lane after recording began means gateway-service was down."""
+    hours = hours if hours in TIMELINE_BUCKETS else 6
+    bucket = TIMELINE_BUCKETS[hours]
+    end = (db.now_ms() // bucket + 1) * bucket
+    start = end - hours * 3_600_000
+    samples = db.fetch_all("SELECT ts, lane, state, detail FROM gateway_status_sample WHERE ts >= %s ORDER BY ts",
+                           (start,))
+    first = db.fetch_one("SELECT min(ts) AS ts FROM gateway_status_sample")["ts"]
+    n = (end - start) // bucket
+    rank = {"none": 0, "stopped": 1, "ok": 2, "down": 3}
+    lanes: dict[str, dict[str, Any]] = {}
+    any_sample = [False] * n
+    for row in samples:
+        i = (row["ts"] - start) // bucket
+        any_sample[i] = True
+        lane = lanes.setdefault(row["lane"], {"states": ["none"] * n, "details": [None] * n})
+        if rank[row["state"]] >= rank[lane["states"][i]]:
+            lane["states"][i] = row["state"]
+            lane["details"][i] = row["detail"] or lane["details"][i]
+    gateway = lanes.setdefault("gateway", {"states": ["none"] * n, "details": [None] * n})
+    for i in range(n):
+        bucket_end = start + (i + 1) * bucket
+        if not any_sample[i] and first is not None and bucket_end > first and start + i * bucket < db.now_ms() - bucket:
+            gateway["states"][i], gateway["details"][i] = "down", "gateway service not running"
+    labels = {r["device_id"]: r["label"] for r in db.fetch_all("SELECT device_id, label FROM gateway_device_instance")}
+    order = {"gateway": 0, "canopy": 1, "controller": 2, "device": 3}
+    out = []
+    for lane, data in lanes.items():
+        label, kind = lane_label(lane, labels)
+        states = data["states"]
+        incidents, i = [], 0
+        while i < n:
+            if states[i] == "down":
+                j = i
+                while j + 1 < n and states[j + 1] == "down":
+                    j += 1
+                incidents.append({"start": start + i * bucket, "end": min(start + (j + 1) * bucket, db.now_ms()),
+                                  "detail": next((d for d in data["details"][i:j + 1] if d), None)})
+                i = j + 1
+            else:
+                i += 1
+        up, down = states.count("ok"), states.count("down")
+        out.append({"lane": lane, "label": label, "kind": kind, "states": states, "details": data["details"],
+                    "uptime": round(100 * up / (up + down), 1) if up + down else None, "incidents": incidents})
+    out.sort(key=lambda r: (order[r["kind"]], r["label"]))
+    return {"hours": hours, "start": start, "bucket_ms": bucket, "buckets": n, "recording_since": first, "lanes": out}
+
+
 # ------------------------------------------------------------------ Haber + license
+
+SECRET_OPTION = ("password", "secret", "token", "key", "credential")
+MASK = "••••"
+
+
+def masked_options(options: dict[str, Any]) -> dict[str, Any]:
+    return {key: MASK if any(word in key.lower() for word in SECRET_OPTION) else value
+            for key, value in options.items()}
+
+
+def apply_canopy_config(config: dict[str, Any]) -> dict[str, Any]:
+    """Make this gateway match a configuration stored in Canopy (clone, restore, new gateway).
+
+    Secrets never leave a gateway, so masked option values keep this gateway's own
+    value; a secret this gateway does not have yet is reported for manual entry.
+    """
+    version = int(config.get("version") or 0)
+    if "site" in config:
+        site = config.get("site") or {}
+        db.execute(
+            f"""UPDATE gateway_site SET {', '.join(c + '=%s' for c in SITE_COLUMNS)}, updated_at=%s, updated_by='canopy'
+                WHERE id=1""",
+            (*(site.get(c) for c in SITE_COLUMNS), db.now_ms()))
+    if "devices" not in config:
+        # Location set at Canopy: a site-only configuration never touches this gateway's devices.
+        db.execute("UPDATE gateway_site SET canopy_config_version=%s WHERE id=1", (version,))
+        result = {"version": version, "site_only": True, "at": db.now_ms()}
+        log.info("applied Canopy location %s", version)
+        return result
+    wanted = {str(device["device_id"]): device for device in config.get("devices") or [] if device.get("device_id")}
+    existing = {row["device_id"]: db.instance_row(row) for row in db.fetch_all("SELECT * FROM gateway_device_instance")}
+    removed, applied, skipped, missing_secrets = [], [], [], []
+    for device_id in set(existing) - set(wanted):
+        docker_ops.stop_parser(device_id)
+        db.execute("DELETE FROM gateway_device_instance WHERE device_id=%s", (device_id,))
+        removed.append(device_id)
+    for device_id, device in sorted(wanted.items()):
+        if not db.fetch_one("SELECT 1 FROM gateway_device_type WHERE code=%s", (device.get("device_type"),)):
+            skipped.append({"device_id": device_id, "reason": f"unknown device type {device.get('device_type')}"})
+            continue
+        options = dict(device.get("options") or {})
+        own = (existing.get(device_id) or {}).get("options") or {}
+        for key, value in list(options.items()):
+            if value == MASK:
+                if key in own:
+                    options[key] = own[key]
+                else:
+                    options.pop(key)
+                    missing_secrets.append(f"{device_id}.{key}")
+        fields = InstanceFields(**{**{c: device.get(c) for c in INSTANCE_COLUMNS if c in device},
+                                   "options": options, "enabled": bool(device.get("enabled", True))})
+        if device_id in existing:
+            db.execute(
+                f"UPDATE gateway_device_instance SET {', '.join(c + '=%s' for c in INSTANCE_COLUMNS)}, updated_at=%s "
+                "WHERE device_id=%s",
+                (*instance_values(fields), db.now_ms(), device_id))
+            if any(getattr(fields, c) != existing[device_id].get(c) for c in PARSER_COLUMNS):
+                docker_ops.stop_parser(device_id)  # reconcile restarts it with the new settings
+        else:
+            insert_instance(InstanceIn(device_id=device_id, **fields.model_dump()))
+        applied.append(device_id)
+    db.execute("UPDATE gateway_site SET canopy_config_version=%s WHERE id=1", (version,))
+    result = {"version": version, "applied": applied, "removed": removed, "skipped": skipped,
+              "missing_secrets": missing_secrets, "at": db.now_ms()}
+    log.info("applied Canopy configuration %s: %s", version, result)
+    try:
+        reconcile()
+    except Exception as error:
+        log.warning("reconcile after Canopy configuration failed: %s", error)
+    return result
+
 
 async def haber_checkin() -> dict[str, Any]:
     if not settings.HABER_URL:
         STATE["haber"].update(status="disabled", error=None)
         return {}
-    instances = db.fetch_all("SELECT device_id, device_type, leaf_id, pod, enabled FROM gateway_device_instance")
+    # Full device configuration so Canopy can show what each gateway feeds and how it is set up.
+    states = await asyncio.to_thread(docker_ops.parser_states)
+    instances = [
+        {**row, "options": masked_options(row.get("options") or {}),
+         "parser_status": (states.get(row["device_id"]) or {}).get("status") or "absent"}
+        for row in db.fetch_all(
+            """SELECT device_id, device_type, leaf_id, pod, enabled, label, options, serial_number,
+                      asset_tag, station, location, installed_at, notes, updated_at
+               FROM gateway_device_instance ORDER BY device_id""")
+    ]
     async with httpx.AsyncClient(timeout=5) as client:
         response = await client.post(
             f"{settings.HABER_URL}/api/haber/v1/gateways/{settings.GATEWAY_ID}/checkin",
             headers={"authorization": f"Bearer {settings.HABER_TOKEN}"},
-            json={"gateway_id": settings.GATEWAY_ID, "version": "0.1.0", "devices": instances, "site": site_row()},
+            json={"gateway_id": settings.GATEWAY_ID, "version": "0.1.0", "devices": instances, "site": site_row(),
+                  "applied_config_version": int(site_row().get("canopy_config_version") or 0),
+                  "data_api_url": settings.DATA_API_PUBLIC_URL or None},
         )
         response.raise_for_status()
         payload = response.json()
+    canopy_config = payload.get("canopy_config")
+    if isinstance(canopy_config, dict) and int(canopy_config.get("version") or 0) > int(site_row().get("canopy_config_version") or 0):
+        result = await asyncio.to_thread(apply_canopy_config, canopy_config)
+        STATE["haber"].update(canopy_config=result)
     db.upsert_device_types(payload.get("device_types") or [], "haber")
     db.store_parser_images(payload.get("images") or [], payload.get("device_types") or [], payload.get("release_id"))
     if payload.get("license"):
@@ -199,8 +459,8 @@ def reconcile() -> dict[str, Any]:
 def seed_instances() -> bool:
     """Creates demo/site instances from FLORA_GATEWAY_SEED once their types exist."""
     path = Path(settings.SEED_PATH)
-    if not path.exists():
-        return True
+    if not path.exists() or int(site_row().get("canopy_config_version") or 0) > 0:
+        return True  # a configuration from Canopy replaces the seed
     pending = False
     for item in json.loads(path.read_text()):
         if db.fetch_one("SELECT 1 FROM gateway_device_instance WHERE device_id=%s", (item["device_id"],)):
@@ -615,6 +875,62 @@ def stream_detail(pod: str, window: int = 300, after: int = 0, limit: int = 100)
     return {**stream.summary(window_arg(window)), "frames": frames[::-1], "monitor": monitor.status}
 
 
+# ------------------------------------------------------------------ device monitor
+
+# hours -> bucket size: per minute for the last hour, 5 min for 6 h, 15 min for a day.
+MONITOR_BUCKETS = {1: 60_000, 6: 300_000, 24: 900_000}
+
+
+def bucket_counts(table: str, device_id: str, start: int, bucket: int) -> dict[int, int]:
+    try:
+        rows = db.fetch_all(
+            f"SELECT (system_ts / %s) * %s AS t, count(*) AS n FROM {table} "
+            "WHERE device_id=%s AND system_ts >= %s GROUP BY 1",
+            (bucket, bucket, device_id, start))
+    except Exception:  # gateway_measurement is missing on gateways created before it existed
+        return {}
+    return {int(row["t"]): row["n"] for row in rows}
+
+
+@app.get("/api/devices/{device_id}/monitor")
+def device_monitor(device_id: str, hours: int = 1):
+    """Stored history (what the collector wrote) for one device, plus its live output rate."""
+    instance = db.fetch_one("SELECT * FROM gateway_device_instance WHERE device_id=%s", (device_id,))
+    if instance is None:
+        raise HTTPException(404, "device not found")
+    hours = hours if hours in MONITOR_BUCKETS else 1
+    bucket = MONITOR_BUCKETS[hours]
+    end = db.now_ms() // bucket * bucket          # last complete bucket; the live tiles cover the current one
+    start = end - hours * 3_600_000
+    observations = bucket_counts("gateway_observation", device_id, start, bucket)
+    measurements = bucket_counts("gateway_measurement", device_id, start, bucket)
+    series = [[t // 1000, observations.get(t, 0), measurements.get(t, 0)] for t in range(start, end, bucket)]
+    # Parameters look at everything stored in the range, including the bucket still filling.
+    parameters = db.fetch_all(
+        """SELECT DISTINCT ON (ivy_param) ivy_param, raw_code, value, unit, system_ts,
+                  count(*) OVER (PARTITION BY ivy_param) AS n
+           FROM gateway_observation WHERE device_id=%s AND system_ts >= %s
+           ORDER BY ivy_param, system_ts DESC""", (device_id, start))
+    live = monitor.devices.get(device_id)
+    return {
+        "device": db.instance_row(instance), "hours": hours, "bucket_ms": bucket, "series": series,
+        "totals": {"observations": sum(observations.values()), "measurements": sum(measurements.values())},
+        "parameters": parameters,
+        "live": {"rate": live.rate() if live else {"obs_per_min": 0, "measurements_per_min": 0},
+                 "totals": live.totals if live else {"obs": 0, "measurement": 0},
+                 "last_ts": live.last_ts if live else None},
+        "monitor": monitor.status,
+    }
+
+
+@app.get("/api/devices/{device_id}/payloads")
+def device_payloads(device_id: str, after: int = 0, limit: int = 100):
+    """Messages this device's parser published for the collector (newest first); `after` = last seen id."""
+    live = monitor.devices.get(device_id)
+    rows = [row for row in (live.recent if live else []) if row["id"] > after][-max(1, min(limit, 300)):]
+    return {"rows": rows[::-1], "monitor": monitor.status}
+
+
 # ------------------------------------------------------------------ device commands
 
 class CommandIn(BaseModel):
@@ -635,6 +951,73 @@ async def send_command(pod: str, body: CommandIn):
     await STATE["producer"].send_and_wait(topic, {"pod": pod, "encoding": body.encoding, "payload": body.payload,
                                                   "meta": meta, "issued_at": db.now_ms()})
     return {"sent": True, "topic": topic}
+
+
+# ------------------------------------------------------------------ link to Canopy
+
+ENV_LINK = {"canopy_url": settings.HABER_URL, "gateway_id": settings.GATEWAY_ID, "gateway_key": settings.HABER_TOKEN}
+
+
+def normalize_url(value: str | None) -> str:
+    value = (value or "").strip().rstrip("/")
+    if value and "://" not in value:
+        value = "https://" + value          # a bare host name means the Canopy edge on 443
+    return value
+
+
+def load_canopy_link() -> None:
+    """Values saved on the admin page win over the environment."""
+    row = db.fetch_one("SELECT * FROM gateway_canopy_link WHERE id=1") or {}
+    settings.HABER_URL = normalize_url(row.get("canopy_url")) or ENV_LINK["canopy_url"]
+    settings.GATEWAY_ID = row.get("gateway_id") or ENV_LINK["gateway_id"]
+    settings.HABER_TOKEN = row.get("gateway_key") or ENV_LINK["gateway_key"]
+
+
+def link_state() -> dict[str, Any]:
+    row = db.fetch_one("SELECT * FROM gateway_canopy_link WHERE id=1") or {}
+    return {"canopy_url": settings.HABER_URL, "gateway_id": settings.GATEWAY_ID, "has_key": bool(settings.HABER_TOKEN),
+            "source": "admin page" if row.get("canopy_url") or row.get("gateway_id") else "environment",
+            "updated_at": row.get("updated_at"), "updated_by": row.get("updated_by"), "haber": STATE["haber"]}
+
+
+class CanopyLinkIn(BaseModel):
+    canopy_url: str = Field(min_length=1, max_length=300)
+    gateway_id: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,120}$")
+    gateway_key: str | None = Field(default=None, max_length=500)   # blank keeps the current key
+
+
+@app.get("/api/canopy-link")
+def get_canopy_link():
+    return link_state()
+
+
+@app.put("/api/canopy-link", dependencies=[Depends(require_admin), Depends(auth.require_role_admin)])
+async def put_canopy_link(payload: CanopyLinkIn, request: Request):
+    """Saves how to reach Canopy and checks in right away; the result says whether Canopy accepted it."""
+    url = normalize_url(payload.canopy_url)
+    if not url.startswith(("https://", "http://")):
+        raise HTTPException(422, "Canopy address must be a host name or an http(s) URL")
+    previous_id = settings.GATEWAY_ID
+    db.execute(
+        """UPDATE gateway_canopy_link SET canopy_url=%s, gateway_id=%s,
+             gateway_key=COALESCE(NULLIF(%s, ''), gateway_key), updated_at=%s, updated_by=%s WHERE id=1""",
+        (url, payload.gateway_id, payload.gateway_key or "", db.now_ms(), request.state.user["username"]))
+    load_canopy_link()
+    if previous_id != settings.GATEWAY_ID:
+        # Controllers stamp this id on frames; they pick it up from gateway.toml when restarted.
+        try:
+            config = read_config()
+            config["gateway_id"] = settings.GATEWAY_ID
+            Path(settings.CONFIG_PATH).write_text(tomli_w.dumps(config))
+        except Exception as error:
+            log.warning("could not write gateway_id to %s: %s", settings.CONFIG_PATH, error)
+    try:
+        await haber_checkin()
+        connected, error = True, None
+    except Exception as failure:
+        STATE["haber"].update(status="offline", error=str(failure))
+        connected, error = False, str(failure)
+    return {**link_state(), "connected": connected, "error": error, "gateway_id_changed": previous_id != settings.GATEWAY_ID}
 
 
 # ------------------------------------------------------------------ site (where this gateway is installed)
@@ -667,7 +1050,8 @@ def site_label(site: dict[str, Any]) -> str:
 def get_site():
     site = site_row()
     license_ = db.fetch_one("SELECT tenant_id FROM gateway_license WHERE id=1") or {}
-    return {**site, "gateway_id": settings.GATEWAY_ID, "tenant_id": license_.get("tenant_id"), "label": site_label(site)}
+    return {**site, "gateway_id": settings.GATEWAY_ID, "tenant_id": license_.get("tenant_id"), "label": site_label(site),
+            "managed_by_canopy": bool(settings.HABER_URL)}
 
 
 @app.get("/api/site/label")
@@ -678,6 +1062,8 @@ def get_site_label():
 
 @app.put("/api/site", dependencies=[Depends(require_admin), Depends(auth.require_role_admin)])
 def put_site(payload: SiteIn, request: Request):
+    if settings.HABER_URL:
+        raise HTTPException(409, "this gateway is connected to Canopy; set its location at Canopy (Topology → gateway)")
     db.execute(
         f"""UPDATE gateway_site SET {', '.join(c + '=%s' for c in SITE_COLUMNS)}, updated_at=%s, updated_by=%s
             WHERE id=1""",

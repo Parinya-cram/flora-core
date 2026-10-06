@@ -257,3 +257,90 @@ export const adoptObservedLeafLocation = (leafId: string) =>
   sendJson<Record<string, unknown>>(`/api/fleet/control/leaves/${encodeURIComponent(leafId)}/adopt-observed`, "POST", {});
 export const applyLeafGroupSettings = (id: number, input: { timezone: string; date_format: string; time_format: string }) =>
   sendJson<{ ok: boolean; updated: number }>(`/api/fleet/control/groups/${id}/settings`, "PUT", input);
+
+// ---- Topology: Canopy -> ward -> Leaf -> Gateway -> device ---------------------------
+
+export type GatewayDevice = {
+  gateway_id: string;
+  device_id: string;
+  leaf_id: string | null;
+  leaf_name: string | null;
+  unit_key: string | null;
+  unit_name: string | null;
+  device_type: string;
+  pod: string | null;
+  label: string | null;
+  enabled: boolean;
+  options: Record<string, unknown>;
+  serial_number: string | null;
+  asset_tag: string | null;
+  station: string | null;
+  location: string | null;
+  installed_at: number | null;
+  notes: string | null;
+  parser_status: string | null;
+  updated_at: number | null;
+};
+export type GatewayLicense = {
+  max_devices?: number | null;
+  allowed_types?: string[];
+  expires_at?: number | null;
+  bundle_id?: string | null;
+  revoked?: boolean;
+  issued_by?: string | null;
+};
+export type CanopyGateway = {
+  gateway_id: string;
+  version: string | null;
+  site: Record<string, string | null>;
+  license: GatewayLicense;
+  config_hash: string | null;
+  first_seen_at: number;
+  last_seen_at: number;
+  config_changed_at: number;
+  desired_version: number;
+  desired_source: string | null;
+  applied_version: number;
+  config_pending: boolean;
+  connection_status: "online" | "delayed" | "offline" | "pending";
+  devices: GatewayDevice[];
+  license_usage: { enabled: number; max_devices: number | null; by_ward: Record<string, number> };
+};
+export type TopologyLeaf = {
+  leaf_id: string;
+  hospital_id: string;
+  display_name: string;
+  software_version: string | null;
+  last_seen_at: string | null;
+  unit_key: string | null;
+  unit_name: string | null;
+  hospital_name: string | null;
+  room_name: string | null;
+  bed_name: string | null;
+  connection_status: "online" | "delayed" | "offline";
+  active_cases: number;
+};
+export type DeviceTypeInfo = { label?: string; category?: string; protocol?: string; controller?: string; parser?: string };
+export type Topology = {
+  server_time: string;
+  canopy: { name: string; tenant_id: string | null };
+  haber: { status: "ok" | "unavailable"; error: string | null };
+  wards: Array<{ key: string; name: string; building_name: string | null }>;
+  leaves: TopologyLeaf[];
+  gateways: CanopyGateway[];
+  device_types: Record<string, DeviceTypeInfo>;
+};
+export type GatewaySnapshot = {
+  id: number;
+  config_hash: string;
+  captured_at: number;
+  device_count: number;
+  config: { site: Record<string, unknown>; devices: Array<Record<string, unknown>> };
+};
+
+export const getTopology = () => getJson<Topology>("/api/fleet/topology");
+export const getGatewaySnapshots = (gatewayId: string) =>
+  rows<GatewaySnapshot>(`/api/fleet/gateways/${encodeURIComponent(gatewayId)}/snapshots`);
+export const cloneGatewayConfig = (targetGatewayId: string, input: { source_gateway_id: string; snapshot_id?: number | null; include_site: boolean }) =>
+  sendJson<{ ok: boolean; gateway_id: string; desired_version: number; devices: number }>(
+    `/api/fleet/control/gateways/${encodeURIComponent(targetGatewayId)}/clone`, "POST", input);

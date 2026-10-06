@@ -1,6 +1,13 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createCaseDiagnosis, createCaseProcedure } from "../api/caseClinicalApi";
-import { getCaseStartOverlap, startCase, type AdmissionSource, type StartCaseOverlapPolicy } from "../api/caseApi";
+import {
+  getCanopyAdmissions,
+  getCaseStartOverlap,
+  startCase,
+  type AdmissionSource,
+  type CanopyAdmissionRow,
+  type StartCaseOverlapPolicy,
+} from "../api/caseApi";
 import {
   createCaseAllergy,
   getHisBufferByHn,
@@ -94,6 +101,27 @@ function preparedPatientName(row: HisBufferListRow, preference: PatientNameLangu
   return formatPatientDisplayName(row, preference) || row.hn;
 }
 
+const CANOPY_ADMISSIONS_REFRESH_MS = 15_000;
+const ASA_ROMAN: Record<string, string> = { "1": "I", "2": "II", "3": "III", "4": "IV", "5": "V", "6": "VI" };
+const SURGICAL_PRIORITIES = ["elective", "urgent", "emergency"];
+
+function normalizeAsa(value: string | null | undefined) {
+  const raw = String(value || "").trim().toUpperCase();
+  return ASA_ROMAN[raw] || raw;
+}
+
+function formatScheduled(ms: number | null | undefined, timezone: string, language: string) {
+  if (!ms || !Number.isFinite(ms)) return "";
+  return new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", {
+    day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: timezone,
+  }).format(new Date(ms));
+}
+
+/** Errors meaning the Canopy admission was taken or withdrawn; the list must be refreshed. */
+function isCanopyAdmissionGone(message: string) {
+  return /no longer available|already started at another leaf/i.test(message);
+}
+
 function FieldIcon({ children }: { children: ReactNode }) {
   return <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--app-accent)]/12 text-[var(--app-accent)]">{children}</span>;
 }
@@ -121,6 +149,10 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
   const [hn, setHn] = useState("");
   const [lookup, setLookup] = useState<CaseHisLookupResult | null>(null);
   const [prepared, setPrepared] = useState<HisBufferListRow[]>([]);
+  const [canopyAdmissions, setCanopyAdmissions] = useState<CanopyAdmissionRow[]>([]);
+  const [canopyAdmission, setCanopyAdmission] = useState<CanopyAdmissionRow | null>(null);
+  /** The Canopy admission's HN also exists in the local HIS buffer (so HIS sync is worthwhile). */
+  const [canopyHisBuffered, setCanopyHisBuffered] = useState(false);
   const [demoPatients, setDemoPatients] = useState<DemoHisPatient[]>([]);
   const [procedure, setProcedure] = useState("");
   const [diagnosis, setDiagnosis] = useState("");
@@ -153,6 +185,20 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
     });
     return () => { cancelled = true; };
   }, []);
+
+  const refreshCanopyAdmissions = useCallback(async () => {
+    try {
+      setCanopyAdmissions(await getCanopyAdmissions());
+    } catch {
+      // Canopy may be unreachable; keep the last known list.
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshCanopyAdmissions();
+    const timer = window.setInterval(() => void refreshCanopyAdmissions(), CANOPY_ADMISSIONS_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [refreshCanopyAdmissions]);
 
   useEffect(() => {
     if (selectedDiagnosis?.local_name === diagnosis || diagnosis.trim().length < 2) { setDiagnosisMatches([]); return; }
@@ -201,11 +247,13 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
   const patientReady = Boolean(lookup?.row && (lookup.row.hn || mode === "manual"));
   const safeToStart = patientReady && Boolean(procedure.trim()) && allergyReviewed && Boolean(startAt) && !busy;
   const clinician = sessionUser?.name || sessionUser?.username || t("landing.notAssigned");
-  const sourceLabel = mode === "manual" ? t("admit.manual") : lookup?.offline ? t("landing.bufferSource") : lookup?.exchange?.label || t("landing.hisSource");
+  const sourceLabel = canopyAdmission ? t("landing.canopySource") : mode === "manual" ? t("admit.manual") : lookup?.offline ? t("landing.bufferSource") : lookup?.exchange?.label || t("landing.hisSource");
   const startTimestamp = useMemo(() => new Date(startAt).getTime(), [startAt]);
 
   function resetPatient() {
     setLookup(null);
+    setCanopyAdmission(null);
+    setCanopyHisBuffered(false);
     setProcedure("");
     setDiagnosis("");
     setSelectedProcedure(null);
@@ -230,6 +278,8 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
   async function loadPatient(targetHn: string, fromBuffer = false) {
     const normalized = targetHn.trim();
     if (!normalized) return;
+    setCanopyAdmission(null);
+    setCanopyHisBuffered(false);
     setBusy(true);
     setError("");
     try {
@@ -247,6 +297,52 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function selectCanopyAdmission(row: CanopyAdmissionRow) {
+    resetPatient();
+    setBusy(true);
+    const normalizedHn = String(row.hn || "").trim();
+    const patient = row.patient || { patient_name: "" };
+    let result: CaseHisLookupResult | null = null;
+    if (normalizedHn) {
+      try {
+        const buffered = await getHisBufferByHn(normalizedHn);
+        if (buffered.row) result = buffered;
+      } catch {
+        // Not in the local HIS buffer: the Canopy admission carries the identity.
+      }
+    }
+    setCanopyHisBuffered(Boolean(result));
+    setLookup(result ?? {
+      ok: true,
+      hn: normalizedHn,
+      source: "BUFFER",
+      offline: true,
+      row: {
+        hn: normalizedHn,
+        an: row.admissionNumber || null,
+        patient_name: patient.patient_name || null,
+        sex: patient.sex || null,
+        dob: patient.dob || null,
+        age_text: patient.age_text || null,
+        weight_kg: patient.weight_kg ?? null,
+        height_cm: patient.height_cm ?? null,
+      },
+      allergies: [],
+      labs: [],
+    });
+    const details = row.admission || {};
+    setCanopyAdmission(row);
+    setHn(normalizedHn);
+    setProcedure(details.operation || "");
+    setDiagnosis(details.diagnosis || "");
+    setAnaesthesiaTechnique(details.anaesthesia_technique || "");
+    setAsaStatus(normalizeAsa(details.asa_status));
+    setAsaEmergency(Boolean(details.asa_emergency));
+    const priority = String(details.surgical_priority || "").trim().toLowerCase();
+    setSurgicalPriority(SURGICAL_PRIORITIES.includes(priority) ? priority : "elective");
+    setBusy(false);
   }
 
   function useManualPatient() {
@@ -278,7 +374,7 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
     setBusy(true);
     setError("");
     try {
-      const admissionSource: AdmissionSource = mode === "prepared" ? "prepared" : mode === "manual" ? "manual" : "his";
+      const admissionSource: AdmissionSource = canopyAdmission || mode === "prepared" ? "prepared" : mode === "manual" ? "manual" : "his";
       const started = await startCase(lookup.row.hn, startTimestamp, {
         overlapPolicy: policy,
         admissionSource,
@@ -295,12 +391,14 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
         asaStatus: asaStatus || undefined,
         asaEmergency,
         surgicalPriority,
+        canopyAdmissionId: canopyAdmission?.id,
       });
       const caseId = Number(started?.case_id);
       if (!Number.isFinite(caseId) || caseId <= 0) throw new Error(t("landing.startFailed"));
 
       const preparationWarnings: unknown[] = [];
-      if (mode !== "manual") {
+      // A Canopy admission whose HN is not in the HIS buffer has nothing to sync.
+      if (mode !== "manual" && (!canopyAdmission || canopyHisBuffered)) {
         try {
           await syncCaseHis(caseId);
         } catch (syncError) {
@@ -337,7 +435,14 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
       window.dispatchEvent(new CustomEvent("flora:case-started", { detail: { caseId, hn: started?.hn || lookup.row.hn } }));
       await onCaseStarted();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t("landing.startFailed"));
+      const message = cause instanceof Error ? cause.message : t("landing.startFailed");
+      if (canopyAdmission && isCanopyAdmissionGone(message)) {
+        // Someone else started or withdrew it: return to the refreshed list.
+        resetPatient();
+        setMode("prepared");
+        void refreshCanopyAdmissions();
+      }
+      setError(message);
     } finally {
       setBusy(false);
       setOverlapChoice(false);
@@ -443,8 +548,28 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
             </section>
 
             {mode === "prepared" ? <section className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-5 sm:p-7">
+              {error ? <div className="mb-4 rounded-xl border border-amber-400/35 bg-amber-400/10 p-4 text-sm text-[var(--app-text)]" role="alert">{error}</div> : null}
               <div className="grid gap-3 md:grid-cols-2">
-                {prepared.length ? prepared.map(row => (
+                {canopyAdmissions.map(row => {
+                  const name = row.patient?.patient_name || row.hn;
+                  const scheduled = formatScheduled(row.scheduledAt, displayTimezone, language);
+                  return (
+                    <button key={`canopy-${row.id}`} type="button" disabled={busy} onClick={() => void selectCanopyAdmission(row)} className="flex w-full items-center gap-3 rounded-xl border border-[var(--app-accent)]/35 bg-[var(--app-control-bg)] p-4 text-left hover:border-[var(--app-accent)] disabled:opacity-60">
+                      <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--app-accent)]/12 text-sm font-bold text-[var(--app-accent)]">{name.slice(0, 1).toUpperCase()}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <span className="truncate text-sm font-semibold text-[var(--app-text)]">{name}</span>
+                          <span className="rounded-full bg-[var(--app-accent)]/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--app-accent)]">{t("landing.canopyBadge")}</span>
+                          {row.preopFilled ? <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">{t("landing.preopFilled")}</span> : null}
+                        </span>
+                        <span className="block text-xs text-[var(--app-muted)]">HN {row.hn}{row.unitName ? ` · ${row.unitName}` : ""}{scheduled ? ` · ${scheduled}` : ""}</span>
+                        {row.admission?.operation ? <span className="block truncate text-xs text-[var(--app-muted)]">{row.admission.operation}</span> : null}
+                      </span>
+                      <span className="text-[var(--app-accent)]">›</span>
+                    </button>
+                  );
+                })}
+                {prepared.length || canopyAdmissions.length ? prepared.map(row => (
                   <button key={row.hn} type="button" onClick={() => void loadPatient(row.hn, true)} className="flex w-full items-center gap-3 rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] p-4 text-left hover:border-[var(--app-accent)]">
                     <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[var(--app-accent)]/12 text-sm font-bold text-[var(--app-accent)]">{preparedPatientName(row, patientNameLanguage).slice(0, 1).toUpperCase()}</span>
                     <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-[var(--app-text)]">{preparedPatientName(row, patientNameLanguage)}</span><span className="block text-xs text-[var(--app-muted)]">HN {row.hn} · {row.allergy_count || 0} {t("landing.allergies")} · {row.lab_count || 0} {t("landing.labs")}</span></span><span className="text-[var(--app-accent)]">›</span>
