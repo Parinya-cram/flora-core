@@ -17,14 +17,14 @@ services:
     environment:
       POSTGRES_DB: ${FLORA_POSTGRES_DB:-flora}
       POSTGRES_USER: ${FLORA_POSTGRES_ADMIN_USER:-flora_admin}
-      POSTGRES_PASSWORD: ${FLORA_POSTGRES_ADMIN_PASSWORD:-flora-admin-local-only}
-      FLORA_DB_APP_PASSWORD: ${FLORA_DB_APP_PASSWORD:-flora-app-local-only}
-      FLORA_DB_VIEW_PASSWORD: ${FLORA_DB_VIEW_PASSWORD:-flora-view-local-only}
-      FLORA_DB_SYNC_PASSWORD: ${FLORA_DB_SYNC_PASSWORD:-flora-sync-local-only}
+      POSTGRES_PASSWORD: ${FLORA_POSTGRES_ADMIN_PASSWORD:-admin}
+      FLORA_DB_APP_PASSWORD: ${FLORA_DB_APP_PASSWORD:-admin}
+      FLORA_DB_VIEW_PASSWORD: ${FLORA_DB_VIEW_PASSWORD:-admin}
+      FLORA_DB_SYNC_PASSWORD: ${FLORA_DB_SYNC_PASSWORD:-admin}
     ports:
       - "${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_POSTGRES_PORT:-6892}:5432"
     volumes:
-      - flora_pgdata_v3:/var/lib/postgresql/data
+      - flora_pgdata_v4:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -52,7 +52,7 @@ services:
     build:
       context: ./services/flora-api
     environment:
-      FLORA_DATABASE_URL: postgresql://flora_app:${FLORA_DB_APP_PASSWORD:-flora-app-local-only}@postgres:5432/${FLORA_POSTGRES_DB:-flora}
+      FLORA_DATABASE_URL: postgresql://flora_app:${FLORA_DB_APP_PASSWORD:-admin}@postgres:5432/${FLORA_POSTGRES_DB:-flora}
       FLORA_API_ENV: development
       FLORA_API_MODE: leaf
       FLORA_LEAF_WRITE_API: "true"
@@ -61,9 +61,9 @@ services:
       FLORA_BOOTSTRAP_ADMIN_PASSWORD: ${FLORA_BOOTSTRAP_ADMIN_PASSWORD:-admin}
       FLORA_BOOTSTRAP_ADMIN_NAME: ${FLORA_BOOTSTRAP_ADMIN_NAME:-Administrator}
       FLORA_DEVICE_INGEST_ENABLED: "true"
-      FLORA_LEAF_SERVICE_SECRET: ${FLORA_LEAF_SERVICE_SECRET:-flora-leaf-service-dev-secret-change-me}
+      FLORA_LEAF_SERVICE_SECRET: ${FLORA_LEAF_SERVICE_SECRET:-admin}
       FLORA_CANOPY_SYNC_URL: ${FLORA_CANOPY_SYNC_URL:-http://flora-sync-api:8000}
-      FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-flora-sync-dev-secret-change-me}
+      FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-admin}
       FLORA_ACCOUNT_CONFIG_SYNC_TIMEOUT_SECONDS: ${FLORA_ACCOUNT_CONFIG_SYNC_TIMEOUT_SECONDS:-1.5}
       VECTOR_READ_URL: ${VECTOR_READ_URL:-http://flora-liveagent:8000/api/observations}
       HIS_GATEWAY_BASE_URL: ${HIS_GATEWAY_BASE_URL:-http://10.35.202.6:8590}
@@ -88,10 +88,10 @@ services:
     build:
       context: ./services/flora-api
     environment:
-      FLORA_DATABASE_URL: postgresql://flora_sync:${FLORA_DB_SYNC_PASSWORD:-flora-sync-local-only}@postgres:5432/${FLORA_POSTGRES_DB:-flora}
+      FLORA_DATABASE_URL: postgresql://flora_sync:${FLORA_DB_SYNC_PASSWORD:-admin}@postgres:5432/${FLORA_POSTGRES_DB:-flora}
       FLORA_API_ENV: development
       FLORA_API_MODE: sync
-      FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-flora-sync-dev-secret-change-me}
+      FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-admin}
     ports:
       - "${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_SYNC_API_PORT:-6896}:8000"
     depends_on:
@@ -125,8 +125,8 @@ services:
     environment:
       FLORA_LEAF_API_URL: http://flora-leaf-api:8000
       FLORA_CANOPY_SYNC_URL: http://flora-sync-api:8000
-      FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-flora-sync-dev-secret-change-me}
-      FLORA_LEAF_SERVICE_SECRET: ${FLORA_LEAF_SERVICE_SECRET:-flora-leaf-service-dev-secret-change-me}
+      FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-admin}
+      FLORA_LEAF_SERVICE_SECRET: ${FLORA_LEAF_SERVICE_SECRET:-admin}
       FLORA_LEAF_ID: ${FLORA_LEAF_ID:-leaf-dev-01}
       FLORA_HOSPITAL_ID: ${FLORA_HOSPITAL_ID:-hospital-dev}
       FLORA_LEAF_NAME: ${FLORA_LEAF_NAME:-Development Leaf}
@@ -139,4 +139,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  flora_pgdata_v3:
+  flora_pgdata_v4:
