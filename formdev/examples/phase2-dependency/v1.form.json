@@ -1,0 +1,52 @@
+{
+  "format": "flora.form/1",
+  "form_id": "patient_address",
+  "schema_version": 1,
+  "title": "ที่อยู่และสิทธิการรักษา",
+  "description": "Phase 2.3 example: dependent lookups (province -> district -> sub-district -> postcode), conditional options, lookups inside a repeat section.",
+  "paper": { "size": "A4", "orientation": "portrait" },
+  "style_id": "style.a4.medical",
+  "extensions": { "flora.subject_field": "hn" },
+  "sections": [
+    {
+      "id": "address",
+      "title": "ที่อยู่ปัจจุบัน",
+      "fields": [
+        { "id": "hn", "type": "text", "label": "HN", "required": true, "indexed": true, "layout": { "span": 12 } },
+        { "id": "province", "type": "select", "label": "จังหวัด", "required": true, "indexed": true, "layout": { "span": 6 },
+          "lookup": { "source": "thai_address", "value": "province" } },
+        { "id": "district", "type": "select", "label": "อำเภอ / เขต", "required": true, "layout": { "span": 6 },
+          "lookup": { "source": "thai_address", "value": "district", "filter": { "province": "province" } } },
+        { "id": "subdistrict", "type": "select", "label": "ตำบล / แขวง", "required": true, "layout": { "span": 6 },
+          "lookup": { "source": "thai_address", "value": "subdistrict", "filter": { "province": "province", "district": "district" } } },
+        { "id": "postcode", "type": "text", "label": "รหัสไปรษณีย์", "readonly": true, "layout": { "span": 6 },
+          "derive": { "lookup": "thai_address", "column": "postcode", "match": { "province": "province", "district": "district", "subdistrict": "subdistrict" } } }
+      ]
+    },
+    {
+      "id": "coverage",
+      "title": "สิทธิการรักษา",
+      "fields": [
+        { "id": "scheme", "type": "radio", "label": "สิทธิ", "required": true, "layout": { "span": 6 },
+          "options": [ { "value": "uc", "label": "บัตรทอง (UC)" }, { "value": "sss", "label": "ประกันสังคม" },
+                       { "value": "csmbs", "label": "ข้าราชการ" }, { "value": "self", "label": "ชำระเงินเอง" } ] },
+        { "id": "benefits", "type": "multiselect", "label": "บริการที่ใช้", "layout": { "span": 6 },
+          "options": [ { "value": "opd", "label": "ผู้ป่วยนอก" }, { "value": "ipd", "label": "ผู้ป่วยใน" },
+                       { "value": "dental", "label": "ทันตกรรม", "when": { "field": "scheme", "operator": "in", "value": ["sss", "csmbs"] } },
+                       { "value": "discount", "label": "ส่วนลดชำระเงินสด", "when": { "field": "scheme", "operator": "equals", "value": "self" } } ] }
+      ]
+    },
+    {
+      "id": "contacts",
+      "title": "ผู้ติดต่อ",
+      "repeat": { "key": "contacts", "max_items": 3 },
+      "fields": [
+        { "id": "contact_name", "type": "text", "label": "ชื่อ", "required": true, "layout": { "span": 4 } },
+        { "id": "contact_province", "type": "select", "label": "จังหวัด", "layout": { "span": 4 },
+          "lookup": { "source": "thai_address", "value": "province" } },
+        { "id": "contact_district", "type": "select", "label": "อำเภอ / เขต", "layout": { "span": 4 },
+          "lookup": { "source": "thai_address", "value": "district", "filter": { "province": "contact_province" } } }
+      ]
+    }
+  ]
+}

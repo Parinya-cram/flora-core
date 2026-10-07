@@ -17,12 +17,26 @@ pool = ConnectionPool(
 )
 
 
+# Small dedicated pool for FormDev background jobs and statistics flushes, so long-running jobs
+# never take connections from interactive requests. Opened on demand by the job runtime.
+job_pool = ConnectionPool(
+    conninfo=DATABASE_URL,
+    min_size=0,
+    max_size=int(os.getenv("FORMDEV_JOB_POOL_SIZE", "2")),
+    kwargs={"autocommit": True, "row_factory": dict_row},
+    check=ConnectionPool.check_connection,
+    open=False,
+)
+
+
 def open_pool() -> None:
     pool.open(wait=True, timeout=10)
 
 
 def close_pool() -> None:
     pool.close()
+    if not job_pool.closed:
+        job_pool.close()
 
 
 def connection() -> Iterator[Connection]:

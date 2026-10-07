@@ -9,6 +9,8 @@ tmp*/
 .tmp/
 output/
 data/
+# ...but not FormDev's data-layer source (a folder named data/ in the frontend code)
+!frontend/src/formdev/data/
 emr/
 __pycache__/
 *.py[cod]

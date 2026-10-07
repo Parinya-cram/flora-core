@@ -1,0 +1,83 @@
+[
+  {
+    "template_id": "bmi",
+    "name": "Body mass index (BMI)",
+    "description": "weight (kg) / height (m)²",
+    "params": [ { "name": "weight", "label": "น้ำหนัก", "unit": "kg" }, { "name": "height", "label": "ส่วนสูง", "unit": "cm" } ],
+    "formula": "weight / ((height / 100) ^ 2)",
+    "output": { "type": "decimal", "decimals": 1, "unit": "kg/m²" },
+    "examples": [ { "values": { "weight": 70, "height": 175 }, "result": 22.9 }, { "values": { "weight": 70 }, "result": null } ]
+  },
+  {
+    "template_id": "bmi_class_asia",
+    "name": "BMI class (Asia-Pacific)",
+    "description": "< 18.5 underweight, < 23 normal, < 25 overweight, otherwise obese",
+    "params": [ { "name": "weight", "label": "น้ำหนัก", "unit": "kg" }, { "name": "height", "label": "ส่วนสูง", "unit": "cm" } ],
+    "formula": "IF(ISBLANK(weight) OR ISBLANK(height), NULL, IF(weight / ((height / 100) ^ 2) < 18.5, 'ต่ำกว่าเกณฑ์', IF(weight / ((height / 100) ^ 2) < 23, 'ปกติ', IF(weight / ((height / 100) ^ 2) < 25, 'น้ำหนักเกิน', 'อ้วน'))))",
+    "output": { "type": "text" },
+    "examples": [ { "values": { "weight": 70, "height": 175 }, "result": "ปกติ" }, { "values": { "weight": 80, "height": 170 }, "result": "อ้วน" } ]
+  },
+  {
+    "template_id": "map",
+    "name": "Mean arterial pressure (MAP)",
+    "description": "(systolic + 2 × diastolic) / 3",
+    "params": [ { "name": "systolic", "label": "ความดันตัวบน", "unit": "mmHg" }, { "name": "diastolic", "label": "ความดันตัวล่าง", "unit": "mmHg" } ],
+    "formula": "(systolic + 2 * diastolic) / 3",
+    "output": { "type": "decimal", "decimals": 0, "unit": "mmHg" },
+    "examples": [ { "values": { "systolic": 120, "diastolic": 80 }, "result": 93 } ]
+  },
+  {
+    "template_id": "bsa_mosteller",
+    "name": "Body surface area (Mosteller)",
+    "description": "√(height (cm) × weight (kg) / 3600)",
+    "params": [ { "name": "weight", "label": "น้ำหนัก", "unit": "kg" }, { "name": "height", "label": "ส่วนสูง", "unit": "cm" } ],
+    "formula": "SQRT(weight * height / 3600)",
+    "output": { "type": "decimal", "decimals": 2, "unit": "m²" },
+    "examples": [ { "values": { "weight": 70, "height": 175 }, "result": 1.84 } ]
+  },
+  {
+    "template_id": "age_years",
+    "name": "Age in completed years",
+    "description": "Years from the birth date to today",
+    "params": [ { "name": "birth_date", "label": "วันเกิด" } ],
+    "formula": "AGE(birth_date)",
+    "output": { "type": "integer", "unit": "ปี" },
+    "examples": [ { "values": { "birth_date": "1960-10-07" }, "result": 65 }, { "values": { "birth_date": "1960-10-06" }, "result": 66 } ]
+  },
+  {
+    "template_id": "percentage",
+    "name": "Percentage",
+    "description": "part / total × 100",
+    "params": [ { "name": "part", "label": "ส่วน" }, { "name": "total", "label": "ทั้งหมด" } ],
+    "formula": "part / total * 100",
+    "output": { "type": "decimal", "decimals": 1, "unit": "%" },
+    "examples": [ { "values": { "part": 7, "total": 9 }, "result": 77.8 }, { "values": { "part": 7, "total": 0 }, "result": null } ]
+  },
+  {
+    "template_id": "total_score",
+    "name": "Total score",
+    "description": "Sum of item scores; unanswered items count as 0",
+    "params": [ { "name": "item1", "label": "ข้อ 1" }, { "name": "item2", "label": "ข้อ 2" }, { "name": "item3", "label": "ข้อ 3" } ],
+    "formula": "SUM(item1, item2, item3)",
+    "output": { "type": "integer" },
+    "examples": [ { "values": { "item1": 2, "item2": 1 }, "result": 3 } ]
+  },
+  {
+    "template_id": "risk_level_morse",
+    "name": "Fall risk level (Morse Fall Scale)",
+    "description": "Morse total 0-24 low, 25-44 moderate, 45 or more high",
+    "params": [ { "name": "score", "label": "คะแนน Morse" } ],
+    "formula": "IF(ISBLANK(score), NULL, IF(score >= 45, 'สูง', IF(score >= 25, 'ปานกลาง', 'ต่ำ')))",
+    "output": { "type": "text" },
+    "examples": [ { "values": { "score": 20 }, "result": "ต่ำ" }, { "values": { "score": 25 }, "result": "ปานกลาง" }, { "values": { "score": 45 }, "result": "สูง" }, { "values": {}, "result": null } ]
+  },
+  {
+    "template_id": "sub_score",
+    "name": "Sub-score as a share of its maximum",
+    "description": "score / maximum × 100",
+    "params": [ { "name": "score", "label": "คะแนน" }, { "name": "maximum", "label": "คะแนนเต็ม" } ],
+    "formula": "ROUND(score / maximum * 100, 0)",
+    "output": { "type": "integer", "unit": "%" },
+    "examples": [ { "values": { "score": 18, "maximum": 24 }, "result": 75 } ]
+  }
+]

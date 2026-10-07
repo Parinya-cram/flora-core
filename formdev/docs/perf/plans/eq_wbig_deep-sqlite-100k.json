@@ -1,0 +1,29 @@
+{
+ "case": "eq_wbig_deep",
+ "label": "sqlite-100k",
+ "statements": {
+  "main": {
+   "indexes_used": [
+    "formdev_record_ingest",
+    "sqlite_autoindex_formdev_record_1",
+    "sqlite_autoindex_formdev_record_index_1"
+   ],
+   "full_scan": false,
+   "node_types": [
+    "CO-ROUTINE page",
+    "SEARCH k USING INDEX formdev_record_ingest (form_id=? AND ingest_seq<?)",
+    "CORRELATED SCALAR SUBQUERY 1",
+    "SEARCH i1 USING INDEX sqlite_autoindex_formdev_record_index_1 (record_id=? AND field_id=?)",
+    "SCAN page",
+    "SEARCH r USING INDEX sqlite_autoindex_formdev_record_1 (record_id=?)",
+    "USE TEMP B-TREE FOR ORDER BY"
+   ],
+   "est_rows": null,
+   "rows_scanned": null,
+   "buffers": null,
+   "planning_ms": null,
+   "execution_ms": null,
+   "sql": "SELECT r.record_id, r.schema_version, r.data, r.ingested_at, page.ok AS order_value FROM (SELECT k.record_id AS rid, k.ingest_seq AS ok FROM formdev_record k WHERE k.form_id = ? AND k.status <> 'deleted' AND EXISTS (SELECT 1 FROM formdev_record_index i1 WHERE i1.record_id = k.record_id AND i1.form_id = ? AND i1.status <> 'deleted' AND i1.field_id = ? AND i1.value_text = ?) AND k.ingest_seq < ? ORDER BY k.ingest_seq DESC LIMIT ?) page JOIN formdev_record r ON r.record_id = page.rid ORDER BY page.ok DESC"
+  }
+ }
+}

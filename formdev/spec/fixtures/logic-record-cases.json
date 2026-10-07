@@ -1,0 +1,680 @@
+{
+ "definition": "examples/phase2-logic/v1.form.json",
+ "today": "2026-10-06",
+ "cases": [
+  {
+   "name": "calculated values are computed and the client's are overwritten",
+   "status": "submitted",
+   "data": {
+    "hn": "HN0001",
+    "birth_date": "1950-01-01",
+    "bp_sys": 130,
+    "bp_dia": 80,
+    "weight_kg": 60,
+    "height_cm": 160,
+    "bmi": 999,
+    "age": 1
+   },
+   "expect": {
+    "data": {
+     "hn": "HN0001",
+     "birth_date": "1950-01-01",
+     "bp_sys": 130,
+     "bp_dia": 80,
+     "weight_kg": 60,
+     "height_cm": 160,
+     "bmi": 23.4,
+     "age": 76.0,
+     "bmi_class": "น้ำหนักเกิน",
+     "fall_count": 0.0
+    },
+    "codes": [],
+    "paths": [],
+    "hidden": [
+     "$.data.packs_per_day",
+     "$.data.temperature_c"
+    ]
+   }
+  },
+  {
+   "name": "BMI stays empty until weight and height are both entered",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "birth_date": "1950-01-01",
+    "bp_sys": 130,
+    "bp_dia": 80,
+    "weight_kg": 60
+   },
+   "expect": {
+    "data": {
+     "hn": "HN0001",
+     "birth_date": "1950-01-01",
+     "bp_sys": 130,
+     "bp_dia": 80,
+     "weight_kg": 60,
+     "age": 76.0,
+     "fall_count": 0.0
+    },
+    "codes": [],
+    "paths": [],
+    "hidden": [
+     "$.data.packs_per_day",
+     "$.data.temperature_c"
+    ]
+   }
+  },
+  {
+   "name": "BMI class boundaries",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "birth_date": "1950-01-01",
+    "bp_sys": 130,
+    "bp_dia": 80,
+    "weight_kg": 47,
+    "height_cm": 160
+   },
+   "expect": {
+    "data": {
+     "hn": "HN0001",
+     "birth_date": "1950-01-01",
+     "bp_sys": 130,
+     "bp_dia": 80,
+     "weight_kg": 47,
+     "height_cm": 160,
+     "age": 76.0,
+     "bmi": 18.4,
+     "bmi_class": "ต่ำกว่าเกณฑ์",
+     "fall_count": 0.0
+    },
+    "codes": [],
+    "paths": [],
+    "hidden": [
+     "$.data.packs_per_day",
+     "$.data.temperature_c"
+    ]
+   }
+  },
+  {
+   "name": "hidden with clear_when_hidden is cleared",
+   "status": "submitted",
+   "data": {
+    "hn": "HN0001",
+    "birth_date": "1950-01-01",
+    "bp_sys": 130,
+    "bp_dia": 80,
+    "weight_kg": 60,
+    "height_cm": 160,
+    "has_fever": false,
+    "temperature_c": 38.5
+   },
+   "expect": {
+    "data": {
+     "hn": "HN0001",
+     "birth_date": "1950-01-01",
+     "bp_sys": 130,
+     "bp_dia": 80,
+     "weight_kg": 60,
+     "height_cm": 160,
+     "has_fever": false,
+     "age": 76.0,
+     "bmi": 23.4,
+     "bmi_class": "น้ำหนักเกิน",
+     "fall_count": 0.0
+    },
+    "codes": [],
+    "paths": [],
+    "hidden": [
+     "$.data.packs_per_day",
+     "$.data.temperature_c"
+    ]
+   }
+  },
+  {
+   "name": "shown again it is required",
+   "status": "submitted",
+   "data": {
+    "hn": "HN0001",
+    "birth_date": "1950-01-01",
+    "bp_sys": 130,
+    "bp_dia": 80,
+    "weight_kg": 60,
+    "height_cm": 160,
+    "has_fever": true
+   },
+   "expect": {
+    "data": {
+     "hn": "HN0001",
+     "birth_date": "1950-01-01",
+     "bp_sys": 130,
+     "bp_dia": 80,
+     "weight_kg": 60,
+     "height_cm": 160,
+     "has_fever": true,
+     "age": 76.0,
+     "bmi": 23.4,
+     "bmi_class": "น้ำหนักเกิน",
+     "fall_count": 0.0
+    },
+    "codes": [
+     "required"
+    ],
+    "paths": [
+     "$.data.temperature_c"
+    ],
+    "hidden": [
+     "$.data.packs_per_day"
+    ]
+   }
+  },
+  {
+   "name": "a hidden value is kept but not validated",
+   "status": "submitted",
+   "data": {
+    "hn": "HN0001",
+    "birth_date": "1950-01-01",
+    "bp_sys": 130,
+    "bp_dia": 80,
+    "weight_kg": 60,
+    "height_cm": 160,
+    "smoker": "never",
+    "packs_per_day": 99
+   },
+   "expect": {
+    "data": {
+     "hn": "HN0001",
+     "birth_date": "1950-01-01",
+     "bp_sys": 130,
+     "bp_dia": 80,
+     "weight_kg": 60,
+     "height_cm": 160,
+     "smoker": "never",
+     "packs_per_day": 99,
+     "age": 76.0,
+     "bmi": 23.4,
+     "bmi_class": "น้ำหนักเกิน",
+     "fall_count": 0.0
+    },
+    "codes": [],
+    "paths": [],
+    "hidden": [
+     "$.data.packs_per_day",
+     "$.data.temperature_c"
+    ]
+   }
+  },
+  {
+   "name": "visible again the same value is validated",
+   "status": "submitted",
+   "data": {
+    "hn": "HN0001",
+    "birth_date": "1950-01-01",
+    "bp_sys": 130,
+    "bp_dia": 80,
+    "weight_kg": 60,
+    "height_cm": 160,
+    "smoker": "current",
+    "packs_per_day": 99
+   },
+   "expect": {
+    "data": {
+     "hn": "HN0001",
+     "birth_date": "1950-01-01",
+     "bp_sys": 130,
+     "bp_dia": 80,
+     "weight_kg": 60,
+     "height_cm": 160,
+     "smoker": "current",
+     "packs_per_day": 99,
+     "age": 76.0,
+     "bmi": 23.4,
+     "bmi_class": "น้ำหนักเกิน",
+     "fall_count": 0.0
+    },
+    "codes": [
+     "out_of_range"
+    ],
+    "paths": [
+     "$.data.packs_per_day"
+    ],
+    "hidden": [
+     "$.data.temperature_c"
+    ]
+   }
+  },
+  {
+   "name": "custom field rule",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "birth_date": "1950-01-01",
+    "bp_sys": 80,
+    "bp_dia": 90,
+    "weight_kg": 60,
+    "height_cm": 160
+   },
+   "expect": {
+    "data": {
+     "hn": "HN0001",
+     "birth_date": "1950-01-01",
+     "bp_sys": 80,
+     "bp_dia": 90,
+     "weight_kg": 60,
+     "height_cm": 160,
+     "age": 76.0,
+     "bmi": 23.4,
+     "bmi_class": "น้ำหนักเกิน",
+     "fall_count": 0.0
+    },
+    "codes": [
+     "rule_failed"
+    ],
+    "paths": [
+     "$.data.bp_sys"
+    ],
+    "hidden": [
+     "$.data.packs_per_day",
+     "$.data.temperature_c"
+    ]
+   }
+  },
+  {
+   "name": "a rule with a missing input passes",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "birth_date": "1950-01-01",
+    "bp_sys": 130,
+    "weight_kg": 60,
+    "height_cm": 160
+   },
+   "expect": {
+    "data": {
+     "hn": "HN0001",
+     "birth_date": "1950-01-01",
+     "bp_sys": 130,
+     "weight_kg": 60,
+     "height_cm": 160,
+     "age": 76.0,
+     "bmi": 23.4,
+     "bmi_class": "น้ำหนักเกิน",
+     "fall_count": 0.0
+    },
+    "codes": [],
+    "paths": [],
+    "hidden": [
+     "$.data.packs_per_day",
+     "$.data.temperature_c"
+    ]
+   }
+  },
+  {
+   "name": "form rule reported on its field",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "birth_date": "1950-01-01",
+    "bp_sys": 130,
+    "bp_dia": 80,
+    "weight_kg": 60,
+    "height_cm": 160,
+    "admitted_on": "2026-10-05",
+    "discharged_on": "2026-10-01"
+   },
+   "expect": {
+    "data": {
+     "hn": "HN0001",
+     "birth_date": "1950-01-01",
+     "bp_sys": 130,
+     "bp_dia": 80,
+     "weight_kg": 60,
+     "height_cm": 160,
+     "admitted_on": "2026-10-05",
+     "discharged_on": "2026-10-01",
+     "age": 76.0,
+     "bmi": 23.4,
+     "bmi_class": "น้ำหนักเกิน",
+     "fall_count": 0.0
+    },
+    "codes": [
+     "rule_failed"
+    ],
+    "paths": [
+     "$.data.discharged_on"
+    ],
+    "hidden": [
+     "$.data.packs_per_day",
+     "$.data.temperature_c"
+    ]
+   }
+  },
+  {
+   "name": "pattern, e-mail and future date",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "birth_date": "2030-01-01",
+    "bp_sys": 130,
+    "bp_dia": 80,
+    "weight_kg": 60,
+    "height_cm": 160,
+    "phone": "12345",
+    "email": "a@b"
+   },
+   "expect": {
+    "data": {
+     "hn": "HN0001",
+     "birth_date": "2030-01-01",
+     "bp_sys": 130,
+     "bp_dia": 80,
+     "weight_kg": 60,
+     "height_cm": 160,
+     "phone": "12345",
+     "email": "a@b",
+     "bmi": 23.4,
+     "bmi_class": "น้ำหนักเกิน",
+     "fall_count": 0.0
+    },
+    "codes": [
+     "date_too_late",
+     "invalid_email",
+     "pattern_mismatch"
+    ],
+    "paths": [
+     "$.data.birth_date",
+     "$.data.email",
+     "$.data.phone"
+    ],
+    "hidden": [
+     "$.data.packs_per_day",
+     "$.data.temperature_c"
+    ]
+   }
+  },
+  {
+   "name": "other text is required when other is chosen",
+   "status": "submitted",
+   "data": {
+    "hn": "HN0001",
+    "birth_date": "1950-01-01",
+    "bp_sys": 130,
+    "bp_dia": 80,
+    "weight_kg": 60,
+    "height_cm": 160,
+    "symptoms": [
+     "dizzy",
+     "other"
+    ]
+   },
+   "expect": {
+    "data": {
+     "hn": "HN0001",
+     "birth_date": "1950-01-01",
+     "bp_sys": 130,
+     "bp_dia": 80,
+     "weight_kg": 60,
+     "height_cm": 160,
+     "symptoms": [
+      "dizzy",
+      "other"
+     ],
+     "age": 76.0,
+     "bmi": 23.4,
+     "bmi_class": "น้ำหนักเกิน",
+     "fall_count": 0.0
+    },
+    "codes": [
+     "other_text_required"
+    ],
+    "paths": [
+     "$.data.symptoms"
+    ],
+    "hidden": [
+     "$.data.packs_per_day",
+     "$.data.temperature_c"
+    ]
+   }
+  },
+  {
+   "name": "other text is kept with its answer",
+   "status": "submitted",
+   "data": {
+    "hn": "HN0001",
+    "birth_date": "1950-01-01",
+    "bp_sys": 130,
+    "bp_dia": 80,
+    "weight_kg": 60,
+    "height_cm": 160,
+    "symptoms": [
+     "other"
+    ],
+    "_other": {
+     "symptoms": "ปวดเข่า"
+    }
+   },
+   "expect": {
+    "data": {
+     "hn": "HN0001",
+     "birth_date": "1950-01-01",
+     "bp_sys": 130,
+     "bp_dia": 80,
+     "weight_kg": 60,
+     "height_cm": 160,
+     "symptoms": [
+      "other"
+     ],
+     "_other": {
+      "symptoms": "ปวดเข่า"
+     },
+     "age": 76.0,
+     "bmi": 23.4,
+     "bmi_class": "น้ำหนักเกิน",
+     "fall_count": 0.0
+    },
+    "codes": [],
+    "paths": [],
+    "hidden": [
+     "$.data.packs_per_day",
+     "$.data.temperature_c"
+    ]
+   }
+  },
+  {
+   "name": "other text without its answer is dropped",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "birth_date": "1950-01-01",
+    "bp_sys": 130,
+    "bp_dia": 80,
+    "weight_kg": 60,
+    "height_cm": 160,
+    "symptoms": [
+     "dizzy"
+    ],
+    "_other": {
+     "symptoms": "ปวดเข่า",
+     "smoker": "x"
+    }
+   },
+   "expect": {
+    "data": {
+     "hn": "HN0001",
+     "birth_date": "1950-01-01",
+     "bp_sys": 130,
+     "bp_dia": 80,
+     "weight_kg": 60,
+     "height_cm": 160,
+     "symptoms": [
+      "dizzy"
+     ],
+     "age": 76.0,
+     "bmi": 23.4,
+     "bmi_class": "น้ำหนักเกิน",
+     "fall_count": 0.0
+    },
+    "codes": [],
+    "paths": [],
+    "hidden": [
+     "$.data.packs_per_day",
+     "$.data.temperature_c"
+    ]
+   }
+  },
+  {
+   "name": "repeat section: items, counts, item visibility and required",
+   "status": "submitted",
+   "data": {
+    "hn": "HN0001",
+    "birth_date": "1950-01-01",
+    "bp_sys": 130,
+    "bp_dia": 80,
+    "weight_kg": 60,
+    "height_cm": 160,
+    "falls": [
+     {
+      "fall_date": "2026-09-01",
+      "injury": "yes"
+     },
+     {
+      "fall_date": "2026-08-01",
+      "injury": "other",
+      "_other": {
+       "injury": "ล้มในห้องน้ำ"
+      }
+     },
+     {
+      "injury": "no"
+     }
+    ]
+   },
+   "expect": {
+    "data": {
+     "hn": "HN0001",
+     "birth_date": "1950-01-01",
+     "bp_sys": 130,
+     "bp_dia": 80,
+     "weight_kg": 60,
+     "height_cm": 160,
+     "falls": [
+      {
+       "fall_date": "2026-09-01",
+       "injury": "yes"
+      },
+      {
+       "fall_date": "2026-08-01",
+       "injury": "other",
+       "_other": {
+        "injury": "ล้มในห้องน้ำ"
+       }
+      },
+      {
+       "injury": "no"
+      }
+     ],
+     "age": 76.0,
+     "bmi": 23.4,
+     "bmi_class": "น้ำหนักเกิน",
+     "fall_count": 2.0
+    },
+    "codes": [
+     "required",
+     "required"
+    ],
+    "paths": [
+     "$.data.falls[0].injury_detail",
+     "$.data.falls[2].fall_date"
+    ],
+    "hidden": [
+     "$.data.falls[1].injury_detail",
+     "$.data.falls[2].injury_detail",
+     "$.data.packs_per_day",
+     "$.data.temperature_c"
+    ]
+   }
+  },
+  {
+   "name": "repeat section limit",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "birth_date": "1950-01-01",
+    "bp_sys": 130,
+    "bp_dia": 80,
+    "weight_kg": 60,
+    "height_cm": 160,
+    "falls": [
+     {
+      "fall_date": "2026-01-01"
+     },
+     {
+      "fall_date": "2026-01-02"
+     },
+     {
+      "fall_date": "2026-01-03"
+     },
+     {
+      "fall_date": "2026-01-04"
+     },
+     {
+      "fall_date": "2026-01-05"
+     },
+     {
+      "fall_date": "2026-01-06"
+     }
+    ]
+   },
+   "expect": {
+    "data": {
+     "hn": "HN0001",
+     "birth_date": "1950-01-01",
+     "bp_sys": 130,
+     "bp_dia": 80,
+     "weight_kg": 60,
+     "height_cm": 160,
+     "falls": [
+      {
+       "fall_date": "2026-01-01"
+      },
+      {
+       "fall_date": "2026-01-02"
+      },
+      {
+       "fall_date": "2026-01-03"
+      },
+      {
+       "fall_date": "2026-01-04"
+      },
+      {
+       "fall_date": "2026-01-05"
+      },
+      {
+       "fall_date": "2026-01-06"
+      }
+     ],
+     "age": 76.0,
+     "bmi": 23.4,
+     "bmi_class": "น้ำหนักเกิน",
+     "fall_count": 6.0
+    },
+    "codes": [
+     "too_many_items"
+    ],
+    "paths": [
+     "$.data.falls"
+    ],
+    "hidden": [
+     "$.data.falls[0].injury_detail",
+     "$.data.falls[1].injury_detail",
+     "$.data.falls[2].injury_detail",
+     "$.data.falls[3].injury_detail",
+     "$.data.falls[4].injury_detail",
+     "$.data.falls[5].injury_detail",
+     "$.data.packs_per_day",
+     "$.data.temperature_c"
+    ]
+   }
+  }
+ ]
+}

@@ -1,0 +1,1407 @@
+{
+ "definition": "examples/phase1-showcase/v1.form.json",
+ "cases": [
+  {
+   "name": "complete record",
+   "status": "submitted",
+   "data": {
+    "hn": "HN0001",
+    "full_name": "สมชาย ใจดี",
+    "sex": "m",
+    "birth_date": "1960-04-01",
+    "admitted_at": "2026-10-06T09:30:00+07:00",
+    "ward": "7a",
+    "recorded_by": "u17",
+    "weight_kg": 70.5,
+    "height_cm": 172,
+    "bmi": 23.8,
+    "pain_score": 3,
+    "has_fever": true,
+    "temperature_c": 38.4,
+    "drug_allergy": false,
+    "symptoms": [
+     "fever",
+     "cough"
+    ],
+    "contact_name": "สมหญิง",
+    "contact_phone": "0812345678",
+    "note": "-",
+    "meds": [
+     {
+      "drug_name": "Paracetamol",
+      "dose": "500 mg",
+      "frequency": "tid"
+     }
+    ],
+    "xray": [
+     {
+      "name": "cxr.png",
+      "mime": "image/png",
+      "size": 204800,
+      "ref": "asset:cxr-1"
+     }
+    ],
+    "consent_file": {
+     "name": "consent.pdf",
+     "mime": "application/pdf",
+     "size": 102400,
+     "ref": "asset:consent-1"
+    },
+    "nurse_signature": {
+     "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+     "signed_at": "2026-10-06T09:45:00+07:00",
+     "signer": "RN Somsri"
+    }
+   },
+   "codes": [],
+   "paths": []
+  },
+  {
+   "name": "draft may be empty",
+   "status": "draft",
+   "data": {},
+   "codes": [],
+   "paths": []
+  },
+  {
+   "name": "required missing on submit",
+   "status": "submitted",
+   "data": {
+    "full_name": "สมชาย ใจดี",
+    "sex": "m",
+    "birth_date": "1960-04-01",
+    "admitted_at": "2026-10-06T09:30:00+07:00",
+    "ward": "7a",
+    "recorded_by": "u17",
+    "weight_kg": 70.5,
+    "height_cm": 172,
+    "bmi": 23.8,
+    "pain_score": 3,
+    "has_fever": true,
+    "temperature_c": 38.4,
+    "drug_allergy": false,
+    "symptoms": [
+     "fever",
+     "cough"
+    ],
+    "contact_name": "สมหญิง",
+    "contact_phone": "0812345678",
+    "note": "-",
+    "meds": [
+     {
+      "drug_name": "Paracetamol",
+      "dose": "500 mg",
+      "frequency": "tid"
+     }
+    ],
+    "xray": [
+     {
+      "name": "cxr.png",
+      "mime": "image/png",
+      "size": 204800,
+      "ref": "asset:cxr-1"
+     }
+    ],
+    "consent_file": {
+     "name": "consent.pdf",
+     "mime": "application/pdf",
+     "size": 102400,
+     "ref": "asset:consent-1"
+    },
+    "nurse_signature": {
+     "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+     "signed_at": "2026-10-06T09:45:00+07:00",
+     "signer": "RN Somsri"
+    }
+   },
+   "codes": [
+    "required"
+   ],
+   "paths": [
+    "$.data.hn"
+   ]
+  },
+  {
+   "name": "decimal places",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "full_name": "สมชาย ใจดี",
+    "sex": "m",
+    "birth_date": "1960-04-01",
+    "admitted_at": "2026-10-06T09:30:00+07:00",
+    "ward": "7a",
+    "recorded_by": "u17",
+    "weight_kg": 70.55,
+    "height_cm": 172,
+    "bmi": 23.8,
+    "pain_score": 3,
+    "has_fever": true,
+    "temperature_c": 38.4,
+    "drug_allergy": false,
+    "symptoms": [
+     "fever",
+     "cough"
+    ],
+    "contact_name": "สมหญิง",
+    "contact_phone": "0812345678",
+    "note": "-",
+    "meds": [
+     {
+      "drug_name": "Paracetamol",
+      "dose": "500 mg",
+      "frequency": "tid"
+     }
+    ],
+    "xray": [
+     {
+      "name": "cxr.png",
+      "mime": "image/png",
+      "size": 204800,
+      "ref": "asset:cxr-1"
+     }
+    ],
+    "consent_file": {
+     "name": "consent.pdf",
+     "mime": "application/pdf",
+     "size": 102400,
+     "ref": "asset:consent-1"
+    },
+    "nurse_signature": {
+     "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+     "signed_at": "2026-10-06T09:45:00+07:00",
+     "signer": "RN Somsri"
+    }
+   },
+   "codes": [
+    "too_many_decimals"
+   ],
+   "paths": [
+    "$.data.weight_kg"
+   ]
+  },
+  {
+   "name": "decimal range",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "full_name": "สมชาย ใจดี",
+    "sex": "m",
+    "birth_date": "1960-04-01",
+    "admitted_at": "2026-10-06T09:30:00+07:00",
+    "ward": "7a",
+    "recorded_by": "u17",
+    "weight_kg": 401.0,
+    "height_cm": 172,
+    "bmi": 23.8,
+    "pain_score": 3,
+    "has_fever": true,
+    "temperature_c": 38.4,
+    "drug_allergy": false,
+    "symptoms": [
+     "fever",
+     "cough"
+    ],
+    "contact_name": "สมหญิง",
+    "contact_phone": "0812345678",
+    "note": "-",
+    "meds": [
+     {
+      "drug_name": "Paracetamol",
+      "dose": "500 mg",
+      "frequency": "tid"
+     }
+    ],
+    "xray": [
+     {
+      "name": "cxr.png",
+      "mime": "image/png",
+      "size": 204800,
+      "ref": "asset:cxr-1"
+     }
+    ],
+    "consent_file": {
+     "name": "consent.pdf",
+     "mime": "application/pdf",
+     "size": 102400,
+     "ref": "asset:consent-1"
+    },
+    "nurse_signature": {
+     "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+     "signed_at": "2026-10-06T09:45:00+07:00",
+     "signer": "RN Somsri"
+    }
+   },
+   "codes": [
+    "out_of_range"
+   ],
+   "paths": [
+    "$.data.weight_kg"
+   ]
+  },
+  {
+   "name": "validation object range",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "full_name": "สมชาย ใจดี",
+    "sex": "m",
+    "birth_date": "1960-04-01",
+    "admitted_at": "2026-10-06T09:30:00+07:00",
+    "ward": "7a",
+    "recorded_by": "u17",
+    "weight_kg": 70.5,
+    "height_cm": 172,
+    "bmi": 23.8,
+    "pain_score": 11,
+    "has_fever": true,
+    "temperature_c": 38.4,
+    "drug_allergy": false,
+    "symptoms": [
+     "fever",
+     "cough"
+    ],
+    "contact_name": "สมหญิง",
+    "contact_phone": "0812345678",
+    "note": "-",
+    "meds": [
+     {
+      "drug_name": "Paracetamol",
+      "dose": "500 mg",
+      "frequency": "tid"
+     }
+    ],
+    "xray": [
+     {
+      "name": "cxr.png",
+      "mime": "image/png",
+      "size": 204800,
+      "ref": "asset:cxr-1"
+     }
+    ],
+    "consent_file": {
+     "name": "consent.pdf",
+     "mime": "application/pdf",
+     "size": 102400,
+     "ref": "asset:consent-1"
+    },
+    "nurse_signature": {
+     "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+     "signed_at": "2026-10-06T09:45:00+07:00",
+     "signer": "RN Somsri"
+    }
+   },
+   "codes": [
+    "out_of_range"
+   ],
+   "paths": [
+    "$.data.pain_score"
+   ]
+  },
+  {
+   "name": "radio option",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "full_name": "สมชาย ใจดี",
+    "sex": "x",
+    "birth_date": "1960-04-01",
+    "admitted_at": "2026-10-06T09:30:00+07:00",
+    "ward": "7a",
+    "recorded_by": "u17",
+    "weight_kg": 70.5,
+    "height_cm": 172,
+    "bmi": 23.8,
+    "pain_score": 3,
+    "has_fever": true,
+    "temperature_c": 38.4,
+    "drug_allergy": false,
+    "symptoms": [
+     "fever",
+     "cough"
+    ],
+    "contact_name": "สมหญิง",
+    "contact_phone": "0812345678",
+    "note": "-",
+    "meds": [
+     {
+      "drug_name": "Paracetamol",
+      "dose": "500 mg",
+      "frequency": "tid"
+     }
+    ],
+    "xray": [
+     {
+      "name": "cxr.png",
+      "mime": "image/png",
+      "size": 204800,
+      "ref": "asset:cxr-1"
+     }
+    ],
+    "consent_file": {
+     "name": "consent.pdf",
+     "mime": "application/pdf",
+     "size": 102400,
+     "ref": "asset:consent-1"
+    },
+    "nurse_signature": {
+     "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+     "signed_at": "2026-10-06T09:45:00+07:00",
+     "signer": "RN Somsri"
+    }
+   },
+   "codes": [
+    "invalid_option"
+   ],
+   "paths": [
+    "$.data.sex"
+   ]
+  },
+  {
+   "name": "switch is boolean",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "full_name": "สมชาย ใจดี",
+    "sex": "m",
+    "birth_date": "1960-04-01",
+    "admitted_at": "2026-10-06T09:30:00+07:00",
+    "ward": "7a",
+    "recorded_by": "u17",
+    "weight_kg": 70.5,
+    "height_cm": 172,
+    "bmi": 23.8,
+    "pain_score": 3,
+    "has_fever": "yes",
+    "temperature_c": 38.4,
+    "drug_allergy": false,
+    "symptoms": [
+     "fever",
+     "cough"
+    ],
+    "contact_name": "สมหญิง",
+    "contact_phone": "0812345678",
+    "note": "-",
+    "meds": [
+     {
+      "drug_name": "Paracetamol",
+      "dose": "500 mg",
+      "frequency": "tid"
+     }
+    ],
+    "xray": [
+     {
+      "name": "cxr.png",
+      "mime": "image/png",
+      "size": 204800,
+      "ref": "asset:cxr-1"
+     }
+    ],
+    "consent_file": {
+     "name": "consent.pdf",
+     "mime": "application/pdf",
+     "size": 102400,
+     "ref": "asset:consent-1"
+    },
+    "nurse_signature": {
+     "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+     "signed_at": "2026-10-06T09:45:00+07:00",
+     "signer": "RN Somsri"
+    }
+   },
+   "codes": [
+    "invalid_type"
+   ],
+   "paths": [
+    "$.data.has_fever"
+   ]
+  },
+  {
+   "name": "image type",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "full_name": "สมชาย ใจดี",
+    "sex": "m",
+    "birth_date": "1960-04-01",
+    "admitted_at": "2026-10-06T09:30:00+07:00",
+    "ward": "7a",
+    "recorded_by": "u17",
+    "weight_kg": 70.5,
+    "height_cm": 172,
+    "bmi": 23.8,
+    "pain_score": 3,
+    "has_fever": true,
+    "temperature_c": 38.4,
+    "drug_allergy": false,
+    "symptoms": [
+     "fever",
+     "cough"
+    ],
+    "contact_name": "สมหญิง",
+    "contact_phone": "0812345678",
+    "note": "-",
+    "meds": [
+     {
+      "drug_name": "Paracetamol",
+      "dose": "500 mg",
+      "frequency": "tid"
+     }
+    ],
+    "xray": [
+     {
+      "name": "a.pdf",
+      "mime": "application/pdf",
+      "size": 10,
+      "ref": "r"
+     }
+    ],
+    "consent_file": {
+     "name": "consent.pdf",
+     "mime": "application/pdf",
+     "size": 102400,
+     "ref": "asset:consent-1"
+    },
+    "nurse_signature": {
+     "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+     "signed_at": "2026-10-06T09:45:00+07:00",
+     "signer": "RN Somsri"
+    }
+   },
+   "codes": [
+    "file_type_not_allowed"
+   ],
+   "paths": [
+    "$.data.xray[0]"
+   ]
+  },
+  {
+   "name": "image size",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "full_name": "สมชาย ใจดี",
+    "sex": "m",
+    "birth_date": "1960-04-01",
+    "admitted_at": "2026-10-06T09:30:00+07:00",
+    "ward": "7a",
+    "recorded_by": "u17",
+    "weight_kg": 70.5,
+    "height_cm": 172,
+    "bmi": 23.8,
+    "pain_score": 3,
+    "has_fever": true,
+    "temperature_c": 38.4,
+    "drug_allergy": false,
+    "symptoms": [
+     "fever",
+     "cough"
+    ],
+    "contact_name": "สมหญิง",
+    "contact_phone": "0812345678",
+    "note": "-",
+    "meds": [
+     {
+      "drug_name": "Paracetamol",
+      "dose": "500 mg",
+      "frequency": "tid"
+     }
+    ],
+    "xray": [
+     {
+      "name": "a.png",
+      "mime": "image/png",
+      "size": 10485761,
+      "ref": "r"
+     }
+    ],
+    "consent_file": {
+     "name": "consent.pdf",
+     "mime": "application/pdf",
+     "size": 102400,
+     "ref": "asset:consent-1"
+    },
+    "nurse_signature": {
+     "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+     "signed_at": "2026-10-06T09:45:00+07:00",
+     "signer": "RN Somsri"
+    }
+   },
+   "codes": [
+    "file_too_large"
+   ],
+   "paths": [
+    "$.data.xray[0]"
+   ]
+  },
+  {
+   "name": "multiple files need a list",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "full_name": "สมชาย ใจดี",
+    "sex": "m",
+    "birth_date": "1960-04-01",
+    "admitted_at": "2026-10-06T09:30:00+07:00",
+    "ward": "7a",
+    "recorded_by": "u17",
+    "weight_kg": 70.5,
+    "height_cm": 172,
+    "bmi": 23.8,
+    "pain_score": 3,
+    "has_fever": true,
+    "temperature_c": 38.4,
+    "drug_allergy": false,
+    "symptoms": [
+     "fever",
+     "cough"
+    ],
+    "contact_name": "สมหญิง",
+    "contact_phone": "0812345678",
+    "note": "-",
+    "meds": [
+     {
+      "drug_name": "Paracetamol",
+      "dose": "500 mg",
+      "frequency": "tid"
+     }
+    ],
+    "xray": {
+     "name": "a.png",
+     "mime": "image/png",
+     "size": 1,
+     "ref": "r"
+    },
+    "consent_file": {
+     "name": "consent.pdf",
+     "mime": "application/pdf",
+     "size": 102400,
+     "ref": "asset:consent-1"
+    },
+    "nurse_signature": {
+     "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+     "signed_at": "2026-10-06T09:45:00+07:00",
+     "signer": "RN Somsri"
+    }
+   },
+   "codes": [
+    "invalid_type"
+   ],
+   "paths": [
+    "$.data.xray"
+   ]
+  },
+  {
+   "name": "file shape",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "full_name": "สมชาย ใจดี",
+    "sex": "m",
+    "birth_date": "1960-04-01",
+    "admitted_at": "2026-10-06T09:30:00+07:00",
+    "ward": "7a",
+    "recorded_by": "u17",
+    "weight_kg": 70.5,
+    "height_cm": 172,
+    "bmi": 23.8,
+    "pain_score": 3,
+    "has_fever": true,
+    "temperature_c": 38.4,
+    "drug_allergy": false,
+    "symptoms": [
+     "fever",
+     "cough"
+    ],
+    "contact_name": "สมหญิง",
+    "contact_phone": "0812345678",
+    "note": "-",
+    "meds": [
+     {
+      "drug_name": "Paracetamol",
+      "dose": "500 mg",
+      "frequency": "tid"
+     }
+    ],
+    "xray": [
+     {
+      "name": "cxr.png",
+      "mime": "image/png",
+      "size": 204800,
+      "ref": "asset:cxr-1"
+     }
+    ],
+    "consent_file": {
+     "name": "c.pdf",
+     "mime": "application/pdf",
+     "size": 1
+    },
+    "nurse_signature": {
+     "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+     "signed_at": "2026-10-06T09:45:00+07:00",
+     "signer": "RN Somsri"
+    }
+   },
+   "codes": [
+    "invalid_file"
+   ],
+   "paths": [
+    "$.data.consent_file"
+   ]
+  },
+  {
+   "name": "file accept list",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "full_name": "สมชาย ใจดี",
+    "sex": "m",
+    "birth_date": "1960-04-01",
+    "admitted_at": "2026-10-06T09:30:00+07:00",
+    "ward": "7a",
+    "recorded_by": "u17",
+    "weight_kg": 70.5,
+    "height_cm": 172,
+    "bmi": 23.8,
+    "pain_score": 3,
+    "has_fever": true,
+    "temperature_c": 38.4,
+    "drug_allergy": false,
+    "symptoms": [
+     "fever",
+     "cough"
+    ],
+    "contact_name": "สมหญิง",
+    "contact_phone": "0812345678",
+    "note": "-",
+    "meds": [
+     {
+      "drug_name": "Paracetamol",
+      "dose": "500 mg",
+      "frequency": "tid"
+     }
+    ],
+    "xray": [
+     {
+      "name": "cxr.png",
+      "mime": "image/png",
+      "size": 204800,
+      "ref": "asset:cxr-1"
+     }
+    ],
+    "consent_file": {
+     "name": "c.doc",
+     "mime": "application/msword",
+     "size": 1,
+     "ref": "r"
+    },
+    "nurse_signature": {
+     "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+     "signed_at": "2026-10-06T09:45:00+07:00",
+     "signer": "RN Somsri"
+    }
+   },
+   "codes": [
+    "file_type_not_allowed"
+   ],
+   "paths": [
+    "$.data.consent_file"
+   ]
+  },
+  {
+   "name": "signature data",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "full_name": "สมชาย ใจดี",
+    "sex": "m",
+    "birth_date": "1960-04-01",
+    "admitted_at": "2026-10-06T09:30:00+07:00",
+    "ward": "7a",
+    "recorded_by": "u17",
+    "weight_kg": 70.5,
+    "height_cm": 172,
+    "bmi": 23.8,
+    "pain_score": 3,
+    "has_fever": true,
+    "temperature_c": 38.4,
+    "drug_allergy": false,
+    "symptoms": [
+     "fever",
+     "cough"
+    ],
+    "contact_name": "สมหญิง",
+    "contact_phone": "0812345678",
+    "note": "-",
+    "meds": [
+     {
+      "drug_name": "Paracetamol",
+      "dose": "500 mg",
+      "frequency": "tid"
+     }
+    ],
+    "xray": [
+     {
+      "name": "cxr.png",
+      "mime": "image/png",
+      "size": 204800,
+      "ref": "asset:cxr-1"
+     }
+    ],
+    "consent_file": {
+     "name": "consent.pdf",
+     "mime": "application/pdf",
+     "size": 102400,
+     "ref": "asset:consent-1"
+    },
+    "nurse_signature": {
+     "data": "my name"
+    }
+   },
+   "codes": [
+    "invalid_signature"
+   ],
+   "paths": [
+    "$.data.nurse_signature"
+   ]
+  },
+  {
+   "name": "signature time",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "full_name": "สมชาย ใจดี",
+    "sex": "m",
+    "birth_date": "1960-04-01",
+    "admitted_at": "2026-10-06T09:30:00+07:00",
+    "ward": "7a",
+    "recorded_by": "u17",
+    "weight_kg": 70.5,
+    "height_cm": 172,
+    "bmi": 23.8,
+    "pain_score": 3,
+    "has_fever": true,
+    "temperature_c": 38.4,
+    "drug_allergy": false,
+    "symptoms": [
+     "fever",
+     "cough"
+    ],
+    "contact_name": "สมหญิง",
+    "contact_phone": "0812345678",
+    "note": "-",
+    "meds": [
+     {
+      "drug_name": "Paracetamol",
+      "dose": "500 mg",
+      "frequency": "tid"
+     }
+    ],
+    "xray": [
+     {
+      "name": "cxr.png",
+      "mime": "image/png",
+      "size": 204800,
+      "ref": "asset:cxr-1"
+     }
+    ],
+    "consent_file": {
+     "name": "consent.pdf",
+     "mime": "application/pdf",
+     "size": 102400,
+     "ref": "asset:consent-1"
+    },
+    "nurse_signature": {
+     "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+     "signed_at": "yesterday"
+    }
+   },
+   "codes": [
+    "invalid_signature"
+   ],
+   "paths": [
+    "$.data.nurse_signature"
+   ]
+  },
+  {
+   "name": "group children are top-level keys",
+   "status": "draft",
+   "data": {
+    "contact_name": "A",
+    "contact_phone": "0811111111"
+   },
+   "codes": [],
+   "paths": []
+  },
+  {
+   "name": "a group has no value of its own",
+   "status": "draft",
+   "data": {
+    "fld_contact": {
+     "contact_name": "A"
+    }
+   },
+   "codes": [
+    "unknown_field"
+   ],
+   "paths": [
+    "$.data.fld_contact"
+   ]
+  },
+  {
+   "name": "repeat items",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "full_name": "สมชาย ใจดี",
+    "sex": "m",
+    "birth_date": "1960-04-01",
+    "admitted_at": "2026-10-06T09:30:00+07:00",
+    "ward": "7a",
+    "recorded_by": "u17",
+    "weight_kg": 70.5,
+    "height_cm": 172,
+    "bmi": 23.8,
+    "pain_score": 3,
+    "has_fever": true,
+    "temperature_c": 38.4,
+    "drug_allergy": false,
+    "symptoms": [
+     "fever",
+     "cough"
+    ],
+    "contact_name": "สมหญิง",
+    "contact_phone": "0812345678",
+    "note": "-",
+    "meds": [
+     {
+      "drug_name": "A"
+     },
+     {
+      "drug_name": "B",
+      "frequency": "bid"
+     }
+    ],
+    "xray": [
+     {
+      "name": "cxr.png",
+      "mime": "image/png",
+      "size": 204800,
+      "ref": "asset:cxr-1"
+     }
+    ],
+    "consent_file": {
+     "name": "consent.pdf",
+     "mime": "application/pdf",
+     "size": 102400,
+     "ref": "asset:consent-1"
+    },
+    "nurse_signature": {
+     "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+     "signed_at": "2026-10-06T09:45:00+07:00",
+     "signer": "RN Somsri"
+    }
+   },
+   "codes": [],
+   "paths": []
+  },
+  {
+   "name": "repeat item unknown key",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "full_name": "สมชาย ใจดี",
+    "sex": "m",
+    "birth_date": "1960-04-01",
+    "admitted_at": "2026-10-06T09:30:00+07:00",
+    "ward": "7a",
+    "recorded_by": "u17",
+    "weight_kg": 70.5,
+    "height_cm": 172,
+    "bmi": 23.8,
+    "pain_score": 3,
+    "has_fever": true,
+    "temperature_c": 38.4,
+    "drug_allergy": false,
+    "symptoms": [
+     "fever",
+     "cough"
+    ],
+    "contact_name": "สมหญิง",
+    "contact_phone": "0812345678",
+    "note": "-",
+    "meds": [
+     {
+      "drug_name": "A",
+      "route": "po"
+     }
+    ],
+    "xray": [
+     {
+      "name": "cxr.png",
+      "mime": "image/png",
+      "size": 204800,
+      "ref": "asset:cxr-1"
+     }
+    ],
+    "consent_file": {
+     "name": "consent.pdf",
+     "mime": "application/pdf",
+     "size": 102400,
+     "ref": "asset:consent-1"
+    },
+    "nurse_signature": {
+     "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+     "signed_at": "2026-10-06T09:45:00+07:00",
+     "signer": "RN Somsri"
+    }
+   },
+   "codes": [
+    "unknown_field"
+   ],
+   "paths": [
+    "$.data.meds[0].route"
+   ]
+  },
+  {
+   "name": "repeat item value",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "full_name": "สมชาย ใจดี",
+    "sex": "m",
+    "birth_date": "1960-04-01",
+    "admitted_at": "2026-10-06T09:30:00+07:00",
+    "ward": "7a",
+    "recorded_by": "u17",
+    "weight_kg": 70.5,
+    "height_cm": 172,
+    "bmi": 23.8,
+    "pain_score": 3,
+    "has_fever": true,
+    "temperature_c": 38.4,
+    "drug_allergy": false,
+    "symptoms": [
+     "fever",
+     "cough"
+    ],
+    "contact_name": "สมหญิง",
+    "contact_phone": "0812345678",
+    "note": "-",
+    "meds": [
+     {
+      "drug_name": "A",
+      "frequency": "qid"
+     }
+    ],
+    "xray": [
+     {
+      "name": "cxr.png",
+      "mime": "image/png",
+      "size": 204800,
+      "ref": "asset:cxr-1"
+     }
+    ],
+    "consent_file": {
+     "name": "consent.pdf",
+     "mime": "application/pdf",
+     "size": 102400,
+     "ref": "asset:consent-1"
+    },
+    "nurse_signature": {
+     "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+     "signed_at": "2026-10-06T09:45:00+07:00",
+     "signer": "RN Somsri"
+    }
+   },
+   "codes": [
+    "invalid_option"
+   ],
+   "paths": [
+    "$.data.meds[0].frequency"
+   ]
+  },
+  {
+   "name": "repeat needs a list of objects",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "full_name": "สมชาย ใจดี",
+    "sex": "m",
+    "birth_date": "1960-04-01",
+    "admitted_at": "2026-10-06T09:30:00+07:00",
+    "ward": "7a",
+    "recorded_by": "u17",
+    "weight_kg": 70.5,
+    "height_cm": 172,
+    "bmi": 23.8,
+    "pain_score": 3,
+    "has_fever": true,
+    "temperature_c": 38.4,
+    "drug_allergy": false,
+    "symptoms": [
+     "fever",
+     "cough"
+    ],
+    "contact_name": "สมหญิง",
+    "contact_phone": "0812345678",
+    "note": "-",
+    "meds": [
+     "A"
+    ],
+    "xray": [
+     {
+      "name": "cxr.png",
+      "mime": "image/png",
+      "size": 204800,
+      "ref": "asset:cxr-1"
+     }
+    ],
+    "consent_file": {
+     "name": "consent.pdf",
+     "mime": "application/pdf",
+     "size": 102400,
+     "ref": "asset:consent-1"
+    },
+    "nurse_signature": {
+     "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+     "signed_at": "2026-10-06T09:45:00+07:00",
+     "signer": "RN Somsri"
+    }
+   },
+   "codes": [
+    "invalid_type"
+   ],
+   "paths": [
+    "$.data.meds"
+   ]
+  },
+  {
+   "name": "repeat max items",
+   "status": "draft",
+   "data": {
+    "hn": "HN0001",
+    "full_name": "สมชาย ใจดี",
+    "sex": "m",
+    "birth_date": "1960-04-01",
+    "admitted_at": "2026-10-06T09:30:00+07:00",
+    "ward": "7a",
+    "recorded_by": "u17",
+    "weight_kg": 70.5,
+    "height_cm": 172,
+    "bmi": 23.8,
+    "pain_score": 3,
+    "has_fever": true,
+    "temperature_c": 38.4,
+    "drug_allergy": false,
+    "symptoms": [
+     "fever",
+     "cough"
+    ],
+    "contact_name": "สมหญิง",
+    "contact_phone": "0812345678",
+    "note": "-",
+    "meds": [
+     {
+      "drug_name": "0"
+     },
+     {
+      "drug_name": "1"
+     },
+     {
+      "drug_name": "2"
+     },
+     {
+      "drug_name": "3"
+     },
+     {
+      "drug_name": "4"
+     },
+     {
+      "drug_name": "5"
+     },
+     {
+      "drug_name": "6"
+     },
+     {
+      "drug_name": "7"
+     },
+     {
+      "drug_name": "8"
+     },
+     {
+      "drug_name": "9"
+     },
+     {
+      "drug_name": "10"
+     },
+     {
+      "drug_name": "11"
+     },
+     {
+      "drug_name": "12"
+     },
+     {
+      "drug_name": "13"
+     },
+     {
+      "drug_name": "14"
+     },
+     {
+      "drug_name": "15"
+     },
+     {
+      "drug_name": "16"
+     },
+     {
+      "drug_name": "17"
+     },
+     {
+      "drug_name": "18"
+     },
+     {
+      "drug_name": "19"
+     },
+     {
+      "drug_name": "20"
+     }
+    ],
+    "xray": [
+     {
+      "name": "cxr.png",
+      "mime": "image/png",
+      "size": 204800,
+      "ref": "asset:cxr-1"
+     }
+    ],
+    "consent_file": {
+     "name": "consent.pdf",
+     "mime": "application/pdf",
+     "size": 102400,
+     "ref": "asset:consent-1"
+    },
+    "nurse_signature": {
+     "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+     "signed_at": "2026-10-06T09:45:00+07:00",
+     "signer": "RN Somsri"
+    }
+   },
+   "codes": [
+    "too_many_items"
+   ],
+   "paths": [
+    "$.data.meds"
+   ]
+  },
+  {
+   "name": "repeat item required on submit",
+   "status": "submitted",
+   "data": {
+    "hn": "HN0001",
+    "full_name": "สมชาย ใจดี",
+    "sex": "m",
+    "birth_date": "1960-04-01",
+    "admitted_at": "2026-10-06T09:30:00+07:00",
+    "ward": "7a",
+    "recorded_by": "u17",
+    "weight_kg": 70.5,
+    "height_cm": 172,
+    "bmi": 23.8,
+    "pain_score": 3,
+    "has_fever": true,
+    "temperature_c": 38.4,
+    "drug_allergy": false,
+    "symptoms": [
+     "fever",
+     "cough"
+    ],
+    "contact_name": "สมหญิง",
+    "contact_phone": "0812345678",
+    "note": "-",
+    "meds": [
+     {
+      "dose": "1 tab"
+     }
+    ],
+    "xray": [
+     {
+      "name": "cxr.png",
+      "mime": "image/png",
+      "size": 204800,
+      "ref": "asset:cxr-1"
+     }
+    ],
+    "consent_file": {
+     "name": "consent.pdf",
+     "mime": "application/pdf",
+     "size": 102400,
+     "ref": "asset:consent-1"
+    },
+    "nurse_signature": {
+     "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+     "signed_at": "2026-10-06T09:45:00+07:00",
+     "signer": "RN Somsri"
+    }
+   },
+   "codes": [
+    "required"
+   ],
+   "paths": [
+    "$.data.meds[0].drug_name"
+   ]
+  },
+  {
+   "name": "text max length from the field",
+   "status": "draft",
+   "data": {
+    "hn": "HHHHHHHHHHHHHHHHHHHHH",
+    "full_name": "สมชาย ใจดี",
+    "sex": "m",
+    "birth_date": "1960-04-01",
+    "admitted_at": "2026-10-06T09:30:00+07:00",
+    "ward": "7a",
+    "recorded_by": "u17",
+    "weight_kg": 70.5,
+    "height_cm": 172,
+    "bmi": 23.8,
+    "pain_score": 3,
+    "has_fever": true,
+    "temperature_c": 38.4,
+    "drug_allergy": false,
+    "symptoms": [
+     "fever",
+     "cough"
+    ],
+    "contact_name": "สมหญิง",
+    "contact_phone": "0812345678",
+    "note": "-",
+    "meds": [
+     {
+      "drug_name": "Paracetamol",
+      "dose": "500 mg",
+      "frequency": "tid"
+     }
+    ],
+    "xray": [
+     {
+      "name": "cxr.png",
+      "mime": "image/png",
+      "size": 204800,
+      "ref": "asset:cxr-1"
+     }
+    ],
+    "consent_file": {
+     "name": "consent.pdf",
+     "mime": "application/pdf",
+     "size": 102400,
+     "ref": "asset:consent-1"
+    },
+    "nurse_signature": {
+     "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+     "signed_at": "2026-10-06T09:45:00+07:00",
+     "signer": "RN Somsri"
+    }
+   },
+   "codes": [
+    "too_long"
+   ],
+   "paths": [
+    "$.data.hn"
+   ]
+  },
+  {
+   "name": "data keyed by id is unknown",
+   "status": "draft",
+   "data": {
+    "fld_hn": "HN1"
+   },
+   "codes": [
+    "unknown_field"
+   ],
+   "paths": [
+    "$.data.fld_hn"
+   ]
+  }
+ ],
+ "index": [
+  {
+   "name": "complete record",
+   "data": {
+    "hn": "HN0001",
+    "full_name": "สมชาย ใจดี",
+    "sex": "m",
+    "birth_date": "1960-04-01",
+    "admitted_at": "2026-10-06T09:30:00+07:00",
+    "ward": "7a",
+    "recorded_by": "u17",
+    "weight_kg": 70.5,
+    "height_cm": 172,
+    "bmi": 23.8,
+    "pain_score": 3,
+    "has_fever": true,
+    "temperature_c": 38.4,
+    "drug_allergy": false,
+    "symptoms": [
+     "fever",
+     "cough"
+    ],
+    "contact_name": "สมหญิง",
+    "contact_phone": "0812345678",
+    "note": "-",
+    "meds": [
+     {
+      "drug_name": "Paracetamol",
+      "dose": "500 mg",
+      "frequency": "tid"
+     }
+    ],
+    "xray": [
+     {
+      "name": "cxr.png",
+      "mime": "image/png",
+      "size": 204800,
+      "ref": "asset:cxr-1"
+     }
+    ],
+    "consent_file": {
+     "name": "consent.pdf",
+     "mime": "application/pdf",
+     "size": 102400,
+     "ref": "asset:consent-1"
+    },
+    "nurse_signature": {
+     "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+     "signed_at": "2026-10-06T09:45:00+07:00",
+     "signer": "RN Somsri"
+    }
+   },
+   "expected": [
+    {
+     "field_id": "admitted_at",
+     "value_text": "2026-10-06T09:30:00+07:00",
+     "value_num": 1791253800000
+    },
+    {
+     "field_id": "bmi",
+     "value_text": null,
+     "value_num": 23.8
+    },
+    {
+     "field_id": "hn",
+     "value_text": "HN0001",
+     "value_num": null
+    },
+    {
+     "field_id": "sex",
+     "value_text": "m",
+     "value_num": null
+    },
+    {
+     "field_id": "ward",
+     "value_text": "7a",
+     "value_num": null
+    }
+   ]
+  }
+ ]
+}

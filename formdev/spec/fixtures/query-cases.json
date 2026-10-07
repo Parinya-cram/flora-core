@@ -1,0 +1,3082 @@
+{
+ "catalogs": {
+  "assessment": {
+   "source_id": "patient_assessment",
+   "fields": {
+    "hn": {
+     "type": "text",
+     "indexed": true
+    },
+    "full_name": {
+     "type": "text",
+     "access": [
+      "system_admin",
+      "clinician"
+     ]
+    },
+    "age": {
+     "type": "integer",
+     "indexed": true
+    },
+    "sex": {
+     "type": "select",
+     "options": [
+      "male",
+      "female"
+     ]
+    },
+    "assessed_at": {
+     "type": "datetime",
+     "indexed": true
+    },
+    "fall_risk": {
+     "type": "select",
+     "indexed": true,
+     "options": [
+      "yes",
+      "no"
+     ]
+    },
+    "ward": {
+     "type": "text",
+     "indexed": true,
+     "state": "building"
+    },
+    "smoker": {
+     "type": "checkbox",
+     "indexed": true
+    },
+    "remarks": {
+     "type": "textarea"
+    },
+    "tags": {
+     "type": "multiselect",
+     "options": [
+      "a",
+      "b"
+     ]
+    },
+    "bmi": {
+     "type": "calculated",
+     "indexed": true
+    }
+   },
+   "relations": {
+    "patient": {
+     "local": "hn",
+     "foreign": "hn",
+     "target": {
+      "source_id": "patient_registration",
+      "fields": {
+       "hn": {
+        "type": "text",
+        "indexed": true
+       },
+       "name": {
+        "type": "text"
+       },
+       "phone": {
+        "type": "text",
+        "access": [
+         "system_admin"
+        ]
+       }
+      }
+     }
+    }
+   }
+  },
+  "rebuilding": {
+   "source_id": "rebuilding",
+   "fields": {
+    "hn": {
+     "type": "text",
+     "indexed": true
+    }
+   },
+   "metadata_building": [
+    "$subject_id"
+   ]
+  },
+  "patient": {
+   "source_id": "patient",
+   "fields": {
+    "hn": {
+     "type": "text",
+     "indexed": true
+    },
+    "name": {
+     "type": "text"
+    },
+    "age": {
+     "type": "integer",
+     "indexed": true
+    }
+   }
+  }
+ },
+ "principals": {
+  "admin": {
+   "user_id": 1,
+   "username": "admin",
+   "roles": [
+    "system_admin"
+   ],
+   "permissions": [
+    "formdev.query",
+    "formdev.export",
+    "formdev.diagnostics",
+    "formdev.manage"
+   ]
+  },
+  "clinician": {
+   "user_id": 2,
+   "username": "nurse",
+   "roles": [
+    "clinician"
+   ],
+   "permissions": [
+    "formdev.query"
+   ]
+  },
+  "viewer": {
+   "user_id": 3,
+   "username": "auditor",
+   "roles": [
+    "viewer"
+   ],
+   "permissions": [
+    "formdev.query"
+   ]
+  },
+  "integration": {
+   "user_id": 4,
+   "username": "device",
+   "roles": [
+    "integration"
+   ],
+   "permissions": []
+  }
+ },
+ "cases": [
+  {
+   "name": "spec example 4.1 verbatim",
+   "catalog": "patient",
+   "principal": "viewer",
+   "body": {
+    "query": {
+     "id": "patient_list",
+     "source": "patient",
+     "select": [
+      "hn",
+      "name",
+      "age",
+      "status"
+     ],
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     }
+    }
+   },
+   "errors": [],
+   "warnings": [
+    "missing_filter"
+   ],
+   "paths": [
+    "warning:missing_filter:$.query.filter"
+   ]
+  },
+  {
+   "name": "filtered list",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn",
+      "age",
+      "$status"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [],
+   "warnings": [],
+   "paths": []
+  },
+  {
+   "name": "and / or / not",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "and": [
+       {
+        "field": "fall_risk",
+        "op": "eq",
+        "value": "yes"
+       },
+       {
+        "or": [
+         {
+          "field": "age",
+          "op": "gte",
+          "value": 65
+         },
+         {
+          "field": "$status",
+          "op": "eq",
+          "value": "draft"
+         }
+        ]
+       },
+       {
+        "not": {
+         "field": "smoker",
+         "op": "eq",
+         "value": true
+        }
+       }
+      ]
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [],
+   "warnings": [],
+   "paths": []
+  },
+  {
+   "name": "is_null and between",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "and": [
+       {
+        "field": "bmi",
+        "op": "is_null"
+       },
+       {
+        "field": "age",
+        "op": "between",
+        "value": [
+         18,
+         65
+        ]
+       }
+      ]
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [],
+   "warnings": [],
+   "paths": []
+  },
+  {
+   "name": "missing limit",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "missing_limit"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:missing_limit:$.query.pagination"
+   ]
+  },
+  {
+   "name": "pagination without limit",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "pagination": {
+      "mode": "cursor"
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "missing_limit"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:missing_limit:$.query.pagination.limit"
+   ]
+  },
+  {
+   "name": "limit exceeded",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 501
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "limit_exceeded"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:limit_exceeded:$.query.pagination.limit"
+   ]
+  },
+  {
+   "name": "offset exceeded",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "pagination": {
+      "mode": "offset",
+      "limit": 10,
+      "offset": 10001
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "offset_exceeded"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:offset_exceeded:$.query.pagination.offset"
+   ]
+  },
+  {
+   "name": "top-level limit alias",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "limit": 20,
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [],
+   "warnings": [],
+   "paths": []
+  },
+  {
+   "name": "select star",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "*"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "select_star_not_allowed"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:select_star_not_allowed:$.query.select"
+   ]
+  },
+  {
+   "name": "missing select",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "missing_select"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:missing_select:$.query.select"
+   ]
+  },
+  {
+   "name": "invalid field",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "agee"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "invalid_field"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:invalid_field:$.query.select[0]"
+   ]
+  },
+  {
+   "name": "bare metadata name",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn",
+      "status",
+      "updated_at"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [],
+   "warnings": [],
+   "paths": []
+  },
+  {
+   "name": "unauthorized select",
+   "catalog": "assessment",
+   "principal": "viewer",
+   "body": {
+    "query": {
+     "select": [
+      "hn",
+      "full_name"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "unauthorized_field"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:unauthorized_field:$.query.select[1]"
+   ]
+  },
+  {
+   "name": "unauthorized filter oracle",
+   "catalog": "assessment",
+   "principal": "viewer",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "full_name",
+      "op": "eq",
+      "value": "Somchai"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "unauthorized_field"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:unauthorized_field:$.query.filter.field"
+   ]
+  },
+  {
+   "name": "authorized sensitive select",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn",
+      "full_name"
+     ],
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [],
+   "warnings": [
+    "missing_filter"
+   ],
+   "paths": [
+    "warning:missing_filter:$.query.filter"
+   ]
+  },
+  {
+   "name": "filter needs an index",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "sex",
+      "op": "eq",
+      "value": "male"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "not_filterable"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:not_filterable:$.query.filter.field"
+   ]
+  },
+  {
+   "name": "index building",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "ward",
+      "op": "eq",
+      "value": "W1"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "index_building"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:index_building:$.query.filter.field"
+   ]
+  },
+  {
+   "name": "subject id being backfilled",
+   "catalog": "rebuilding",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "source": "rebuilding",
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "$subject_id",
+      "op": "eq",
+      "value": "HN-1"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     }
+    }
+   },
+   "errors": [
+    "index_building"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:index_building:$.query.filter.field"
+   ]
+  },
+  {
+   "name": "subject id selectable while backfilled",
+   "catalog": "rebuilding",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "source": "rebuilding",
+     "select": [
+      "hn",
+      "$subject_id"
+     ],
+     "filter": {
+      "field": "hn",
+      "op": "eq",
+      "value": "HN-1"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     }
+    }
+   },
+   "errors": [],
+   "warnings": [],
+   "paths": []
+  },
+  {
+   "name": "textarea not filterable",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "remarks",
+      "op": "eq",
+      "value": "x"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "not_filterable"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:not_filterable:$.query.filter.field"
+   ]
+  },
+  {
+   "name": "multiselect not filterable",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "tags",
+      "op": "eq",
+      "value": "a"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "not_filterable"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:not_filterable:$.query.filter.field"
+   ]
+  },
+  {
+   "name": "unknown operator",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "hn",
+      "op": "like",
+      "value": "%1"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "invalid_operator"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:invalid_operator:$.query.filter.op"
+   ]
+  },
+  {
+   "name": "prefix on a number",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "age",
+      "op": "prefix",
+      "value": "1"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "invalid_operator"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:invalid_operator:$.query.filter.op"
+   ]
+  },
+  {
+   "name": "wrong value type",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "age",
+      "op": "eq",
+      "value": "old"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "invalid_value"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:invalid_value:$.query.filter.value"
+   ]
+  },
+  {
+   "name": "bad datetime value",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "assessed_at",
+      "op": "gte",
+      "value": "yesterday"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "invalid_value"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:invalid_value:$.query.filter.value"
+   ]
+  },
+  {
+   "name": "datetime range",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "assessed_at",
+      "op": "between",
+      "value": [
+       "2026-10-01T00:00:00+07:00",
+       "2026-10-31T23:59:59+07:00"
+      ]
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [],
+   "warnings": [],
+   "paths": []
+  },
+  {
+   "name": "metadata time filter",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "$created_at",
+      "op": "gte",
+      "value": "2026-10-01T00:00:00Z"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [],
+   "warnings": [],
+   "paths": []
+  },
+  {
+   "name": "too many in values",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "hn",
+      "op": "in",
+      "value": [
+       "HN0",
+       "HN1",
+       "HN2",
+       "HN3",
+       "HN4",
+       "HN5",
+       "HN6",
+       "HN7",
+       "HN8",
+       "HN9",
+       "HN10",
+       "HN11",
+       "HN12",
+       "HN13",
+       "HN14",
+       "HN15",
+       "HN16",
+       "HN17",
+       "HN18",
+       "HN19",
+       "HN20",
+       "HN21",
+       "HN22",
+       "HN23",
+       "HN24",
+       "HN25",
+       "HN26",
+       "HN27",
+       "HN28",
+       "HN29",
+       "HN30",
+       "HN31",
+       "HN32",
+       "HN33",
+       "HN34",
+       "HN35",
+       "HN36",
+       "HN37",
+       "HN38",
+       "HN39",
+       "HN40",
+       "HN41",
+       "HN42",
+       "HN43",
+       "HN44",
+       "HN45",
+       "HN46",
+       "HN47",
+       "HN48",
+       "HN49",
+       "HN50",
+       "HN51",
+       "HN52",
+       "HN53",
+       "HN54",
+       "HN55",
+       "HN56",
+       "HN57",
+       "HN58",
+       "HN59",
+       "HN60",
+       "HN61",
+       "HN62",
+       "HN63",
+       "HN64",
+       "HN65",
+       "HN66",
+       "HN67",
+       "HN68",
+       "HN69",
+       "HN70",
+       "HN71",
+       "HN72",
+       "HN73",
+       "HN74",
+       "HN75",
+       "HN76",
+       "HN77",
+       "HN78",
+       "HN79",
+       "HN80",
+       "HN81",
+       "HN82",
+       "HN83",
+       "HN84",
+       "HN85",
+       "HN86",
+       "HN87",
+       "HN88",
+       "HN89",
+       "HN90",
+       "HN91",
+       "HN92",
+       "HN93",
+       "HN94",
+       "HN95",
+       "HN96",
+       "HN97",
+       "HN98",
+       "HN99",
+       "HN100",
+       "HN101",
+       "HN102",
+       "HN103",
+       "HN104",
+       "HN105",
+       "HN106",
+       "HN107",
+       "HN108",
+       "HN109",
+       "HN110",
+       "HN111",
+       "HN112",
+       "HN113",
+       "HN114",
+       "HN115",
+       "HN116",
+       "HN117",
+       "HN118",
+       "HN119",
+       "HN120",
+       "HN121",
+       "HN122",
+       "HN123",
+       "HN124",
+       "HN125",
+       "HN126",
+       "HN127",
+       "HN128",
+       "HN129",
+       "HN130",
+       "HN131",
+       "HN132",
+       "HN133",
+       "HN134",
+       "HN135",
+       "HN136",
+       "HN137",
+       "HN138",
+       "HN139",
+       "HN140",
+       "HN141",
+       "HN142",
+       "HN143",
+       "HN144",
+       "HN145",
+       "HN146",
+       "HN147",
+       "HN148",
+       "HN149",
+       "HN150",
+       "HN151",
+       "HN152",
+       "HN153",
+       "HN154",
+       "HN155",
+       "HN156",
+       "HN157",
+       "HN158",
+       "HN159",
+       "HN160",
+       "HN161",
+       "HN162",
+       "HN163",
+       "HN164",
+       "HN165",
+       "HN166",
+       "HN167",
+       "HN168",
+       "HN169",
+       "HN170",
+       "HN171",
+       "HN172",
+       "HN173",
+       "HN174",
+       "HN175",
+       "HN176",
+       "HN177",
+       "HN178",
+       "HN179",
+       "HN180",
+       "HN181",
+       "HN182",
+       "HN183",
+       "HN184",
+       "HN185",
+       "HN186",
+       "HN187",
+       "HN188",
+       "HN189",
+       "HN190",
+       "HN191",
+       "HN192",
+       "HN193",
+       "HN194",
+       "HN195",
+       "HN196",
+       "HN197",
+       "HN198",
+       "HN199",
+       "HN200",
+       "HN201",
+       "HN202",
+       "HN203",
+       "HN204",
+       "HN205",
+       "HN206",
+       "HN207",
+       "HN208",
+       "HN209",
+       "HN210",
+       "HN211",
+       "HN212",
+       "HN213",
+       "HN214",
+       "HN215",
+       "HN216",
+       "HN217",
+       "HN218",
+       "HN219",
+       "HN220",
+       "HN221",
+       "HN222",
+       "HN223",
+       "HN224",
+       "HN225",
+       "HN226",
+       "HN227",
+       "HN228",
+       "HN229",
+       "HN230",
+       "HN231",
+       "HN232",
+       "HN233",
+       "HN234",
+       "HN235",
+       "HN236",
+       "HN237",
+       "HN238",
+       "HN239",
+       "HN240",
+       "HN241",
+       "HN242",
+       "HN243",
+       "HN244",
+       "HN245",
+       "HN246",
+       "HN247",
+       "HN248",
+       "HN249",
+       "HN250",
+       "HN251",
+       "HN252",
+       "HN253",
+       "HN254",
+       "HN255",
+       "HN256",
+       "HN257",
+       "HN258",
+       "HN259",
+       "HN260",
+       "HN261",
+       "HN262",
+       "HN263",
+       "HN264",
+       "HN265",
+       "HN266",
+       "HN267",
+       "HN268",
+       "HN269",
+       "HN270",
+       "HN271",
+       "HN272",
+       "HN273",
+       "HN274",
+       "HN275",
+       "HN276",
+       "HN277",
+       "HN278",
+       "HN279",
+       "HN280",
+       "HN281",
+       "HN282",
+       "HN283",
+       "HN284",
+       "HN285",
+       "HN286",
+       "HN287",
+       "HN288",
+       "HN289",
+       "HN290",
+       "HN291",
+       "HN292",
+       "HN293",
+       "HN294",
+       "HN295",
+       "HN296",
+       "HN297",
+       "HN298",
+       "HN299",
+       "HN300",
+       "HN301",
+       "HN302",
+       "HN303",
+       "HN304",
+       "HN305",
+       "HN306",
+       "HN307",
+       "HN308",
+       "HN309",
+       "HN310",
+       "HN311",
+       "HN312",
+       "HN313",
+       "HN314",
+       "HN315",
+       "HN316",
+       "HN317",
+       "HN318",
+       "HN319",
+       "HN320",
+       "HN321",
+       "HN322",
+       "HN323",
+       "HN324",
+       "HN325",
+       "HN326",
+       "HN327",
+       "HN328",
+       "HN329",
+       "HN330",
+       "HN331",
+       "HN332",
+       "HN333",
+       "HN334",
+       "HN335",
+       "HN336",
+       "HN337",
+       "HN338",
+       "HN339",
+       "HN340",
+       "HN341",
+       "HN342",
+       "HN343",
+       "HN344",
+       "HN345",
+       "HN346",
+       "HN347",
+       "HN348",
+       "HN349",
+       "HN350",
+       "HN351",
+       "HN352",
+       "HN353",
+       "HN354",
+       "HN355",
+       "HN356",
+       "HN357",
+       "HN358",
+       "HN359",
+       "HN360",
+       "HN361",
+       "HN362",
+       "HN363",
+       "HN364",
+       "HN365",
+       "HN366",
+       "HN367",
+       "HN368",
+       "HN369",
+       "HN370",
+       "HN371",
+       "HN372",
+       "HN373",
+       "HN374",
+       "HN375",
+       "HN376",
+       "HN377",
+       "HN378",
+       "HN379",
+       "HN380",
+       "HN381",
+       "HN382",
+       "HN383",
+       "HN384",
+       "HN385",
+       "HN386",
+       "HN387",
+       "HN388",
+       "HN389",
+       "HN390",
+       "HN391",
+       "HN392",
+       "HN393",
+       "HN394",
+       "HN395",
+       "HN396",
+       "HN397",
+       "HN398",
+       "HN399",
+       "HN400",
+       "HN401",
+       "HN402",
+       "HN403",
+       "HN404",
+       "HN405",
+       "HN406",
+       "HN407",
+       "HN408",
+       "HN409",
+       "HN410",
+       "HN411",
+       "HN412",
+       "HN413",
+       "HN414",
+       "HN415",
+       "HN416",
+       "HN417",
+       "HN418",
+       "HN419",
+       "HN420",
+       "HN421",
+       "HN422",
+       "HN423",
+       "HN424",
+       "HN425",
+       "HN426",
+       "HN427",
+       "HN428",
+       "HN429",
+       "HN430",
+       "HN431",
+       "HN432",
+       "HN433",
+       "HN434",
+       "HN435",
+       "HN436",
+       "HN437",
+       "HN438",
+       "HN439",
+       "HN440",
+       "HN441",
+       "HN442",
+       "HN443",
+       "HN444",
+       "HN445",
+       "HN446",
+       "HN447",
+       "HN448",
+       "HN449",
+       "HN450",
+       "HN451",
+       "HN452",
+       "HN453",
+       "HN454",
+       "HN455",
+       "HN456",
+       "HN457",
+       "HN458",
+       "HN459",
+       "HN460",
+       "HN461",
+       "HN462",
+       "HN463",
+       "HN464",
+       "HN465",
+       "HN466",
+       "HN467",
+       "HN468",
+       "HN469",
+       "HN470",
+       "HN471",
+       "HN472",
+       "HN473",
+       "HN474",
+       "HN475",
+       "HN476",
+       "HN477",
+       "HN478",
+       "HN479",
+       "HN480",
+       "HN481",
+       "HN482",
+       "HN483",
+       "HN484",
+       "HN485",
+       "HN486",
+       "HN487",
+       "HN488",
+       "HN489",
+       "HN490",
+       "HN491",
+       "HN492",
+       "HN493",
+       "HN494",
+       "HN495",
+       "HN496",
+       "HN497",
+       "HN498",
+       "HN499",
+       "HN500"
+      ]
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "too_many_values"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:too_many_values:$.query.filter.value"
+   ]
+  },
+  {
+   "name": "filter too deep",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "and": [
+       {
+        "and": [
+         {
+          "and": [
+           {
+            "and": [
+             {
+              "field": "fall_risk",
+              "op": "eq",
+              "value": "yes"
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "filter_too_complex"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:filter_too_complex:$.query.filter.and[0].and[0].and[0].and[0]"
+   ]
+  },
+  {
+   "name": "too many conditions",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "or": [
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN0"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN1"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN2"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN3"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN4"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN5"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN6"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN7"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN8"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN9"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN10"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN11"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN12"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN13"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN14"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN15"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN16"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN17"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN18"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN19"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN20"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN21"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN22"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN23"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN24"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN25"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN26"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN27"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN28"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN29"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN30"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN31"
+       },
+       {
+        "field": "hn",
+        "op": "eq",
+        "value": "HN32"
+       }
+      ]
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "filter_too_complex"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:filter_too_complex:$.query.filter"
+   ]
+  },
+  {
+   "name": "too many index terms in one and",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "and": [
+       {
+        "field": "age",
+        "op": "gte",
+        "value": 0
+       },
+       {
+        "field": "age",
+        "op": "gte",
+        "value": 1
+       },
+       {
+        "field": "age",
+        "op": "gte",
+        "value": 2
+       },
+       {
+        "field": "age",
+        "op": "gte",
+        "value": 3
+       },
+       {
+        "field": "age",
+        "op": "gte",
+        "value": 4
+       },
+       {
+        "field": "age",
+        "op": "gte",
+        "value": 5
+       },
+       {
+        "field": "age",
+        "op": "gte",
+        "value": 6
+       },
+       {
+        "field": "age",
+        "op": "gte",
+        "value": 7
+       },
+       {
+        "field": "age",
+        "op": "gte",
+        "value": 8
+       }
+      ]
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "filter_too_complex"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:filter_too_complex:$.query.filter.and"
+   ]
+  },
+  {
+   "name": "cursor needs a stable sort",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "sort": [
+      {
+       "field": "age",
+       "dir": "desc"
+      }
+     ],
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "cursor_requires_stable_sort"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:cursor_requires_stable_sort:$.query.sort[0].field"
+   ]
+  },
+  {
+   "name": "cursor on updated_at warns",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "sort": [
+      {
+       "field": "$updated_at",
+       "dir": "desc"
+      }
+     ],
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [],
+   "warnings": [
+    "cursor_not_snapshot_stable"
+   ],
+   "paths": [
+    "warning:cursor_not_snapshot_stable:$.query.sort[0].field"
+   ]
+  },
+  {
+   "name": "offset sort by indexed field",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "sort": [
+      {
+       "field": "age",
+       "dir": "asc"
+      }
+     ],
+     "pagination": {
+      "mode": "offset",
+      "limit": 20,
+      "offset": 40
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [],
+   "warnings": [],
+   "paths": []
+  },
+  {
+   "name": "offset sort needs an index",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "sort": [
+      {
+       "field": "full_name"
+      }
+     ],
+     "pagination": {
+      "mode": "offset",
+      "limit": 20
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "not_filterable"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:not_filterable:$.query.sort[0].field"
+   ]
+  },
+  {
+   "name": "two sort keys",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "sort": [
+      {
+       "field": "$created_at"
+      },
+      {
+       "field": "$record_id"
+      }
+     ],
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "invalid_sort"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:invalid_sort:$.query.sort"
+   ]
+  },
+  {
+   "name": "raw sql key",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "sql": "DROP TABLE formdev_record",
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "dangerous_operation"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:dangerous_operation:$.query.sql"
+   ]
+  },
+  {
+   "name": "unknown leaf key",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "hn",
+      "op": "eq",
+      "value": "x",
+      "raw": "1=1"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "dangerous_operation"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:dangerous_operation:$.query.filter.raw"
+   ]
+  },
+  {
+   "name": "nul byte",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "hn",
+      "op": "eq",
+      "value": "HN\u00001"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "dangerous_operation"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:dangerous_operation:$.query.filter.value"
+   ]
+  },
+  {
+   "name": "hostile field name",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "a') OR 1=1--"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "invalid_field"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:invalid_field:$.query.select[0]"
+   ]
+  },
+  {
+   "name": "hostile sort direction",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "sort": [
+      {
+       "field": "$created_at",
+       "dir": "desc; --"
+      }
+     ],
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "invalid_sort"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:invalid_sort:$.query.sort[0].dir"
+   ]
+  },
+  {
+   "name": "hostile alias",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "group": [
+      "fall_risk"
+     ],
+     "aggregate": [
+      {
+       "fn": "count",
+       "as": "x\"; DROP TABLE formdev_record; --"
+      }
+     ],
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "invalid_alias"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:invalid_alias:$.query.aggregate[0].as"
+   ]
+  },
+  {
+   "name": "unknown source",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "source": "nope",
+     "select": [
+      "hn"
+     ],
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     }
+    }
+   },
+   "errors": [
+    "unknown_source"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:unknown_source:$.query.source"
+   ]
+  },
+  {
+   "name": "no query permission",
+   "catalog": "assessment",
+   "principal": "integration",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "unknown_source"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:unknown_source:$.query.source"
+   ]
+  },
+  {
+   "name": "relation select",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn",
+      "patient.name"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [],
+   "warnings": [],
+   "paths": []
+  },
+  {
+   "name": "relation filter",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "patient.name",
+      "op": "eq",
+      "value": "x"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "invalid_relation"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:invalid_relation:$.query.filter.field"
+   ]
+  },
+  {
+   "name": "unknown relation",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn",
+      "doctor.name"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "invalid_relation"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:invalid_relation:$.query.select[1]"
+   ]
+  },
+  {
+   "name": "unauthorized relation field",
+   "catalog": "assessment",
+   "principal": "viewer",
+   "body": {
+    "query": {
+     "select": [
+      "hn",
+      "patient.phone"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "unauthorized_field"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:unauthorized_field:$.query.select[1]"
+   ]
+  },
+  {
+   "name": "group count",
+   "catalog": "assessment",
+   "principal": "viewer",
+   "body": {
+    "query": {
+     "group": [
+      "fall_risk"
+     ],
+     "aggregate": [
+      {
+       "fn": "count",
+       "as": "n"
+      }
+     ],
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [],
+   "warnings": [],
+   "paths": []
+  },
+  {
+   "name": "group with avg and offset",
+   "catalog": "assessment",
+   "principal": "viewer",
+   "body": {
+    "query": {
+     "group": [
+      "fall_risk",
+      "$status"
+     ],
+     "aggregate": [
+      {
+       "fn": "count",
+       "as": "n"
+      },
+      {
+       "fn": "avg",
+       "field": "age",
+       "as": "avg_age"
+      }
+     ],
+     "sort": [
+      {
+       "field": "n",
+       "dir": "desc"
+      }
+     ],
+     "pagination": {
+      "mode": "offset",
+      "limit": 100
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [],
+   "warnings": [],
+   "paths": []
+  },
+  {
+   "name": "aggregate without group",
+   "catalog": "assessment",
+   "principal": "viewer",
+   "body": {
+    "query": {
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "aggregate": [
+      {
+       "fn": "max",
+       "field": "assessed_at",
+       "as": "latest"
+      },
+      {
+       "fn": "avg",
+       "field": "bmi",
+       "as": "avg_bmi"
+      }
+     ],
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [],
+   "warnings": [],
+   "paths": []
+  },
+  {
+   "name": "select must be grouped",
+   "catalog": "assessment",
+   "principal": "viewer",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "group": [
+      "fall_risk"
+     ],
+     "aggregate": [
+      {
+       "fn": "count",
+       "as": "n"
+      }
+     ],
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "select_not_grouped"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:select_not_grouped:$.query.select"
+   ]
+  },
+  {
+   "name": "grouped cursor",
+   "catalog": "assessment",
+   "principal": "viewer",
+   "body": {
+    "query": {
+     "group": [
+      "fall_risk"
+     ],
+     "aggregate": [
+      {
+       "fn": "count",
+       "as": "n"
+      }
+     ],
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "cursor_not_supported_for_group"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:cursor_not_supported_for_group:$.query.pagination.mode"
+   ]
+  },
+  {
+   "name": "avg of text",
+   "catalog": "assessment",
+   "principal": "viewer",
+   "body": {
+    "query": {
+     "group": [
+      "fall_risk"
+     ],
+     "aggregate": [
+      {
+       "fn": "avg",
+       "field": "hn",
+       "as": "x"
+      }
+     ],
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "aggregate_invalid"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:aggregate_invalid:$.query.aggregate[0].field"
+   ]
+  },
+  {
+   "name": "duplicate alias",
+   "catalog": "assessment",
+   "principal": "viewer",
+   "body": {
+    "query": {
+     "group": [
+      "fall_risk"
+     ],
+     "aggregate": [
+      {
+       "fn": "count",
+       "as": "n"
+      },
+      {
+       "fn": "max",
+       "field": "age",
+       "as": "n"
+      }
+     ],
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "invalid_alias"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:invalid_alias:$.query.aggregate[1].as"
+   ]
+  },
+  {
+   "name": "time group needs bucket",
+   "catalog": "assessment",
+   "principal": "viewer",
+   "body": {
+    "query": {
+     "group": [
+      "$created_at"
+     ],
+     "aggregate": [
+      {
+       "fn": "count",
+       "as": "n"
+      }
+     ],
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "aggregate_invalid"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:aggregate_invalid:$.query.group[0]"
+   ]
+  },
+  {
+   "name": "day bucket",
+   "catalog": "assessment",
+   "principal": "viewer",
+   "body": {
+    "query": {
+     "group": [
+      {
+       "field": "$ingested_at",
+       "bucket": "day",
+       "tz_offset_minutes": 420
+      }
+     ],
+     "aggregate": [
+      {
+       "fn": "count",
+       "as": "n"
+      }
+     ],
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [],
+   "warnings": [],
+   "paths": []
+  },
+  {
+   "name": "too many group keys",
+   "catalog": "assessment",
+   "principal": "viewer",
+   "body": {
+    "query": {
+     "group": [
+      "fall_risk",
+      "$status",
+      "smoker",
+      "hn"
+     ],
+     "aggregate": [
+      {
+       "fn": "count",
+       "as": "n"
+      }
+     ],
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "too_many_groups"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:too_many_groups:$.query.group"
+   ]
+  },
+  {
+   "name": "grouped sort by non-group",
+   "catalog": "assessment",
+   "principal": "viewer",
+   "body": {
+    "query": {
+     "group": [
+      "fall_risk"
+     ],
+     "aggregate": [
+      {
+       "fn": "count",
+       "as": "n"
+      }
+     ],
+     "sort": [
+      {
+       "field": "age"
+      }
+     ],
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "sort_not_grouped"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:sort_not_grouped:$.query.sort[0].field"
+   ]
+  },
+  {
+   "name": "deleted needs admin",
+   "catalog": "assessment",
+   "principal": "viewer",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "$status",
+      "op": "eq",
+      "value": "deleted"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "deleted_requires_admin"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:deleted_requires_admin:$.query.filter.value"
+   ]
+  },
+  {
+   "name": "admin sees deleted",
+   "catalog": "assessment",
+   "principal": "admin",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "$status",
+      "op": "eq",
+      "value": "deleted"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [],
+   "warnings": [],
+   "paths": []
+  },
+  {
+   "name": "wrong format",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "format": "flora.query/9",
+    "query": {
+     "source": "patient_assessment",
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     }
+    }
+   },
+   "errors": [
+    "invalid_format"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:invalid_format:$.format"
+   ]
+  },
+  {
+   "name": "timeout clamped",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "timeout": 60000,
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [],
+   "warnings": [
+    "timeout_clamped"
+   ],
+   "paths": [
+    "warning:timeout_clamped:$.query.timeout"
+   ]
+  },
+  {
+   "name": "export over the role limit",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "export": {
+      "format": "csv",
+      "max_rows": 200000
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "export_limit_exceeded"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:export_limit_exceeded:$.query.export.max_rows"
+   ]
+  },
+  {
+   "name": "admin export limit",
+   "catalog": "assessment",
+   "principal": "admin",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "export": {
+      "format": "jsonl",
+      "max_rows": 1000000
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [],
+   "warnings": [],
+   "paths": []
+  },
+  {
+   "name": "capped count",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "count": "capped",
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [],
+   "warnings": [],
+   "paths": []
+  },
+  {
+   "name": "bad query id",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "id": "Patient List",
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "invalid_value"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:invalid_value:$.query.id"
+   ]
+  },
+  {
+   "name": "body must wrap query",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "source": "patient_assessment",
+    "select": [
+     "hn"
+    ]
+   },
+   "errors": [
+    "invalid_request"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:invalid_request:$"
+   ]
+  },
+  {
+   "name": "trailing newline in a datetime",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "$created_at",
+      "op": "gte",
+      "value": "2025-01-01T00:00:00Z\n"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "invalid_value"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:invalid_value:$.query.filter.value"
+   ]
+  },
+  {
+   "name": "trailing newline in a field name",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn\n"
+     ],
+     "filter": {
+      "field": "fall_risk",
+      "op": "eq",
+      "value": "yes"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "invalid_field"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:invalid_field:$.query.select[0]"
+   ]
+  },
+  {
+   "name": "list operator",
+   "catalog": "assessment",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "hn",
+      "op": [
+       "eq"
+      ],
+      "value": "x"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     },
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "invalid_operator"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:invalid_operator:$.query.filter.op"
+   ]
+  },
+  {
+   "name": "list aggregate fn",
+   "catalog": "assessment",
+   "principal": "viewer",
+   "body": {
+    "query": {
+     "aggregate": [
+      {
+       "fn": [
+        "count"
+       ],
+       "as": "n"
+      }
+     ],
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "aggregate_invalid"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:aggregate_invalid:$.query.aggregate[0].fn"
+   ]
+  },
+  {
+   "name": "list bucket",
+   "catalog": "assessment",
+   "principal": "viewer",
+   "body": {
+    "query": {
+     "group": [
+      {
+       "field": "$created_at",
+       "bucket": [
+        "day"
+       ]
+      }
+     ],
+     "aggregate": [
+      {
+       "fn": "count",
+       "as": "n"
+      }
+     ],
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "aggregate_invalid"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:aggregate_invalid:$.query.group[0].bucket"
+   ]
+  },
+  {
+   "name": "list grouped sort field",
+   "catalog": "assessment",
+   "principal": "viewer",
+   "body": {
+    "query": {
+     "group": [
+      "fall_risk"
+     ],
+     "aggregate": [
+      {
+       "fn": "count",
+       "as": "n"
+      }
+     ],
+     "sort": [
+      {
+       "field": [
+        "fall_risk"
+       ]
+      }
+     ],
+     "source": "patient_assessment"
+    }
+   },
+   "errors": [
+    "sort_not_grouped"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:sort_not_grouped:$.query.sort[0].field"
+   ]
+  }
+ ]
+}

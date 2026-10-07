@@ -1,0 +1,73 @@
+{
+ "case": "agg_all_ward",
+ "what": "aggregate over the whole form: interactive must refuse (job)",
+ "label": "100k",
+ "statements": {
+  "probe": {
+   "planning_ms": 0.028,
+   "execution_ms": 8.971,
+   "planning_buffers": 0,
+   "settings": {
+    "plan_cache_mode": "force_custom_plan",
+    "jit": "off",
+    "max_parallel_workers_per_gather": "0",
+    "work_mem": "32MB"
+   },
+   "nodes": [
+    {
+     "depth": 0,
+     "node": "Aggregate",
+     "strategy": "Plain",
+     "est_rows": 1,
+     "act_rows": 1,
+     "loops": 1,
+     "shared_hit": 646,
+     "shared_read": 0,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 8.943
+    },
+    {
+     "depth": 1,
+     "node": "Limit",
+     "parent": "Outer",
+     "est_rows": 50001,
+     "act_rows": 50001,
+     "loops": 1,
+     "shared_hit": 646,
+     "shared_read": 0,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 7.287
+    },
+    {
+     "depth": 2,
+     "node": "Index Only Scan",
+     "parent": "Outer",
+     "relation": "formdev_record",
+     "index": "formdev_record_status_recent",
+     "alias": "k",
+     "direction": "Forward",
+     "est_rows": 98973,
+     "act_rows": 50001,
+     "loops": 1,
+     "removed_by_filter": 980,
+     "removed_by_recheck": 0,
+     "heap_fetches": 0,
+     "shared_hit": 646,
+     "shared_read": 0,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 5.22,
+     "index_cond": "(form_id = 'perf_assessment'::text)",
+     "filter": "(status <> 'deleted'::text)"
+    }
+   ],
+   "sql": "SELECT COUNT(*) AS total FROM (SELECT 1 AS one FROM formdev_record k WHERE k.form_id = ? AND k.status <> 'deleted' LIMIT ?) c",
+   "params": [
+    "perf_assessment",
+    50001
+   ]
+  }
+ }
+}

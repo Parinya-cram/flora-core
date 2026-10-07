@@ -1,0 +1,8 @@
+[
+  {
+    "record_id": "6f1c1d1e-0000-4000-8000-000000000001",
+    "schema_version": 1,
+    "status": "submitted",
+    "data": { "hn": "HN0001", "full_name": "สมชาย ใจดี", "age": 72, "sex": "male", "assessed_at": "2026-10-05T08:30:00+07:00", "bp": 138, "bp_dia": 84, "weight": "61.5", "height_cm": 165, "fall_risk": "yes", "smoker": false, "remarks": "ตัวอย่างข้อมูลจาก formpack" }
+  }
+]

@@ -1,0 +1,716 @@
+[
+  {
+    "font_id": "noto-sans-thai",
+    "metadata": {
+      "family": "Noto Sans Thai Variable",
+      "display_name": "Noto Sans Thai",
+      "category": "ui",
+      "official": false,
+      "scripts": [
+        "thai",
+        "latin"
+      ],
+      "weights": [
+        100,
+        900
+      ],
+      "styles": [
+        "normal"
+      ],
+      "license": "OFL-1.1",
+      "license_verified": true
+    },
+    "assets": [
+      {
+        "kind": "bundled",
+        "package": "@fontsource-variable/noto-sans-thai",
+        "installed": true
+      }
+    ],
+    "fallback": [
+      "Noto Sans Thai Variable",
+      "Noto Sans Thai",
+      "Tahoma",
+      "sans-serif"
+    ]
+  },
+  {
+    "font_id": "inter",
+    "metadata": {
+      "family": "Inter Variable",
+      "display_name": "Inter",
+      "category": "ui",
+      "official": false,
+      "scripts": [
+        "latin"
+      ],
+      "weights": [
+        100,
+        900
+      ],
+      "styles": [
+        "normal"
+      ],
+      "license": "OFL-1.1",
+      "license_verified": true
+    },
+    "assets": [
+      {
+        "kind": "bundled",
+        "package": "@fontsource-variable/inter",
+        "installed": true
+      }
+    ],
+    "fallback": [
+      "Inter Variable",
+      "Inter",
+      "system-ui",
+      "sans-serif"
+    ]
+  },
+  {
+    "font_id": "th-sarabun-new",
+    "metadata": {
+      "family": "TH Sarabun New",
+      "display_name": "TH Sarabun New",
+      "category": "official-th",
+      "official": true,
+      "scripts": [
+        "thai",
+        "latin"
+      ],
+      "weights": [
+        400,
+        700
+      ],
+      "styles": [
+        "normal",
+        "italic"
+      ],
+      "license": "Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.",
+      "license_verified": false,
+      "note": "TH Sarabun New (2011 update of TH SarabunPSK) is the font named for Thai government documents; it is the +1 beside the 13 national fonts."
+    },
+    "assets": [
+      {
+        "kind": "system",
+        "family": "TH Sarabun New",
+        "note": "Use the copy installed on the workstation (no file is shipped)"
+      },
+      {
+        "kind": "web_alternative",
+        "family": "Sarabun",
+        "package": "@fontsource/sarabun",
+        "license": "OFL-1.1",
+        "installed": false,
+        "note": "Open-licence redesign of the same typeface; not installed (no packages are downloaded)"
+      }
+    ],
+    "fallback": [
+      "TH Sarabun New",
+      "Sarabun",
+      "Noto Sans Thai Variable",
+      "Noto Sans Thai",
+      "Tahoma",
+      "sans-serif"
+    ]
+  },
+  {
+    "font_id": "th-sarabun-psk",
+    "metadata": {
+      "family": "TH SarabunPSK",
+      "display_name": "TH SarabunPSK",
+      "category": "official-th",
+      "official": true,
+      "scripts": [
+        "thai",
+        "latin"
+      ],
+      "weights": [
+        400,
+        700
+      ],
+      "styles": [
+        "normal",
+        "italic"
+      ],
+      "license": "Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.",
+      "license_verified": false
+    },
+    "assets": [
+      {
+        "kind": "system",
+        "family": "TH SarabunPSK",
+        "note": "Use the copy installed on the workstation (no file is shipped)"
+      },
+      {
+        "kind": "web_alternative",
+        "family": "Sarabun",
+        "package": "@fontsource/sarabun",
+        "license": "OFL-1.1",
+        "installed": false,
+        "note": "Open-licence redesign of the same typeface; not installed (no packages are downloaded)"
+      }
+    ],
+    "fallback": [
+      "TH SarabunPSK",
+      "Sarabun",
+      "Noto Sans Thai Variable",
+      "Noto Sans Thai",
+      "Tahoma",
+      "sans-serif"
+    ]
+  },
+  {
+    "font_id": "th-chakra-petch",
+    "metadata": {
+      "family": "TH Chakra Petch",
+      "display_name": "TH Chakra Petch",
+      "category": "official-th",
+      "official": true,
+      "scripts": [
+        "thai",
+        "latin"
+      ],
+      "weights": [
+        400,
+        700
+      ],
+      "styles": [
+        "normal",
+        "italic"
+      ],
+      "license": "Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.",
+      "license_verified": false
+    },
+    "assets": [
+      {
+        "kind": "system",
+        "family": "TH Chakra Petch",
+        "note": "Use the copy installed on the workstation (no file is shipped)"
+      },
+      {
+        "kind": "web_alternative",
+        "family": "Chakra Petch",
+        "package": "@fontsource/chakra-petch",
+        "license": "OFL-1.1",
+        "installed": false,
+        "note": "Open-licence redesign of the same typeface; not installed (no packages are downloaded)"
+      }
+    ],
+    "fallback": [
+      "TH Chakra Petch",
+      "Chakra Petch",
+      "Noto Sans Thai Variable",
+      "Noto Sans Thai",
+      "Tahoma",
+      "sans-serif"
+    ]
+  },
+  {
+    "font_id": "th-baijam",
+    "metadata": {
+      "family": "TH Baijam",
+      "display_name": "TH Baijam",
+      "category": "official-th",
+      "official": true,
+      "scripts": [
+        "thai",
+        "latin"
+      ],
+      "weights": [
+        400,
+        700
+      ],
+      "styles": [
+        "normal",
+        "italic"
+      ],
+      "license": "Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.",
+      "license_verified": false
+    },
+    "assets": [
+      {
+        "kind": "system",
+        "family": "TH Baijam",
+        "note": "Use the copy installed on the workstation (no file is shipped)"
+      },
+      {
+        "kind": "web_alternative",
+        "family": "Bai Jamjuree",
+        "package": "@fontsource/bai-jamjuree",
+        "license": "OFL-1.1",
+        "installed": false,
+        "note": "Open-licence redesign of the same typeface; not installed (no packages are downloaded)"
+      }
+    ],
+    "fallback": [
+      "TH Baijam",
+      "Bai Jamjuree",
+      "Noto Sans Thai Variable",
+      "Noto Sans Thai",
+      "Tahoma",
+      "sans-serif"
+    ]
+  },
+  {
+    "font_id": "th-charm-of-au",
+    "metadata": {
+      "family": "TH Charm of AU",
+      "display_name": "TH Charm of AU",
+      "category": "official-th",
+      "official": true,
+      "scripts": [
+        "thai",
+        "latin"
+      ],
+      "weights": [
+        400,
+        700
+      ],
+      "styles": [
+        "normal",
+        "italic"
+      ],
+      "license": "Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.",
+      "license_verified": false
+    },
+    "assets": [
+      {
+        "kind": "system",
+        "family": "TH Charm of AU",
+        "note": "Use the copy installed on the workstation (no file is shipped)"
+      },
+      {
+        "kind": "web_alternative",
+        "family": "Charm",
+        "package": "@fontsource/charm",
+        "license": "OFL-1.1",
+        "installed": false,
+        "note": "Open-licence redesign of the same typeface; not installed (no packages are downloaded)"
+      }
+    ],
+    "fallback": [
+      "TH Charm of AU",
+      "Charm",
+      "Noto Sans Thai Variable",
+      "Noto Sans Thai",
+      "Tahoma",
+      "sans-serif"
+    ]
+  },
+  {
+    "font_id": "th-charmonman",
+    "metadata": {
+      "family": "TH Charmonman",
+      "display_name": "TH Charmonman",
+      "category": "official-th",
+      "official": true,
+      "scripts": [
+        "thai",
+        "latin"
+      ],
+      "weights": [
+        400,
+        700
+      ],
+      "styles": [
+        "normal",
+        "italic"
+      ],
+      "license": "Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.",
+      "license_verified": false
+    },
+    "assets": [
+      {
+        "kind": "system",
+        "family": "TH Charmonman",
+        "note": "Use the copy installed on the workstation (no file is shipped)"
+      },
+      {
+        "kind": "web_alternative",
+        "family": "Charmonman",
+        "package": "@fontsource/charmonman",
+        "license": "OFL-1.1",
+        "installed": false,
+        "note": "Open-licence redesign of the same typeface; not installed (no packages are downloaded)"
+      }
+    ],
+    "fallback": [
+      "TH Charmonman",
+      "Charmonman",
+      "Noto Sans Thai Variable",
+      "Noto Sans Thai",
+      "Tahoma",
+      "sans-serif"
+    ]
+  },
+  {
+    "font_id": "th-fah-kwang",
+    "metadata": {
+      "family": "TH Fah kwang",
+      "display_name": "TH Fah kwang",
+      "category": "official-th",
+      "official": true,
+      "scripts": [
+        "thai",
+        "latin"
+      ],
+      "weights": [
+        400,
+        700
+      ],
+      "styles": [
+        "normal",
+        "italic"
+      ],
+      "license": "Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.",
+      "license_verified": false
+    },
+    "assets": [
+      {
+        "kind": "system",
+        "family": "TH Fah kwang",
+        "note": "Use the copy installed on the workstation (no file is shipped)"
+      },
+      {
+        "kind": "web_alternative",
+        "family": "Fahkwang",
+        "package": "@fontsource/fahkwang",
+        "license": "OFL-1.1",
+        "installed": false,
+        "note": "Open-licence redesign of the same typeface; not installed (no packages are downloaded)"
+      }
+    ],
+    "fallback": [
+      "TH Fah kwang",
+      "Fahkwang",
+      "Noto Sans Thai Variable",
+      "Noto Sans Thai",
+      "Tahoma",
+      "sans-serif"
+    ]
+  },
+  {
+    "font_id": "th-k2d-july8",
+    "metadata": {
+      "family": "TH K2D July8",
+      "display_name": "TH K2D July8",
+      "category": "official-th",
+      "official": true,
+      "scripts": [
+        "thai",
+        "latin"
+      ],
+      "weights": [
+        400,
+        700
+      ],
+      "styles": [
+        "normal",
+        "italic"
+      ],
+      "license": "Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.",
+      "license_verified": false
+    },
+    "assets": [
+      {
+        "kind": "system",
+        "family": "TH K2D July8",
+        "note": "Use the copy installed on the workstation (no file is shipped)"
+      },
+      {
+        "kind": "web_alternative",
+        "family": "K2D",
+        "package": "@fontsource/k2d",
+        "license": "OFL-1.1",
+        "installed": false,
+        "note": "Open-licence redesign of the same typeface; not installed (no packages are downloaded)"
+      }
+    ],
+    "fallback": [
+      "TH K2D July8",
+      "K2D",
+      "Noto Sans Thai Variable",
+      "Noto Sans Thai",
+      "Tahoma",
+      "sans-serif"
+    ]
+  },
+  {
+    "font_id": "th-kodchasal",
+    "metadata": {
+      "family": "TH Kodchasal",
+      "display_name": "TH Kodchasal",
+      "category": "official-th",
+      "official": true,
+      "scripts": [
+        "thai",
+        "latin"
+      ],
+      "weights": [
+        400,
+        700
+      ],
+      "styles": [
+        "normal",
+        "italic"
+      ],
+      "license": "Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.",
+      "license_verified": false
+    },
+    "assets": [
+      {
+        "kind": "system",
+        "family": "TH Kodchasal",
+        "note": "Use the copy installed on the workstation (no file is shipped)"
+      },
+      {
+        "kind": "web_alternative",
+        "family": "Kodchasan",
+        "package": "@fontsource/kodchasan",
+        "license": "OFL-1.1",
+        "installed": false,
+        "note": "Open-licence redesign of the same typeface; not installed (no packages are downloaded)"
+      }
+    ],
+    "fallback": [
+      "TH Kodchasal",
+      "Kodchasan",
+      "Noto Sans Thai Variable",
+      "Noto Sans Thai",
+      "Tahoma",
+      "sans-serif"
+    ]
+  },
+  {
+    "font_id": "th-koho",
+    "metadata": {
+      "family": "TH KoHo",
+      "display_name": "TH KoHo",
+      "category": "official-th",
+      "official": true,
+      "scripts": [
+        "thai",
+        "latin"
+      ],
+      "weights": [
+        400,
+        700
+      ],
+      "styles": [
+        "normal",
+        "italic"
+      ],
+      "license": "Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.",
+      "license_verified": false
+    },
+    "assets": [
+      {
+        "kind": "system",
+        "family": "TH KoHo",
+        "note": "Use the copy installed on the workstation (no file is shipped)"
+      },
+      {
+        "kind": "web_alternative",
+        "family": "KoHo",
+        "package": "@fontsource/koho",
+        "license": "OFL-1.1",
+        "installed": false,
+        "note": "Open-licence redesign of the same typeface; not installed (no packages are downloaded)"
+      }
+    ],
+    "fallback": [
+      "TH KoHo",
+      "KoHo",
+      "Noto Sans Thai Variable",
+      "Noto Sans Thai",
+      "Tahoma",
+      "sans-serif"
+    ]
+  },
+  {
+    "font_id": "th-krub",
+    "metadata": {
+      "family": "TH Krub",
+      "display_name": "TH Krub",
+      "category": "official-th",
+      "official": true,
+      "scripts": [
+        "thai",
+        "latin"
+      ],
+      "weights": [
+        400,
+        700
+      ],
+      "styles": [
+        "normal",
+        "italic"
+      ],
+      "license": "Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.",
+      "license_verified": false
+    },
+    "assets": [
+      {
+        "kind": "system",
+        "family": "TH Krub",
+        "note": "Use the copy installed on the workstation (no file is shipped)"
+      },
+      {
+        "kind": "web_alternative",
+        "family": "Krub",
+        "package": "@fontsource/krub",
+        "license": "OFL-1.1",
+        "installed": false,
+        "note": "Open-licence redesign of the same typeface; not installed (no packages are downloaded)"
+      }
+    ],
+    "fallback": [
+      "TH Krub",
+      "Krub",
+      "Noto Sans Thai Variable",
+      "Noto Sans Thai",
+      "Tahoma",
+      "sans-serif"
+    ]
+  },
+  {
+    "font_id": "th-mali-grade6",
+    "metadata": {
+      "family": "TH Mali Grade6",
+      "display_name": "TH Mali Grade6",
+      "category": "official-th",
+      "official": true,
+      "scripts": [
+        "thai",
+        "latin"
+      ],
+      "weights": [
+        400,
+        700
+      ],
+      "styles": [
+        "normal",
+        "italic"
+      ],
+      "license": "Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.",
+      "license_verified": false
+    },
+    "assets": [
+      {
+        "kind": "system",
+        "family": "TH Mali Grade6",
+        "note": "Use the copy installed on the workstation (no file is shipped)"
+      },
+      {
+        "kind": "web_alternative",
+        "family": "Mali",
+        "package": "@fontsource/mali",
+        "license": "OFL-1.1",
+        "installed": false,
+        "note": "Open-licence redesign of the same typeface; not installed (no packages are downloaded)"
+      }
+    ],
+    "fallback": [
+      "TH Mali Grade6",
+      "Mali",
+      "Noto Sans Thai Variable",
+      "Noto Sans Thai",
+      "Tahoma",
+      "sans-serif"
+    ]
+  },
+  {
+    "font_id": "th-niramit-as",
+    "metadata": {
+      "family": "TH Niramit AS",
+      "display_name": "TH Niramit AS",
+      "category": "official-th",
+      "official": true,
+      "scripts": [
+        "thai",
+        "latin"
+      ],
+      "weights": [
+        400,
+        700
+      ],
+      "styles": [
+        "normal",
+        "italic"
+      ],
+      "license": "Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.",
+      "license_verified": false
+    },
+    "assets": [
+      {
+        "kind": "system",
+        "family": "TH Niramit AS",
+        "note": "Use the copy installed on the workstation (no file is shipped)"
+      },
+      {
+        "kind": "web_alternative",
+        "family": "Niramit",
+        "package": "@fontsource/niramit",
+        "license": "OFL-1.1",
+        "installed": false,
+        "note": "Open-licence redesign of the same typeface; not installed (no packages are downloaded)"
+      }
+    ],
+    "fallback": [
+      "TH Niramit AS",
+      "Niramit",
+      "Noto Sans Thai Variable",
+      "Noto Sans Thai",
+      "Tahoma",
+      "sans-serif"
+    ]
+  },
+  {
+    "font_id": "th-srisakdi",
+    "metadata": {
+      "family": "TH Srisakdi",
+      "display_name": "TH Srisakdi",
+      "category": "official-th",
+      "official": true,
+      "scripts": [
+        "thai",
+        "latin"
+      ],
+      "weights": [
+        400,
+        700
+      ],
+      "styles": [
+        "normal",
+        "italic"
+      ],
+      "license": "Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.",
+      "license_verified": false
+    },
+    "assets": [
+      {
+        "kind": "system",
+        "family": "TH Srisakdi",
+        "note": "Use the copy installed on the workstation (no file is shipped)"
+      },
+      {
+        "kind": "web_alternative",
+        "family": "Srisakdi",
+        "package": "@fontsource/srisakdi",
+        "license": "OFL-1.1",
+        "installed": false,
+        "note": "Open-licence redesign of the same typeface; not installed (no packages are downloaded)"
+      }
+    ],
+    "fallback": [
+      "TH Srisakdi",
+      "Srisakdi",
+      "Noto Sans Thai Variable",
+      "Noto Sans Thai",
+      "Tahoma",
+      "sans-serif"
+    ]
+  }
+]

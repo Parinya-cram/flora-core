@@ -1,0 +1,119 @@
+{
+ "label": "1m",
+ "records": 1000000,
+ "noise": 50000,
+ "seed": 4013,
+ "timings_s": {
+  "truncate_drop": 0.01,
+  "copy": 59.13,
+  "index_build": {
+   "formdev_record_created": 1.88,
+   "formdev_record_ingest": 0.72,
+   "formdev_record_recent": 0.83,
+   "formdev_record_status_recent": 1.4,
+   "formdev_record_subject": 1.56,
+   "formdev_ri_num_live": 11.07,
+   "formdev_ri_text_live": 24.21,
+   "formdev_record_index_pkey": 10.4,
+   "formdev_record_index_record_id_fkey (validate)": 3.26
+  },
+  "validation": 23.15,
+  "vacuum_analyze": 15.67,
+  "total": 153.55
+ },
+ "host_free_gb": {
+  "start": 11.18,
+  "lowest_during_copy": 9.71,
+  "end": 6.59,
+  "lowest_watchdog": 6.59
+ },
+ "index_definitions": {
+  "formdev_record_created": "CREATE INDEX formdev_record_created ON public.formdev_record USING btree (form_id, created_at DESC, record_id DESC)",
+  "formdev_record_index_pkey": "CREATE UNIQUE INDEX formdev_record_index_pkey ON public.formdev_record_index USING btree (record_id, field_id)",
+  "formdev_record_ingest": "CREATE UNIQUE INDEX formdev_record_ingest ON public.formdev_record USING btree (form_id, ingest_seq)",
+  "formdev_record_pkey": "CREATE UNIQUE INDEX formdev_record_pkey ON public.formdev_record USING btree (record_id)",
+  "formdev_record_recent": "CREATE INDEX formdev_record_recent ON public.formdev_record USING btree (form_id, updated_at DESC, record_id DESC)",
+  "formdev_record_status_recent": "CREATE INDEX formdev_record_status_recent ON public.formdev_record USING btree (form_id, status, updated_at DESC, record_id DESC)",
+  "formdev_record_subject": "CREATE INDEX formdev_record_subject ON public.formdev_record USING btree (form_id, subject_id, created_at DESC, record_id DESC) WHERE (subject_id IS NOT NULL)",
+  "formdev_ri_num_live": "CREATE INDEX formdev_ri_num_live ON public.formdev_record_index USING btree (form_id, field_id, value_num, updated_at DESC, record_id DESC) WHERE ((value_num IS NOT NULL) AND (status <> 'deleted'::text))",
+  "formdev_ri_text_live": "CREATE INDEX formdev_ri_text_live ON public.formdev_record_index USING btree (form_id, field_id, value_text, updated_at DESC, record_id DESC) WHERE ((value_text IS NOT NULL) AND (status <> 'deleted'::text))"
+ },
+ "constraints": {
+  "formdev_record_index_record_id_fkey": "FOREIGN KEY (record_id) REFERENCES formdev_record(record_id) ON DELETE CASCADE",
+  "formdev_record_index_pkey": "PRIMARY KEY (record_id, field_id)"
+ },
+ "counts": {
+  "records": 1151000,
+  "index_rows": 7086962,
+  "by_form": {
+   "perf_registration": 101000,
+   "m_noise_labs": 15000,
+   "a_noise_vitals": 20000,
+   "z_noise_notes": 15000,
+   "perf_assessment": 1000000
+  },
+  "by_status": {
+   "submitted": 969791,
+   "draft": 20138,
+   "deleted": 10071
+  }
+ },
+ "copy_rows_per_s": {
+  "records": 19466,
+  "index_rows": 119854,
+  "all_rows": 139319
+ },
+ "wal_bytes": {
+  "copy": 1563901280,
+  "index_build": 1674138960,
+  "total": 3394010144
+ },
+ "indexes_identical": true,
+ "index_definition_diff": {},
+ "constraints_identical": true,
+ "validation": {
+  "sampled": 9891,
+  "mismatches": 0,
+  "examples": [],
+  "create_ms_p50": 1.34,
+  "create_ms_p95": 2.74,
+  "creates_per_s": 596
+ },
+ "sizes": {
+  "formdev_record": {
+   "heap": 642932736,
+   "indexes": 581672960,
+   "total": 1224818688,
+   "reltuples": 1161015,
+   "per_index": {
+    "formdev_record_created": 101269504,
+    "formdev_record_ingest": 48414720,
+    "formdev_record_pkey": 87842816,
+    "formdev_record_recent": 101269504,
+    "formdev_record_status_recent": 121503744,
+    "formdev_record_subject": 121372672
+   }
+  },
+  "formdev_record_index": {
+   "heap": 890396672,
+   "indexes": 1376657408,
+   "total": 2267332608,
+   "reltuples": 7153678,
+   "per_index": {
+    "formdev_record_index_pkey": 484941824,
+    "formdev_ri_num_live": 417079296,
+    "formdev_ri_text_live": 474636288
+   }
+  },
+  "formdev_record_revision": {
+   "heap": 5210112,
+   "indexes": 909312,
+   "total": 6160384,
+   "reltuples": 9891,
+   "per_index": {
+    "formdev_record_revision_pkey": 909312
+   }
+  },
+  "database": 3507429903
+ }
+}

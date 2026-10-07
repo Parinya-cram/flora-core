@@ -1,0 +1,119 @@
+{
+ "label": "300k",
+ "records": 300000,
+ "noise": 60000,
+ "seed": 4013,
+ "timings_s": {
+  "truncate_drop": 0.01,
+  "copy": 18.46,
+  "index_build": {
+   "formdev_record_created": 0.68,
+   "formdev_record_ingest": 0.29,
+   "formdev_record_recent": 0.45,
+   "formdev_record_status_recent": 1.01,
+   "formdev_record_subject": 0.76,
+   "formdev_ri_num_live": 3.32,
+   "formdev_ri_text_live": 3.46,
+   "formdev_record_index_pkey": 8.36,
+   "formdev_record_index_record_id_fkey (validate)": 0.95
+  },
+  "validation": 8.16,
+  "vacuum_analyze": 12.37,
+  "total": 58.41
+ },
+ "host_free_gb": {
+  "start": 7.25,
+  "lowest_during_copy": 7.25,
+  "end": 5.65,
+  "lowest_watchdog": 4.83
+ },
+ "index_definitions": {
+  "formdev_record_created": "CREATE INDEX formdev_record_created ON public.formdev_record USING btree (form_id, created_at DESC, record_id DESC)",
+  "formdev_record_index_pkey": "CREATE UNIQUE INDEX formdev_record_index_pkey ON public.formdev_record_index USING btree (record_id, field_id)",
+  "formdev_record_ingest": "CREATE UNIQUE INDEX formdev_record_ingest ON public.formdev_record USING btree (form_id, ingest_seq)",
+  "formdev_record_pkey": "CREATE UNIQUE INDEX formdev_record_pkey ON public.formdev_record USING btree (record_id)",
+  "formdev_record_recent": "CREATE INDEX formdev_record_recent ON public.formdev_record USING btree (form_id, updated_at DESC, record_id DESC)",
+  "formdev_record_status_recent": "CREATE INDEX formdev_record_status_recent ON public.formdev_record USING btree (form_id, status, updated_at DESC, record_id DESC)",
+  "formdev_record_subject": "CREATE INDEX formdev_record_subject ON public.formdev_record USING btree (form_id, subject_id, created_at DESC, record_id DESC) WHERE (subject_id IS NOT NULL)",
+  "formdev_ri_num_live": "CREATE INDEX formdev_ri_num_live ON public.formdev_record_index USING btree (form_id, field_id, value_num, updated_at DESC, record_id DESC) WHERE ((value_num IS NOT NULL) AND (status <> 'deleted'::text))",
+  "formdev_ri_text_live": "CREATE INDEX formdev_ri_text_live ON public.formdev_record_index USING btree (form_id, field_id, value_text, updated_at DESC, record_id DESC) WHERE ((value_text IS NOT NULL) AND (status <> 'deleted'::text))"
+ },
+ "constraints": {
+  "formdev_record_index_record_id_fkey": "FOREIGN KEY (record_id) REFERENCES formdev_record(record_id) ON DELETE CASCADE",
+  "formdev_record_index_pkey": "PRIMARY KEY (record_id, field_id)"
+ },
+ "counts": {
+  "records": 390300,
+  "index_rows": 2336838,
+  "by_form": {
+   "m_noise_labs": 18000,
+   "perf_registration": 30300,
+   "a_noise_vitals": 24000,
+   "perf_assessment": 300000,
+   "z_noise_notes": 18000
+  },
+  "by_status": {
+   "submitted": 290959,
+   "draft": 6026,
+   "deleted": 3015
+  }
+ },
+ "copy_rows_per_s": {
+  "records": 21143,
+  "index_rows": 126589,
+  "all_rows": 147732
+ },
+ "wal_bytes": {
+  "copy": 495416688,
+  "index_build": 555313248,
+  "total": 1106567080
+ },
+ "indexes_identical": true,
+ "index_definition_diff": {},
+ "constraints_identical": true,
+ "validation": {
+  "sampled": 2971,
+  "mismatches": 0,
+  "examples": [],
+  "create_ms_p50": 1.38,
+  "create_ms_p95": 5.33,
+  "creates_per_s": 414
+ },
+ "sizes": {
+  "formdev_record": {
+   "heap": 206938112,
+   "indexes": 197713920,
+   "total": 404742144,
+   "reltuples": 393271,
+   "per_index": {
+    "formdev_record_created": 34267136,
+    "formdev_record_ingest": 16367616,
+    "formdev_record_pkey": 31023104,
+    "formdev_record_recent": 34267136,
+    "formdev_record_status_recent": 40910848,
+    "formdev_record_subject": 40878080
+   }
+  },
+  "formdev_record_index": {
+   "heap": 293199872,
+   "indexes": 454844416,
+   "total": 748158976,
+   "reltuples": 2356912,
+   "per_index": {
+    "formdev_record_index_pkey": 159817728,
+    "formdev_ri_num_live": 138067968,
+    "formdev_ri_text_live": 156958720
+   }
+  },
+  "formdev_record_revision": {
+   "heap": 1540096,
+   "indexes": 286720,
+   "total": 1859584,
+   "reltuples": 2971,
+   "per_index": {
+    "formdev_record_revision_pkey": 286720
+   }
+  },
+  "database": 1163723279
+ }
+}

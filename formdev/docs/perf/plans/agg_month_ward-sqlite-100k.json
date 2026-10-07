@@ -1,0 +1,52 @@
+{
+ "case": "agg_month_ward",
+ "label": "sqlite-100k",
+ "statements": {
+  "main": {
+   "indexes_used": [
+    "formdev_record_status_recent",
+    "sqlite_autoindex_formdev_record_index_1"
+   ],
+   "full_scan": false,
+   "node_types": [
+    "CO-ROUTINE q",
+    "CO-ROUTINE p",
+    "SEARCH k USING COVERING INDEX formdev_record_status_recent (form_id=?)",
+    "CORRELATED SCALAR SUBQUERY 1",
+    "SEARCH i1 USING INDEX sqlite_autoindex_formdev_record_index_1 (record_id=? AND field_id=?)",
+    "SEARCH x USING INDEX sqlite_autoindex_formdev_record_index_1 (record_id=? AND field_id=?) LEFT-JOIN",
+    "USE TEMP B-TREE FOR GROUP BY",
+    "SCAN p",
+    "USE TEMP B-TREE FOR GROUP BY",
+    "SCAN q",
+    "USE TEMP B-TREE FOR ORDER BY"
+   ],
+   "est_rows": null,
+   "rows_scanned": null,
+   "buffers": null,
+   "planning_ms": null,
+   "execution_ms": null,
+   "sql": "SELECT * FROM (SELECT p.f0 AS g0, COUNT(*) AS a0 FROM (SELECT k.record_id AS rid, MAX(CASE WHEN x.field_id = ? THEN x.value_text END) AS f0 FROM formdev_record k LEFT JOIN formdev_record_index x ON x.record_id = k.record_id AND x.field_id IN (?) WHERE k.form_id = ? AND k.status <> 'deleted' AND EXISTS (SELECT 1 FROM formdev_record_index i1 WHERE i1.record_id = k.record_id AND i1.form_id = ? AND i1.status <> 'deleted' AND i1.field_id = ? AND i1.value_num >= ? AND i1.value_num <= ?) GROUP BY k.record_id) p GROUP BY p.f0) q ORDER BY (q.g0 IS NULL), q.g0 ASC LIMIT ?"
+  },
+  "probe": {
+   "indexes_used": [
+    "formdev_record_status_recent",
+    "sqlite_autoindex_formdev_record_index_1"
+   ],
+   "full_scan": false,
+   "node_types": [
+    "CO-ROUTINE c",
+    "SEARCH k USING COVERING INDEX formdev_record_status_recent (form_id=?)",
+    "CORRELATED SCALAR SUBQUERY 1",
+    "SEARCH i1 USING INDEX sqlite_autoindex_formdev_record_index_1 (record_id=? AND field_id=?)",
+    "SCAN c"
+   ],
+   "est_rows": null,
+   "rows_scanned": null,
+   "buffers": null,
+   "planning_ms": null,
+   "execution_ms": null,
+   "sql": "SELECT COUNT(*) AS total FROM (SELECT 1 AS one FROM formdev_record k WHERE k.form_id = ? AND k.status <> 'deleted' AND EXISTS (SELECT 1 FROM formdev_record_index i1 WHERE i1.record_id = k.record_id AND i1.form_id = ? AND i1.status <> 'deleted' AND i1.field_id = ? AND i1.value_num >= ? AND i1.value_num <= ?) LIMIT ?) c"
+  }
+ }
+}

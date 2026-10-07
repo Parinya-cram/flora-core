@@ -1,0 +1,1637 @@
+{
+ "label": "300k",
+ "runs": 20,
+ "warmup": 3,
+ "values": {
+  "live": 296985,
+  "hn_a": "HN0020402",
+  "hn_b": "HN0012770",
+  "prefix": "HN00012",
+  "counts": {
+   "hn_a": 19,
+   "w_big": 89492,
+   "w_rare": 148
+  }
+ },
+ "server": {
+  "effective_cache_size": "524288",
+  "effective_io_concurrency": "1",
+  "jit": "on",
+  "maintenance_work_mem": "65536",
+  "max_parallel_workers_per_gather": "2",
+  "random_page_cost": "4",
+  "server_version": "17.6",
+  "shared_buffers": "16384",
+  "work_mem": "4096"
+ },
+ "cases": [
+  {
+   "name": "eq_hn",
+   "what": "eq on hn (selective, ~10 matches)",
+   "warmup_ms": [
+    7.7,
+    1.9,
+    1.9
+   ],
+   "p50_ms": 1.6,
+   "p95_ms": 2.8,
+   "max_ms": 5.4,
+   "min_ms": 1.1,
+   "runs": 20,
+   "rows": 19,
+   "has_more": false,
+   "first_row": "1020b7b4-c235-4de6-9bcd-ea9be2bec21e",
+   "plan": {
+    "main": {
+     "node_types": [
+      "Nested Loop",
+      "Limit",
+      "Sort",
+      "Nested Loop",
+      "Index Only Scan",
+      "Index Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_pkey",
+      "formdev_ri_text_live"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [
+      "quicksort"
+     ],
+     "top_est": 1.0,
+     "top_act": 19.0,
+     "top_ratio": 19.0,
+     "worst_ratio": 19.0,
+     "worst_node": "Nested Loop",
+     "rows_scanned": 57,
+     "removed_by_filter": 0,
+     "heap_fetches": 0,
+     "buffers": 158,
+     "shared_read": 0,
+     "planning_ms": 0.149,
+     "execution_ms": 0.118
+    }
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_seq_scan": true,
+    "no_external_sort": true,
+    "top_estimate_within_10x": false
+   },
+   "status": "FAIL"
+  },
+  {
+   "name": "eq_wbig_p1",
+   "what": "eq on ward W_BIG (30%), page 1",
+   "warmup_ms": [
+    7.1,
+    2.7,
+    2.0
+   ],
+   "p50_ms": 1.9,
+   "p95_ms": 2.3,
+   "max_ms": 2.4,
+   "min_ms": 1.7,
+   "runs": 20,
+   "rows": 50,
+   "has_more": true,
+   "first_row": "8c203865-341d-4897-9a94-0944432e459a",
+   "plan": {
+    "main": {
+     "node_types": [
+      "Nested Loop",
+      "Limit",
+      "Nested Loop",
+      "Index Scan",
+      "Index Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_index_pkey",
+      "formdev_record_ingest",
+      "formdev_record_pkey"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [],
+     "top_est": 51.0,
+     "top_act": 51.0,
+     "top_ratio": 1.0,
+     "worst_ratio": 2363.7,
+     "worst_node": "Index Scan formdev_record_ingest",
+     "rows_scanned": 302,
+     "removed_by_filter": 126,
+     "heap_fetches": 0,
+     "buffers": 848,
+     "shared_read": 0,
+     "planning_ms": 0.154,
+     "execution_ms": 0.35
+    }
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_seq_scan": true,
+    "no_external_sort": true,
+    "top_estimate_within_10x": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "eq_wbig_deep",
+   "what": "eq on ward W_BIG, keyset page after the 5000th match",
+   "cursor_after_seq": 283085,
+   "warmup_ms": [
+    3.9,
+    2.3,
+    3.4
+   ],
+   "p50_ms": 2.2,
+   "p95_ms": 3.8,
+   "max_ms": 6.4,
+   "min_ms": 1.7,
+   "runs": 20,
+   "rows": 50,
+   "has_more": true,
+   "first_row": "86fd1cef-7a4f-4825-8576-120d6e3c53f6",
+   "plan": {
+    "main": {
+     "node_types": [
+      "Nested Loop",
+      "Limit",
+      "Nested Loop",
+      "Index Scan",
+      "Index Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_index_pkey",
+      "formdev_record_ingest",
+      "formdev_record_pkey"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [],
+     "top_est": 51.0,
+     "top_act": 51.0,
+     "top_ratio": 1.0,
+     "worst_ratio": 1483.6,
+     "worst_node": "Index Scan formdev_record_ingest",
+     "rows_scanned": 435,
+     "removed_by_filter": 193,
+     "heap_fetches": 0,
+     "buffers": 1181,
+     "shared_read": 0,
+     "planning_ms": 0.138,
+     "execution_ms": 0.464
+    }
+   },
+   "deep_vs_page1_buffers": [
+    1181,
+    848
+   ],
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_seq_scan": true,
+    "no_external_sort": true,
+    "top_estimate_within_10x": true,
+    "deep_buffers_le_3x_page1": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "eq_wrare",
+   "what": "eq on ward W_RARE (0.05%, all oldest): LIMIT trap",
+   "warmup_ms": [
+    3.7,
+    1.7,
+    1.6
+   ],
+   "p50_ms": 1.9,
+   "p95_ms": 2.5,
+   "max_ms": 2.6,
+   "min_ms": 1.4,
+   "runs": 20,
+   "rows": 50,
+   "has_more": true,
+   "first_row": "61c189e1-2ab4-444b-b568-8f2c0e5be11e",
+   "plan": {
+    "main": {
+     "node_types": [
+      "Nested Loop",
+      "Limit",
+      "Sort",
+      "Nested Loop",
+      "Index Only Scan",
+      "Index Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_pkey",
+      "formdev_ri_text_live"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [
+      "top-N heapsort"
+     ],
+     "top_est": 14.0,
+     "top_act": 51.0,
+     "top_ratio": 3.642857142857143,
+     "worst_ratio": 10.6,
+     "worst_node": "Nested Loop",
+     "rows_scanned": 347,
+     "removed_by_filter": 0,
+     "heap_fetches": 0,
+     "buffers": 803,
+     "shared_read": 0,
+     "planning_ms": 0.143,
+     "execution_ms": 0.359
+    }
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_seq_scan": true,
+    "no_external_sort": true,
+    "top_estimate_within_10x": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "and_age_fall",
+   "what": "AND(age between 30..50, fall_risk eq yes)",
+   "warmup_ms": [
+    15.8,
+    6.6,
+    6.8
+   ],
+   "p50_ms": 5.4,
+   "p95_ms": 6.4,
+   "max_ms": 6.5,
+   "min_ms": 5.1,
+   "runs": 20,
+   "rows": 50,
+   "has_more": true,
+   "first_row": "f0337f7b-8d54-4847-90d9-0dddbba9a4ea",
+   "plan": {
+    "main": {
+     "node_types": [
+      "Nested Loop",
+      "Limit",
+      "Nested Loop",
+      "Nested Loop",
+      "Index Scan",
+      "Index Scan",
+      "Index Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_index_pkey",
+      "formdev_record_ingest",
+      "formdev_record_pkey"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [],
+     "top_est": 51.0,
+     "top_act": 51.0,
+     "top_ratio": 1.0,
+     "worst_ratio": 195.0,
+     "worst_node": "Index Scan formdev_record_ingest",
+     "rows_scanned": 3408,
+     "removed_by_filter": 1842,
+     "heap_fetches": 0,
+     "buffers": 9395,
+     "shared_read": 0,
+     "planning_ms": 0.446,
+     "execution_ms": 3.432
+    }
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_seq_scan": true,
+    "no_external_sort": true,
+    "top_estimate_within_10x": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "or_index",
+   "what": "OR(hn eq X, ward eq W_RARE): index leaves only",
+   "warmup_ms": [
+    2.5,
+    1.6,
+    2.0
+   ],
+   "p50_ms": 2.0,
+   "p95_ms": 2.2,
+   "max_ms": 2.2,
+   "min_ms": 1.6,
+   "runs": 20,
+   "rows": 50,
+   "has_more": true,
+   "first_row": "7b84d2d8-1b1d-4276-a957-3ed1c1e80d35",
+   "plan": {
+    "main": {
+     "node_types": [
+      "Nested Loop",
+      "Limit",
+      "Sort",
+      "Nested Loop",
+      "Aggregate",
+      "Bitmap Heap Scan",
+      "BitmapOr",
+      "Bitmap Index Scan",
+      "Bitmap Index Scan",
+      "Index Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_pkey",
+      "formdev_ri_text_live"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [
+      "top-N heapsort"
+     ],
+     "top_est": 16.0,
+     "top_act": 51.0,
+     "top_ratio": 3.1875,
+     "worst_ratio": 21.0,
+     "worst_node": "BitmapOr",
+     "rows_scanned": 534,
+     "removed_by_filter": 0,
+     "heap_fetches": 0,
+     "buffers": 891,
+     "shared_read": 0,
+     "planning_ms": 0.196,
+     "execution_ms": 0.416
+    }
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_seq_scan": true,
+    "no_external_sort": true,
+    "top_estimate_within_10x": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "or_meta_index",
+   "what": "OR($subject_id eq X, ward eq W_RARE): metadata + index leaf",
+   "warmup_ms": [
+    162.6,
+    180.1,
+    131.5
+   ],
+   "p50_ms": 137.9,
+   "p95_ms": 196.9,
+   "max_ms": 201.5,
+   "min_ms": 125.8,
+   "runs": 20,
+   "rows": 50,
+   "has_more": true,
+   "first_row": "7b84d2d8-1b1d-4276-a957-3ed1c1e80d35",
+   "plan": {
+    "main": {
+     "node_types": [
+      "Nested Loop",
+      "Limit",
+      "Index Scan",
+      "Index Only Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_ingest",
+      "formdev_record_pkey",
+      "formdev_ri_text_live"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [],
+     "top_est": 51.0,
+     "top_act": 51.0,
+     "top_ratio": 1.0,
+     "worst_ratio": 2896.8,
+     "worst_node": "Index Scan formdev_record_ingest",
+     "rows_scanned": 300087,
+     "removed_by_filter": 299837,
+     "heap_fetches": 0,
+     "buffers": 29826,
+     "shared_read": 26602,
+     "planning_ms": 0.299,
+     "execution_ms": 152.695
+    }
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_seq_scan": true,
+    "no_external_sort": true,
+    "top_estimate_within_10x": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "not_fall",
+   "what": "NOT(fall_risk eq no)",
+   "warmup_ms": [
+    5.6,
+    5.3,
+    3.4
+   ],
+   "p50_ms": 2.9,
+   "p95_ms": 4.1,
+   "max_ms": 5.0,
+   "min_ms": 2.0,
+   "runs": 20,
+   "rows": 50,
+   "has_more": true,
+   "first_row": "651ceaf7-afed-4774-8e5c-50e5bcba74f5",
+   "plan": {
+    "main": {
+     "node_types": [
+      "Nested Loop",
+      "Limit",
+      "Nested Loop",
+      "Index Scan",
+      "Index Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_index_pkey",
+      "formdev_record_ingest",
+      "formdev_record_pkey"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [],
+     "top_est": 51.0,
+     "top_act": 51.0,
+     "top_ratio": 1.0,
+     "worst_ratio": 2273.1,
+     "worst_node": "Nested Loop",
+     "rows_scanned": 544,
+     "removed_by_filter": 5,
+     "heap_fetches": 0,
+     "buffers": 1455,
+     "shared_read": 0,
+     "planning_ms": 0.133,
+     "execution_ms": 0.827
+    }
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_seq_scan": true,
+    "no_external_sort": true,
+    "top_estimate_within_10x": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "isnull_age",
+   "what": "age is_null (25% missing)",
+   "warmup_ms": [
+    3.1,
+    2.1,
+    2.6
+   ],
+   "p50_ms": 2.1,
+   "p95_ms": 2.9,
+   "max_ms": 3.4,
+   "min_ms": 1.9,
+   "runs": 20,
+   "rows": 50,
+   "has_more": true,
+   "first_row": "3bf806bc-718a-4689-9951-b988787e913e",
+   "plan": {
+    "main": {
+     "node_types": [
+      "Nested Loop",
+      "Limit",
+      "Nested Loop",
+      "Index Scan",
+      "Index Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_index_pkey",
+      "formdev_record_ingest",
+      "formdev_record_pkey"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [],
+     "top_est": 51.0,
+     "top_act": 51.0,
+     "top_ratio": 1.0,
+     "worst_ratio": 1688.3,
+     "worst_node": "Index Scan formdev_record_ingest",
+     "rows_scanned": 404,
+     "removed_by_filter": 3,
+     "heap_fetches": 0,
+     "buffers": 1053,
+     "shared_read": 0,
+     "planning_ms": 0.134,
+     "execution_ms": 0.48
+    }
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_seq_scan": true,
+    "no_external_sort": true,
+    "top_estimate_within_10x": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "prefix_hn",
+   "what": "prefix on hn 'HN00012' (~1000 matches)",
+   "warmup_ms": [
+    11.6,
+    5.3,
+    3.6
+   ],
+   "p50_ms": 3.2,
+   "p95_ms": 3.6,
+   "max_ms": 3.8,
+   "min_ms": 3.0,
+   "runs": 20,
+   "rows": 50,
+   "has_more": true,
+   "first_row": "618ea17d-4f9e-4472-aa73-5590089cfa43",
+   "plan": {
+    "main": {
+     "node_types": [
+      "Nested Loop",
+      "Limit",
+      "Sort",
+      "Nested Loop",
+      "Index Only Scan",
+      "Index Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_pkey",
+      "formdev_ri_text_live"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [
+      "top-N heapsort"
+     ],
+     "top_est": 51.0,
+     "top_act": 51.0,
+     "top_ratio": 1.0,
+     "worst_ratio": 6.1,
+     "worst_node": "Nested Loop",
+     "rows_scanned": 1981,
+     "removed_by_filter": 0,
+     "heap_fetches": 0,
+     "buffers": 4182,
+     "shared_read": 0,
+     "planning_ms": 0.156,
+     "execution_ms": 1.674
+    }
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_seq_scan": true,
+    "no_external_sort": true,
+    "top_estimate_within_10x": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "dt_month",
+   "what": "assessed_at in March 2025 (one month, old)",
+   "warmup_ms": [
+    43.5,
+    27.0,
+    25.8
+   ],
+   "p50_ms": 23.7,
+   "p95_ms": 30.8,
+   "max_ms": 30.9,
+   "min_ms": 21.4,
+   "runs": 20,
+   "rows": 50,
+   "has_more": true,
+   "first_row": "c95754c1-f4ca-4f47-97a7-f38ab32beb9d",
+   "plan": {
+    "main": {
+     "node_types": [
+      "Nested Loop",
+      "Limit",
+      "Sort",
+      "Nested Loop",
+      "Index Only Scan",
+      "Index Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_pkey",
+      "formdev_ri_num_live"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [
+      "top-N heapsort"
+     ],
+     "top_est": 51.0,
+     "top_act": 51.0,
+     "top_ratio": 1.0,
+     "worst_ratio": 30.4,
+     "worst_node": "Sort",
+     "rows_scanned": 25225,
+     "removed_by_filter": 0,
+     "heap_fetches": 0,
+     "buffers": 50730,
+     "shared_read": 0,
+     "planning_ms": 0.306,
+     "execution_ms": 26.411
+    }
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_seq_scan": true,
+    "no_external_sort": true,
+    "top_estimate_within_10x": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "nofilter_p1",
+   "what": "no filter, page 1",
+   "warmup_ms": [
+    2.4,
+    2.3,
+    1.4
+   ],
+   "p50_ms": 1.6,
+   "p95_ms": 2.1,
+   "max_ms": 2.6,
+   "min_ms": 1.2,
+   "runs": 20,
+   "rows": 50,
+   "has_more": true,
+   "first_row": "8c203865-341d-4897-9a94-0944432e459a",
+   "plan": {
+    "main": {
+     "node_types": [
+      "Nested Loop",
+      "Limit",
+      "Index Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_ingest",
+      "formdev_record_pkey"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [],
+     "top_est": 51.0,
+     "top_act": 51.0,
+     "top_ratio": 1.0,
+     "worst_ratio": 5793.3,
+     "worst_node": "Index Scan formdev_record_ingest",
+     "rows_scanned": 102,
+     "removed_by_filter": 0,
+     "heap_fetches": 0,
+     "buffers": 211,
+     "shared_read": 0,
+     "planning_ms": 0.053,
+     "execution_ms": 0.105
+    }
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_seq_scan": true,
+    "no_external_sort": true,
+    "top_estimate_within_10x": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "nofilter_deep",
+   "what": "no filter, keyset page at the middle of the form",
+   "cursor_after_seq": 150018,
+   "warmup_ms": [
+    6.8,
+    3.5,
+    3.6
+   ],
+   "p50_ms": 4.0,
+   "p95_ms": 8.4,
+   "max_ms": 11.2,
+   "min_ms": 1.3,
+   "runs": 20,
+   "rows": 50,
+   "has_more": true,
+   "first_row": "b5173050-700e-4db8-bd40-8573c3dbf96d",
+   "plan": {
+    "main": {
+     "node_types": [
+      "Nested Loop",
+      "Limit",
+      "Index Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_ingest",
+      "formdev_record_pkey"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [],
+     "top_est": 51.0,
+     "top_act": 51.0,
+     "top_ratio": 1.0,
+     "worst_ratio": 3586.3,
+     "worst_node": "Index Scan formdev_record_ingest",
+     "rows_scanned": 102,
+     "removed_by_filter": 0,
+     "heap_fetches": 0,
+     "buffers": 212,
+     "shared_read": 0,
+     "planning_ms": 0.412,
+     "execution_ms": 0.783
+    }
+   },
+   "deep_vs_page1_buffers": [
+    212,
+    211
+   ],
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_seq_scan": true,
+    "no_external_sort": true,
+    "top_estimate_within_10x": true,
+    "deep_buffers_le_3x_page1": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "offset0",
+   "what": "ward eq W_BIG, offset 0",
+   "warmup_ms": [
+    5.1,
+    4.6,
+    3.0
+   ],
+   "p50_ms": 2.8,
+   "p95_ms": 10.5,
+   "max_ms": 15.1,
+   "min_ms": 1.6,
+   "runs": 20,
+   "rows": 50,
+   "has_more": true,
+   "first_row": "8c203865-341d-4897-9a94-0944432e459a",
+   "plan": {
+    "main": {
+     "node_types": [
+      "Nested Loop",
+      "Limit",
+      "Nested Loop",
+      "Index Scan",
+      "Index Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_index_pkey",
+      "formdev_record_ingest",
+      "formdev_record_pkey"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [],
+     "top_est": 51.0,
+     "top_act": 51.0,
+     "top_ratio": 1.0,
+     "worst_ratio": 2363.7,
+     "worst_node": "Index Scan formdev_record_ingest",
+     "rows_scanned": 302,
+     "removed_by_filter": 126,
+     "heap_fetches": 0,
+     "buffers": 848,
+     "shared_read": 0,
+     "planning_ms": 0.167,
+     "execution_ms": 0.358
+    }
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_seq_scan": true,
+    "no_external_sort": true,
+    "top_estimate_within_10x": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "offset10000",
+   "what": "ward eq W_BIG, offset 10000",
+   "warmup_ms": [
+    171.9,
+    128.3,
+    122.9
+   ],
+   "p50_ms": 123.2,
+   "p95_ms": 172.3,
+   "max_ms": 177.1,
+   "min_ms": 114.9,
+   "runs": 20,
+   "rows": 50,
+   "has_more": true,
+   "first_row": "2ed6e543-6e75-4204-804d-dbbc930189ea",
+   "plan": {
+    "main": {
+     "node_types": [
+      "Nested Loop",
+      "Limit",
+      "Sort",
+      "Hash Join",
+      "Seq Scan",
+      "Hash",
+      "Index Only Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_pkey",
+      "formdev_ri_text_live"
+     ],
+     "seq_scans": [
+      "formdev_record"
+     ],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [
+      "top-N heapsort"
+     ],
+     "top_est": 51.0,
+     "top_act": 51.0,
+     "top_ratio": 1.0,
+     "worst_ratio": 6.6,
+     "worst_node": "Sort",
+     "rows_scanned": 482814,
+     "removed_by_filter": 96286,
+     "heap_fetches": 0,
+     "buffers": 26660,
+     "shared_read": 14353,
+     "planning_ms": 0.219,
+     "execution_ms": 137.741
+    }
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_1000ms": true,
+    "no_seq_scan": false,
+    "no_external_sort": true,
+    "top_estimate_within_10x": true
+   },
+   "status": "FAIL"
+  },
+  {
+   "name": "sort_age_off0",
+   "what": "sort by age asc (field sort), offset 0",
+   "warmup_ms": [
+    22.8,
+    11.8,
+    14.5
+   ],
+   "p50_ms": 8.0,
+   "p95_ms": 17.3,
+   "max_ms": 20.7,
+   "min_ms": 6.7,
+   "runs": 20,
+   "rows": 50,
+   "has_more": true,
+   "first_row": "00065bbf-93ad-4ade-864a-63256d212376",
+   "plan": {
+    "main": {
+     "node_types": [
+      "Limit",
+      "Sort",
+      "Nested Loop",
+      "Append",
+      "Subquery Scan",
+      "Limit",
+      "Incremental Sort",
+      "Nested Loop",
+      "Index Only Scan",
+      "Memoize",
+      "Index Scan",
+      "Subquery Scan",
+      "Limit",
+      "Merge Join",
+      "Index Scan",
+      "Index Only Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_index_pkey",
+      "formdev_record_pkey",
+      "formdev_ri_num_live"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [
+      "quicksort"
+     ],
+     "top_est": 51.0,
+     "top_act": 51.0,
+     "top_ratio": 1.0,
+     "worst_ratio": 4694.7,
+     "worst_node": "Incremental Sort",
+     "rows_scanned": 4834,
+     "removed_by_filter": 82,
+     "heap_fetches": 0,
+     "buffers": 9110,
+     "shared_read": 0,
+     "planning_ms": 0.396,
+     "execution_ms": 8.78
+    }
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_seq_scan": true,
+    "no_external_sort": true,
+    "top_estimate_within_10x": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "sort_age_off5000",
+   "what": "sort by age asc, offset 5000",
+   "warmup_ms": [
+    178.0,
+    136.1,
+    120.4
+   ],
+   "p50_ms": 168.9,
+   "p95_ms": 385.1,
+   "max_ms": 603.4,
+   "min_ms": 116.7,
+   "runs": 20,
+   "rows": 50,
+   "has_more": true,
+   "first_row": "52a9ac32-52bb-4d2a-a7d4-333b9be87aed",
+   "plan": {
+    "main": {
+     "node_types": [
+      "Limit",
+      "Sort",
+      "Nested Loop",
+      "Append",
+      "Subquery Scan",
+      "Limit",
+      "Incremental Sort",
+      "Nested Loop",
+      "Index Only Scan",
+      "Memoize",
+      "Index Scan",
+      "Subquery Scan",
+      "Limit",
+      "Merge Join",
+      "Index Scan",
+      "Index Only Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_index_pkey",
+      "formdev_record_pkey",
+      "formdev_ri_num_live"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [
+      "quicksort"
+     ],
+     "top_est": 51.0,
+     "top_act": 51.0,
+     "top_ratio": 1.0,
+     "worst_ratio": 49.4,
+     "worst_node": "Index Only Scan formdev_ri_num_live",
+     "rows_scanned": 77463,
+     "removed_by_filter": 6460,
+     "heap_fetches": 0,
+     "buffers": 97160,
+     "shared_read": 19967,
+     "planning_ms": 0.435,
+     "execution_ms": 157.714
+    }
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_1000ms": true,
+    "no_seq_scan": true,
+    "no_external_sort": true,
+    "top_estimate_within_10x": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "count_capped",
+   "what": "ward eq W_BIG + capped count (cap 10000)",
+   "warmup_ms": [
+    53.5,
+    24.7,
+    30.1
+   ],
+   "p50_ms": 22.9,
+   "p95_ms": 39.4,
+   "max_ms": 39.5,
+   "min_ms": 18.9,
+   "runs": 20,
+   "rows": 50,
+   "has_more": true,
+   "first_row": "8c203865-341d-4897-9a94-0944432e459a",
+   "total": 10000,
+   "total_is_lower_bound": true,
+   "plan": {
+    "main": {
+     "node_types": [
+      "Nested Loop",
+      "Limit",
+      "Nested Loop",
+      "Index Scan",
+      "Index Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_index_pkey",
+      "formdev_record_ingest",
+      "formdev_record_pkey"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [],
+     "top_est": 51.0,
+     "top_act": 51.0,
+     "top_ratio": 1.0,
+     "worst_ratio": 2363.7,
+     "worst_node": "Index Scan formdev_record_ingest",
+     "rows_scanned": 302,
+     "removed_by_filter": 126,
+     "heap_fetches": 0,
+     "buffers": 848,
+     "shared_read": 0,
+     "planning_ms": 0.221,
+     "execution_ms": 0.582
+    },
+    "count": {
+     "node_types": [
+      "Aggregate",
+      "Limit",
+      "Hash Join",
+      "Index Only Scan",
+      "Hash",
+      "Index Only Scan"
+     ],
+     "indexes": [
+      "formdev_record_status_recent",
+      "formdev_ri_text_live"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [],
+     "top_est": 1.0,
+     "top_act": 1.0,
+     "top_ratio": 1.0,
+     "worst_ratio": 8.8,
+     "worst_node": "Index Only Scan formdev_record_status_recent",
+     "rows_scanned": 126051,
+     "removed_by_filter": 3015,
+     "heap_fetches": 628,
+     "buffers": 1937,
+     "shared_read": 0,
+     "planning_ms": 0.15,
+     "execution_ms": 27.812
+    }
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_seq_scan": true,
+    "no_external_sort": true,
+    "top_estimate_within_10x": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "relation_p1",
+   "what": "perf_with_patient: hn, ward, patient.name; ward eq W05; page of 50",
+   "warmup_ms": [
+    24.0,
+    7.3,
+    7.6
+   ],
+   "p50_ms": 6.7,
+   "p95_ms": 11.0,
+   "max_ms": 11.3,
+   "min_ms": 5.5,
+   "runs": 20,
+   "rows": 50,
+   "has_more": true,
+   "first_row": "16601e6b-f2d0-4455-833e-a742e28a7050",
+   "relation_ambiguous": {
+    "patient": 1
+   },
+   "relation_filled": 48,
+   "plan": {
+    "main": {
+     "node_types": [
+      "Nested Loop",
+      "Limit",
+      "Nested Loop",
+      "Index Scan",
+      "Index Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_index_pkey",
+      "formdev_record_ingest",
+      "formdev_record_pkey"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [],
+     "top_est": 51.0,
+     "top_act": 51.0,
+     "top_ratio": 1.0,
+     "worst_ratio": 229.0,
+     "worst_node": "Index Scan formdev_record_ingest",
+     "rows_scanned": 2646,
+     "removed_by_filter": 1305,
+     "heap_fetches": 0,
+     "buffers": 6784,
+     "shared_read": 0,
+     "planning_ms": 0.147,
+     "execution_ms": 2.81
+    },
+    "relation": {
+     "node_types": [
+      "Nested Loop",
+      "Index Only Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_pkey",
+      "formdev_ri_text_live"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [],
+     "top_est": 1.0,
+     "top_act": 49.0,
+     "top_ratio": 49.0,
+     "worst_ratio": 49.0,
+     "worst_node": "Nested Loop",
+     "rows_scanned": 98,
+     "removed_by_filter": 0,
+     "heap_fetches": 0,
+     "buffers": 392,
+     "shared_read": 0,
+     "planning_ms": 0.175,
+     "execution_ms": 0.267
+    }
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_seq_scan": true,
+    "no_external_sort": true,
+    "top_estimate_within_10x": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "agg_month_ward",
+   "what": "interactive aggregate: count by ward, one month (probe <= 50000)",
+   "warmup_ms": [
+    204.4,
+    168.4,
+    116.3
+   ],
+   "p50_ms": 89.5,
+   "p95_ms": 126.0,
+   "max_ms": 149.7,
+   "min_ms": 80.5,
+   "runs": 20,
+   "rows": 19,
+   "has_more": false,
+   "first_row": null,
+   "plan": {
+    "main": {
+     "node_types": [
+      "Limit",
+      "Sort",
+      "Subquery Scan",
+      "Aggregate",
+      "Sort",
+      "Subquery Scan",
+      "Aggregate",
+      "Sort",
+      "Nested Loop",
+      "Nested Loop",
+      "Index Only Scan",
+      "Index Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_index_pkey",
+      "formdev_record_pkey",
+      "formdev_ri_num_live"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [
+      "quicksort"
+     ],
+     "top_est": 200.0,
+     "top_act": 19.0,
+     "top_ratio": 10.526315789473685,
+     "worst_ratio": 10.5,
+     "worst_node": "Limit",
+     "rows_scanned": 50367,
+     "removed_by_filter": 0,
+     "heap_fetches": 0,
+     "buffers": 113461,
+     "shared_read": 0,
+     "planning_ms": 0.366,
+     "execution_ms": 86.389
+    },
+    "probe": {
+     "node_types": [
+      "Aggregate",
+      "Limit",
+      "Nested Loop",
+      "Index Only Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_pkey",
+      "formdev_ri_num_live"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [],
+     "top_est": 1.0,
+     "top_act": 1.0,
+     "top_ratio": 1.0,
+     "worst_ratio": 8.1,
+     "worst_node": "Limit",
+     "rows_scanned": 25174,
+     "removed_by_filter": 0,
+     "heap_fetches": 0,
+     "buffers": 50526,
+     "shared_read": 0,
+     "planning_ms": 0.41,
+     "execution_ms": 30.394
+    }
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_seq_scan": true,
+    "no_external_sort": true,
+    "top_estimate_within_10x": false
+   },
+   "status": "FAIL"
+  },
+  {
+   "name": "agg_month_ward_fall",
+   "what": "interactive aggregate: by ward+fall_risk avg(age), one month",
+   "warmup_ms": [
+    146.6,
+    143.8,
+    228.4
+   ],
+   "p50_ms": 115.9,
+   "p95_ms": 151.2,
+   "max_ms": 156.8,
+   "min_ms": 98.0,
+   "runs": 20,
+   "rows": 38,
+   "has_more": false,
+   "first_row": null,
+   "plan": {
+    "main": {
+     "node_types": [
+      "Limit",
+      "Sort",
+      "Subquery Scan",
+      "Aggregate",
+      "Aggregate",
+      "Nested Loop",
+      "Nested Loop",
+      "Index Only Scan",
+      "Index Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_index_pkey",
+      "formdev_record_pkey",
+      "formdev_ri_num_live"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [
+      "quicksort"
+     ],
+     "top_est": 368.0,
+     "top_act": 38.0,
+     "top_ratio": 9.68421052631579,
+     "worst_ratio": 9.7,
+     "worst_node": "Limit",
+     "rows_scanned": 62973,
+     "removed_by_filter": 0,
+     "heap_fetches": 0,
+     "buffers": 116121,
+     "shared_read": 2519,
+     "planning_ms": 0.384,
+     "execution_ms": 96.389
+    },
+    "probe": {
+     "node_types": [
+      "Aggregate",
+      "Limit",
+      "Nested Loop",
+      "Index Only Scan",
+      "Index Scan"
+     ],
+     "indexes": [
+      "formdev_record_pkey",
+      "formdev_ri_num_live"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [],
+     "top_est": 1.0,
+     "top_act": 1.0,
+     "top_ratio": 1.0,
+     "worst_ratio": 8.1,
+     "worst_node": "Limit",
+     "rows_scanned": 25174,
+     "removed_by_filter": 0,
+     "heap_fetches": 0,
+     "buffers": 50526,
+     "shared_read": 0,
+     "planning_ms": 0.385,
+     "execution_ms": 24.125
+    }
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_seq_scan": true,
+    "no_external_sort": true,
+    "top_estimate_within_10x": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "agg_all_ward",
+   "what": "aggregate over the whole form: interactive must refuse (job)",
+   "warmup_ms": [],
+   "error": {
+    "code": "full_scan_requires_job",
+    "status": 409,
+    "after_ms": 9.0
+   },
+   "plan": {
+    "probe": {
+     "node_types": [
+      "Aggregate",
+      "Limit",
+      "Index Only Scan"
+     ],
+     "indexes": [
+      "formdev_record_status_recent"
+     ],
+     "seq_scans": [],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [],
+     "top_est": 1.0,
+     "top_act": 1.0,
+     "top_ratio": 1.0,
+     "worst_ratio": 5.9,
+     "worst_node": "Index Only Scan formdev_record_status_recent",
+     "rows_scanned": 53016,
+     "removed_by_filter": 3015,
+     "heap_fetches": 628,
+     "buffers": 950,
+     "shared_read": 0,
+     "planning_ms": 0.056,
+     "execution_ms": 7.944
+    }
+   },
+   "checks": {
+    "refused_as_expected": true,
+    "probe_no_seq_scan": true
+   },
+   "status": "PASS"
+  }
+ ],
+ "jobs": [
+  {
+   "name": "job_agg_ward",
+   "what": "aggregate job: group by ward",
+   "kind": "aggregate",
+   "format": "json",
+   "status": "PASS",
+   "error": null,
+   "rows": 20,
+   "total_estimate": null,
+   "bytes": 600,
+   "elapsed_s": 0.67,
+   "create_ms": 4.7,
+   "rows_per_s": 30,
+   "maxrss_kb_before": 46932,
+   "maxrss_kb_after": 47060,
+   "file_lines": 1,
+   "groups": 20,
+   "reference_groups": 20,
+   "mismatches": [],
+   "plan": {
+    "main": {
+     "node_types": [
+      "Limit",
+      "Sort",
+      "Subquery Scan",
+      "Aggregate",
+      "Aggregate",
+      "Hash Join",
+      "Seq Scan",
+      "Hash",
+      "Index Only Scan"
+     ],
+     "indexes": [
+      "formdev_record_status_recent"
+     ],
+     "seq_scans": [
+      "formdev_record_index"
+     ],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [
+      "quicksort"
+     ],
+     "top_est": 200.0,
+     "top_act": 20.0,
+     "top_ratio": 10.0,
+     "worst_ratio": 10.0,
+     "worst_node": "Limit",
+     "rows_scanned": 2656932,
+     "removed_by_filter": 1996956,
+     "heap_fetches": 2027,
+     "buffers": 40375,
+     "shared_read": 34170,
+     "planning_ms": 0.191,
+     "execution_ms": 510.373
+    }
+   },
+   "checks": {
+    "succeeded": true,
+    "matches_reference": true,
+    "within_aggregate_timeout": true
+   }
+  },
+  {
+   "name": "job_agg_ward_fall_avg_age",
+   "what": "aggregate job: group by ward+fall_risk",
+   "kind": "aggregate",
+   "format": "json",
+   "status": "PASS",
+   "error": null,
+   "rows": 40,
+   "total_estimate": null,
+   "bytes": 3141,
+   "elapsed_s": 0.67,
+   "create_ms": 3.0,
+   "rows_per_s": 59,
+   "maxrss_kb_before": 47060,
+   "maxrss_kb_after": 47060,
+   "file_lines": 1,
+   "groups": 40,
+   "reference_groups": 40,
+   "mismatches": [],
+   "plan": {
+    "main": {
+     "node_types": [
+      "Limit",
+      "Sort",
+      "Subquery Scan",
+      "Aggregate",
+      "Aggregate",
+      "Hash Join",
+      "Seq Scan",
+      "Hash",
+      "Index Only Scan"
+     ],
+     "indexes": [
+      "formdev_record_status_recent"
+     ],
+     "seq_scans": [
+      "formdev_record_index"
+     ],
+     "external_sort": false,
+     "spilled": false,
+     "sort_methods": [
+      "quicksort"
+     ],
+     "top_est": 1001.0,
+     "top_act": 40.0,
+     "top_ratio": 25.025,
+     "worst_ratio": 738.6,
+     "worst_node": "Sort",
+     "rows_scanned": 2656952,
+     "removed_by_filter": 1425199,
+     "heap_fetches": 2027,
+     "buffers": 40375,
+     "shared_read": 34106,
+     "planning_ms": 0.239,
+     "execution_ms": 784.225
+    }
+   },
+   "checks": {
+    "succeeded": true,
+    "matches_reference": true,
+    "within_aggregate_timeout": true
+   }
+  },
+  {
+   "name": "job_export_csv",
+   "what": "export job, CSV, 100000 rows, 9 columns",
+   "kind": "export",
+   "format": "csv",
+   "status": "PASS",
+   "error": null,
+   "rows": 100000,
+   "total_estimate": 296985,
+   "bytes": 23820316,
+   "elapsed_s": 2.3,
+   "create_ms": 2.2,
+   "rows_per_s": 43401,
+   "maxrss_kb_before": 47060,
+   "maxrss_kb_after": 54228,
+   "file_lines": 100001,
+   "expected_rows": 100000,
+   "tracemalloc_run": {
+    "elapsed_s": 6.64,
+    "rows_per_s": 15052,
+    "tracemalloc_peak_mb": 4.59,
+    "maxrss_kb_after": 59580
+   },
+   "checks": {
+    "succeeded": true,
+    "rows_expected": true,
+    "file_lines_rows_plus_header": true,
+    "tracemalloc_peak_lt_64mb": true
+   }
+  }
+ ],
+ "elapsed_s": 32.3
+}

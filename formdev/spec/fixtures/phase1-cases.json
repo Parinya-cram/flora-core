@@ -1,0 +1,92 @@
+{
+ "definition": "examples/phase1-showcase/v1.form.json",
+ "describe": [
+  {
+   "path": "$.title",
+   "expected": "title"
+  },
+  {
+   "path": "$.paper.header.left",
+   "expected": "paper.header.left"
+  },
+  {
+   "path": "$.sections[0].fields[1].layout.span",
+   "expected": "Section \"ข้อมูลผู้ป่วย\" › Field \"ชื่อ-สกุล\" (full_name) › layout.span"
+  },
+  {
+   "path": "$.sections[1].fields[8].fields[1].validation.pattern",
+   "expected": "Section \"การประเมินแรกรับ\" › Field \"ผู้ติดต่อฉุกเฉิน\" › Field \"โทรศัพท์\" (contact_phone) › validation.pattern"
+  },
+  {
+   "path": "$.sections[1].sections[0].fields[0].fields[2].options[1]",
+   "expected": "Section \"การประเมินแรกรับ\" › Section \"ยาที่ใช้ประจำ\" › Field \"รายการยา\" (meds) › Field \"ความถี่\" (frequency) › options[1]"
+  },
+  {
+   "path": "$.calculators[0].formula",
+   "expected": "Calculator \"bmi\" › formula"
+  },
+  {
+   "path": "$.sections[2]",
+   "expected": "Section \"เอกสารและลายมือชื่อ\""
+  },
+  {
+   "path": "$.data.hn",
+   "expected": "Field \"HN\" (hn)"
+  },
+  {
+   "path": "$.data.meds[1].dose",
+   "expected": "Field \"รายการยา\" (meds) › Item 2 › Field \"ขนาด\" (dose)"
+  },
+  {
+   "path": "$.data._retired",
+   "expected": "_retired"
+  },
+  {
+   "path": "$.sections[9].fields[0]",
+   "expected": "Section 10 › fields[0]"
+  },
+  {
+   "path": "$",
+   "expected": "form"
+  },
+  {
+   "path": "$.migration.ops[0]",
+   "expected": "migration.ops[0]"
+  }
+ ],
+ "strict_json": [
+  {
+   "name": "no duplicates",
+   "text": "{\"a\": 1, \"b\": [1, {\"c\": 2}]}",
+   "issues": []
+  },
+  {
+   "name": "top-level duplicate",
+   "text": "{\"a\": 1, \"a\": 2}",
+   "issues": [
+    "duplicate_json_key:$.a"
+   ]
+  },
+  {
+   "name": "nested duplicate reported once",
+   "text": "{\"form\": {\"sections\": [{\"id\": \"x\", \"id\": \"y\", \"id\": \"z\"}]}}",
+   "issues": [
+    "duplicate_json_key:$.form.sections[0].id"
+   ]
+  },
+  {
+   "name": "escaped keys",
+   "text": "{\"a\\\"b\": 1, \"a\\\"b\": 2, \"s\": \"{\\\"a\\\": 1, \\\"a\\\": 2}\"}",
+   "issues": [
+    "duplicate_json_key:$.a\"b"
+   ]
+  },
+  {
+   "name": "not json",
+   "text": "{\"a\": }",
+   "issues": [
+    "invalid_json:$"
+   ]
+  }
+ ]
+}

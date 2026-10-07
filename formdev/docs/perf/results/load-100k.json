@@ -1,0 +1,118 @@
+{
+ "label": "100k",
+ "records": 100000,
+ "noise": 50000,
+ "seed": 4013,
+ "timings_s": {
+  "truncate_drop": 0.01,
+  "copy": 7.78,
+  "index_build": {
+   "formdev_record_created": 0.22,
+   "formdev_record_ingest": 0.23,
+   "formdev_record_recent": 0.25,
+   "formdev_record_status_recent": 0.48,
+   "formdev_record_subject": 0.39,
+   "formdev_ri_num_live": 2.09,
+   "formdev_ri_text_live": 1.04,
+   "formdev_record_index_pkey": 1.26,
+   "formdev_record_index_record_id_fkey (validate)": 0.28
+  },
+  "validation": 1.32,
+  "vacuum_analyze": 9.73,
+  "total": 25.14
+ },
+ "host_free_gb": {
+  "start": 11.51,
+  "lowest_during_copy": 11.3,
+  "end": 10.81
+ },
+ "index_definitions": {
+  "formdev_record_created": "CREATE INDEX formdev_record_created ON public.formdev_record USING btree (form_id, created_at DESC, record_id DESC)",
+  "formdev_record_index_pkey": "CREATE UNIQUE INDEX formdev_record_index_pkey ON public.formdev_record_index USING btree (record_id, field_id)",
+  "formdev_record_ingest": "CREATE UNIQUE INDEX formdev_record_ingest ON public.formdev_record USING btree (form_id, ingest_seq)",
+  "formdev_record_pkey": "CREATE UNIQUE INDEX formdev_record_pkey ON public.formdev_record USING btree (record_id)",
+  "formdev_record_recent": "CREATE INDEX formdev_record_recent ON public.formdev_record USING btree (form_id, updated_at DESC, record_id DESC)",
+  "formdev_record_status_recent": "CREATE INDEX formdev_record_status_recent ON public.formdev_record USING btree (form_id, status, updated_at DESC, record_id DESC)",
+  "formdev_record_subject": "CREATE INDEX formdev_record_subject ON public.formdev_record USING btree (form_id, subject_id, created_at DESC, record_id DESC) WHERE (subject_id IS NOT NULL)",
+  "formdev_ri_num_live": "CREATE INDEX formdev_ri_num_live ON public.formdev_record_index USING btree (form_id, field_id, value_num, updated_at DESC, record_id DESC) WHERE ((value_num IS NOT NULL) AND (status <> 'deleted'::text))",
+  "formdev_ri_text_live": "CREATE INDEX formdev_ri_text_live ON public.formdev_record_index USING btree (form_id, field_id, value_text, updated_at DESC, record_id DESC) WHERE ((value_text IS NOT NULL) AND (status <> 'deleted'::text))"
+ },
+ "constraints": {
+  "formdev_record_index_record_id_fkey": "FOREIGN KEY (record_id) REFERENCES formdev_record(record_id) ON DELETE CASCADE",
+  "formdev_record_index_pkey": "PRIMARY KEY (record_id, field_id)"
+ },
+ "counts": {
+  "records": 160100,
+  "index_rows": 919808,
+  "by_form": {
+   "m_noise_labs": 15000,
+   "perf_registration": 10100,
+   "a_noise_vitals": 20000,
+   "perf_assessment": 100000,
+   "z_noise_notes": 15000
+  },
+  "by_status": {
+   "submitted": 96968,
+   "deleted": 980,
+   "draft": 2052
+  }
+ },
+ "copy_rows_per_s": {
+  "records": 20578,
+  "index_rows": 118227,
+  "all_rows": 138806
+ },
+ "wal_bytes": {
+  "copy": 191865128,
+  "index_build": 221481720,
+  "total": 421472080
+ },
+ "indexes_identical": true,
+ "index_definition_diff": {},
+ "constraints_identical": true,
+ "validation": {
+  "sampled": 992,
+  "mismatches": 0,
+  "examples": [],
+  "create_ms_p50": 0.99,
+  "create_ms_p95": 1.86,
+  "creates_per_s": 883
+ },
+ "sizes": {
+  "formdev_record": {
+   "heap": 79593472,
+   "indexes": 80224256,
+   "total": 159875072,
+   "reltuples": 161092,
+   "per_index": {
+    "formdev_record_created": 14016512,
+    "formdev_record_ingest": 6692864,
+    "formdev_record_pkey": 12279808,
+    "formdev_record_recent": 14016512,
+    "formdev_record_status_recent": 16621568,
+    "formdev_record_subject": 16596992
+   }
+  },
+  "formdev_record_index": {
+   "heap": 115179520,
+   "indexes": 179462144,
+   "total": 294707200,
+   "reltuples": 926510,
+   "per_index": {
+    "formdev_record_index_pkey": 62767104,
+    "formdev_ri_num_live": 54632448,
+    "formdev_ri_text_live": 62062592
+   }
+  },
+  "formdev_record_revision": {
+   "heap": 524288,
+   "indexes": 90112,
+   "total": 647168,
+   "reltuples": 992,
+   "per_index": {
+    "formdev_record_revision_pkey": 90112
+   }
+  },
+  "database": 464003599
+ }
+}

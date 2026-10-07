@@ -1,0 +1,42 @@
+{
+  "format": "flora.form/1",
+  "form_id": "patient_assessment",
+  "schema_version": 1,
+  "title": "แบบประเมินผู้ป่วย",
+  "paper": "A4",
+  "style_id": "form.a4.medical",
+  "font_id": "noto-sans-thai",
+  "offline": true,
+  "sections": [
+    {
+      "id": "patient",
+      "title": "ข้อมูลผู้ป่วย",
+      "fields": [
+        { "id": "hn", "type": "text", "label": "HN", "required": true, "indexed": true, "max_length": 20 },
+        { "id": "full_name", "type": "text", "label": "ชื่อ-นามสกุล", "required": true, "max_length": 200 },
+        { "id": "age", "type": "integer", "label": "อายุ", "unit": "ปี", "min": 0, "max": 150, "indexed": true },
+        { "id": "sex", "type": "select", "label": "เพศ", "options": [ { "value": "male", "label": "ชาย" }, { "value": "female", "label": "หญิง" } ] },
+        { "id": "assessed_at", "type": "datetime", "label": "วันเวลาที่ประเมิน", "required": true, "indexed": true }
+      ]
+    },
+    {
+      "id": "vital_sign",
+      "title": "Vital Signs",
+      "fields": [
+        { "id": "bp", "type": "number", "label": "ความดันตัวบน", "unit": "mmHg", "min": 0, "max": 300 },
+        { "id": "bp_dia", "type": "number", "label": "ความดันตัวล่าง", "unit": "mmHg", "min": 0, "max": 200 },
+        { "id": "weight", "type": "text", "label": "น้ำหนัก (kg)", "max_length": 10 },
+        { "id": "height_cm", "type": "number", "label": "ส่วนสูง", "unit": "cm", "min": 0, "max": 260 }
+      ]
+    },
+    {
+      "id": "risk",
+      "title": "ความเสี่ยง",
+      "fields": [
+        { "id": "fall_risk", "type": "select", "label": "เสี่ยงต่อการหกล้ม", "indexed": true, "options": [ { "value": "yes", "label": "ใช่" }, { "value": "no", "label": "ไม่ใช่" } ] },
+        { "id": "smoker", "type": "checkbox", "label": "สูบบุหรี่" },
+        { "id": "remarks", "type": "textarea", "label": "หมายเหตุ", "max_length": 2000 }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "description": "Style tokens (Phase 1.8, 1.9). Style registry entries, and style.override at form, section and field level, may only use these tokens with these types. Units: pt for type sizes, mm for lengths. Both runtimes must equal this file (checked by tests).",
+  "components": ["label", "input", "section", "header", "footer"],
+  "tokens": {
+    "fontId": { "type": "font" },
+    "fontSize": { "type": "number", "min": 6, "max": 72 },
+    "fontWeight": { "type": "integer", "min": 100, "max": 900 },
+    "lineHeight": { "type": "number", "min": 0.8, "max": 3 },
+    "color": { "type": "color" },
+    "background": { "type": "color" },
+    "align": { "type": "enum", "values": ["left", "center", "right"] },
+    "labelPosition": { "type": "enum", "values": ["top", "left"] },
+    "border": { "type": "enum", "values": ["none", "solid", "dashed", "underline"] },
+    "borderColor": { "type": "color" },
+    "radius": { "type": "number", "min": 0, "max": 10 },
+    "padding": { "type": "number", "min": 0, "max": 20 },
+    "gap": { "type": "number", "min": 0, "max": 20 },
+    "columns": { "type": "integer", "min": 1, "max": 24 },
+    "inputHeight": { "type": "number", "min": 4, "max": 30 },
+    "rule": { "type": "enum", "values": ["none", "solid", "card"] },
+    "uppercase": { "type": "boolean" },
+    "pageMarginTop": { "type": "number", "min": 0, "max": 60 },
+    "pageMarginRight": { "type": "number", "min": 0, "max": 60 },
+    "pageMarginBottom": { "type": "number", "min": 0, "max": 60 },
+    "pageMarginLeft": { "type": "number", "min": 0, "max": 60 }
+  }
+}
