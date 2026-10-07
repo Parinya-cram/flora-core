@@ -64,6 +64,20 @@ const template = (id: string) => CALCULATOR_TEMPLATES.find(item => item.template
 const options = (lang: Lang, items: Array<[string, string, string]>) => items.map(([value, th, en]) => ({ value, label: tr(lang, th, en) }));
 
 export const BLOCKS: BlockItem[] = [
+  { id: "excel_table", icon: "▦", th: "ตารางแบบ Excel", en: "Excel-style table", hintTh: "กรอกเป็นแถว/คอลัมน์ วางจาก Excel ได้", hintEn: "Rows and columns; paste from Excel",
+    build: (used, lang) => {
+      const table = uniqueName("table", used);
+      const taken = new Set([...used, table]);
+      const column = (base: string) => { const name = uniqueName(base, taken); taken.add(name); return name; };
+      return { calculators: [], fields: [
+        { id: table, type: "repeat", view: "table", label: tr(lang, "ตาราง", "Table"), max_items: 100, layout: { span: 12 }, fields: [
+          { id: column("item"), type: "text", label: tr(lang, "รายการ", "Item") },
+          { id: column("date"), type: "date", label: tr(lang, "วันที่", "Date") },
+          { id: column("amount"), type: "number", label: tr(lang, "จำนวน", "Amount") },
+          { id: column("note"), type: "text", label: tr(lang, "หมายเหตุ", "Note") },
+        ] },
+      ] };
+    } },
   { id: "patient", icon: "👤", th: "ข้อมูลผู้ป่วย", en: "Patient", hintTh: "HN, ชื่อ, วันเกิด, อายุ (คำนวณ), เพศ", hintEn: "HN, name, birth date, age, sex",
     build: (used, lang) => {
       const hn = uniqueName("hn", used), name = uniqueName("full_name", used), birth = uniqueName("birth_date", used), age = uniqueName("age", used), sex = uniqueName("sex", used);

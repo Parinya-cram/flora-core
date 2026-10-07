@@ -31,7 +31,7 @@ export const FIELD_TYPE_SPECS = {
   signature: { value: "signature", query: "blob", index: null, props: ["max_size_kb"] },
   calculated: { value: "number", query: "num", index: "num", props: ["unit", "formula", "calculator", "decimals"] },
   group: { value: null, query: null, index: null, props: ["fields", "columns"] },
-  repeat: { value: "list", query: "list", index: null, props: ["fields", "columns", "min_items", "max_items"] },
+  repeat: { value: "list", query: "list", index: null, props: ["fields", "columns", "min_items", "max_items", "view"] },
 } as const satisfies Record<string, FieldTypeSpec>;
 
 export type FieldType = keyof typeof FIELD_TYPE_SPECS;

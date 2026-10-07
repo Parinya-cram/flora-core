@@ -4,7 +4,7 @@
  * base -> form -> section -> field -> override. Fields hidden by visible/hidden or display.form are not
  * shown, but their values are kept. The A4 print layout is a separate renderer (FormPrint).
  */
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { asRepeatField, repeatKey } from "../core/blocks";
 import { fieldKey, OTHER_KEY } from "../core/validate";
 import { conditionTrue, evaluateRecord } from "../logic/evaluate";
@@ -13,6 +13,7 @@ import { fieldPermissions, formAllows, type FieldGrant } from "../logic/permissi
 import { containerColumns, formColumns, gridArea, modeForWidth, placeField } from "../core/layout";
 import type { ResolvedStyle } from "../core/styles";
 import type { CategoryDefinition, ContainerLayout, FieldDefinition, FieldOption, FontEntry, FormDefinition, Issue, JsonValue, LayoutMode, RecordData, SectionDefinition, StyleEntry } from "../core/types";
+import { isGridPaste, parseTsv, pasteInto } from "./gridPaste";
 import { FIELD_INPUTS } from "./inputRegistry";
 import { changeRecord, errorsByPath } from "./renderUtils";
 import { formStyle, gridCss, inputCss, registries, rootCss, sectionCss, typeCss, type Registries } from "./formStyle";
@@ -93,7 +94,9 @@ function FieldBlock({ field, scope, columns, style, ctx, containerType, siblings
     </fieldset>;
   } else if (field.type === "repeat") {
     body = <><span style={{ ...typeCss(own, ctx.regs, "label"), display: "block", marginBottom: "1mm" }}>{field.label}</span>
-      <RepeatItems field={field} scope={scope} columns={containerColumns({ columns: field.columns }, columns)} style={own} ctx={ctx} /></>;
+      {field.view === "table" && tableColumnsOk(field)
+        ? <RepeatTable field={field} scope={scope} style={own} ctx={ctx} />
+        : <RepeatItems field={field} scope={scope} columns={containerColumns({ columns: field.columns }, columns)} style={own} ctx={ctx} />}</>;
   } else {
     const Input = FIELD_INPUTS[field.type];
     const shown = offeredField(field, ctx.options[`$.data.${dataPath}`], scope.data[key]);
@@ -171,6 +174,95 @@ function RepeatItems({ field, scope, columns, style, ctx }: { field: FieldDefini
       </div>;
     })}
     {editable ? <button type="button" style={{ ...button, justifySelf: "start" }} disabled={full} onClick={() => write([...items, {}])}>+ Add {field.label}</button> : null}
+  </div>;
+}
+
+/** A table needs one cell per child field: children that are themselves groups or repeats fall back to cards. */
+const tableColumnsOk = (field: FieldDefinition) => (field.fields ?? []).every(child => child.type !== "group" && child.type !== "repeat");
+
+/** view: "table" — a spreadsheet-like grid: one row per item, one column per child field. Tab moves across,
+ * Enter moves down (adding a row at the end), and cells copied from Excel paste into several rows at once. */
+function RepeatTable({ field, scope, style, ctx }: { field: FieldDefinition; scope: Scope; style: ResolvedStyle; ctx: Ctx }) {
+  const key = fieldKey(field);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const items = Array.isArray(scope.data[key]) ? (scope.data[key] as Array<Record<string, JsonValue>>) : [];
+  const write = (next: Array<Record<string, JsonValue>>) => scope.set(key, next.length ? next : null);
+  const node = `${scope.node}${key}.`;
+  const base = `${scope.path ? `${scope.path}.` : ""}${key}`;
+  const columns = (field.fields ?? []).filter(child => grantOf(ctx, `${node}${fieldKey(child)}`).view && child.display?.form !== false);
+  const editable = !ctx.readOnly && field.readonly !== true && grantOf(ctx, `${scope.node}${key}`).edit;
+  const cellEditable = (child: FieldDefinition) => editable && child.readonly !== true && child.type !== "calculated" && child.derive === undefined
+    && grantOf(ctx, `${node}${fieldKey(child)}`).edit;
+  const full = field.max_items !== undefined && items.length >= field.max_items;
+  const focusCell = (row: number, column: number) => requestAnimationFrame(() => {
+    tableRef.current?.querySelector<HTMLElement>(`[data-cell="${row}:${column}"] input, [data-cell="${row}:${column}"] select, [data-cell="${row}:${column}"] textarea`)?.focus();
+  });
+  const onKeyDown = (event: KeyboardEvent, row: number, column: number) => {
+    if (event.key !== "Enter" || event.shiftKey || (event.target as HTMLElement).tagName === "TEXTAREA") return;
+    event.preventDefault();
+    if (row + 1 >= items.length) {
+      if (!editable || full) return;
+      write([...items, {}]);
+    }
+    focusCell(row + 1, column);
+  };
+  const onPaste = (event: ClipboardEvent, row: number, column: number) => {
+    const text = event.clipboardData.getData("text/plain");
+    if (!editable || !isGridPaste(text)) return;
+    event.preventDefault();
+    write(pasteInto(items, parseTsv(text), row, column, columns, cellEditable, field.max_items));
+  };
+  const cell: CSSProperties = { border: "0.3mm solid #e2e8f0", padding: "0.8mm", verticalAlign: "top", minWidth: "28mm" };
+  const head: CSSProperties = { ...cell, background: "#f1f5f9", ...typeCss(style, ctx.regs, "label"), textAlign: "left", whiteSpace: "nowrap" };
+  const button: CSSProperties = { fontSize: "9pt", padding: "0.3mm 1.5mm", border: "0.3mm solid #cbd5e1", borderRadius: "1mm", background: "#ffffff", cursor: "pointer" };
+  const compact: CSSProperties = { ...inputCss(style, ctx.regs), minHeight: 0, width: "100%", boxSizing: "border-box" };
+  const rowErrors = (index: number) => [...ctx.errors.entries()].filter(([path]) => path === `${base}[${index}]`).map(([, message]) => message);
+  return <div data-repeat={key} data-view="table" style={{ display: "grid", gap: "1.5mm" }}>
+    <div style={{ overflowX: "auto" }}>
+      <table ref={tableRef} style={{ borderCollapse: "collapse", width: "100%", fontSize: "9.5pt" }}>
+        <thead><tr>
+          <th style={{ ...head, minWidth: "8mm", width: "8mm" }}>#</th>
+          {columns.map(child => <th key={child.id} style={head}>{child.label}{child.unit ? ` (${child.unit})` : ""}{child.required || child.validation?.required ? <span style={{ color: "#e11d48" }}> *</span> : null}</th>)}
+          {editable ? <th style={{ ...head, minWidth: "20mm", width: "20mm" }} /> : null}
+        </tr></thead>
+        <tbody>
+          {items.map((item, index) => {
+            const set = (childKey: string, value: JsonValue) => write(items.map((current, i) => (i === index ? withValue(current, childKey, value) : current)));
+            const itemScope: Scope = { data: item, path: `${base}[${index}]`, node, set };
+            const messages = rowErrors(index);
+            return <tr key={index} data-item={index}>
+              <td style={{ ...cell, minWidth: "8mm", color: "#64748b", textAlign: "right" }} title={messages.join("\n") || undefined}>{index + 1}{messages.length ? <span style={{ color: "#e11d48" }}> !</span> : null}</td>
+              {columns.map((child, column) => {
+                const childKey = fieldKey(child);
+                const dataPath = `${base}[${index}].${childKey}`;
+                const hidden = ctx.hidden.has(`$.data.${dataPath}`);
+                const Input = FIELD_INPUTS[child.type];
+                const shown = offeredField(child, ctx.options[`$.data.${dataPath}`], item[childKey]);
+                const error = ctx.errors.get(dataPath);
+                return <td key={child.id} data-cell={`${index}:${column}`} style={{ ...cell, background: hidden ? "#f8fafc" : error ? "#fff1f2" : undefined }}
+                  onKeyDown={event => onKeyDown(event, index, column)} onPaste={event => onPaste(event, index, column)}>
+                  {hidden || !Input ? null : <>
+                    <Input field={shown} value={item[childKey]} disabled={!cellEditable(child)} css={compact} label={`${child.label} #${index + 1}`} onChange={next => set(childKey, next)} />
+                    <OtherText field={shown} scope={itemScope} disabled={!cellEditable(child)} css={compact} />
+                    {error ? <span role="alert" style={{ display: "block", fontSize: "8pt", color: "#e11d48" }}>{error}</span> : null}
+                  </>}
+                </td>;
+              })}
+              {editable ? <td style={{ ...cell, whiteSpace: "nowrap", minWidth: "20mm" }}>
+                <button type="button" style={button} aria-label={`Move row ${index + 1} up`} disabled={index === 0} onClick={() => write(items.map((current, i) => (i === index - 1 ? items[index] : i === index ? items[index - 1] : current)))}>↑</button>
+                <button type="button" style={button} aria-label={`Move row ${index + 1} down`} disabled={index === items.length - 1} onClick={() => write(items.map((current, i) => (i === index + 1 ? items[index] : i === index ? items[index + 1] : current)))}>↓</button>
+                <button type="button" style={button} aria-label={`Remove row ${index + 1}`} onClick={() => write(items.filter((_, i) => i !== index))}>✕</button>
+              </td> : null}
+            </tr>;
+          })}
+          {!items.length ? <tr><td colSpan={columns.length + (editable ? 2 : 1)} style={{ ...cell, color: "#94a3b8", textAlign: "center" }}>—</td></tr> : null}
+        </tbody>
+      </table>
+    </div>
+    {editable ? <span style={{ display: "flex", gap: "2mm", alignItems: "center", fontSize: "8pt", color: "#64748b" }}>
+      <button type="button" style={{ ...button, padding: "0.5mm 2mm" }} disabled={full} onClick={() => { write([...items, {}]); focusCell(items.length, 0); }}>+ Add row</button>
+      Tab → next cell · Enter → next row · paste cells copied from Excel
+    </span> : null}
   </div>;
 }
 

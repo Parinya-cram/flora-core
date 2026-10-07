@@ -874,6 +874,10 @@
           "minimum": 0,
           "maximum": 1000
         },
+        "view": {
+          "enum": ["cards", "table"],
+          "description": "repeat: one card per row (default) or a spreadsheet-like table"
+        },
         "lookup": {
           "type": "object",
           "required": [

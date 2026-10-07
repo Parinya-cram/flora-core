@@ -1783,6 +1783,120 @@
   ]
  },
  {
+  "name": "p1: repeat shown as a table",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "r",
+       "type": "repeat",
+       "label": "R",
+       "view": "table",
+       "fields": [
+        {
+         "id": "other",
+         "type": "text",
+         "label": "Other"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: repeat with an unknown view",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "r",
+       "type": "repeat",
+       "label": "R",
+       "view": "sheet",
+       "fields": [
+        {
+         "id": "other",
+         "type": "text",
+         "label": "Other"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_repeat"
+  ]
+ },
+ {
+  "name": "p1: view only on repeat",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "t",
+       "type": "text",
+       "label": "T",
+       "view": "table"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "property_not_supported"
+  ]
+ },
+ {
   "name": "p1: no index inside a repeat",
   "definition": {
    "format": "flora.form/1",

@@ -33,7 +33,7 @@ FIELD_TYPES: dict[str, dict[str, Any]] = {
     "signature": {"value": "signature", "query": "blob", "index": None, "props": ["max_size_kb"]},
     "calculated": {"value": "number", "query": "num", "index": "num", "props": ["unit", "formula", "calculator", "decimals"]},
     "group": {"value": None, "query": None, "index": None, "props": ["fields", "columns"]},
-    "repeat": {"value": "list", "query": "list", "index": None, "props": ["fields", "columns", "min_items", "max_items"]},
+    "repeat": {"value": "list", "query": "list", "index": None, "props": ["fields", "columns", "min_items", "max_items", "view"]},
 }
 
 STYLE_COMPONENTS = ("label", "input", "section", "header", "footer")

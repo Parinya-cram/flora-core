@@ -117,6 +117,8 @@ export type FieldDefinition = {
   columns?: number;
   min_items?: number;
   max_items?: number;
+  /** repeat: "cards" (default, one card per row) or "table" (spreadsheet-like grid: one row per item). */
+  view?: "cards" | "table";
 };
 
 /** A named sub-group between section and field (Phase 2.0); its fields share the section's data scope. */

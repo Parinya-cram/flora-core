@@ -17,6 +17,7 @@ export const DEFAULT_TZ_OFFSET_MINUTES = 420;
 export const SUBJECT_FIELD_KEY = "flora.subject_field";
 const SUBJECT_FIELD_TYPES = ["text", "select", "radio", "integer"];
 export const PAPERS = ["A4", "A5", "Letter", "screen"];
+const REPEAT_VIEWS = ["cards", "table"];
 /** Sheet size in mm, portrait. "screen" has no page. */
 export const PAPER_SIZES_MM: Readonly<Record<string, [number, number]>> = { A4: [210, 297], A5: [148, 210], Letter: [215.9, 279.4] };
 const ORIENTATIONS = ["portrait", "landscape"];
@@ -889,6 +890,7 @@ function validateContainerField(ctx: Ctx, field: Obj, path: string, scope: Scope
     if (bound in field && !(isInt(field[bound]) && (field[bound] as number) >= 0 && (field[bound] as number) <= 1000)) ctx.add(`${path}.${bound}`, "invalid_type", `${bound} must be an integer 0-1000`);
   }
   if (isInt(field.min_items) && isInt(field.max_items) && field.min_items > field.max_items) ctx.add(path, "invalid_range", "min_items must not be greater than max_items");
+  if ("view" in field && !REPEAT_VIEWS.includes(field.view as string)) ctx.add(`${path}.view`, "invalid_repeat", "view is cards (one card per row) or table (a spreadsheet-like grid)");
   const children = field.fields;
   if (!Array.isArray(children) || children.length === 0) ctx.add(`${path}.fields`, "container_requires_fields", `${String(field.type)} fields need at least one child field`);
   else if (depth >= MAX_NESTING) ctx.add(`${path}.fields`, "too_deep", `Groups and repeats may nest at most ${MAX_NESTING} levels`);

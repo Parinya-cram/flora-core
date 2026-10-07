@@ -36,6 +36,7 @@ PAPERS = ("A4", "A5", "Letter", "screen")
 # Sheet size in mm, portrait. "screen" has no page.
 PAPER_SIZES_MM = {"A4": (210.0, 297.0), "A5": (148.0, 210.0), "Letter": (215.9, 279.4)}
 ORIENTATIONS = ("portrait", "landscape")
+REPEAT_VIEWS = ("cards", "table")
 PAGE_BREAKS = ("before", "after", "avoid")
 LAYOUT_MODES = ("desktop", "tablet", "mobile", "print")
 SECTION_LAYOUTS = ("grid", "row", "column")
@@ -1019,6 +1020,8 @@ def _validate_container_field(ctx: _Ctx, field: dict[str, Any], path: str, scope
             ctx.add(f"{path}.{bound}", "invalid_type", f"{bound} must be an integer 0-1000")
     if is_int(field.get("min_items")) and is_int(field.get("max_items")) and field["min_items"] > field["max_items"]:
         ctx.add(path, "invalid_range", "min_items must not be greater than max_items")
+    if "view" in field and field["view"] not in REPEAT_VIEWS:
+        ctx.add(f"{path}.view", "invalid_repeat", "view is cards (one card per row) or table (a spreadsheet-like grid)")
     children = field.get("fields")
     if not isinstance(children, list) or not children:
         ctx.add(f"{path}.fields", "container_requires_fields", f"{field['type']} fields need at least one child field")

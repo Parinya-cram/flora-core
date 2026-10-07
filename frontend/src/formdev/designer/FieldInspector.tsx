@@ -110,6 +110,8 @@ export default function FieldInspector({ definition, fieldRef, lang, lookups, pu
       {type === "decimal" || type === "calculated" ? <NumberField label={t("จำนวนตำแหน่งทศนิยม", "Decimal places")} value={field.decimals} min={0} max={10} onChange={value => set({ decimals: value })} /> : null}
       {!CONTAINER.has(type) && type !== "calculated" ? <Toggle label={t("ต้องกรอก", "Required")} checked={field.required === true} onChange={on => set({ required: on || undefined })} /> : null}
       {!CONTAINER.has(type) && type !== "calculated" ? <Toggle label={t("อ่านอย่างเดียว", "Read-only")} checked={field.readonly === true} onChange={on => set({ readonly: on || undefined })} /> : null}
+      {type === "repeat" ? <Toggle label={t("แสดงเป็นตารางแบบ Excel (1 แถวต่อรายการ, วางข้อมูลจาก Excel ได้)", "Show as an Excel-style table (one row per entry; paste from Excel)")}
+        checked={field.view === "table"} onChange={on => set({ view: on ? "table" : undefined })} /> : null}
       <SelectField label={t("ชนิดช่อง", "Field type")} value={type} onChange={value => changeType(value as FieldType)}
         options={PALETTE.flatMap(group => group.items).map(item => ({ value: item.type, label: tr(lang, item.th, item.en) }))} />
     </Group>
