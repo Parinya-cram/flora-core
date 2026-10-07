@@ -16,5 +16,14 @@
     "leaf_id": "leaf-or-01",
     "options": {"poll_interval_sec": 1},
     "enabled": false
+  },
+  {
+    "device_id": "or-vista-01",
+    "label": "OR-1 Dräger Vista 120 S",
+    "device_type": "draeger-vista-120s",
+    "pod": "socket.vista",
+    "leaf_id": "leaf-or-01",
+    "options": {"source_ip": "192.0.2.20"},
+    "enabled": false
   }
 ]

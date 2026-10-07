@@ -7,6 +7,7 @@ Each device uses a different gateway ingress path:
   icu-ventilator    JSON served here, polled by feeder-controller
   or-temp-module    RS-232 KEY=VALUE, answers only when polled ("?\\r\\n")
   or-t200           RS-232 Acme T-200 ($T200,…*CS), answers each "R\\r" poll (virtual COM2)
+  or-vista          Dräger Vista 120 S CMS link: binary vitals frames over TCP → socket pod 9500
 It also receives the publisher's pushed batches at POST /receiver.
 """
 from __future__ import annotations
@@ -15,6 +16,7 @@ import asyncio
 import logging
 import math
 import os
+import struct
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -190,6 +192,45 @@ async def acme_t200() -> None:
             await asyncio.sleep(3)
 
 
+# ------------------------------------------------------------------ Dräger Vista 120 S
+
+VISTA_PORT = int(os.getenv("SIM_VISTA_PORT", "9500"))
+VISTA_NO_READING = -1000.0
+
+
+def vista_frame(position: int) -> bytes:
+    """A 58-record vitals frame like the real monitor's; unknown record ids carry "no reading"."""
+    minute_slot = int(time.time() // 300)          # a new NIBP reading every 5 minutes
+    sys_bp, dia_bp = 116 + (minute_slot % 5) * 2, 70 + (minute_slot % 3) * 2
+    known = {0: round(78 + wave(4, 6, 2.1)), 3: round(0.1 + wave(9, 0.05), 2), 14: round(14 + wave(5, 2)),
+             15: sys_bp, 16: dia_bp, 17: round((sys_bp + 2 * dia_bp) / 3), 18: 77,
+             19: round(98 + wave(11, 1)), 20: round(78 + wave(4, 6, 2.1)), 53: round(36.7 + wave(40, 0.2), 1)}
+    records = b"".join(struct.pack("<Hf", record_id, float(known.get(record_id, VISTA_NO_READING)))
+                       for record_id in range(58))
+    return struct.pack("<6H", 12 + len(records), 0x51, position % 65536, 40000 - position % 40000, 58, 0) + records
+
+
+async def vista_monitor() -> None:
+    """Connects to the CMS port as the monitor does, waits for the CMS greeting, then streams."""
+    position = 0
+    while True:
+        try:
+            reader, writer = await asyncio.open_connection(SOCKET_HOST, VISTA_PORT)
+            log.info("vista 120 s connected to %s:%s", SOCKET_HOST, VISTA_PORT)
+            greeting = await asyncio.wait_for(reader.readexactly(16), timeout=15)
+            log.info("vista 120 s greeted by CMS (%s)", greeting.hex())
+            while True:
+                position += 1
+                waveform = struct.pack("<2H", 104, 0x52) + bytes(range(100))   # skipped by the parser
+                writer.write(waveform + vista_frame(position))
+                await writer.drain()
+                bump("or-vista", True)
+                await asyncio.sleep(1)
+        except Exception as error:
+            bump("or-vista", False, str(error) or type(error).__name__)
+            await asyncio.sleep(3)
+
+
 # ------------------------------------------------------------------ app
 
 @asynccontextmanager
@@ -201,6 +242,7 @@ async def lifespan(_: FastAPI):
         asyncio.create_task(anesthesia_machine()),
         asyncio.create_task(serial_module()),
         asyncio.create_task(acme_t200()),
+        asyncio.create_task(vista_monitor()),
     ]
     yield
     for task in tasks:

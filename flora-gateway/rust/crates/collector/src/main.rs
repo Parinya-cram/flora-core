@@ -1,7 +1,9 @@
 //! Egress: `gw.obs` + `gw.logs` → gateway Postgres, in batches.
 //!
 //! Offsets are committed only after a batch is stored, so a crash replays rather
-//! than loses data. A failing database is retried with the same batch.
+//! than loses data. A failing database is retried with the same batch. A batch the
+//! database rejects for its data (bad value, constraint) is stored row by row instead,
+//! skipping only the rows that cannot be stored, so one device cannot block the rest.
 
 use std::time::Duration;
 
@@ -103,7 +105,14 @@ async fn main() -> Result<()> {
         let logs = serde_json::to_value(&logs)?;
         let measurements = serde_json::to_value(&measurements)?;
         loop {
-            match store(&mut client, &observations, &logs, &measurements).await {
+            let result = match store(&mut client, &observations, &logs, &measurements).await {
+                Err(error) if is_data_error(&error) => {
+                    tracing::warn!(%error, "batch rejected for its data; storing row by row");
+                    store_each(&mut client, &observations, &logs, &measurements).await
+                }
+                other => other,
+            };
+            match result {
                 Ok(()) => break,
                 Err(error) => {
                     tracing::warn!(%error, "store failed, reconnecting");
@@ -134,6 +143,42 @@ async fn store(client: &mut Client, observations: &Value, logs: &Value, measurem
         transaction.execute(INSERT_MEASUREMENTS, &[measurements]).await?;
     }
     transaction.commit().await?;
+    Ok(())
+}
+
+/// SQLSTATE class 22 (data exception) or 23 (integrity constraint): retrying cannot help.
+fn is_data_error(error: &anyhow::Error) -> bool {
+    error.downcast_ref::<tokio_postgres::Error>()
+        .and_then(|error| error.code())
+        .is_some_and(|code| code.code().starts_with("22") || code.code().starts_with("23"))
+}
+
+/// Stores each row on its own; rows the database rejects for their data are logged and skipped.
+async fn store_each(client: &mut Client, observations: &Value, logs: &Value, measurements: &Value) -> Result<()> {
+    let empty = Value::Array(Vec::new());
+    let rows = |value: &Value| value.as_array().cloned().unwrap_or_default();
+    let mut skipped = 0usize;
+    for (kind, items) in [("observation", rows(observations)), ("log", rows(logs)), ("measurement", rows(measurements))] {
+        for item in items {
+            let one = Value::Array(vec![item.clone()]);
+            let (o, l, m) = match kind {
+                "observation" => (&one, &empty, &empty),
+                "log" => (&empty, &one, &empty),
+                _ => (&empty, &empty, &one),
+            };
+            match store(client, o, l, m).await {
+                Ok(()) => {}
+                Err(error) if is_data_error(&error) => {
+                    skipped += 1;
+                    let device_id = item.get("device_id").map(ToString::to_string).unwrap_or_default();
+                    let raw_code = item.get("raw_code").map(ToString::to_string).unwrap_or_default();
+                    tracing::warn!(%error, kind, device_id, raw_code, "skipping row the database rejects");
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+    tracing::info!(skipped, "batch stored row by row");
     Ok(())
 }
 

@@ -5,8 +5,17 @@ import ipaddress
 import json
 from pathlib import Path
 
+import logging
+
 from device_medical_service.parsers.shared.base import FLORA_PARAMS, Parser
 from device_medical_service.parsers.draeger.iacs_m540.blocks import IacsDatagramParser
+
+
+log = logging.getLogger(__name__)
+
+
+def parsed_tag(data: bytes, offset: int) -> str:
+    return data[offset:offset + 2].hex()
 
 
 class IacsM540Parser(Parser):
@@ -25,6 +34,7 @@ class IacsM540Parser(Parser):
             if rule["ivy_param"] not in FLORA_PARAMS or not rule["source_keys"]:
                 raise ValueError("IACS mappings need a Flora parameter and source_keys")
         self.decoder = IacsDatagramParser()
+        self.unknown_tags: set[str] = set()
 
     def feed(self, frame):
         if frame.pod != self.pod:
@@ -34,7 +44,12 @@ class IacsM540Parser(Parser):
             return []
         parsed = self.decoder.parse(frame.data)
         if parsed.trailing_offset is not None:
-            raise ValueError(f"unknown IACS block at {parsed.trailing_offset}")
+            # Real monitors send blocks this decoder does not know (alerts, settings). Like the
+            # field-tested gxt gateway, keep what was decoded before the unknown block.
+            tag = parsed_tag(frame.data, parsed.trailing_offset)
+            if tag not in self.unknown_tags:
+                self.unknown_tags.add(tag)
+                log.info("%s: unknown IACS block %s at %d; earlier values kept", self.device_id, tag, parsed.trailing_offset)
         rows = []
         for key, value in parsed.numeric_values.items():
             rule = next((item for item in self.rules if key in item["source_keys"]), None)

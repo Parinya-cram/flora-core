@@ -25,8 +25,20 @@ def test_m540_vector_fixture_has_flora_values_and_ingress_timestamp():
     assert parser.feed(raw(bytes(32), "socket.m540", source_ip="192.0.2.10")) == []
     with pytest.raises(IacsParseError, match="truncated"):
         parser.feed(raw(data[:-1], "socket.m540", source_ip="192.0.2.10"))
-    with pytest.raises(ValueError, match="unknown IACS"):
-        parser.feed(raw(data + b'\xff\xff', "socket.m540", source_ip="192.0.2.10"))
+    # An unknown block (alerts, settings) ends decoding but keeps the values before it, as gxt did.
+    kept = parser.feed(raw(data + b'\xff\xff' + bytes(40), "socket.m540", source_ip="192.0.2.10"))
+    assert {r['ivy_param'] for r in kept} == {r['ivy_param'] for r in rows}
+
+
+def test_m540_frames_from_the_tcp_relay_select_by_monitor_ip():
+    """socket pod framing = "udp_relay" sets source_ip to the monitor, not the relay host."""
+    parser = load_parser("iacs_m540", "monitor-01", "socket.m540-relay", {"source_ip": "192.0.2.10"})
+    data = bytes.fromhex((FIXTURES / "iacs-m540-numeric.hex").read_text())
+    relayed = raw(data, "socket.m540-relay", source_ip="192.0.2.10", peer="10.9.9.9:51000",
+                  transport="udp-relay", connection=1, framing="udp_relay")
+    assert {r['ivy_param'] for r in parser.feed(relayed)} >= {'hr', 'spo2', 'nibp_sys'}
+    other = raw(data, "socket.m540-relay", source_ip="192.0.2.11", transport="udp-relay")
+    assert parser.feed(other) == []
 
 
 def test_m540_requires_device_identity():

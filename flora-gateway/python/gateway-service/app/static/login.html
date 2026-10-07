@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Flora Gateway · Sign in</title>
+<title>ESM Flora Gateway · Sign in</title>
 <style>
   :root { --bg:#f6f7f4; --panel:#ffffff; --ink:#1d2621; --muted:#65706a; --line:#e2e6e1; --accent:#2f6f4f; --bad:#b23b3b; }
   @media (prefers-color-scheme: dark) { :root { --bg:#121614; --panel:#1a201d; --ink:#e4ebe6; --muted:#9aa59f;
@@ -22,7 +22,7 @@
 </head>
 <body>
 <form id="form">
-  <h1>Flora Gateway</h1>
+  <h1>ESM Flora Gateway</h1>
   <p id="station">Station admin sign-in</p>
   <label for="username">Username</label>
   <input id="username" name="username" autocomplete="username" required autofocus>
@@ -35,7 +35,7 @@
 fetch("api/site/label").then((r) => r.json()).then((s) => {
   const where = s.label ? `${s.label} · ${s.gateway_id}` : s.gateway_id;
   document.getElementById("station").textContent = `Sign in to ${where}`;
-  document.title = `${s.label || s.gateway_id} · Sign in — Flora Gateway`;
+  document.title = `${s.label || s.gateway_id} · Sign in — ESM Flora Gateway`;
 }).catch(() => {});
 document.getElementById("form").addEventListener("submit", async (event) => {
   event.preventDefault();

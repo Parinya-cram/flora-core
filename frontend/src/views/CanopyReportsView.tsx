@@ -157,7 +157,7 @@ export default function CanopyReportsView() {
     return <div className="h-full overflow-auto p-4 sm:p-6">
       <div className="mx-auto max-w-[1500px] space-y-5">
         <header className="flex flex-wrap items-end justify-between gap-4">
-          <div><div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">Flora Canopy · reporting platform</div><h1 className="mt-1 text-3xl font-semibold text-[var(--app-text)]">Reports</h1><p className="mt-1 max-w-3xl text-sm text-[var(--app-muted)]">Run the 15 prebuilt NIT reports now. These use the same report-definition model that the visual builder and Flora Agent will create.</p></div>
+          <div><div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">ESM Flora Canopy · reporting platform</div><h1 className="mt-1 text-3xl font-semibold text-[var(--app-text)]">Reports</h1><p className="mt-1 max-w-3xl text-sm text-[var(--app-muted)]">Run the 15 prebuilt NIT reports now. These use the same report-definition model that the visual builder and Flora Agent will create.</p></div>
           <div className="flex gap-2"><button type="button" disabled className="rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] px-4 py-2.5 text-sm font-bold text-[var(--app-muted)] opacity-70">Ask Flora · next</button><button type="button" disabled className="rounded-xl border border-[var(--app-accent)] bg-[var(--app-accent)] px-4 py-2.5 text-sm font-bold text-[var(--app-accent-contrast)] opacity-70">Create report · next</button></div>
         </header>
         <section className="grid gap-3 sm:grid-cols-3">

@@ -216,7 +216,7 @@ impl Default for SocketConfig {
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum Framing {
     /// HL7 Minimal Lower Layer Protocol: `<VT> message <FS><CR>`.
     Mllp,
@@ -226,6 +226,10 @@ pub enum Framing {
     Idle,
     /// Emit each received chunk unchanged; the device parser owns framing.
     Raw,
+    /// Datagrams relayed over TCP from a UDP-only device network (tools/iacs-relay):
+    /// `[u16 BE length][4-byte IPv4 of the device][datagram]`, length covering IP + datagram.
+    /// The frame's source_ip is the device's, so parsers select devices as they do for UDP.
+    UdpRelay,
 }
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -273,6 +277,52 @@ pub struct SocketPod {
     pub idle_ms: u64,
     #[serde(default = "default_max_frame")]
     pub max_frame_bytes: usize,
+    /// Periodic UDP broadcast some monitors need to find their central station
+    /// (e.g. Dräger Vista 120 S). Sent while the pod runs, whether or not a device is connected.
+    #[serde(default)]
+    pub beacon: Option<Beacon>,
+    /// UDP pods: learn monitors from a discovery multicast stream and join each one's data
+    /// group automatically (Dräger IACS: 224.127.1.254:2000 → 224.0.1.<last octet of the monitor>).
+    #[serde(default)]
+    pub discovery: Option<Discovery>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Discovery {
+    pub group: std::net::Ipv4Addr,
+    pub port: u16,
+    /// The data group for a monitor is this address with its last octet replaced by the
+    /// monitor's last octet.
+    #[serde(default = "default_data_group_base")]
+    pub data_group_base: std::net::Ipv4Addr,
+}
+
+impl Discovery {
+    pub fn data_group(&self, monitor: std::net::Ipv4Addr) -> std::net::Ipv4Addr {
+        let [a, b, c, _] = self.data_group_base.octets();
+        std::net::Ipv4Addr::new(a, b, c, monitor.octets()[3])
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Beacon {
+    /// Broadcast (or unicast) IPv4 address, e.g. the LAN's x.x.x.255.
+    pub address: std::net::Ipv4Addr,
+    pub port: u16,
+    #[serde(default = "default_interval_ms")]
+    pub interval_ms: u64,
+    /// The datagram, as hex. Whitespace is ignored.
+    pub payload_hex: String,
+}
+
+impl Beacon {
+    pub fn payload(&self) -> anyhow::Result<Vec<u8>> {
+        let hex: String = self.payload_hex.split_whitespace().collect();
+        anyhow::ensure!(hex.len() % 2 == 0 && !hex.is_empty(), "beacon payload_hex must be an even number of hex digits");
+        (0..hex.len()).step_by(2)
+            .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).map_err(|_| anyhow::anyhow!("beacon payload_hex is not hex")))
+            .collect()
+    }
 }
 
 // ---------------------------------------------------------------- egress
@@ -357,6 +407,7 @@ fn default_stop_bits() -> u8 { 1 }
 fn default_idle_ms() -> u64 { 50 }
 fn default_max_frame() -> usize { 64 * 1024 }
 fn default_interval_ms() -> u64 { 1000 }
+fn default_data_group_base() -> std::net::Ipv4Addr { std::net::Ipv4Addr::new(224, 0, 1, 0) }
 fn default_timeout_ms() -> u64 { 3000 }
 fn default_max_body() -> usize { 1024 * 1024 }
 fn default_framing() -> Framing { Framing::Mllp }
@@ -396,5 +447,44 @@ mod tests {
         "#).unwrap();
         assert!(config.validate().is_ok());
         assert!(matches!(config.serial.pods[0].flow_control, FlowControlMode::Hardware));
+    }
+}
+
+#[cfg(test)]
+mod beacon_tests {
+    use super::*;
+
+    #[test]
+    fn beacon_payload_ignores_whitespace_and_rejects_bad_hex() {
+        let beacon = |hex: &str| Beacon { address: "192.168.1.255".parse().unwrap(), port: 9610, interval_ms: 1000, payload_hex: hex.into() };
+        assert_eq!(beacon("7e 00\n30").payload().unwrap(), vec![0x7e, 0x00, 0x30]);
+        assert!(beacon("7e0").payload().is_err());
+        assert!(beacon("zz").payload().is_err());
+        assert!(beacon("").payload().is_err());
+    }
+
+    #[test]
+    fn socket_pod_beacon_is_optional() {
+        let pod: SocketPod = toml::from_str("id = \"a\"\nport = 9500").unwrap();
+        assert!(pod.beacon.is_none());
+        let pod: SocketPod = toml::from_str("id = \"a\"\nport = 9500\n[beacon]\naddress = \"10.0.0.255\"\nport = 9610\npayload_hex = \"7e00\"").unwrap();
+        assert_eq!(pod.beacon.unwrap().interval_ms, 1000);
+    }
+}
+
+#[cfg(test)]
+mod discovery_tests {
+    use super::*;
+
+    #[test]
+    fn data_group_takes_the_monitors_last_octet() {
+        let discovery: Discovery = toml::from_str("group = \"224.127.1.254\"\nport = 2000").unwrap();
+        assert_eq!(discovery.data_group("191.1.2.11".parse().unwrap()), "224.0.1.11".parse::<std::net::Ipv4Addr>().unwrap());
+    }
+
+    #[test]
+    fn udp_relay_framing_name() {
+        let pod: SocketPod = toml::from_str("id = \"r\"\nport = 2051\nframing = \"udp_relay\"").unwrap();
+        assert_eq!(pod.framing, Framing::UdpRelay);
     }
 }

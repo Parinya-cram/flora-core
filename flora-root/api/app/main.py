@@ -68,7 +68,8 @@ DEMO_TENANT = {
     "region": "TH",
     "api_key": os.getenv("ROOT_DEMO_TENANT_KEY", "root-tenant-demo-key"),
 }
-DEMO_DEVICE_TYPES = ["hl7-patient-monitor", "json-anesthesia-machine", "http-ventilator", "serial-temp-module"]
+DEMO_DEVICE_TYPES = ["hl7-patient-monitor", "json-anesthesia-machine", "http-ventilator", "serial-temp-module",
+                     "draeger-vista-120s"]
 DEFAULT_GLOBAL_CONFIG = {
     "terminology_release": "2026.09",
     "minimum_versions": {"leaf": "1.2.0", "canopy": "1.2.0", "gateway": "0.1.0"},

@@ -27,14 +27,53 @@ max_frame_bytes = 16384
 [socket]
 admin_port = 7504
 
+# M540 IACS, received directly. Ports and groups from the gxt CMS (m540_cfg.rb):
+# data on UDP 2050; each monitor sends to 224.0.1.<last octet of its IP>; monitors
+# announce themselves on 224.127.1.254:2000, and `discovery` joins each data group.
 [[socket.pods]]
 id = "m540"
-enabled = false # Enable after replacing the network placeholders.
+enabled = false # Enable after setting multicast_interface (and source_ips if wanted).
 transport = "udp"
 bind_address = "0.0.0.0"
-port = 0 # REQUIRED: actual M540 data port; missing from Vector's m540_cfg.
+port = 2050
 multicast_interface = "192.0.2.5" # REQUIRED: this workstation's device-network IPv4.
-multicast_groups = ["224.0.1.10"] # Legacy rule for monitor IP ending in .10; verify on site.
-source_ips = ["192.0.2.10"] # REQUIRED: actual monitor IPv4 addresses.
+multicast_groups = [] # Optional fixed groups, e.g. "224.0.1.10"; discovery adds the rest.
+source_ips = [] # Optional allowlist of monitor IPv4s; empty accepts every discovered monitor.
 max_frame_bytes = 6096
 auto_ack = false
+
+[socket.pods.discovery]
+group = "224.127.1.254"
+port = 2000
+data_group_base = "224.0.1.0"
+
+# M540 IACS through tools/iacs-relay, when this gateway cannot receive the multicast
+# (another subnet, Docker). The relay joins the groups on the monitor network and sends
+# every datagram here over TCP; source_ip is still the monitor's.
+[[socket.pods]]
+id = "m540-relay"
+enabled = false # Enable together with the relay.
+port = 2051
+framing = "udp_relay"
+auto_ack = false
+max_frame_bytes = 6096
+
+# Dräger Vista 120 S: the monitors connect to this port as their central station (CMS).
+# Several monitors may share it; each device instance picks its monitor by source_ip.
+[[socket.pods]]
+id = "vista"
+enabled = false # Enable after setting the beacon address for the monitor network.
+port = 9500
+framing = "raw"
+auto_ack = false
+
+# The monitors find the CMS through this UDP broadcast every second. The payload is the
+# capture from the gxt CMS; bytes 94-97 and 98-101 are IPv4 addresses from that site
+# (192.168.100.11 and 192.168.2.159). Their meaning is not verified: compare with a
+# capture from your own CMS before relying on discovery.
+[socket.pods.beacon]
+address = "192.0.2.255" # REQUIRED: broadcast address of the monitor network.
+port = 9610
+interval_ms = 1000
+payload_hex = "7e00300200006af9e207040701050c06434d530000000000484f53504954414c0000000000000000080000000f00000000000000781bda03f017da03000000000000000000000000000000000000000000000000000000001c2500000000c0a8640bc0a8029f000000000000000000000000000000000000000000000000"
+

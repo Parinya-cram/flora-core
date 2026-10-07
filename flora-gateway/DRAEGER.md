@@ -22,7 +22,8 @@ starts one parser container per device using the two new Haber catalog types,
 
 | Integration | Implemented behavior |
 | --- | --- |
-| M540 | Passive IPv4 UDP multicast reception; explicit interface/group configuration; controller IP allowlist; per-instance source-IP selection; Vector's 12 numeric mappings; bounded block decoding |
+| M540 | Passive IPv4 UDP multicast reception on 2050; automatic monitor discovery (224.127.1.254:2000) and per-monitor group join, or fixed groups; TCP relay (`tools/iacs-relay`, framing `udp_relay`) for networks the gateway cannot reach by multicast; controller IP allowlist; per-instance source-IP selection; the 12 numeric mappings shared with the gxt CMS; bounded block decoding that keeps values before an unknown block |
+| Vista 120 S | TCP central-station link (9500) with CMS greeting; optional UDP beacon (9610); vitals frame decoding with resync; see [parsers/draeger/vista_s](python/device-medical-service/device_medical_service/parsers/draeger/vista_s/README.md) |
 | MEDIBUS.X | 19200/8E1 example with RTS/DTR; checksum validation; buffering across serial chunks; ICC/device-ID handshake; NOP and stop replies; sequential measured-page 1, page 2, and settings polling; timeout recovery |
 | Observations | Flora `ivy_param`, numeric value, normalized unit, actual device ID, raw code, pod, and ingress timestamp |
 
@@ -62,14 +63,34 @@ restart support must be connected to that screen when it is built.
 ## Configure the hardware
 
 Use [gateway.draeger.toml](config/gateway.draeger.toml) for the native
-controllers. Edit the COM port, monitor IP, interface IP, and M540 UDP port in this file. `port = 0` is intentionally rejected.
+controllers. Edit the COM port, monitor IP and interface IP in this file. `port = 0` is intentionally rejected.
 
-The supplied Vector tree is missing `iacs-m540/config/m540_cfg.rb`, so its actual
-M540 ports and discovery groups could not be recovered. The old gateway derives
-each data group as `224.0.1.<last monitor IP octet>`; the example shows that rule,
-but the group must be confirmed for the installation. This port uses explicit
-group membership; it does not discover monitors or read the separate patient
-information multicast stream.
+The M540 network values come from the gxt CMS (`miot-monitor/devices/config/m540_cfg.rb`):
+
+| Stream | Address | Used for |
+| --- | --- | --- |
+| Data | UDP 2050, group `224.0.1.<last octet of the monitor IP>` | Vitals and waveforms (decoded) |
+| Discovery | `224.127.1.254:2000` | Monitors announce themselves; the pod's `discovery` joins each data group |
+| Patient info | `224.127.1.255:2150` | Not read (the gxt CMS ignored it too) |
+
+With `[socket.pods.discovery]` the controller joins each announcing monitor's data group
+by itself (filtered by `source_ips` when set); `multicast_groups` can still list fixed groups.
+
+### When the gateway cannot receive the multicast: TCP relay
+
+Multicast does not cross subnets without multicast routing and does not reach a container
+on a Docker bridge. Run [tools/iacs-relay/relay.py](tools/iacs-relay/relay.py) (Python 3,
+standard library only) on a machine in the monitor network:
+
+```
+python relay.py --gateway <gateway-host>:2051 --interface <relay IPv4 on the monitor network>
+```
+
+It discovers monitors and joins their groups the same way, then sends each datagram to the
+`m540-relay` socket pod (framing `udp_relay`: `[u16 length][monitor IPv4][datagram]`) and
+reconnects by itself, holding up to `--max-queue` datagrams while the gateway is away. The
+gateway sets each frame's source_ip to the monitor, so device instances are configured as for
+direct UDP. Use `--monitor <ip>` (repeatable) to relay only some monitors.
 
 Use one UDP pod per data port, with every required multicast group in that pod.
 Create one parser instance per monitor and set `options.source_ip` to the monitor's

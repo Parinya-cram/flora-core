@@ -38,7 +38,7 @@ def validate(config, instances, catalog):
                 transport=pod.get('transport','tcp')
                 if transport not in ('tcp','udp'):
                     raise ValueError(f'invalid transport for {key}')
-                if pod.get('framing','mllp') not in ('mllp','line','idle','raw'):
+                if pod.get('framing','mllp') not in ('mllp','line','idle','raw','udp_relay'):
                     raise ValueError(f'invalid framing for {key}')
                 if pod.get('remote_host') and transport!='tcp':
                     raise ValueError(f'remote_host requires TCP: {key}')
@@ -49,6 +49,12 @@ def validate(config, instances, catalog):
                 for group in pod.get('multicast_groups',[]):
                     if not ipaddress.IPv4Address(group).is_multicast:
                         raise ValueError(f'invalid multicast group for {key}')
+                discovery=pod.get('discovery')
+                if discovery:
+                    if not ipaddress.IPv4Address(discovery['group']).is_multicast or not 0<int(discovery['port'])<65536:
+                        raise ValueError(f'invalid discovery group or port for {key}')
+                    if not ipaddress.IPv4Address(discovery.get('data_group_base','224.0.1.0')).is_multicast:
+                        raise ValueError(f'invalid discovery data_group_base for {key}')
                 if enabled and not pod.get('remote_host'):
                     listener=(transport,pod.get('bind_address','0.0.0.0'),pod['port'])
                     if listener in listeners: raise ValueError(f'duplicate listener: {key}')

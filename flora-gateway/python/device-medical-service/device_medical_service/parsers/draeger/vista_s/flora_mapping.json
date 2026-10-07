@@ -1,0 +1,17 @@
+{
+  "mapping_version": "draeger-vista-120-s@0.1.0",
+  "evidence_status": "Record ids from the gxt miot-monitor gateway (vista-120-S-gw.rb), used against a real Vista 120 S; other record ids are not identified",
+  "records": {
+    "0":  {"name": "HR",       "unit": "/min", "ivy_param": "hr",          "precision": 0},
+    "3":  {"name": "ST",       "unit": "mm",   "ivy_param": null,          "precision": 2},
+    "14": {"name": "RR",       "unit": "/min", "ivy_param": "rr",          "precision": 0},
+    "15": {"name": "NIBP sys", "unit": "mmHg", "ivy_param": "nibp_sys",    "precision": 0, "nibp": true},
+    "16": {"name": "NIBP dia", "unit": "mmHg", "ivy_param": "nibp_dia",    "precision": 0, "nibp": true},
+    "17": {"name": "NIBP mean","unit": "mmHg", "ivy_param": "nibp_map",    "precision": 0, "nibp": true},
+    "18": {"name": "NIBP PR",  "unit": "/min", "ivy_param": null,          "precision": 0},
+    "19": {"name": "SpO2",     "unit": "%",    "ivy_param": "spo2",        "precision": 0},
+    "20": {"name": "SpO2 PR",  "unit": "/min", "ivy_param": "pr",          "precision": 0},
+    "53": {"name": "T1",       "unit": "Cel",  "ivy_param": "temperature", "precision": 1},
+    "54": {"name": "T2",       "unit": "Cel",  "ivy_param": null,          "precision": 1}
+  }
+}

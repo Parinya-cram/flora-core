@@ -127,7 +127,7 @@ function buildTree(data: Topology): TreeNode {
       ],
     });
   }
-  return { id: "canopy", kind: "canopy", label: data.canopy.name, sublabel: "Flora Canopy", icon: "🏥", children };
+  return { id: "canopy", kind: "canopy", label: data.canopy.name, sublabel: "ESM Flora Canopy", icon: "🏥", children };
 }
 
 function countDescendants(node: TreeNode): number {
@@ -468,7 +468,7 @@ export default function CanopyTopologyView({ sessionUser }: { sessionUser?: Auth
   return <main className="flex h-full flex-col overflow-hidden bg-[var(--app-bg)] p-3 sm:p-5">
     <header className="flex flex-wrap items-end justify-between gap-3">
       <div>
-        <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">Flora Canopy · topology</div>
+        <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">ESM Flora Canopy · topology</div>
         <h1 className="mt-1 text-2xl font-semibold text-[var(--app-text)]">Topology</h1>
         <p className="mt-1 text-sm text-[var(--app-muted)]">Live hierarchy: Canopy → Ward → Leaf → Gateway → Device</p>
       </div>

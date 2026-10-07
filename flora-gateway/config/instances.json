@@ -8,5 +8,7 @@
   {"device_id": "icu-monitor-01", "label": "ICU bed 1 patient monitor", "device_type": "hl7-patient-monitor",
    "pod": "socket.icu-monitor", "leaf_id": "leaf-icu-01"},
   {"device_id": "icu-ventilator-01", "label": "ICU bed 1 ventilator", "device_type": "http-ventilator",
-   "pod": "feeder.icu-ventilator", "leaf_id": "leaf-icu-01"}
+   "pod": "feeder.icu-ventilator", "leaf_id": "leaf-icu-01"},
+  {"device_id": "or-vista-01", "label": "OR-1 Dräger Vista 120 S (simulated)", "device_type": "draeger-vista-120s",
+   "pod": "socket.vista", "leaf_id": "leaf-or-01"}
 ]

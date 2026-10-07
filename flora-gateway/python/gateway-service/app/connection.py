@@ -29,7 +29,7 @@ class SerialDefaults(_Strict):
 
 class SocketDefaults(_Strict):
     transport: Literal["tcp", "udp"] | None = None
-    framing: Literal["mllp", "line", "idle", "raw"] | None = None
+    framing: Literal["mllp", "line", "idle", "raw", "udp_relay"] | None = None
     auto_ack: bool | None = None
     idle_ms: int | None = Field(default=None, ge=1, le=60000)
     connect_timeout_ms: int | None = Field(default=None, ge=100, le=600000)

@@ -1,7 +1,7 @@
 {
   "images": [
     {"image": "flora-gateway-parser:dev", "version": "0.1.0", "registry": "local",
-     "parsers": ["hl7v2", "json_fields", "ascii_kv", "iacs_m540", "medibus", "ge_carestation", "ge_dri", "bbraun_bcc", "hidro_hl7"]}
+     "parsers": ["hl7v2", "json_fields", "ascii_kv", "iacs_m540", "medibus", "ge_carestation", "ge_dri", "bbraun_bcc", "hidro_hl7", "draeger_vista_s"]}
   ],
   "device_types": [
     {"code": "hl7-patient-monitor", "label": "Patient monitor (HL7 v2 / IHE PCD-01)", "category": "patient_monitor",
@@ -45,6 +45,7 @@
     {"code": "bbraun-space-bcc", "label": "B. Braun SpaceCom (BCC TCP)", "category": "infusion_pump", "protocol": "bbraun-bcc", "controller": "socket", "parser": "bbraun_bcc", "image": "flora-gateway-parser:dev", "default_options": {"bed_id": "1/1/1", "poll_interval_sec": 5},
      "connection_defaults": {"transport": "tcp", "framing": "raw", "auto_ack": false, "connect_timeout_ms": 3000, "read_timeout_ms": 15000, "reconnect_ms": 3000}, "version": "1"},
     {"code": "hidro-hl7-monitor", "label": "Hidro shared HL7 monitor (GE / configured vendor aliases)", "category": "patient_monitor", "protocol": "hl7v2", "controller": "socket", "parser": "hidro_hl7", "image": "flora-gateway-parser:dev", "default_options": {"timezone": "Asia/Bangkok", "repair_segments": false},
-     "connection_defaults": {"transport": "tcp", "framing": "mllp", "auto_ack": true}, "version": "1"}
+     "connection_defaults": {"transport": "tcp", "framing": "mllp", "auto_ack": true}, "version": "1"},
+    {"code": "draeger-vista-120s", "label": "Dräger Vista 120 S patient monitor (CMS link, TCP)", "category": "patient_monitor", "manufacturer": "draeger", "model": "Vista 120 S", "protocol": "draeger-vista-s", "controller": "socket", "parser": "draeger_vista_s", "image": "flora-gateway-parser:dev", "default_options": {"min_interval_sec": 1}, "connection_defaults": {"transport": "tcp", "framing": "raw", "auto_ack": false}, "version": "1"}
   ]
 }

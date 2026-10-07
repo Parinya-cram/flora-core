@@ -85,6 +85,7 @@ because multiple vendors use it.
 | --- | --- | --- |
 | `draeger/iacs_m540` | `iacs_m540` | `config/gateway.draeger.toml`, `config/instances.draeger.json` |
 | `draeger/medibus` | `medibus` | Dräger files above |
+| `draeger/vista_s` | `draeger_vista_s` | Dräger files above; demo `config/gateway.toml` (`socket.vista`) |
 | `ge/carestation` | `ge_carestation` | `config/gateway.hidro.toml`, `config/instances.hidro.json` |
 | `ge/dri` | `ge_dri` | Hidro files above |
 | `bbraun/bcc` | `bbraun_bcc` | Hidro files above |

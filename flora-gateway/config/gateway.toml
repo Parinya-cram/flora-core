@@ -41,6 +41,7 @@ admin_port = 5004
 pods = [
     { id = "or-monitor", port = 9001, framing = "mllp", auto_ack = true },
     { id = "icu-monitor", port = 9002, framing = "mllp", auto_ack = true },
+    { id = "vista", port = 9500, framing = "raw", auto_ack = false },
 ]
 
 [collector]

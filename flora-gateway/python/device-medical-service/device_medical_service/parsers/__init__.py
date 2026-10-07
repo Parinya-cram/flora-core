@@ -9,6 +9,7 @@ from device_medical_service.parsers.hl7.parser import Hl7v2Parser
 from device_medical_service.parsers.generic.json_fields.parser import JsonFieldsParser
 from device_medical_service.parsers.draeger.iacs_m540.parser import IacsM540Parser
 from device_medical_service.parsers.draeger.medibus.parser import MedibusParser
+from device_medical_service.parsers.draeger.vista_s.parser import DraegerVistaSParser
 from device_medical_service.parsers.ge.carestation.parser import GeCarestationParser
 from device_medical_service.parsers.ge.dri.parser import GeDriParser
 from device_medical_service.parsers.bbraun.bcc.parser import BBraunBccParser
@@ -19,6 +20,7 @@ PARSERS: dict[str, type[Parser]] = {
     for parser in (
         IacsM540Parser,
         MedibusParser,
+        DraegerVistaSParser,
         GeCarestationParser,
         GeDriParser,
         BBraunBccParser,

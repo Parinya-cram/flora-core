@@ -320,5 +320,25 @@
       "idle_ms": 50
     },
     "version": "1"
+  },
+  {
+    "code": "draeger-vista-120s",
+    "label": "Dräger Vista 120 S patient monitor (CMS link, TCP)",
+    "category": "patient_monitor",
+    "manufacturer": "draeger",
+    "model": "Vista 120 S",
+    "protocol": "draeger-vista-s",
+    "controller": "socket",
+    "parser": "draeger_vista_s",
+    "image": "parser",
+    "default_options": {
+      "min_interval_sec": 1
+    },
+    "connection_defaults": {
+      "transport": "tcp",
+      "framing": "raw",
+      "auto_ack": false
+    },
+    "version": "1"
   }
 ]

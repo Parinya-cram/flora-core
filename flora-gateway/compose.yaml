@@ -107,6 +107,8 @@ services:
       - "127.0.0.1:7404:5004"
       - "${FLORA_GATEWAY_HL7_OR_PORT:-7421}:9001"
       - "${FLORA_GATEWAY_HL7_ICU_PORT:-7422}:9002"
+      # Dräger Vista 120 S monitors connect here as to their central station (CMS).
+      - "${FLORA_GATEWAY_VISTA_PORT:-9500}:9500"
 
   # ---------------------------------------------------------------- process layer (Python)
   # Built here, started per device instance by gateway-service.
@@ -153,6 +155,9 @@ services:
       KONG_ADMIN_LISTEN: 127.0.0.1:8001
       KONG_PROXY_ACCESS_LOG: /dev/stdout
       KONG_PROXY_ERROR_LOG: /dev/stderr
+      # Re-resolve `server` every few seconds: a release recreates it with a new IP, and with
+      # Docker's DNS TTL Kong would keep sending Leaf requests to the old one (502).
+      KONG_DNS_VALID_TTL: "5"
     volumes:
       - ./kong:/kong:ro
     ports:
