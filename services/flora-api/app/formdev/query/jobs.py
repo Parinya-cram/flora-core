@@ -41,13 +41,14 @@ from ..errors import FormDevError
 from .access import Principal
 from .catalog import SourceCatalog
 from .engine import QueryEngine, QueryRuntime, fingerprints
+from . import xlsx
 from .plan import Leaf, Node, OrderKey, build_plan, count_plan
 
 LOG = logging.getLogger("formdev.jobs")
-KINDS = {"export": ("list", ("csv", "jsonl")), "search": ("list", ("jsonl",)), "aggregate": ("aggregate", ("json",)),
-         "report": ("aggregate", ("csv", "json"))}
-EXTENSIONS = {"csv": "csv", "jsonl": "jsonl", "json": "json"}
-MEDIA_TYPES = {"csv": "text/csv; charset=utf-8", "jsonl": "application/x-ndjson", "json": "application/json"}
+KINDS = {"export": ("list", ("csv", "jsonl", "xlsx")), "search": ("list", ("jsonl",)), "aggregate": ("aggregate", ("json",)),
+         "report": ("aggregate", ("csv", "json", "xlsx"))}
+EXTENSIONS = {"csv": "csv", "jsonl": "jsonl", "json": "json", "xlsx": "xlsx"}
+MEDIA_TYPES = {"csv": "text/csv; charset=utf-8", "jsonl": "application/x-ndjson", "json": "application/json", "xlsx": xlsx.MEDIA_TYPE}
 FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 TERMINAL = ("succeeded", "failed", "cancelled", "expired")
 REINDEX_RETRY_MS = 10 * 60_000
@@ -104,8 +105,16 @@ class ResultStore:
         handle.seek(keep_bytes)
         return handle
 
-    def finish(self, job_id: str, attempt: int, fmt: str) -> tuple[int, str]:
+    def finish(self, job_id: str, attempt: int, fmt: str, sheet: str = "Export", header_rows: int = 1) -> tuple[int, str]:
         source, target = self.part(job_id, attempt), self.final(job_id, fmt)
+        if fmt == "xlsx":
+            # The part file holds one JSON array per row (resumable like the other formats); the workbook is
+            # built from it once, at the end.
+            built = source.with_suffix(".xlsx")
+            with open(source, encoding="utf-8") as lines:
+                xlsx.write_xlsx(built, sheet, (json.loads(line) for line in lines if line.strip()), header_rows)
+            os.chmod(built, 0o600)
+            os.replace(built, source)
         digest = hashlib.sha256()
         with open(source, "rb") as handle:
             for chunk in iter(lambda: handle.read(1 << 20), b""):
@@ -542,11 +551,14 @@ class JobWorker:
         columns = ["$record_id"] + [ref["output"] for ref in spec["select"]]
         handle = self.store.open_part(job["job_id"], job["attempt"], self.store.existing_part(job["job_id"]), checkpoint["bytes"])
         try:
+            labels = None
+            if (spec["export"] or {}).get("headers") == "labels":
+                labels = ["record_id"] + [catalog.fields.get(ref.get("field") or "", {}).get("label") or ref["output"] for ref in spec["select"]]
             if checkpoint["bytes"] == 0 and fmt == "csv":
-                labels = None
-                if (spec["export"] or {}).get("headers") == "labels":
-                    labels = ["record_id"] + [catalog.fields.get(ref.get("field") or "", {}).get("label") or ref["output"] for ref in spec["select"]]
                 checkpoint["bytes"] += handle.write(csv_header(columns, labels))
+            elif checkpoint["bytes"] == 0 and fmt == "xlsx":
+                # Excel: one header row, labels when asked for (column ids otherwise).
+                checkpoint["bytes"] += handle.write((json.dumps(labels or columns, ensure_ascii=False) + "\n").encode("utf-8"))
             batch_where = Leaf("meta", "ingest_seq", "lte", (checkpoint["boundary"],))
             while checkpoint["rows"] < max_rows:
                 plan = build_plan({**spec, "pagination": {"mode": "cursor", "limit": min(policy["batch_rows"], max_rows - checkpoint["rows"]), "offset": 0}})
@@ -564,6 +576,8 @@ class JobWorker:
                     break
                 if fmt == "csv":
                     chunk = csv_lines(page["rows"], columns)
+                elif fmt == "xlsx":
+                    chunk = "".join(json.dumps([row.get(column) for column in columns], ensure_ascii=False, default=str) + "\n" for row in page["rows"]).encode("utf-8")
                 else:
                     chunk = "".join(json.dumps(row, ensure_ascii=False, default=str) + "\n" for row in page["rows"]).encode("utf-8")
                 if checkpoint["bytes"] + len(chunk) > policy["max_result_bytes"]:
@@ -581,7 +595,7 @@ class JobWorker:
         finally:
             handle.close()
         self._check(services, job, owner, checkpoint, checkpoint["rows"])  # still ours (and not cancelled) before the rename
-        size, digest = self.store.finish(job["job_id"], job["attempt"], fmt)
+        size, digest = self.store.finish(job["job_id"], job["attempt"], fmt, catalog.title)
         return {"rows_processed": checkpoint["rows"], "result_bytes": size, "result_sha256": digest, "checkpoint": checkpoint}
 
     def _aggregate(self, services: Any, engine: QueryEngine, spec: dict[str, Any], catalog: SourceCatalog, job: dict[str, Any], owner: str) -> dict[str, Any]:
@@ -595,6 +609,8 @@ class JobWorker:
         names = [key["name"] for key in spec["group"]] + [agg["as"] for agg in spec["aggregate"]]
         if job["format"] == "csv":
             content = csv_header(names, None) + csv_lines(result["rows"], names)
+        elif job["format"] == "xlsx":
+            content = "".join(json.dumps(row, ensure_ascii=False, default=str) + "\n" for row in [names, *([item.get(name) for name in names] for item in result["rows"])]).encode("utf-8")
         else:
             content = json.dumps({"rows": result["rows"], "truncated": result["truncated"]}, ensure_ascii=False, default=str).encode("utf-8")
         handle = self.store.open_part(job["job_id"], job["attempt"], None, 0)
@@ -604,7 +620,7 @@ class JobWorker:
             os.fsync(handle.fileno())
         finally:
             handle.close()
-        size, digest = self.store.finish(job["job_id"], job["attempt"], job["format"])
+        size, digest = self.store.finish(job["job_id"], job["attempt"], job["format"], catalog.title)
         return {"rows_processed": len(result["rows"]), "result_bytes": size, "result_sha256": digest}
 
     def _reindex(self, services: Any, job: dict[str, Any], owner: str) -> dict[str, Any]:

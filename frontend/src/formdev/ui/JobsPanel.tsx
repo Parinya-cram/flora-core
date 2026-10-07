@@ -8,7 +8,7 @@ const tone: Record<string, string> = {
   succeeded: "text-emerald-600 dark:text-emerald-300", failed: "text-rose-500", cancelled: "text-[var(--app-muted)]",
   expired: "text-[var(--app-muted)]", queued: "text-amber-600 dark:text-amber-300", running: "text-sky-600 dark:text-sky-300",
 };
-const EXTENSIONS: Record<string, string> = { csv: "csv", jsonl: "jsonl", json: "json" };
+const EXTENSIONS: Record<string, string> = { csv: "csv", jsonl: "jsonl", json: "json", xlsx: "xlsx" };
 
 export default function JobsPanel({ remote, refreshKey, online }: { remote: RestApiAdapter; refreshKey: number; online: boolean }) {
   const [jobs, setJobs] = useState<FormDevJob[]>([]);

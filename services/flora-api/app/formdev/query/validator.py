@@ -528,8 +528,8 @@ def _export(query: dict[str, Any], ctx: _Context) -> dict[str, Any] | None:
     _unknown_keys(raw, {"format", "headers", "max_rows"}, "$.query.export", ctx)
     fmt = raw.get("format", "csv")
     headers = raw.get("headers", "ids")
-    if fmt not in ("csv", "jsonl", "json") or headers not in ("ids", "labels"):
-        ctx.error("$.query.export", "invalid_export", "format is csv, jsonl or json; headers is ids or labels")
+    if fmt not in ("csv", "jsonl", "json", "xlsx") or headers not in ("ids", "labels"):
+        ctx.error("$.query.export", "invalid_export", "format is csv, jsonl, json or xlsx; headers is ids or labels")
         return None
     limits = ctx.policy["export_max_rows"]
     cap = limits["formdev.manage"] if ctx.principal.is_admin else limits["default"]

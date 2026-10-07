@@ -527,6 +527,53 @@ class JobContract(QueryContract):
         self.assertIn("job_serial", purposes)
 
 
+    # Excel results -------------------------------------------------------------------------------
+    def xlsx_rows(self, job_id, principal=EXPORTER):
+        import re
+        import zipfile
+
+        chunks, media_type, name, size = self.jobs(principal).download(job_id)
+        content = b"".join(chunks)
+        self.assertEqual((len(content), name.endswith(".xlsx"), media_type.startswith("application/vnd.openxmlformats")), (size, True, True))
+        with zipfile.ZipFile(io.BytesIO(content)) as archive:
+            self.assertIsNone(archive.testzip())
+            sheet = archive.read("xl/worksheets/sheet1.xml").decode("utf-8")
+            workbook = archive.read("xl/workbook.xml").decode("utf-8")
+        rows = []
+        for row in re.findall(r"<row [^>]*>(.*?)</row>", sheet):
+            cells = []
+            for attrs, body in re.findall(r"<c ([^>]*)>(.*?)</c>", row):
+                value = re.search(r"<v>(.*?)</v>|<t[^>]*>(.*?)</t>", body)
+                text = value.group(1) if value.group(1) is not None else value.group(2)
+                cells.append(("b", text) if 't="b"' in attrs else ("s", text) if "inlineStr" in attrs else ("n", text))
+            rows.append(cells)
+        return rows, re.search(r'name="([^"]+)"', workbook).group(1)
+
+    def test_export_job_as_excel(self):
+        self.fd.records.update("rec-0002-aaaa", {**ward_record(2), "full_name": "=HYPERLINK(\"x\") <ผู้ป่วย>"}, 1, USER)
+        body = self.export_body("xlsx", filter={"field": "ward", "op": "eq", "value": "W3"})
+        body["query"]["export"]["headers"] = "labels"
+        job = self.jobs().create("export", body)
+        self.run_all()
+        self.assertEqual(self.adapter.get_job(job["job_id"])["status"], "succeeded")
+        rows, sheet = self.xlsx_rows(job["job_id"])
+        self.assertEqual(sheet, "Ward check")
+        self.assertEqual([text for _, text in rows[0]], ["record_id", "HN", "Name", "Age", "Smoker"])
+        self.assertEqual(len(rows) - 1, len(self.live(lambda n, d: d["ward"] == "W3")))
+        by_id = {row[0][1]: row for row in rows[1:]}
+        self.assertEqual(by_id["rec-0002-aaaa"][2], ("s", "=HYPERLINK(&quot;x&quot;) &lt;ผู้ป่วย&gt;"), "text, never a formula; escaped")
+        self.assertEqual(by_id["rec-0002-aaaa"][3], ("n", "22"))
+        self.assertIn(by_id["rec-0002-aaaa"][4], (("b", "1"), ("b", "0")))
+
+    def test_report_job_as_excel(self):
+        body = {"query": {"source": "ward_check", "group": ["ward"], "aggregate": [{"fn": "count", "as": "n"}]}}
+        job = self.jobs().create("report", body, "xlsx")
+        self.run_all()
+        rows, _ = self.xlsx_rows(job["job_id"])
+        self.assertEqual([text for _, text in rows[0]], ["ward", "n"])
+        self.assertEqual(sum(int(row[1][1]) for row in rows[1:]), self.N - 1)
+
+
 class SQLiteJobContract(JobContract, unittest.TestCase):
     def make_adapter(self):
         from app.formdev.adapters.sqlite import SQLiteAdapter
