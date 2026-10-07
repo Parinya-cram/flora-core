@@ -12,6 +12,7 @@ from typing import Callable
 from .adapters.base import DataAdapter
 from .conflict import ConflictResolver
 from .indexing import IndexMaintenance
+from .attachments import AttachmentStore
 from .lookups import LookupRepository
 from .repositories import FormRepository, RecordRepository, SchemaRepository, StyleRepository
 from .sync import SyncService
@@ -27,6 +28,10 @@ class FormDevServices:
     sync: SyncService
     indexing: IndexMaintenance
     lookups: LookupRepository
+
+    @property
+    def attachments(self) -> AttachmentStore:
+        return self.records.attachments
 
 
 def services_for(

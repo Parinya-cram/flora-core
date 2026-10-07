@@ -66,6 +66,9 @@ export type FieldOption = { value: string; label: string; has_input?: boolean; i
 export type LookupPairs = Record<string, string>;
 export type LookupSource = { source: string; value: string; label?: string; filter?: LookupPairs };
 export type LookupDerive = { lookup: string; column: string; match: LookupPairs };
+/** A file kept on this device until it is uploaded (ref "att:<sha256>"). */
+export type LocalAttachment = { sha256: string; mime: string; size: number; name: string; bytes: ArrayBuffer; uploaded: boolean; created_at: number };
+
 /** A lookup table (Phase 2.3) as the registry stores it. */
 export type LookupTable = {
   lookup_id: string;

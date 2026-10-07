@@ -21,6 +21,7 @@ MIGRATIONS: tuple[Path, ...] = (
     HERE / "sqlite_0002_query.sql",
     HERE / "sqlite_0003_registry.sql",
     HERE / "sqlite_0004_lookup.sql",
+    HERE / "sqlite_0005_attachment.sql",
 )
 
 

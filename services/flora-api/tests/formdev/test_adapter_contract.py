@@ -378,6 +378,65 @@ class SQLiteContract(Contract, unittest.TestCase):
             reopened.adapter.close()
 
 
+class JsonFilesContract(Contract, unittest.TestCase):
+    """The file-based adapter (a folder of JSON files) honours the same contract."""
+
+    def make_adapter(self):
+        import tempfile
+
+        from app.formdev.adapters.jsonfiles import JsonFileAdapter
+
+        self.folder = tempfile.TemporaryDirectory()
+        return JsonFileAdapter(self.folder.name)
+
+    def tearDown(self):
+        self.adapter.close()
+        self.folder.cleanup()
+
+    def test_survives_restart_as_readable_json(self):
+        import json
+        from pathlib import Path
+
+        from app.formdev.adapters.jsonfiles import JsonFileAdapter
+
+        published_example(self.fd)
+        record = self.fd.records.create("patient_assessment", {"hn": "JSON1"}, USER)
+        import hashlib
+
+        sha = hashlib.sha256(b"0").hexdigest()
+        self.fd.attachments.put(sha, "text/plain", b"0", USER)
+        self.adapter.close()
+        folder = Path(self.folder.name)
+        rows = json.loads((folder / "formdev_record.json").read_text(encoding="utf-8"))
+        self.assertEqual([row["record_id"] for row in rows], [record["record_id"]])
+        self.assertEqual(json.loads(rows[0]["data"]), {"hn": "JSON1"})
+        self.assertEqual(json.loads((folder / "manifest.json").read_text())["format"], "flora.formdev.jsonfiles/1")
+        self.assertEqual([path.name for path in folder.iterdir() if path.name.startswith(".formdev")], [], "no temporary files left")
+        self.adapter = JsonFileAdapter(folder)
+        reopened = ready_services(self.adapter)
+        self.assertEqual(reopened.records.get(record["record_id"])["data"], {"hn": "JSON1"})
+        self.assertEqual(reopened.attachments.get(sha)[1], b"0", "bytes round-trip through base64 in JSON")
+
+    def test_a_second_process_is_refused(self):
+        from app.formdev.adapters.jsonfiles import JsonFileAdapter
+        from app.formdev.errors import FormDevError
+
+        with self.assertRaises(FormDevError) as caught:
+            JsonFileAdapter(self.folder.name)
+        self.assertEqual(caught.exception.code, "storage_locked")
+
+    def test_a_failed_transaction_writes_nothing(self):
+        from pathlib import Path
+
+        before = (Path(self.folder.name) / "formdev_form.json").read_text(encoding="utf-8")
+        with self.assertRaises(RuntimeError):
+            with self.adapter.transaction():
+                self.adapter.save_form({"form_id": "x_form", "title": "X", "latest_version": 1, "published_version": None,
+                                        "created_at": 1, "created_by": USER, "updated_at": 1, "updated_by": USER})
+                raise RuntimeError("boom")
+        self.assertEqual((Path(self.folder.name) / "formdev_form.json").read_text(encoding="utf-8"), before)
+
+
 @unittest.skipUnless(PG_URL and urlparse(PG_URL).path.endswith("_test"), "set FORMDEV_PG_TEST_URL to a *_test database")
 class PostgreSQLContract(Contract, unittest.TestCase):
     def make_adapter(self):

@@ -51,3 +51,4 @@ COPY infrastructure/postgres/0061-formdev-query.sql /docker-entrypoint-initdb.d/
 COPY infrastructure/postgres/0061b-formdev-query-indexes.sql /docker-entrypoint-initdb.d/0061b-formdev-query-indexes.sql
 COPY infrastructure/postgres/0062-formdev-registry.sql /docker-entrypoint-initdb.d/0062-formdev-registry.sql
 COPY infrastructure/postgres/0063-formdev-lookup.sql /docker-entrypoint-initdb.d/0063-formdev-lookup.sql
+COPY infrastructure/postgres/0064-formdev-attachment.sql /docker-entrypoint-initdb.d/0064-formdev-attachment.sql

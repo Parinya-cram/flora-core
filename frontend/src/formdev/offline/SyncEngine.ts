@@ -7,7 +7,8 @@
  * - idempotency: an op keeps its op_id forever, so resending after a lost ack is safe;
  * - failure recovery: ops left "processing" by a crash are reset to "pending" on start.
  */
-import type { SyncAck } from "../core/types";
+import { attachmentRefs } from "../core/attachments";
+import type { SyncAck, SyncOp } from "../core/types";
 import type { IndexKeyFn, LocalDataAdapter, QueueItem, QueueState, RemoteDataAdapter } from "../data/DataAdapter";
 import { TransportError } from "../data/RestApiAdapter";
 
@@ -115,6 +116,18 @@ export class SyncEngine {
     return this.running;
   }
 
+  /** Upload the device's files that these ops reference and the server has not received yet. */
+  private async uploadAttachments(ops: SyncOp[]): Promise<void> {
+    if (!this.remote.putAttachment) return;
+    const wanted = new Set(ops.flatMap(op => attachmentRefs(op.data)));
+    for (const sha of wanted) {
+      const local = await this.local.getAttachment(sha);
+      if (!local || local.uploaded) continue;
+      await this.remote.putAttachment(sha, local.bytes, local.mime);
+      await this.local.markAttachmentUploaded(sha);
+    }
+  }
+
   private async pushDue(force: boolean): Promise<SyncRunResult> {
     const result: SyncRunResult = { sent: 0, applied: 0, conflicts: 0, rejected: 0, retried: 0, failed: 0 };
     if (!this.options.isOnline()) return { ...result, offline: true };
@@ -137,6 +150,8 @@ export class SyncEngine {
 
     let acks: SyncAck[];
     try {
+      // Files first: the server refuses a record whose attachment it does not have.
+      await this.uploadAttachments(processing.map(item => item.op));
       acks = await this.remote.pushOps(processing.map(item => item.op));
     } catch (error) {
       const retriable = !(error instanceof TransportError) || error.retriable;

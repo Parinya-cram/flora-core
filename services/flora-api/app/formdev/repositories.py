@@ -27,6 +27,7 @@ from .errors import FormDevError
 from .field_types import FIELD_TYPES
 from .logic.evaluate import evaluate_record
 from .logic.lookup import lookup_ids
+from .attachments import AttachmentStore, attachment_store
 from .lookups import LookupRepository
 from .styles import normalize_style, stored_font, validate_font, validate_style, validate_style_registry
 from .indexing import IndexMaintenance
@@ -322,6 +323,7 @@ class RecordRepository:
         self.schemas = schemas
         self.indexing = indexing or IndexMaintenance(adapter, schemas)
         self.lookups = LookupRepository(adapter)
+        self.attachments: AttachmentStore = attachment_store(adapter)
 
     def get_raw(self, record_id: str) -> dict[str, Any] | None:
         return self.adapter.get_record(record_id)
@@ -353,8 +355,9 @@ class RecordRepository:
         """Run the form's logic (Phase 2) and return the data to store: calculated values recomputed by the
         server, values cleared where the definition asks, Other text tidied. Raises on any issue."""
         result = evaluate_record(definition, data, status, lookups=self.lookups.tables(lookup_ids(definition)))
-        if result.issues:
-            raise _issues_error("invalid_record", "Record data is not valid", result.issues)
+        issues = result.issues or self.attachments.missing(result.data)
+        if issues:
+            raise _issues_error("invalid_record", "Record data is not valid", issues)
         return result.data
 
     def _persist(self, row: dict[str, Any], expected_version: int | None) -> dict[str, Any]:

@@ -12,11 +12,13 @@ import re
 import time
 from collections.abc import Iterator
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, Body, Depends, Query, Request
 from fastapi.responses import Response
 
 from ..formdev import FormDevServices
+from ..formdev.attachments import INLINE_TYPES, MAX_BYTES as MAX_ATTACHMENT_BYTES, refs as attachment_refs
 from ..formdev.definition import Issue, describe_issues, parse_json_strict
 from ..formdev.errors import FormDevError
 from ..formdev.formpack import export_formpack, install_formpack, media_type
@@ -122,6 +124,37 @@ def put_font(font_id: str, user: dict = Depends(require_admin), body: Any = Depe
     row = fd.styles.put_font(font_id, body)
     log.info("formdev font %s saved by %s", font_id, username(user))
     return {"font": row}
+
+
+# Attachments (data layer: file storage) ------------------------------------------
+@router.put("/attachments/{sha256}")
+async def put_attachment(sha256: str, request: Request, user: dict = Depends(read_token), fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
+    """Upload the bytes of a file field before syncing the record that references them (ref "att:<sha256>").
+    Idempotent; the server checks the hash. Body: the raw file, Content-Type: its media type."""
+    length = request.headers.get("content-length")
+    if length and length.isdigit() and int(length) > MAX_ATTACHMENT_BYTES:
+        raise FormDevError("attachment_too_large", f"Attachments are limited to {MAX_ATTACHMENT_BYTES} bytes", 413)
+    content = await request.body()
+    media_type = (request.headers.get("content-type") or "").split(";")[0].strip().lower()
+    meta = fd.attachments.put(sha256, media_type, content, username(user))
+    return {"attachment": {key: meta[key] for key in ("sha256", "media_type", "size", "created")}}
+
+
+@router.get("/attachments/{sha256}")
+def get_attachment(sha256: str, request: Request, record_id: str = Query(...), fd: FormDevServices = Depends(formdev)) -> Response:
+    """A file of a record the caller may read; only files the record references in fields the caller may view."""
+    record, hidden = _record_access(request, fd, record_id)
+    references = {sha: value for _, sha, value in attachment_refs(_mask(record["data"], hidden))}
+    found = fd.attachments.get(sha256) if sha256 in references else None
+    if found is None:
+        raise FormDevError("attachment_not_found", "Attachment not found", 404)
+    meta, content = found
+    inline = meta["media_type"] in INLINE_TYPES
+    name = str(references[sha256].get("name") or sha256).replace('"', "")
+    return Response(content=content, media_type=meta["media_type"] if inline else "application/octet-stream", headers={
+        "Content-Disposition": f"{'inline' if inline else 'attachment'}; filename*=UTF-8''{quote(name)}",
+        "X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=3600", "Content-Security-Policy": "default-src 'none'; sandbox",
+    })
 
 
 # Lookup tables (Phase 2.3) ------------------------------------------------------

@@ -12,7 +12,9 @@
 
 Supporting tables: `formdev_record_revision` (every version of every record),
 `formdev_sync_receipt` (idempotency), `formdev_conflict` (conflict log), `formdev_asset`,
-`formdev_style`, `formdev_font` (registries), `formdev_lookup` (Phase 2.3 lookup tables:
+`formdev_attachment` (file / image field content addressed by SHA-256: `sha256`, `media_type`, `size`, `content`,
+`created_at`, `created_by`; PostgreSQL `0064-formdev-attachment.sql`, SQLite migration 5; or a directory with
+`FORMDEV_ATTACHMENT_DIR`), `formdev_style`, `formdev_font` (registries), `formdev_lookup` (Phase 2.3 lookup tables:
 `lookup_id`, `version`, `metadata`, `entries`, `updated_at`, `updated_by`; PostgreSQL
 [`0063-formdev-lookup.sql`](../../infrastructure/postgres/0063-formdev-lookup.sql), SQLite migration 4, both
 generated from `formdev/registry/lookups/*.json` by `sync_registry_seed.py`).

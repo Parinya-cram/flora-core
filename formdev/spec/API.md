@@ -9,6 +9,8 @@ Errors are `{"error": message, "code": "...", "message": "...", "details": ...}`
 | GET | `/registry` | Styles, fonts and the active storage vendor |
 | PUT | `/styles/{style_id}` **admin** | Add or change a style `{definition: {name, category, inherit?, tokens, components?}}`; validated (tokens, fonts, parent present, no cycle → 422 `invalid_style`), version + 1 |
 | PUT | `/fonts/{font_id}` **admin** | Add or change a font `{metadata: {family, ...}, assets?, fallback}`; metadata only, no font files |
+| PUT | `/attachments/{sha256}` | Upload a file of a file / image field: the raw bytes, `Content-Type` its media type. Idempotent; 422 `attachment_checksum` when the bytes do not hash to the id, 413 over `FORMDEV_ATTACHMENT_MAX_BYTES`. Records referencing `att:<sha256>` are refused until it is uploaded (`attachment_missing`) |
+| GET | `/attachments/{sha256}?record_id=` | A file of a record the caller may read, only if the record references it in a field the caller may view (else 404). PNG / JPEG / GIF / WebP / PDF inline, anything else as a download; `nosniff`, sandboxing CSP |
 | GET | `/lookups` | Lookup tables without their entries (`lookup_id`, `version`, `metadata`, `updated_at`, `updated_by`) |
 | GET | `/lookups/{lookup_id}` | One lookup table with its entries; 404 `lookup_not_found` |
 | PUT | `/lookups/{lookup_id}` **admin** | Add or replace a lookup `{metadata: {title, columns: [{name, label}], authoritative?, notice?, source?}, entries: [{column: text}]}` (≤ 50 000 rows, ≤ 16 MB, no repeated JSON keys); 422 `invalid_lookup`; version + 1. `formdev/scripts/import_lookup.py` builds one from CSV |

@@ -13,6 +13,13 @@ UI → RecordRepository → IndexedDB (records + sync_queue, one transaction)
 | --- | --- | --- |
 | Browser / Electron renderer | IndexedDB `flora-formdev:<username>` | One database per signed-in user |
 | Standalone server (desktop, LAN, no PostgreSQL) | SQLite file via `FORMDEV_STORAGE=sqlite:/path/formdev.db` | Same API, WAL journal |
+| Simplest standalone (small, readable files) | Folder of JSON files via `FORMDEV_STORAGE=json:/path/folder` | Same API; one JSON file per table, written atomically after each commit; whole data set in memory; one process |
+
+**Attachments.** Picking a file keeps its bytes in IndexedDB (`attachments` store) and puts `{name, mime, size,
+ref: "att:<sha256>"}` in the record. Before pushing ops, sync uploads every referenced file the server has not
+received (`PUT /attachments/{sha256}`); if an upload fails the ops wait, so the server never sees a record whose
+file is missing (it would refuse it with `attachment_missing`). Files of records pulled from the server are read
+through the record (`GET /attachments/{sha256}?record_id=`).
 
 Offline operations: create, read, update, delete (soft), search (indexed fields, keyset pagination),
 save draft, submit. Every write validates with the same rules as the server

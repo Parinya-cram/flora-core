@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BACKEND_BASE } from "../../api/backendBase";
 import { createFormDevClient, type FormDevClient } from "../index";
+import { AttachmentContext, deviceAttachments, memoryAttachments } from "./attachments";
 import { IndexedDbAdapter } from "../data/IndexedDbAdapter";
 import { RestApiAdapter } from "../data/RestApiAdapter";
 import { FormDevError, type FieldDefinition, type FormDefinition, type FormSummary, type Issue, type JsonValue, type LocalRecord, type RecordData, type SchemaVersion } from "../core/types";
@@ -64,6 +65,9 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
   const [jobsVersion, setJobsVersion] = useState(0);
   const remote = useMemo(() => new RestApiAdapter({ baseUrl: BACKEND_BASE }), []);
   const [client, setClient] = useState<FormDevClient | null>(null);
+  // Files of the open record: on this device until sync uploads them, otherwise from the server via the record.
+  const openRecordId = useRef<string | undefined>(undefined);
+  const attachments = useMemo(() => (client ? deviceAttachments(client.local, client.remote, () => openRecordId.current) : memoryAttachments()), [client]);
   const [online, setOnline] = useState(true);
   const [counts, setCounts] = useState<QueueCounts | null>(null);
   const [forms, setForms] = useState<FormSummary[]>([]);
@@ -207,6 +211,9 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
     }
   };
 
+  const editingRecordId = editing?.record?.record_id;
+  useEffect(() => { openRecordId.current = editingRecordId; }, [editingRecordId]);
+
   /** The open record as a PDF file (loaded on demand: pdf-lib and the fonts stay out of the main bundle). */
   const savePdf = async () => {
     if (!editing) return;
@@ -311,10 +318,12 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
                 </> : null}
               </div>
             </div>
+            <AttachmentContext.Provider value={attachments}>
             {editing.view === "print"
               ? <div className="overflow-x-auto rounded-xl bg-slate-200 p-4 dark:bg-slate-800"><FormPrint definition={editing.definition} value={editing.data} recordId={editing.record?.record_id} roles={codes} isAdmin={isAdmin} lookups={lookups} /></div>
               : <FormRenderer definition={editing.definition} value={editing.data} issues={editing.issues} context={editing.view === "detail" ? "detail" : "form"} language={language}
                 roles={codes} isAdmin={isAdmin} lookups={lookups} onChange={data => setEditing(current => current && { ...current, data })} />}
+            </AttachmentContext.Provider>
           </div> : null}
 
           {isAdmin ? <DesignPanel remote={remote} onChanged={() => void client?.pull().then(refresh)} language={language} /> : null}

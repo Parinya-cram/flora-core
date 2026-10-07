@@ -23,6 +23,7 @@ CONFLICT_COLUMNS = ("conflict_id", "record_id", "op_id", "strategy", "resolution
 ASSET_COLUMNS = ("form_id", "path", "media_type", "sha256", "size", "content_b64", "created_at")
 STYLE_COLUMNS = ("style_id", "version", "definition", "updated_at")
 FONT_COLUMNS = ("font_id", "metadata", "updated_at")
+ATTACHMENT_COLUMNS = ("sha256", "media_type", "size", "content", "created_at", "created_by")
 LOOKUP_COLUMNS = ("lookup_id", "version", "metadata", "entries", "updated_at", "updated_by")
 POLICY_COLUMNS = ("form_id", "policy", "version", "updated_at", "updated_by")
 SOURCE_COLUMNS = ("source_id", "form_id", "config", "version", "updated_at", "updated_by")
@@ -463,6 +464,17 @@ class SqlDataAdapter(DataAdapter):
 
     def save_font(self, row: dict[str, Any]) -> None:
         self._execute(self._upsert_sql("formdev_font", FONT_COLUMNS, ("font_id",)), self._params(row, FONT_COLUMNS))
+
+    def attachment_exists(self, sha256: str) -> bool:
+        return self._one("SELECT 1 AS present FROM formdev_attachment WHERE sha256 = ?", (sha256,)) is not None
+
+    def get_attachment(self, sha256: str) -> dict[str, Any] | None:
+        return self._one(f"SELECT {_cols(ATTACHMENT_COLUMNS)} FROM formdev_attachment WHERE sha256 = ?", (sha256,))
+
+    def save_attachment(self, row: dict[str, Any]) -> None:
+        # Content-addressed: an existing row already holds the same bytes.
+        self._execute(f"INSERT INTO formdev_attachment ({_cols(ATTACHMENT_COLUMNS)}) VALUES ({', '.join('?' for _ in ATTACHMENT_COLUMNS)})"
+                      " ON CONFLICT (sha256) DO NOTHING", self._params(row, ATTACHMENT_COLUMNS))
 
     def get_lookup(self, lookup_id: str) -> dict[str, Any] | None:
         return self._one(f"SELECT {_cols(LOOKUP_COLUMNS)} FROM formdev_lookup WHERE lookup_id = ?", (lookup_id,))

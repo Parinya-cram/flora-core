@@ -1,5 +1,6 @@
 /** Screen inputs, one per value kind; inputRegistry.ts maps field types onto them. */
-import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useContext, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { AttachmentContext } from "./attachments";
 import { localIso } from "./renderUtils";
 import type { FieldDefinition, FileValue, JsonValue, SignatureValue } from "../core/types";
 
@@ -67,21 +68,65 @@ export function SwitchInput({ value, disabled, label, onChange }: InputProps) {
 }
 
 export function FileInput({ field, value, disabled, label, onChange }: InputProps) {
+  const attachments = useContext(AttachmentContext);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState("");
   const many = field.multiple === true;
   const files: FileValue[] = Array.isArray(value) ? (value as FileValue[]) : value ? [value as FileValue] : [];
   const accept = (field.accept ?? (field.type === "image" ? ["image/*"] : [])).join(",");
-  const pick = (list: FileList | null) => {
-    // The record keeps a reference; bytes are uploaded by the host (ref "pending:" until then).
-    const picked = [...(list ?? [])].map(file => ({ name: file.name, mime: file.type || "application/octet-stream", size: file.size, ref: `pending:${file.name}` }));
-    if (picked.length) onChange((many ? [...files, ...picked] : picked[0]) as JsonValue);
+  const pick = async (list: FileList | null) => {
+    const chosen = [...(list ?? [])];
+    if (!chosen.length) return;
+    setBusy(true);
+    setProblem("");
+    try {
+      // The bytes stay on this device (and are uploaded by sync); the record keeps {name, mime, size, ref}.
+      const picked = await Promise.all(chosen.map(file => attachments.save(file)));
+      onChange((many ? [...files, ...picked] : picked[0]) as JsonValue);
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const open = async (file: FileValue) => {
+    const blob = await attachments.open(file).catch(() => null);
+    if (!blob) { setProblem(`${file.name}: not available on this device yet`); return; }
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank", "noopener");
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
   return <div style={{ display: "grid", gap: "1mm" }}>
-    {!disabled ? <input aria-label={label} type="file" accept={accept || undefined} multiple={many} onChange={event => pick(event.target.files)} /> : null}
+    {!disabled ? <input aria-label={label} type="file" accept={accept || undefined} multiple={many} disabled={busy} onChange={event => { void pick(event.target.files); event.target.value = ""; }} /> : null}
     {files.map((file, index) => <div key={`${file.ref}-${index}`} style={{ display: "flex", gap: "2mm", alignItems: "center", fontSize: "9pt" }}>
-      <span>📎 {file.name} ({Math.ceil(file.size / 1024)} KB)</span>
+      {file.mime.startsWith("image/") ? <Thumbnail file={file} /> : <span aria-hidden>📎</span>}
+      <button type="button" onClick={() => void open(file)} style={{ background: "none", border: "none", padding: 0, color: "inherit", textDecoration: "underline", cursor: "pointer" }}>
+        {file.name}
+      </button>
+      <span style={{ color: "#64748b" }}>({Math.ceil(file.size / 1024)} KB)</span>
       {!disabled ? <button type="button" aria-label={`Remove ${file.name}`} onClick={() => onChange((many ? files.filter((_, i) => i !== index) : null) as JsonValue)}>×</button> : null}
     </div>)}
+    {busy ? <span style={{ fontSize: "8pt", color: "#64748b" }}>…</span> : null}
+    {problem ? <span role="alert" style={{ fontSize: "8pt", color: "#e11d48" }}>{problem}</span> : null}
   </div>;
+}
+
+/** A small preview of an image attachment (from this device, or from the server through its record). */
+function Thumbnail({ file }: { file: FileValue }) {
+  const attachments = useContext(AttachmentContext);
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    let created: string | null = null;
+    void attachments.open(file).then(blob => {
+      if (!live || !blob) return;
+      created = URL.createObjectURL(blob);
+      setUrl(created);
+    }).catch(() => undefined);
+    return () => { live = false; if (created) URL.revokeObjectURL(created); };
+  }, [attachments, file]);
+  return url ? <img src={url} alt="" style={{ width: "12mm", height: "12mm", objectFit: "cover", borderRadius: "1mm", border: "0.3mm solid #cbd5e1" }} />
+    : <span aria-hidden>🖼</span>;
 }
 
 export function SignatureInput({ field, value, disabled, label, onChange }: InputProps) {

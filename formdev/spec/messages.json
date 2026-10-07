@@ -1,6 +1,10 @@
 {
   "description": "Validator messages per issue code (Phase 1.10). en is a generic line; the validators' own English messages stay more specific. Generated into services/flora-api/app/formdev/messages.py and frontend/src/formdev/core/messages.ts by formdev/scripts/sync_registry_seed.py.",
   "messages": {
+    "attachment_missing": {
+      "en": "The attached file has not been uploaded",
+      "th": "ยังไม่ได้อัปโหลดไฟล์แนบ"
+    },
     "calculated_formula_conflict": {
       "en": "Use either formula or calculator",
       "th": "ใช้ได้อย่างใดอย่างหนึ่ง: สูตร (formula) หรือตัวคำนวณ (calculator)"

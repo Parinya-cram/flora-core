@@ -147,7 +147,7 @@ class Messages(unittest.TestCase):
 
         app = FORMDEV_ROOT.parent / "services/flora-api/app/formdev"
         emitted: set[str] = set()
-        for name in ("definition.py", "styles.py"):
+        for name in ("definition.py", "styles.py", "attachments.py"):
             emitted |= set(re.findall(r'(?:Issue\([^,]+,\s*|ctx\.add\([^,]+,\s*)"([a-z_]+)"', (app / name).read_text(encoding="utf-8")))
         # Formula problems are reported with the code the formula engine raised.
         emitted |= set(re.findall(r'FormulaError\(\s*"([a-z_]+)"', (app / "logic/formula.py").read_text(encoding="utf-8")))

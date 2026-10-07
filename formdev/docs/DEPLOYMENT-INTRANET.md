@@ -5,7 +5,7 @@ FormDev needs no Internet access. Verified items:
 | Item | How it works offline from the Internet | Evidence |
 | --- | --- | --- |
 | API URL | The client calls `BACKEND_BASE` (same origin as the page, or the Electron-configured backend); no hard-coded hosts | `frontend/src/api/backendBase.ts`, `RestApiAdapter` |
-| Local database | Server: PostgreSQL on the LAN, or SQLite (`FORMDEV_STORAGE=sqlite:/data/formdev.db`). Client: IndexedDB | contract tests on both vendors; HTTP smoke test on both |
+| Local database | Server: PostgreSQL on the LAN, SQLite (`FORMDEV_STORAGE=sqlite:/data/formdev.db`), or a folder of JSON files (`FORMDEV_STORAGE=json:/data/formdev`). Client: IndexedDB | contract tests on all three; HTTP smoke test on PostgreSQL and SQLite |
 | Asset loading | Assets live in the database and are served by `/api/formdev/forms/{id}/assets/...` | formpack tests, `curl` of `header.svg` |
 | Font loading | Fonts are bundled through `@fontsource-variable/*`; registry entries only reference those packages | `check_intranet.py` on the production bundle: 10 bundled font files, 0 external references |
 | Authentication | Existing Canopy HMAC session, issued by the Canopy API on the LAN; no external identity provider | `auth_canopy.py` |
@@ -50,6 +50,8 @@ installs run both automatically. SQLite standalone files are upgraded on open (`
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
+| `FORMDEV_ATTACHMENT_DIR` | unset (database) | Store the files of file / image fields in this directory (sharded by SHA-256, JSON sidecar) instead of the `formdev_attachment` table |
+| `FORMDEV_ATTACHMENT_MAX_BYTES` | 26214400 (25 MB) | Largest accepted upload |
 | `FORMDEV_JOB_DIR` | `/var/lib/flora/formdev-jobs` | Job results (0700 directory, 0600 files). Mounted on the `flora_formdev_jobs` volume in compose so results survive rebuilds |
 | `FORMDEV_JOB_POOL_SIZE` | `2` | Dedicated PostgreSQL connections for job workers and statistics |
 | `FORMDEV_POOL_TIMEOUT_S` | `2` | Wait for a pooled connection before answering 503 `database_busy` |

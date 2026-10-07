@@ -10,6 +10,9 @@ export type FormDevClient = {
   records: RecordRepository;
   styles: StyleRepository;
   sync: SyncEngine;
+  /** The device store and the server, for services such as attachments that need both. */
+  local: LocalDataAdapter;
+  remote: RemoteDataAdapter;
   /** Refresh the offline catalog and server records; returns false when the server is unreachable. */
   pull: (formIds?: string[]) => Promise<boolean>;
   /** Load installed definitions, recover the queue and start background sync (works offline). */
@@ -36,7 +39,7 @@ export function createFormDevClient(local: LocalDataAdapter, remote: RemoteDataA
     await records.prepare((await forms.list()).map(form => form.form_id));
     await sync.start();
   };
-  return { forms, schemas, records, styles: new StyleRepository(local), sync, pull, start };
+  return { forms, schemas, records, styles: new StyleRepository(local), sync, pull, start, local, remote };
 }
 
 export * from "./core/types";

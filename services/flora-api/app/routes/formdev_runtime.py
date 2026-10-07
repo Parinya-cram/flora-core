@@ -1,6 +1,6 @@
 """Process-wide FormDev wiring shared by the Phase 3 and Phase 4 routes.
 
-- storage selection (FORMDEV_STORAGE: postgresql | sqlite:/path)
+- storage selection (FORMDEV_STORAGE: postgresql | sqlite:/path | json:/folder)
 - principals: the caller's current RBAC roles/permissions loaded from auth_user (not the role
   frozen in the session token); deactivated users and pending password changes get 401
 - the QueryRuntime singleton (cache, limits, statistics, cursor secret)
@@ -25,6 +25,7 @@ from ..database import job_pool, pool
 from ..formdev.logic import permission
 from ..formdev import FormDevServices, services_for
 from ..formdev.adapters.postgres import PostgreSQLAdapter
+from ..formdev.adapters.jsonfiles import JsonFileAdapter
 from ..formdev.adapters.sqlite import SQLiteAdapter
 from ..formdev.errors import FormDevError
 from ..formdev.query.access import Principal
@@ -59,10 +60,11 @@ def runtime() -> QueryRuntime:
 
 
 def sqlite_adapter() -> SQLiteAdapter:
+    """The single local store: a SQLite file (sqlite:/path) or a folder of JSON files (json:/path)."""
     global _sqlite
     with _lock:
         if _sqlite is None:
-            _sqlite = SQLiteAdapter(STORAGE[len("sqlite:"):])
+            _sqlite = JsonFileAdapter(STORAGE[len("json:"):]) if STORAGE.startswith("json:") else SQLiteAdapter(STORAGE[len("sqlite:"):])
         return _sqlite
 
 
@@ -96,7 +98,7 @@ def checkout(source: Any = None) -> Iterator[Connection]:
 
 @contextmanager
 def storage(connection: Connection) -> Iterator[FormDevServices]:
-    if STORAGE.startswith("sqlite:"):
+    if STORAGE.startswith(("sqlite:", "json:")):
         yield services_on(sqlite_adapter())
     else:
         yield services_on(PostgreSQLAdapter(connection))
@@ -181,7 +183,7 @@ def write_guard(services: FormDevServices, principal: Principal) -> tuple[Callab
 # Background work ---------------------------------------------------------------------------------
 @contextmanager
 def _job_services() -> Iterator[FormDevServices]:
-    if STORAGE.startswith("sqlite:"):
+    if STORAGE.startswith(("sqlite:", "json:")):
         yield services_on(sqlite_adapter())
         return
     with job_pool.connection(timeout=10) as connection:

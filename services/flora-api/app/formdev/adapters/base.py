@@ -167,6 +167,17 @@ class DataAdapter(ABC):
     @abstractmethod
     def save_font(self, row: dict[str, Any]) -> None: ...
 
+    # Attachments (data layer: file storage) --------------------------------
+    @abstractmethod
+    def attachment_exists(self, sha256: str) -> bool: ...
+
+    @abstractmethod
+    def get_attachment(self, sha256: str) -> dict[str, Any] | None:
+        """{sha256, media_type, size, created_at, created_by, content: bytes} or None."""
+
+    @abstractmethod
+    def save_attachment(self, row: dict[str, Any]) -> None: ...
+
     # Lookup tables (Phase 2.3) ----------------------------------------------
     @abstractmethod
     def get_lookup(self, lookup_id: str) -> dict[str, Any] | None: ...

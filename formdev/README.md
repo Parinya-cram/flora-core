@@ -11,7 +11,7 @@ Status (2026-10-06):
   repeat sections, permissions, versioning, logic graph ([spec/LOGIC.md](spec/LOGIC.md)).
 - **Form designer (drag & drop, no code) and PDF output: available** in Canopy → สร้างฟอร์ม → "ออกแบบฟอร์ม" (administrators);
   user guide in [docs/DESIGNER.md](docs/DESIGNER.md). Works on branch `floraXesm`; FormDev's PostgreSQL migrations
-  are numbered 0060-0063 so they follow upstream's 0038-0051.
+  are numbered 0060-0064 so they follow upstream's 0038-0051.
 - **Phase 3 (data engine + offline + standalone): complete.**
 - **Phase 4 (query engine): implemented, not yet accepted.** An adversarial review confirmed 47 defects
   (access control on Phase 3 endpoints, job lifecycle, reindex races, among others) that are fixed after
@@ -83,7 +83,7 @@ database: it calls client repositories, which write locally and sync through the
 ## Run the tests
 
 ```bash
-# Python: SQLite always; PostgreSQL when FORMDEV_PG_TEST_URL points at a *_test database with 0060, 0061, 0061b, 0062, 0063 applied
+# Python: SQLite always; PostgreSQL when FORMDEV_PG_TEST_URL points at a *_test database with 0060, 0061, 0061b, 0062, 0063, 0064 applied
 cd services/flora-api && FORMDEV_PG_TEST_URL=postgresql://flora_admin:...@127.0.0.1:6892/flora_formdev_test \
   python -m unittest discover -s tests/formdev -p 'test_*.py'
 

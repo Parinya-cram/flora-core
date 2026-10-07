@@ -2,6 +2,10 @@
 formdev/spec/messages.json; do not edit)."""
 
 MESSAGES: dict[str, dict[str, str]] = {
+    "attachment_missing": {
+        "en": "The attached file has not been uploaded",
+        "th": "ยังไม่ได้อัปโหลดไฟล์แนบ"
+    },
     "calculated_formula_conflict": {
         "en": "Use either formula or calculator",
         "th": "ใช้ได้อย่างใดอย่างหนึ่ง: สูตร (formula) หรือตัวคำนวณ (calculator)"
