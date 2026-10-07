@@ -43,14 +43,14 @@ Target (agreed 2026-10-06):
 | | PDF | Done (Designer) | `render/formPdf.ts`: A4 PDF from a form or a record (pdf-lib + bundled Noto Sans Thai, text shaped by fontkit); "ดาวน์โหลด PDF" in the record view and the designer |
 | Query engine | Filter, Index, Aggregate, Page | Implemented (Phase 4), not accepted | 47 confirmed defects and the performance report remain |
 | Data layer | SQLite, PostgreSQL, API | Done (Phase 3) | `SQLiteAdapter`, `PostgreSQLAdapter`, `RestApiAdapter` |
-| | MySQL | Planned: data-layer phase | `SqlDataAdapter` subclass with PyMySQL; same contract suite |
+| | MySQL | Done (data layer) | `MySQLAdapter` (PyMySQL, MySQL 8.0.19+ / 8.4): same contract, query-engine and job suites; HTTP smoke tests pass |
 | | File | Done (data layer) | (1) attachments: file / image bytes stored by SHA-256 in the database or a directory, offline on the device until sync uploads them; (2) `JsonFileAdapter`: a folder of JSON files (`FORMDEV_STORAGE=json:`), same contract as SQLite |
 
 ## Order
 
 1. ~~Phase 2: form logic engine (Rule), beginning with Category.~~ Done.
 2. ~~Designer phase: drag & drop designer with rules editor, PDF output.~~ Done.
-3. Data-layer phase: ~~attachment storage, file adapter~~ done; MySQL adapter waits for approval to download the MySQL test image.
+3. ~~Data-layer phase: MySQL adapter, attachment storage, file adapter.~~ Done.
 4. Phase 4 fixes (47 findings) and the large-data performance report.
 5. Phase 5: Text DSL, templates, AI generator.
 

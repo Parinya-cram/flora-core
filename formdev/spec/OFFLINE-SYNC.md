@@ -13,6 +13,7 @@ UI → RecordRepository → IndexedDB (records + sync_queue, one transaction)
 | --- | --- | --- |
 | Browser / Electron renderer | IndexedDB `flora-formdev:<username>` | One database per signed-in user |
 | Standalone server (desktop, LAN, no PostgreSQL) | SQLite file via `FORMDEV_STORAGE=sqlite:/path/formdev.db` | Same API, WAL journal |
+| Existing MySQL server (8.0.19+ / 8.4) | `FORMDEV_STORAGE=mysql://user:password@host:3306/database` (needs `PyMySQL[rsa]`) | Same API and query engine; schema created on first start (`mysql_schema.sql`, utf8mb4_bin) |
 | Simplest standalone (small, readable files) | Folder of JSON files via `FORMDEV_STORAGE=json:/path/folder` | Same API; one JSON file per table, written atomically after each commit; whole data set in memory; one process |
 
 **Attachments.** Picking a file keeps its bytes in IndexedDB (`attachments` store) and puts `{name, mime, size,

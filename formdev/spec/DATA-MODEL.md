@@ -19,7 +19,8 @@ Supporting tables: `formdev_record_revision` (every version of every record),
 [`0063-formdev-lookup.sql`](../../infrastructure/postgres/0063-formdev-lookup.sql), SQLite migration 4, both
 generated from `formdev/registry/lookups/*.json` by `sync_registry_seed.py`).
 
-The same schema exists for PostgreSQL ([`0060-formdev.sql`](../../infrastructure/postgres/0060-formdev.sql))
+The same schema exists for MySQL ([`mysql_schema.sql`](../../services/flora-api/app/formdev/adapters/mysql_schema.sql),
+utf8mb4_bin, LONGTEXT JSON) and for a folder of JSON files (`JsonFileAdapter`). The same schema exists for PostgreSQL ([`0060-formdev.sql`](../../infrastructure/postgres/0060-formdev.sql))
 and SQLite ([`sqlite_schema.sql`](../../services/flora-api/app/formdev/adapters/sqlite_schema.sql)).
 JSON columns are `jsonb` in PostgreSQL and `TEXT` in SQLite; nothing above the adapter depends on either.
 

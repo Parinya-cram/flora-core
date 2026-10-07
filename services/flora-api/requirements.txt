@@ -4,3 +4,5 @@ uvicorn[standard]==0.35.0
 reportlab==4.4.4
 ldap3==2.9.1
 anthropic
+# Only for FORMDEV_STORAGE=mysql://...; [rsa] adds cryptography for MySQL 8 caching_sha2_password logins.
+PyMySQL[rsa]==1.1.1

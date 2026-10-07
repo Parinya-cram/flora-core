@@ -14,6 +14,22 @@ from app.formdev.errors import FormDevError
 from helpers import USER, example, published_example, ready_services, submitted_data
 
 PG_URL = os.environ.get("FORMDEV_PG_TEST_URL", "")
+MYSQL_URL = os.environ.get("FORMDEV_MYSQL_TEST_URL", "")
+MYSQL_READY = bool(MYSQL_URL) and urlparse(MYSQL_URL).path.endswith("_test")
+
+
+def fresh_mysql():
+    """A MySQLAdapter on an emptied *_test database: every table dropped, then migrated from scratch."""
+    from app.formdev.adapters.mysql import MySQLAdapter, connect
+
+    connection = connect(MYSQL_URL)
+    with connection.cursor() as cursor:
+        cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
+        cursor.execute("SELECT table_name AS name FROM information_schema.tables WHERE table_schema = DATABASE()")
+        for row in cursor.fetchall():
+            cursor.execute(f"DROP TABLE `{row['name']}`")
+        cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
+    return MySQLAdapter(connection=connection)
 FORMDEV_TABLES = (
     "formdev_conflict", "formdev_sync_receipt", "formdev_record_index", "formdev_record_revision",
     "formdev_record", "formdev_asset", "formdev_job", "formdev_query", "formdev_query_stat", "formdev_query_audit",
@@ -454,6 +470,29 @@ class PostgreSQLContract(Contract, unittest.TestCase):
 
     def tearDown(self):
         self.connection.close()
+
+
+@unittest.skipUnless(MYSQL_READY, "set FORMDEV_MYSQL_TEST_URL to a *_test database")
+class MySQLContract(Contract, unittest.TestCase):
+    def make_adapter(self):
+        return fresh_mysql()
+
+    def tearDown(self):
+        self.adapter.close()
+
+    def test_published_versions_are_immutable_in_the_database(self):
+        published_example(self.fd)
+        with self.assertRaises(Exception) as caught:
+            self.adapter._execute("UPDATE formdev_schema_version SET checksum = ? WHERE form_id = ?", ("x", "patient_assessment"))
+        self.assertIn("immutable", str(caught.exception))
+
+    def test_migrations_are_recorded_and_not_repeated(self):
+        from app.formdev.adapters.mysql import MySQLAdapter
+
+        self.assertEqual(self.adapter.schema_version, 2)
+        again = MySQLAdapter(connection=self.adapter.connection)
+        self.assertEqual(again.schema_version, 2)
+        self.assertEqual(len(again.list_styles()), len(self.adapter.list_styles()))
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ FormDev needs no Internet access. Verified items:
 | Item | How it works offline from the Internet | Evidence |
 | --- | --- | --- |
 | API URL | The client calls `BACKEND_BASE` (same origin as the page, or the Electron-configured backend); no hard-coded hosts | `frontend/src/api/backendBase.ts`, `RestApiAdapter` |
-| Local database | Server: PostgreSQL on the LAN, SQLite (`FORMDEV_STORAGE=sqlite:/data/formdev.db`), or a folder of JSON files (`FORMDEV_STORAGE=json:/data/formdev`). Client: IndexedDB | contract tests on all three; HTTP smoke test on PostgreSQL and SQLite |
+| Local database | Server: PostgreSQL on the LAN, SQLite (`FORMDEV_STORAGE=sqlite:/data/formdev.db`), a MySQL database (`FORMDEV_STORAGE=mysql://user:pass@host/db`), or a folder of JSON files (`FORMDEV_STORAGE=json:/data/formdev`). Client: IndexedDB | contract, query and job suites on all four; HTTP smoke tests (13 + 29 checks) on PostgreSQL, SQLite and MySQL |
 | Asset loading | Assets live in the database and are served by `/api/formdev/forms/{id}/assets/...` | formpack tests, `curl` of `header.svg` |
 | Font loading | Fonts are bundled through `@fontsource-variable/*`; registry entries only reference those packages | `check_intranet.py` on the production bundle: 10 bundled font files, 0 external references |
 | Authentication | Existing Canopy HMAC session, issued by the Canopy API on the LAN; no external identity provider | `auth_canopy.py` |

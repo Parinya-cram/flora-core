@@ -1,6 +1,6 @@
 """Process-wide FormDev wiring shared by the Phase 3 and Phase 4 routes.
 
-- storage selection (FORMDEV_STORAGE: postgresql | sqlite:/path | json:/folder)
+- storage selection (FORMDEV_STORAGE: postgresql | sqlite:/path | json:/folder | mysql://user:pass@host/db)
 - principals: the caller's current RBAC roles/permissions loaded from auth_user (not the role
   frozen in the session token); deactivated users and pending password changes get 401
 - the QueryRuntime singleton (cache, limits, statistics, cursor secret)
@@ -59,12 +59,20 @@ def runtime() -> QueryRuntime:
         return _runtime
 
 
-def sqlite_adapter() -> SQLiteAdapter:
-    """The single local store: a SQLite file (sqlite:/path) or a folder of JSON files (json:/path)."""
+def sqlite_adapter() -> Any:
+    """The single shared store: a SQLite file (sqlite:/path), a folder of JSON files (json:/path) or a MySQL
+    database (mysql://...; one connection serialised by the adapter's lock)."""
     global _sqlite
     with _lock:
         if _sqlite is None:
-            _sqlite = JsonFileAdapter(STORAGE[len("json:"):]) if STORAGE.startswith("json:") else SQLiteAdapter(STORAGE[len("sqlite:"):])
+            if STORAGE.startswith("mysql://"):
+                from ..formdev.adapters.mysql import MySQLAdapter  # PyMySQL is only needed for MySQL deployments
+
+                _sqlite = MySQLAdapter(STORAGE)
+            elif STORAGE.startswith("json:"):
+                _sqlite = JsonFileAdapter(STORAGE[len("json:"):])
+            else:
+                _sqlite = SQLiteAdapter(STORAGE[len("sqlite:"):])
         return _sqlite
 
 
@@ -98,7 +106,7 @@ def checkout(source: Any = None) -> Iterator[Connection]:
 
 @contextmanager
 def storage(connection: Connection) -> Iterator[FormDevServices]:
-    if STORAGE.startswith(("sqlite:", "json:")):
+    if STORAGE.startswith(("sqlite:", "json:", "mysql://")):
         yield services_on(sqlite_adapter())
     else:
         yield services_on(PostgreSQLAdapter(connection))
@@ -183,7 +191,7 @@ def write_guard(services: FormDevServices, principal: Principal) -> tuple[Callab
 # Background work ---------------------------------------------------------------------------------
 @contextmanager
 def _job_services() -> Iterator[FormDevServices]:
-    if STORAGE.startswith(("sqlite:", "json:")):
+    if STORAGE.startswith(("sqlite:", "json:", "mysql://")):
         yield services_on(sqlite_adapter())
         return
     with job_pool.connection(timeout=10) as connection:

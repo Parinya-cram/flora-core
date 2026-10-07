@@ -14,7 +14,7 @@ from app.formdev.query.jobs import JobService, JobWorker, LeaseLost, ResultStore
 from app.formdev.query.policy import policy
 from helpers import USER
 from test_query_engine import ADMIN, VIEWER, QueryContract, ward_record
-from test_adapter_contract import FORMDEV_TABLES, PG_URL
+from test_adapter_contract import FORMDEV_TABLES, MYSQL_READY, PG_URL, fresh_mysql
 
 EXPORTER = Principal(7, "exporter", ("clinical_admin", "clinician"), ("formdev.query", "formdev.export"))
 
@@ -297,7 +297,17 @@ class PostgreSQLJobContract(JobContract, unittest.TestCase):
 
 
 # Only the job tests: do not re-run the inherited query-engine tests from this module.
-for _cls in (SQLiteJobContract, PostgreSQLJobContract):
+@unittest.skipUnless(MYSQL_READY, "set FORMDEV_MYSQL_TEST_URL to a *_test database")
+class MySQLJobContract(JobContract, unittest.TestCase):
+    def make_adapter(self):
+        return fresh_mysql()
+
+    def tearDown(self):
+        super().tearDown()
+        self.adapter.close()
+
+
+for _cls in (SQLiteJobContract, PostgreSQLJobContract, MySQLJobContract):
     for _name in [name for name in dir(QueryContract) if name.startswith("test_")]:
         if _name not in JobContract.__dict__:
             setattr(_cls, _name, None)

@@ -84,6 +84,7 @@ database: it calls client repositories, which write locally and sync through the
 
 ```bash
 # Python: SQLite always; PostgreSQL when FORMDEV_PG_TEST_URL points at a *_test database with 0060, 0061, 0061b, 0062, 0063, 0064 applied
+# MySQL when FORMDEV_MYSQL_TEST_URL=mysql://user:pass@host:3306/<name>_test (each test recreates the schema; needs PyMySQL[rsa])
 cd services/flora-api && FORMDEV_PG_TEST_URL=postgresql://flora_admin:...@127.0.0.1:6892/flora_formdev_test \
   python -m unittest discover -s tests/formdev -p 'test_*.py'
 

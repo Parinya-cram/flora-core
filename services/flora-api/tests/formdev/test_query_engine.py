@@ -11,7 +11,7 @@ from app.formdev.query.engine import QueryEngine, QueryRuntime
 from app.formdev.query.plan import build_plan
 from app.formdev.query.policy import policy
 from helpers import USER, example, published_example, ready_services
-from test_adapter_contract import FORMDEV_TABLES, PG_URL
+from test_adapter_contract import FORMDEV_TABLES, MYSQL_READY, PG_URL, fresh_mysql
 
 ADMIN = Principal(1, "admin", ("system_admin",), ("formdev.query", "formdev.export", "formdev.diagnostics", "formdev.manage"))
 CLINICIAN = Principal(2, "nurse", ("clinician",), ("formdev.query",))
@@ -366,6 +366,20 @@ class PostgreSQLQueryContract(QueryContract, unittest.TestCase):
 
     def tearDown(self):
         self.connection.close()
+
+
+@unittest.skipUnless(MYSQL_READY, "set FORMDEV_MYSQL_TEST_URL to a *_test database")
+class MySQLQueryContract(QueryContract, unittest.TestCase):
+    def make_adapter(self):
+        return fresh_mysql()
+
+    def assert_connection_clean(self):
+        rows = self.adapter._rows(self.adapter._raw("SELECT @@SESSION.max_execution_time AS limit_ms, (SELECT COUNT(*) FROM information_schema.innodb_trx "
+                                                    "WHERE trx_mysql_thread_id = CONNECTION_ID()) AS open_tx"))
+        self.assertEqual((int(rows[0]["limit_ms"]), int(rows[0]["open_tx"])), (0, 0))
+
+    def tearDown(self):
+        self.adapter.close()
 
 
 if __name__ == "__main__":

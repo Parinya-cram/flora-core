@@ -7,7 +7,8 @@
 Against a disposable test API (no user database), pass the test session secret
 instead of a password and the script signs its own admin session:
 
-    FORMDEV_API=http://127.0.0.1:7999 FORMDEV_SESSION_SECRET=... python3 formdev/scripts/smoke_api.py
+    FORMDEV_API=http://127.0.0.1:7999 FORMDEV_SESSION_SECRET=... FORMDEV_SMOKE_USER_ID=<id of a test admin> \
+        python3 formdev/scripts/smoke_api.py
 
 Uses a throwaway form id (smoke_<random>) so it never touches real forms. Exits non-zero
 on the first failed check.
@@ -57,7 +58,8 @@ def check(label: str, condition: bool) -> None:
 def signed_session(secret: str) -> str:
     """Same format as app.routes.auth_canopy.create_token; for disposable test APIs only."""
     part = lambda raw: base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")  # noqa: E731
-    payload = {"sub": 0, "username": "formdev-smoke", "name": "FormDev smoke", "role": "admin", "exp": int(time.time() * 1000) + 600_000}
+    # Endpoints resolve the caller from auth_user, so sign as an existing active test user (FORMDEV_SMOKE_USER_ID).
+    payload = {"sub": int(os.environ.get("FORMDEV_SMOKE_USER_ID", "0")), "username": "formdev-smoke", "name": "FormDev smoke", "role": "admin", "exp": int(time.time() * 1000) + 600_000}
     encoded = part(json.dumps(payload, separators=(",", ":")).encode())
     return f"{encoded}.{part(hmac.new(secret.encode(), encoded.encode('ascii'), hashlib.sha256).digest())}"
 
