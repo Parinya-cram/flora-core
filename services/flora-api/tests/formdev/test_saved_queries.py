@@ -108,6 +108,13 @@ class SourceRollback(Base):
         self.assertEqual((stored["version"], stored["config"]["relations"]), (1, good))
         self.assertIsNotNone(self.ctx(ADMIN).engine().catalog("assessments"))
 
+    def test_relations_between_different_kinds_of_value_are_refused(self):
+        """sql-correctness:1 — an integer local field cannot join a text foreign field."""
+        with self.assertRaises(FormDevError) as caught:
+            self.put({"reg": {"source": "patient_registration", "local": "age", "foreign": "hn"}})
+        self.assertEqual(caught.exception.code, "invalid_relation")
+        self.assertIsNone(self.adapter.get_source("assessments"))
+
     def test_a_refused_new_source_is_not_kept(self):
         with self.assertRaises(FormDevError):
             self.put({"patient": {"source": "no_such_source", "local": "hn", "foreign": "hn"}})

@@ -43,7 +43,11 @@ Names: plain names are form field ids; `$name` (or a bare name that is not a fie
 column: `$record_id`, `$status`, `$schema_version`, `$version`, `$created_at`, `$updated_at`,
 `$ingested_at` (server receive time, ordered by the per-form ingest sequence), `$created_by`,
 `$updated_by`, `$subject_id`. `relation.field` reads a field of a declared many-to-one relation
-(select only).
+(select only). The local and foreign fields must hold the same kind of value (text, or number /
+checkbox); local values are converted to the foreign field's index column before matching. Per key
+the database returns the best candidate (submitted first, then most recently updated) and at most
+one more, which only marks the key ambiguous (`relation_ambiguous`). A `not` over a metadata column
+that can be empty (`$subject_id`) keeps the records where it is empty, like a `not` over a field.
 
 ## Filters
 
@@ -93,7 +97,8 @@ returns only the selected names. `data` is never returned wholesale.
 `group`: up to 3 keys — indexed text/number/checkbox fields, `$status`, `$schema_version`,
 `$created_by`, `$updated_by`, or `{field: "$created_at" | "$updated_at" | "$ingested_at", bucket: "day",
 tz_offset_minutes}`. `aggregate`: `count` (optionally of a field: non-null count), `sum`, `avg`, `min`,
-`max` over indexed numeric fields (`min`/`max` also datetimes). Aliases (`as`) are lower_snake_case
+`max` over indexed numeric fields (`min`/`max` also datetimes, returned as UTC ISO instants such as
+`2026-10-01T01:00:00.000Z`). Aliases (`as`) are lower_snake_case
 and unique; SQL uses generated aliases only. `select` may list only group keys and aliases; `sort`
 only those names; pagination is offset (or none, up to `max_groups`). Interactive aggregates covering
 more than `interactive_aggregate_max_rows` records (capped count probe) are refused with
@@ -123,6 +128,8 @@ process · record pulls (`GET /records`, used by offline clients) 600/min per us
 - Cache keys combine the query, the page position, the caller's roles and permissions, the source's
   catalog revision (published versions, policy and source versions) and the per-form change counters
   read inside the query's own transaction. Any write, publish or policy change invalidates them.
+  Entries are shared by callers with the same roles, so they keep the next page's position unsigned;
+  each caller receives a `next_cursor` signed for them. `explain=1` always runs the query.
 
 ## Background jobs
 

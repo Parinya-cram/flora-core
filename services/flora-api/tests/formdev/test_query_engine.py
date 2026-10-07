@@ -332,6 +332,68 @@ class QueryContract:
         self.assertEqual(rows[new["record_id"]]["fall_risk_level"], "low")
 
 
+    # Phase 4 review, group E ---------------------------------------------------------------------
+    def test_cached_pages_carry_a_cursor_for_each_caller(self):
+        """security:10 / spec:3 — callers with the same roles share the cache, not the signed cursor."""
+        query = {"select": ["hn"], "pagination": {"mode": "cursor", "limit": 5}}
+        first = self.run_query(VIEWER, **query)
+        second = self.run_query(OTHER_VIEWER, **query)
+        self.assertTrue(second["diagnostics"]["cache_hit"])
+        self.assertNotEqual(first["next_cursor"], second["next_cursor"])
+        page_two = self.run_query(OTHER_VIEWER, select=["hn"], pagination={"mode": "cursor", "limit": 5, "cursor": second["next_cursor"]})
+        self.assertEqual(len(page_two["rows"]), 5)
+        self.assertTrue(set(self.ids(page_two)).isdisjoint(self.ids(second)))
+        again = self.run_query(VIEWER, **query)
+        self.run_query(VIEWER, select=["hn"], pagination={"mode": "cursor", "limit": 5, "cursor": again["next_cursor"]})
+
+    def test_not_keeps_records_without_a_subject(self):
+        """sql-correctness:0 — NOT over $subject_id behaves like NOT over the subject field."""
+        self.fd.records.create("ward_check", {"ward": "W1"}, USER, record_id="no-subject-0001")
+        by_meta = self.run_query(select=["hn"], filter={"not": {"field": "$subject_id", "op": "eq", "value": "HN-0007"}}, pagination={"mode": "offset", "limit": 100})
+        by_field = self.run_query(select=["hn"], filter={"not": {"field": "hn", "op": "eq", "value": "HN-0007"}}, pagination={"mode": "offset", "limit": 100})
+        self.assertIn("no-subject-0001", self.ids(by_meta))
+        self.assertEqual(sorted(self.ids(by_meta)), sorted(self.ids(by_field)))
+        prefix = self.run_query(select=["hn"], filter={"not": {"field": "$subject_id", "op": "prefix", "value": "HN-00"}}, pagination={"mode": "offset", "limit": 100})
+        self.assertEqual(self.ids(prefix), ["no-subject-0001"])
+
+    def test_relation_keys_follow_the_foreign_column(self):
+        """sql-correctness:1 — an integer local key matches a text foreign key on every vendor (no 500)."""
+        self.fd.records.create("patient_registration", {"hn": "21", "name": "Twenty-one"}, USER)
+        self.adapter.save_source({"source_id": "by_age", "form_id": "ward_check", "version": 1, "updated_at": 0, "updated_by": USER,
+                                  "config": {"relations": {"reg": {"source": "patient_registration", "local": "age", "foreign": "hn"}}}})
+        result = self.run_query(ADMIN, source="by_age", select=["hn", "age", "reg.name"], filter={"field": "hn", "op": "in", "value": ["HN-0001", "HN-0002"]},
+                                sort=[{"field": "$record_id", "dir": "asc"}], pagination={"mode": "cursor", "limit": 5})
+        self.assertEqual([(row["age"], row["reg.name"]) for row in result["rows"]], [(21, "Twenty-one"), (22, None)])
+
+    def test_relation_candidates_are_ranked_in_the_database(self):
+        """spec:12 — a non-unique key returns at most two candidates, and the ranking still picks the best."""
+        from app.formdev.adapters.sql_query import relation_lookup
+
+        for n in range(6):
+            self.fd.records.create("patient_registration", {"hn": "HN-0003", "name": f"Duplicate {n}"}, USER)
+        with self.adapter.read_session(5000) as session:
+            rows = session.fetch(relation_lookup("patient_registration", "hn", "value_text", ["HN-0003", "HN-0001"]))
+        self.assertEqual(sorted((row["relation_key"], int(row["relation_rank"])) for row in rows),
+                         [("HN-0001", 1), ("HN-0001", 2), ("HN-0003", 1), ("HN-0003", 2)])
+        result = self.run_query(ADMIN, source="assessments", select=["hn", "patient.name"], filter={"field": "hn", "op": "in", "value": ["HN-0001", "HN-0003"]},
+                                sort=[{"field": "$record_id", "dir": "asc"}], pagination={"mode": "cursor", "limit": 5})
+        self.assertEqual(result["rows"][0]["patient.name"], "Final name", "submitted first")
+        self.assertEqual(result["relation_ambiguous"], {"patient": 2})
+
+    def test_datetime_min_and_max_are_instants(self):
+        """sql-correctness:2 — not epoch milliseconds."""
+        result = self.run_query(ADMIN, aggregate=[{"fn": "min", "field": "seen_at", "as": "first"}, {"fn": "max", "field": "seen_at", "as": "last"}])
+        self.assertEqual(result["rows"], [{"first": "2026-10-01T01:00:00.000Z", "last": "2026-10-09T01:00:00.000Z"}])
+
+    def test_explain_is_never_answered_from_the_cache(self):
+        """spec:14 — diagnostics need the plan, which a cached result does not have."""
+        query = {"select": ["hn"], "filter": {"field": "ward", "op": "eq", "value": "W1"}, "pagination": {"mode": "cursor", "limit": 5}}
+        self.engine(ADMIN).run({"query": {"source": "ward_check", **query}})
+        explained = self.engine(ADMIN).run({"query": {"source": "ward_check", **query}}, explain=True)
+        self.assertFalse(explained["diagnostics"]["cache_hit"])
+        self.assertIn("plan", explained["diagnostics"])
+
+
 class SQLiteQueryContract(QueryContract, unittest.TestCase):
     def make_adapter(self):
         return SQLiteAdapter(":memory:")

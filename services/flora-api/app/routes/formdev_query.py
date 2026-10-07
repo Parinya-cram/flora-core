@@ -24,7 +24,8 @@ from ..formdev.errors import FormDevError
 from ..formdev.query.access import MANAGE_PERMISSION, QUERY_PERMISSION, Principal
 from ..formdev.query.advisor import advise
 from ..formdev.query.catalog import SOURCE_ID, build_catalog, validate_policy, validate_source_config
-from ..formdev.query.engine import QueryEngine, QueryRuntime
+from ..formdev.field_types import INDEX_FAMILY
+from ..formdev.query.engine import QueryEngine, QueryRuntime, relation_column
 from ..formdev.query.jobs import JobService
 from . import formdev_runtime as rt
 from .auth_canopy import read_token
@@ -360,6 +361,9 @@ async def save_source(source_id: str, body: Any = Depends(json_body), ctx: Conte
             local = catalog.fields.get(relation["local"])
             if not foreign or not foreign.get("indexed") or not local:
                 raise FormDevError("invalid_relation", f"Relation '{name}' needs an existing local field and an indexed foreign field")
+            if local["type"] not in INDEX_FAMILY or relation_column(local["type"]) != relation_column(foreign["type"]):
+                raise FormDevError("invalid_relation", f"Relation '{name}' joins a {local['type']} field to a {foreign['type']} field; "
+                                   "the two must hold the same kind of value (text or number)")
     except FormDevError:
         # Any refusal puts the previous source back (or removes the new one): never leave a broken source.
         with adapter.transaction():

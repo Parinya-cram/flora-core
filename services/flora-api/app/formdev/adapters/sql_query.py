@@ -15,6 +15,9 @@ from ..query.plan import Leaf, Node, QueryPlan
 
 RECORD_COLUMNS = {"record_id", "status", "schema_version", "version", "created_at", "updated_at", "ingested_at",
                   "ingest_seq", "created_by", "updated_by", "subject_id"}
+# Columns that may be NULL: their conditions are made two-valued so that NOT keeps the NULL rows (plan.py: "not F"
+# is every record for which F is false).
+NULLABLE_COLUMNS = {"subject_id", "ingested_at", "ingest_seq"}
 VALUE_COLUMNS = {"value_text", "value_num"}
 COMPARE = {"eq": "=", "ne": "<>", "lt": "<", "lte": "<=", "gt": ">", "gte": ">="}
 DIRECTIONS = {"asc": "ASC", "desc": "DESC"}
@@ -101,6 +104,8 @@ class SqlQueryCompiler:
             return f"{column} IS NULL"
         if leaf.op == "is_not_null":
             return f"{column} IS NOT NULL"
+        if leaf.column in NULLABLE_COLUMNS:
+            return f"({column} IS NOT NULL AND {self._cond(column, leaf.op, leaf.values)})"
         return self._cond(column, leaf.op, leaf.values)
 
     def predicate(self, node: Leaf | Node | None, record: str = "k") -> str:
@@ -257,10 +262,15 @@ def compile_plan(plan: QueryPlan) -> CompiledQuery:
 
 
 def relation_lookup(form_id: str, field_id: str, column: str, keys: list[Any]) -> CompiledQuery:
-    """Candidate target records for a many-to-one relation (live rows only, via the live index)."""
+    """Candidate target records for a many-to-one relation (live rows only, via the live index): at most two
+    per key, ranked submitted first, then most recently updated, then record_id (relation_rank 1 is the match;
+    a second row means the key is ambiguous)."""
     column = _col(column, VALUE_COLUMNS)
     placeholders = ", ".join("?" for _ in keys)
-    sql = (f"SELECT x.{column} AS relation_key, r.record_id, r.status, r.updated_at, r.schema_version, r.data"
-           f" FROM formdev_record_index x JOIN formdev_record r ON r.record_id = x.record_id"
-           f" WHERE x.form_id = ? AND x.field_id = ? AND x.{column} IN ({placeholders}) AND x.status <> 'deleted'")
+    ranked = (f"SELECT x.{column} AS relation_key, r.record_id, r.status, r.updated_at, r.schema_version, r.data,"
+              f" ROW_NUMBER() OVER (PARTITION BY x.{column} ORDER BY CASE WHEN r.status = 'submitted' THEN 1 ELSE 0 END DESC,"
+              f" r.updated_at DESC, r.record_id DESC) AS relation_rank"
+              f" FROM formdev_record_index x JOIN formdev_record r ON r.record_id = x.record_id"
+              f" WHERE x.form_id = ? AND x.field_id = ? AND x.{column} IN ({placeholders}) AND x.status <> 'deleted'")
+    sql = f"SELECT * FROM ({ranked}) candidates WHERE relation_rank <= 2"
     return CompiledQuery(sql, (form_id, field_id, *keys))

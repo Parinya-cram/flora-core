@@ -133,6 +133,36 @@ def _output_value(value: Any, field_type: str | None) -> Any:
     return value
 
 
+def _epoch_iso(value: float) -> str:
+    """An aggregated datetime (epoch ms in the index) as an ISO-8601 instant in UTC."""
+    return datetime.fromtimestamp(value / 1000, tz=timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def relation_column(foreign_type: str) -> str:
+    """The index column a relation's foreign field is matched in (as index_entries writes it)."""
+    return "value_num" if INDEX_FAMILY.get(foreign_type) in ("num", "bool") else "value_text"
+
+
+def relation_key(value: Any, column: str) -> Any:
+    """A local value in the foreign column's domain, or None when it cannot match (lists, objects, non-numbers
+    for a numeric column). Used for binding and for finding the match again, so both sides agree."""
+    if value is None or value == "" or isinstance(value, (list, dict)):
+        return None
+    if column == "value_num":
+        if isinstance(value, bool):
+            return 1.0 if value else 0.0
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        return number if number == number and number not in (float("inf"), float("-inf")) else None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
 class QueryEngine:
     def __init__(self, runtime: QueryRuntime, services: Any, principal: Principal):
         self.runtime = runtime
@@ -232,9 +262,11 @@ class QueryEngine:
             with self._session(spec["timeout_ms"]) as session:
                 versions = session.data_versions(catalog.form_ids())
                 key = hashlib.sha256(_canonical([query_fp, position, self.principal.scope_key(), catalog.revision, versions]).encode()).hexdigest()
-                cached = None if refresh or not spec["cache_ttl_s"] else self.runtime.cache.get(key)
+                # Explain always runs the query: a cached result has no plan to show.
+                cached = None if refresh or explain or not spec["cache_ttl_s"] else self.runtime.cache.get(key)
                 if cached is not None:
                     result = json.loads(cached)
+                    result["next_cursor"] = self._sign(result.pop("_cursor", None), query_fp)
                     result["diagnostics"] = {"cache_hit": True}
                     return result
                 if test_sleep_ms:
@@ -256,14 +288,22 @@ class QueryEngine:
         encoded = json.dumps(result, ensure_ascii=False, default=str)
         if len(encoded.encode("utf-8")) > policy["max_result_bytes"]:
             raise FormDevError("result_too_large", "The result is too large to return interactively; select fewer fields, lower the limit or create an export job", 422)
+        # Cached entries are shared by callers with the same roles: they keep the cursor's position unsigned,
+        # and each caller gets a cursor signed for them.
+        cursor = result.pop("_cursor", None)
+        result["next_cursor"] = self._sign(cursor, query_fp)
         if spec["cache_ttl_s"]:
-            self.runtime.cache.put(key, encoded, spec["cache_ttl_s"], len(encoded), set(catalog.form_ids()))
+            shared = json.dumps({**result, "next_cursor": None, "_cursor": cursor}, ensure_ascii=False, default=str)
+            self.runtime.cache.put(key, shared, spec["cache_ttl_s"], len(shared), set(catalog.form_ids()))
         result["diagnostics"] = {"cache_hit": False}
         if plan_info is not None:
             result["diagnostics"].update({"storage": self.adapter.vendor, "sql": compiled.sql, "plan": plan_info})
         return result
 
     # Results -------------------------------------------------------------------------------
+    def _sign(self, values: list[Any] | None, query_fp: str) -> str | None:
+        return cursors.encode(self.runtime.cursor_secret, values, query_fp, self.principal.user_id, self.runtime.clock_ms()) if values else None
+
     def _loader(self, form_id: str) -> Callable[[int], dict[str, Any]]:
         return self.services.schemas.loader(form_id)
 
@@ -287,15 +327,17 @@ class QueryEngine:
                     item[ref["output"]] = _output_value(data.get(ref["field"]), ref["type"])
                 else:
                     relation = catalog.relations[ref["relation"]]
-                    match = relations.get(ref["relation"], {}).get(data.get(relation["local"]))
+                    column = relation_column(relation["target"].fields[relation["foreign"]]["type"])
+                    key = relation_key(data.get(relation["local"]), column)
+                    match = relations.get(ref["relation"], {}).get(key) if key is not None else None
                     item[ref["output"]] = match.get(ref["field"]) if match else None
             out.append(item)
-        next_cursor = None
+        cursor = None
         if has_more and plan.order is not None and plan.order.kind == "meta" and spec["pagination"]["mode"] == "cursor":
             last = page[-1]
-            values = [last["order_value"]] if plan.order.unique else [last["order_value"], last["record_id"]]
-            next_cursor = cursors.encode(self.runtime.cursor_secret, values, query_fp, self.principal.user_id, self.runtime.clock_ms())
-        result: dict[str, Any] = {"rows": out, "next_cursor": next_cursor, "has_more": has_more, "truncated": False}
+            cursor = [last["order_value"]] if plan.order.unique else [last["order_value"], last["record_id"]]
+        # "_cursor": the unsigned position; the caller (_run) signs it for the requesting user.
+        result: dict[str, Any] = {"rows": out, "next_cursor": None, "_cursor": cursor, "has_more": has_more, "truncated": False}
         if spec["pagination"]["mode"] == "offset":
             result["next_offset"] = plan.offset + plan.limit if has_more else None
         ambiguous = {name: info.pop("_ambiguous", 0) for name, info in relations.items() if "_ambiguous" in info}
@@ -310,23 +352,23 @@ class QueryEngine:
             relation = catalog.relations[name]
             target: SourceCatalog = relation["target"]
             foreign = target.fields[relation["foreign"]]
-            column = "value_num" if INDEX_FAMILY.get(foreign["type"]) == "num" else "value_text"
+            column = relation_column(foreign["type"])
             keys = list(dict.fromkeys(
-                key for key in (self._migrated(row, catalog.form_id, catalog.schema_version).get(relation["local"]) for row in rows)
-                if key is not None and key != ""))
+                key for key in (relation_key(self._migrated(row, catalog.form_id, catalog.schema_version).get(relation["local"]), column) for row in rows)
+                if key is not None))
             matches: dict[Any, dict[str, Any]] = {}
             ambiguous = 0
             if keys and foreign.get("indexed") and foreign.get("state") != "building":
+                # The database ranks candidates and returns at most two per key: the best, and one more to tell
+                # that the key is ambiguous. A non-unique key never loads every matching record.
                 candidates = session.fetch(relation_lookup(target.form_id, relation["foreign"], column, keys))
                 best: dict[Any, dict[str, Any]] = {}
                 counts: dict[Any, int] = {}
                 for candidate in candidates:
-                    key = candidate["relation_key"]
-                    key = int(key) if column == "value_num" and isinstance(key, float) and key.is_integer() else key
+                    key = relation_key(candidate["relation_key"], column)
                     counts[key] = counts.get(key, 0) + 1
-                    rank = (candidate["status"] == "submitted", int(candidate["updated_at"]), candidate["record_id"])
-                    if key not in best or rank > best[key]["_rank"]:
-                        best[key] = {**candidate, "_rank": rank}
+                    if int(candidate["relation_rank"]) == 1:
+                        best[key] = candidate
                 ambiguous = sum(1 for value in counts.values() if value > 1)
                 for key, candidate in best.items():
                     data = self._migrated(candidate, target.form_id, target.schema_version)
@@ -356,7 +398,9 @@ class QueryEngine:
                     value = int(value or 0)
                 elif value is not None:
                     value = float(value)
-                    if agg["fn"] in ("min", "max"):
+                    if agg["fn"] in ("min", "max") and agg["ref"].get("family") == "datetime":
+                        value = _epoch_iso(value)  # the index aggregates datetimes as epoch ms
+                    elif agg["fn"] in ("min", "max"):
                         value = _output_value(value, agg["ref"]["type"])
                 item[agg["as"]] = value
             out.append(item)
