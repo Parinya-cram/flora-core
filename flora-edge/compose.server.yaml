@@ -14,13 +14,13 @@ services:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
-  # Cloudflare tunnel for external/demo access. Runs only with --profile cloudflare
-  # and a token from your Cloudflare Zero Trust dashboard. Public hostname ->
-  # service mapping (e.g. canopy.<domain> -> https://edge:443) is set in that dashboard.
+  # Cloudflare quick tunnel (TryCloudflare) — FREE, no token/domain needed.
+  # Gives a random https://<random>.trycloudflare.com URL for demo. Points at the
+  # Leaf UI by default; change --url to canopy (6894) or root (7100) if needed.
+  # Read the public URL from this container's logs after it starts.
   cloudflared:
     image: cloudflare/cloudflared:latest
-    profiles: ["cloudflare"]
-    command: ["tunnel", "--no-autoupdate", "run", "--token", "${CLOUDFLARE_TUNNEL_TOKEN:-}"]
+    command: ["tunnel", "--no-autoupdate", "--url", "http://host.docker.internal:6890"]
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

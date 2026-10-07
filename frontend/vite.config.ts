@@ -7,6 +7,9 @@ export default defineConfig({
   base: "./",
   plugins: [react(), tailwindcss()],
   server: {
+    // Dev server sits behind nginx / Cloudflare tunnel, so accept any Host
+    // (leaf.flora.local, *.trycloudflare.com, etc.) instead of Vite's default allowlist.
+    allowedHosts: true,
     proxy: {
       '/api': process.env.VITE_API_PROXY_TARGET || 'http://localhost:6893',
       '/health': process.env.VITE_API_PROXY_TARGET || 'http://localhost:6893',
