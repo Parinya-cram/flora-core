@@ -1,6 +1,6 @@
-# Flora edge — reverse proxy (TLS 443, vhost -> upstream) + optional Cloudflare tunnel.
-# nginx proxies to the Leaf/Canopy/Root web services published on the VM host.
-# DNS: *.flora.local -> this VM's IP.
+# Flora edge — TLS per tier on its own port (reach by IP:port, no DNS needed):
+#   https://<vm-ip>:7443 -> Leaf   https://<vm-ip>:8443 -> Root   https://<vm-ip>:9443 -> Canopy
+# nginx terminates TLS (self-signed *.flora cert) and proxies to each tier's web upstream.
 name: flora-edge
 
 services:
@@ -8,28 +8,16 @@ services:
     build:
       context: .
     ports:
-      - "${EDGE_HTTPS_PORT:-443}:443"
-      - "${EDGE_HTTP_PORT:-80}:80"
+      - "${LEAF_HTTPS_PORT:-7443}:7443"
+      - "${ROOT_HTTPS_PORT:-8443}:8443"
+      - "${CANOPY_HTTPS_PORT:-9443}:9443"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
-  # LAN DNS so every device on the network resolves *.flora.local -> this VM
-  # without per-machine /etc/hosts. Point the router's DHCP DNS (or each client)
-  # at this VM's IP. If port 53 fails to bind, disable systemd-resolved stub on
-  # the VM (see docs). Forwards other queries to 1.1.1.1 / 8.8.8.8.
-  dns:
-    build:
-      context: ./dns
-    ports:
-      - "${FLORA_BIND_ADDR:-0.0.0.0}:53:53/udp"
-      - "${FLORA_BIND_ADDR:-0.0.0.0}:53:53/tcp"
-    restart: unless-stopped
-
   # Cloudflare quick tunnel (TryCloudflare) — FREE, no token/domain needed.
-  # Gives a random https://<random>.trycloudflare.com URL for demo. Points at the
-  # Leaf UI by default; change --url to canopy (6894) or root (7100) if needed.
-  # Read the public URL from this container's logs after it starts.
+  # Random https://<random>.trycloudflare.com for external demo. Points at Leaf by
+  # default; read the public URL from this container's logs after it starts.
   cloudflared:
     image: cloudflare/cloudflared:latest
     command: ["tunnel", "--no-autoupdate", "--url", "http://host.docker.internal:6890"]
