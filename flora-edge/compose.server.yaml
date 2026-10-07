@@ -1,0 +1,26 @@
+# Flora edge — reverse proxy (TLS 443, vhost -> upstream) + optional Cloudflare tunnel.
+# nginx proxies to the Leaf/Canopy/Root web services published on the VM host.
+# DNS: *.flora.local -> this VM's IP.
+name: flora-edge
+
+services:
+  edge:
+    build:
+      context: .
+    ports:
+      - "${EDGE_HTTPS_PORT:-443}:443"
+      - "${EDGE_HTTP_PORT:-80}:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # Cloudflare tunnel for external/demo access. Runs only with --profile cloudflare
+  # and a token from your Cloudflare Zero Trust dashboard. Public hostname ->
+  # service mapping (e.g. canopy.<domain> -> https://edge:443) is set in that dashboard.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ["cloudflare"]
+    command: ["tunnel", "--no-autoupdate", "run", "--token", "${CLOUDFLARE_TUNNEL_TOKEN:-}"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

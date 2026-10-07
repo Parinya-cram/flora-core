@@ -1,0 +1,117 @@
+# Flora Leaf (workstation) — own local DB, syncs up to Canopy when online.
+# VM deploy via Portainer. Set FLORA_BIND_ADDR=0.0.0.0.
+name: flora-leaf
+
+services:
+  leaf-db:
+    build:
+      context: ..
+      dockerfile: Dockerfile.postgres.dev
+    environment:
+      POSTGRES_DB: ${FLORA_POSTGRES_DB:-flora}
+      POSTGRES_USER: ${FLORA_POSTGRES_ADMIN_USER:-flora_admin}
+      POSTGRES_PASSWORD: ${FLORA_POSTGRES_ADMIN_PASSWORD:-admin}
+      FLORA_DB_APP_PASSWORD: ${FLORA_DB_APP_PASSWORD:-admin}
+      FLORA_DB_VIEW_PASSWORD: ${FLORA_DB_VIEW_PASSWORD:-admin}
+      FLORA_DB_SYNC_PASSWORD: ${FLORA_DB_SYNC_PASSWORD:-admin}
+    ports:
+      - "${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_LEAF_DB_PORT:-6892}:5432"
+    volumes:
+      - flora_leaf_pgdata_v1:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 300s
+    restart: unless-stopped
+
+  flora-liveagent:
+    build:
+      context: ../services/flora-liveagent
+    environment:
+      LIVEAGENT_PROFILE: ${LIVEAGENT_PROFILE:-stable-anes}
+      LIVEAGENT_SEED: ${LIVEAGENT_SEED:-17}
+      LIVEAGENT_MAX_WINDOW_MINUTES: ${LIVEAGENT_MAX_WINDOW_MINUTES:-240}
+    ports:
+      - "${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_LIVEAGENT_PORT:-6897}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  leaf-api:
+    build:
+      context: ../services/flora-api
+    environment:
+      FLORA_DATABASE_URL: postgresql://flora_app:${FLORA_DB_APP_PASSWORD:-admin}@leaf-db:5432/${FLORA_POSTGRES_DB:-flora}
+      FLORA_API_ENV: development
+      FLORA_API_MODE: leaf
+      FLORA_LEAF_WRITE_API: "true"
+      FLORA_BOOTSTRAP_ADMIN_ENABLED: "true"
+      FLORA_BOOTSTRAP_ADMIN_USERNAME: admin
+      FLORA_BOOTSTRAP_ADMIN_PASSWORD: admin
+      FLORA_BOOTSTRAP_ADMIN_NAME: Administrator
+      FLORA_DEVICE_INGEST_ENABLED: "true"
+      FLORA_LEAF_SERVICE_SECRET: ${FLORA_LEAF_SERVICE_SECRET:-admin}
+      # Canopy sync-api on the VM host (flora-canopy stack publishes 6896)
+      FLORA_CANOPY_SYNC_URL: ${FLORA_CANOPY_SYNC_URL:-http://172.22.1.150:6896}
+      FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-admin}
+      # Device data from the real Gateway (172.22.1.233)
+      VECTOR_READ_URL: ${VECTOR_READ_URL:-http://172.22.1.233:7410/data-api/leaf-or-01/api/observations}
+      HIS_GATEWAY_BASE_URL: ${HIS_GATEWAY_BASE_URL:-http://127.0.0.1:9}
+      FLORA_HIS_DEMO_MODE: ${FLORA_HIS_DEMO_MODE:-true}
+    ports:
+      - "${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_LEAF_API_PORT:-6893}:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      leaf-db:
+        condition: service_healthy
+      flora-liveagent:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  leaf-web:
+    build:
+      context: ..
+      dockerfile: Dockerfile.frontend.dev
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      VITE_FLORA_SURFACE: leaf
+      VITE_API_PROXY_TARGET: http://leaf-api:8000
+    ports:
+      - "${FLORA_LEAF_PORT:-6890}:5173"
+    depends_on:
+      leaf-api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  leaf-sync:
+    build:
+      context: ../services/flora-sync-worker
+    environment:
+      FLORA_LEAF_API_URL: http://leaf-api:8000
+      FLORA_CANOPY_SYNC_URL: ${FLORA_CANOPY_SYNC_URL:-http://172.22.1.150:6896}
+      FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-admin}
+      FLORA_LEAF_SERVICE_SECRET: ${FLORA_LEAF_SERVICE_SECRET:-admin}
+      FLORA_LEAF_ID: ${FLORA_LEAF_ID:-leaf-or-01}
+      FLORA_HOSPITAL_ID: ${FLORA_HOSPITAL_ID:-hospital-01}
+      FLORA_LEAF_NAME: ${FLORA_LEAF_NAME:-Operating Room 1}
+      FLORA_SYNC_INTERVAL_SECONDS: ${FLORA_SYNC_INTERVAL_SECONDS:-10}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      leaf-api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  flora_leaf_pgdata_v1:

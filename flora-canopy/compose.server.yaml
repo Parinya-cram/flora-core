@@ -1,18 +1,90 @@
-# Flora Haber for the shared server (Portainer GitOps).
-#
-# Minimal device-registry / gateway-licensing tier: haber + its registry.
-# Haber pulls the hospital-01 license bundle from the Flora Root we run on the
-# NAS (7100), verifies its Ed25519 signature, and licenses gateways that
-# check in. The gateway on 172.22.1.233 should point its "Canopy address" at
-# http://172.22.1.103:7204 (this Haber). Gateway key must equal
-# HABER_GATEWAY_TOKEN below.
-#
-# Omitted vs the full flora-canopy platform: canopy-db/canopy-api/sync-api/web
-# (we already run a Canopy viewer in the `flora` stack) and the TLS edge. Haber
-# stores its own state in sqlite, so it needs no external DB to license gateways.
-name: flora-haber
+# Flora Canopy (hospital central) — own DB, receives Leaf syncs, licenses gateways via Haber.
+# VM deploy via Portainer. Set FLORA_BIND_ADDR=0.0.0.0.
+name: flora-canopy
 
 services:
+  canopy-db:
+    build:
+      context: ..
+      dockerfile: Dockerfile.postgres.dev
+    environment:
+      POSTGRES_DB: ${FLORA_POSTGRES_DB:-flora}
+      POSTGRES_USER: ${FLORA_POSTGRES_ADMIN_USER:-flora_admin}
+      POSTGRES_PASSWORD: ${FLORA_POSTGRES_ADMIN_PASSWORD:-admin}
+      FLORA_DB_APP_PASSWORD: ${FLORA_DB_APP_PASSWORD:-admin}
+      FLORA_DB_VIEW_PASSWORD: ${FLORA_DB_VIEW_PASSWORD:-admin}
+      FLORA_DB_SYNC_PASSWORD: ${FLORA_DB_SYNC_PASSWORD:-admin}
+    ports:
+      - "${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_CANOPY_DB_PORT:-6892}:5432"
+    volumes:
+      - flora_canopy_pgdata_v1:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 300s
+    restart: unless-stopped
+
+  canopy-api:
+    build:
+      context: ../services/flora-api
+    environment:
+      FLORA_DATABASE_URL: postgresql://flora_view:${FLORA_DB_VIEW_PASSWORD:-admin}@canopy-db:5432/${FLORA_POSTGRES_DB:-flora}
+      FLORA_API_ENV: development
+      FLORA_API_MODE: canopy
+      FLORA_CANOPY_SESSION_SECRET: ${FLORA_CANOPY_SESSION_SECRET:-admin}
+      FLORA_BOOTSTRAP_ADMIN_ENABLED: "true"
+      FLORA_BOOTSTRAP_ADMIN_USERNAME: admin
+      FLORA_BOOTSTRAP_ADMIN_PASSWORD: admin
+      FLORA_BOOTSTRAP_ADMIN_NAME: Administrator
+    ports:
+      - "${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_CANOPY_API_PORT:-6895}:8000"
+    depends_on:
+      canopy-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  sync-api:
+    build:
+      context: ../services/flora-api
+    environment:
+      FLORA_DATABASE_URL: postgresql://flora_sync:${FLORA_DB_SYNC_PASSWORD:-admin}@canopy-db:5432/${FLORA_POSTGRES_DB:-flora}
+      FLORA_API_ENV: development
+      FLORA_API_MODE: sync
+      FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-admin}
+    ports:
+      - "${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_SYNC_API_PORT:-6896}:8000"
+    depends_on:
+      canopy-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  canopy-web:
+    build:
+      context: ..
+      dockerfile: Dockerfile.frontend.dev
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      VITE_FLORA_SURFACE: canopy
+      VITE_API_PROXY_TARGET: http://canopy-api:8000
+    ports:
+      - "${FLORA_CANOPY_PORT:-6894}:5173"
+    depends_on:
+      canopy-api:
+        condition: service_healthy
+    restart: unless-stopped
+
   haber-registry:
     image: registry:3
     environment:
@@ -28,19 +100,19 @@ services:
     build:
       context: ./haber
     environment:
-      # Flora Root on the NAS (http, no TLS edge in our setup).
-      FLORA_ROOT_URL: ${FLORA_ROOT_URL:-http://172.22.1.103:7100}
+      FLORA_ROOT_URL: ${FLORA_ROOT_URL:-http://172.22.1.150:7100}
       FLORA_TENANT_ID: ${FLORA_TENANT_ID:-hospital-01}
       FLORA_ROOT_TENANT_KEY: ${FLORA_ROOT_TENANT_KEY:-root-tenant-demo-key}
-      # Empty = trust the key Root advertises at /api/v1/keys (dev TOFU).
       FLORA_ROOT_PUBLIC_KEY: ${FLORA_ROOT_PUBLIC_KEY:-}
-      # The gateway's "Gateway key" must match this.
       HABER_GATEWAY_TOKEN: ${HABER_GATEWAY_TOKEN:-haber-gateway-demo-token}
       HABER_NODE_TOKEN: ${HABER_NODE_TOKEN:-haber-node-demo-token}
-      HABER_ADMIN_USERNAME: ${HABER_ADMIN_USERNAME:-admin}
-      HABER_ADMIN_PASSWORD: ${HABER_ADMIN_PASSWORD:-admin}
+      HABER_ADMIN_USERNAME: admin
+      HABER_ADMIN_PASSWORD: admin
+      CANOPY_DATABASE_URL: postgresql://flora_view:${FLORA_DB_VIEW_PASSWORD:-admin}@canopy-db:5432/${FLORA_POSTGRES_DB:-flora}
+      FLORA_CANOPY_SYNC_URL: http://sync-api:8000
+      FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-admin}
       HABER_REGISTRY_URL: http://haber-registry:5000
-      HABER_REGISTRY_PUBLIC: ${HABER_REGISTRY_PUBLIC:-172.22.1.103:7205}
+      HABER_REGISTRY_PUBLIC: ${HABER_REGISTRY_PUBLIC:-172.22.1.150:7205}
       HABER_ROOT_SYNC_SEC: ${HABER_ROOT_SYNC_SEC:-15}
     ports:
       - "${FLORA_BIND_ADDR:-127.0.0.1}:${HABER_PORT:-7204}:8000"
@@ -49,10 +121,13 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
+      canopy-db:
+        condition: service_healthy
       haber-registry:
         condition: service_started
     restart: unless-stopped
 
 volumes:
+  flora_canopy_pgdata_v1:
   haber_data:
   haber_registry_data:
