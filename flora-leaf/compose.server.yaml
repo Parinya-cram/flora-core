@@ -65,7 +65,9 @@ services:
       FLORA_HOSPITAL_ID: ${FLORA_HOSPITAL_ID:-hospital-01}
       FLORA_LEAF_NAME: ${FLORA_LEAF_NAME:-Operating Room 1}
       # Device data from the real Gateway (172.22.1.233)
-      VECTOR_READ_URL: ${VECTOR_READ_URL:-http://172.22.1.233:7410/data-api/leaf-or-01/api/observations}
+      # Gateway moved to a remote LAN — reached over Tailscale (stable IP, survives relocation/reboot).
+      # Was http://172.22.1.233:7410 (old same-LAN gateway). Tailscale: gateway=100.77.34.87, VM=100.112.41.12.
+      VECTOR_READ_URL: ${VECTOR_READ_URL:-http://100.77.34.87:7410/data-api/leaf-or-01/api/observations}
       HIS_GATEWAY_BASE_URL: ${HIS_GATEWAY_BASE_URL:-http://127.0.0.1:9}
       FLORA_HIS_DEMO_MODE: ${FLORA_HIS_DEMO_MODE:-true}
     ports:
