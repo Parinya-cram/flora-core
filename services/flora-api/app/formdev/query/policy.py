@@ -42,6 +42,10 @@ DEFAULT_POLICY: dict[str, Any] = {
         "per_minute": 60,
         "burst": 20
     },
+    "pull_rate": {
+        "per_minute": 600,
+        "burst": 100
+    },
     "concurrency": {
         "per_user": 2,
         "global": 4

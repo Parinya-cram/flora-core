@@ -48,6 +48,8 @@ class QueryRuntime:
     test_hooks: bool = False
     cache: QueryCache | None = None
     rate: RateLimiter | None = None
+    # GET /records: paged pulls by offline clients, separate from interactive queries (no concurrency slot).
+    pull_rate: RateLimiter | None = None
     concurrency: ConcurrencyLimiter | None = None
     stats: StatsCollector | None = None
 
@@ -57,6 +59,7 @@ class QueryRuntime:
             self.cursor_secret = (secret or uuid.uuid4().hex).encode("utf-8")
         self.cache = self.cache or QueryCache()
         self.rate = self.rate or RateLimiter(self.policy["rate"]["per_minute"], self.policy["rate"]["burst"])
+        self.pull_rate = self.pull_rate or RateLimiter(self.policy["pull_rate"]["per_minute"], self.policy["pull_rate"]["burst"])
         self.concurrency = self.concurrency or ConcurrencyLimiter(self.policy["concurrency"]["per_user"], self.policy["concurrency"]["global"])
         self.stats = self.stats or StatsCollector(self.clock_ms)
 

@@ -126,7 +126,8 @@ def resolve(name: Any, path: str, ctx: _Context, allow_relation: bool = False) -
     if "." in name:
         relation_name, field_id = name.split(".", 1)
         relation = catalog.relations.get(relation_name)
-        if relation is None or not relation["target"].can_query(ctx.principal):
+        # A relation joins on its local field: it is unknown to callers who may not read that field.
+        if relation is None or not relation["target"].can_query(ctx.principal) or not catalog.can_read(ctx.principal, relation["local"]):
             ctx.error(path, "invalid_relation", f"Unknown relation '{relation_name}'")
             return None
         if not allow_relation:

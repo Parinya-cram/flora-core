@@ -64,11 +64,14 @@ class SyncService:
         self.resolver = resolver or LastWriteWins()
 
     def apply(self, ops: list[Any], user: str, protected: Callable[[str], set[str]] | None = None,
-              locked: Callable[[str], set[str]] | None = None, allows: Callable[[str, str], bool] | None = None) -> list[dict[str, Any]]:
+              locked: Callable[[str], set[str]] | None = None, allows: Callable[..., bool] | None = None,
+              present: Callable[[dict[str, Any]], dict[str, Any]] | None = None) -> list[dict[str, Any]]:
         """protected(form_id) -> fields the writer may not read; they are removed from acknowledgements.
         locked(form_id) -> fields the writer may not change (defaults to protected): their stored values are kept
         on update and they are dropped on create. allows(form_id, action) gates create / edit / delete; a refused
-        operation is acknowledged as rejected with ``forbidden``."""
+        operation is acknowledged as rejected with ``forbidden``; it is called as allows(form_id, action, current)
+        with the stored record for edit / delete. present(record) -> the record as the caller may see it in an
+        acknowledgement (masked, or without data when the caller may not read it); it replaces masking by protected."""
         if not isinstance(ops, list) or len(ops) > MAX_BATCH:
             raise FormDevError("invalid_batch", f"Send between 1 and {MAX_BATCH} operations")
         self._protected, self._locked, self._allows = protected, locked, allows
@@ -76,6 +79,8 @@ class SyncService:
             acks = [self.apply_one(op, user) for op in ops]
         finally:
             self._protected = self._locked = self._allows = None
+        if present is not None:
+            return [{**ack, "record": present(ack["record"])} if ack.get("record") else ack for ack in acks]
         return [self._mask_ack(ack, protected) for ack in acks] if protected else acks
 
     _protected: Callable[[str], set[str]] | None = None
@@ -90,8 +95,8 @@ class SyncService:
             return self._locked(form_id)
         return self._hidden(form_id)
 
-    def _require(self, form_id: str, action: str) -> None:
-        if self._allows and not self._allows(form_id, action):
+    def _require(self, form_id: str, action: str, current: dict[str, Any] | None = None) -> None:
+        if self._allows and not self._allows(form_id, action, current):
             raise FormDevError("forbidden", f"You may not {action} records of this form", 403)
 
     @staticmethod
@@ -122,7 +127,6 @@ class SyncService:
     def _write(self, op: dict[str, Any], user: str, expected_version: int, edited_at: int) -> dict[str, Any]:
         common = {"updated_at": edited_at, "sync_id": op["op_id"]}
         current = self.records.get_raw(op["record_id"])
-        self._require(current["form_id"], "delete" if op["kind"] == "delete" else "edit")
         if op["kind"] == "delete":
             return self.records.delete(op["record_id"], expected_version, user, **common)
         status = "submitted" if op["kind"] == "submit" else op.get("status")
@@ -147,6 +151,8 @@ class SyncService:
             )
             return {"op_id": op["op_id"], "record_id": record["record_id"], "status": "applied", "record": _public(record)}
 
+        # Before any version comparison: a caller who may not change this record learns nothing about it.
+        self._require(current["form_id"], "delete" if op["kind"] == "delete" else "edit", current)
         base_version = int(op.get("base_version") or 0)
         if current["version"] == base_version:
             record = self._write(op, user, base_version, edited_at)

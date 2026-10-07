@@ -253,11 +253,46 @@ class SchemaRepository:
         previous = self._previous_published(form_id)
         with self.adapter.transaction():
             self.adapter.update_schema_version(form_id, schema_version, {"status": "published", "published_at": current, "published_by": user})
+            self._carry_access(form_id, row["definition"], user, current)
             form = self.forms.get(form_id)
             form.update({"published_version": schema_version, "updated_at": current, "updated_by": user})
             self.adapter.save_form(form)
         self._published(form_id, previous, user)
         return self.get_version(form_id, schema_version)
+
+    def _carry_access(self, form_id: str, definition: dict[str, Any], user: str, at: int) -> None:
+        """Keep field restrictions valid across a publish: a renamed field keeps its access list under the new key,
+        a removed field's entry is dropped (its values are retired). Without this a stale policy no longer
+        validates against the latest definition, and field protection would depend on error handling."""
+        ops = (definition.get("migration") or {}).get("ops") or []
+        renames = {op["from"]: op["to"] for op in ops if op.get("op") == "rename_field"}
+        keys = set(field_map(definition))
+
+        def carry(mapping: dict[str, Any]) -> dict[str, Any]:
+            return {renames.get(name, name): codes for name, codes in mapping.items()
+                    if name.startswith("$") or renames.get(name, name) in keys}
+
+        policy = self.adapter.get_form_policy(form_id)
+        if policy is not None and isinstance(policy.get("policy"), dict):
+            body = dict(policy["policy"])
+            fields = carry(body.get("fields") or {})
+            if fields != (body.get("fields") or {}):
+                body["fields"] = fields
+                self.adapter.save_form_policy({"form_id": form_id, "policy": body, "version": int(policy["version"]) + 1, "updated_at": at, "updated_by": user})
+        for source in self.adapter.list_sources():
+            if source.get("form_id") != form_id or not isinstance(source.get("config"), dict):
+                continue
+            config = dict(source["config"])
+            changed = dict(config)
+            if config.get("fields"):
+                changed["fields"] = carry(config["fields"])
+            if config.get("hidden"):
+                changed["hidden"] = [renames.get(name, name) for name in config["hidden"] if renames.get(name, name) in keys]
+            if config.get("relations"):
+                changed["relations"] = {name: {**relation, "local": renames.get(relation.get("local"), relation.get("local"))}
+                                        for name, relation in config["relations"].items()}
+            if changed != config:
+                self.adapter.save_source({**source, "config": changed, "version": int(source["version"]) + 1, "updated_at": at, "updated_by": user})
 
     def install_published(self, definition: dict[str, Any], user: str) -> str:
         """Install a published version from a formpack. Re-installing the same version is a no-op."""

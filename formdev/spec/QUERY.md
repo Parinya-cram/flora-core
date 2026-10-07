@@ -104,7 +104,7 @@ Rows per page 500 · offset 10 000 · select 40 fields · filter depth 4, 32 con
 conditions per `and`, 500 `in` values, 2 000 values in total · text values 1 000 characters ·
 timeout 5 s default, 15 s maximum · result 2 MB · cache TTL 30 s default, 300 s maximum ·
 request body 64 KB · rate 60 queries/min per user (burst 20) · 2 concurrent queries per user, 4 per
-process · jobs: 3 open per user, 20 in total, 1 000-row batches, 30 s per batch, 5 min per aggregate,
+process · record pulls (`GET /records`, used by offline clients) 600/min per user (burst 100), no query slot · jobs: 3 open per user, 20 in total, 1 000-row batches, 30 s per batch, 5 min per aggregate,
 30 min per job, 512 MB per result, results kept 24 h · export rows: 100 000, 1 000 000 for `formdev.manage`.
 
 ## Execution safeguards

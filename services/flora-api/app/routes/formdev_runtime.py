@@ -29,6 +29,7 @@ from ..formdev.adapters.jsonfiles import JsonFileAdapter
 from ..formdev.adapters.sqlite import SQLiteAdapter
 from ..formdev.errors import FormDevError
 from ..formdev.query.access import Principal
+from ..formdev.record_access import RecordAccess
 from ..formdev.query.catalog import build_catalog
 from ..formdev.query.engine import QueryRuntime
 from ..formdev.query.jobs import JobWorker, ResultStore, enqueue_reindex
@@ -150,40 +151,36 @@ def published_definition(services: FormDevServices, form_id: str) -> dict[str, A
         return None
 
 
-def hidden_fields(services: FormDevServices, principal: Principal):
-    """form_id -> fields this principal may not read: the form's field policy (Phase 4) plus the definition's
-    view permissions (Phase 2.8)."""
-    cache: dict[str, set[str]] = {}
-
-    def hidden(form_id: str) -> set[str]:
-        if form_id not in cache:
-            denied: set[str] = set()
-            if services.adapter.get_form_policy(form_id) is not None:
-                try:
-                    denied = set(build_catalog(services, form_id, with_relations=False).denied_fields(principal))
-                except FormDevError:
-                    denied = set()
-            definition = published_definition(services, form_id)
-            if definition is not None:
-                denied |= permission.denied(definition, "view", principal.codes, principal.is_admin, nested=True)
-            cache[form_id] = denied
-        return cache[form_id]
-
-    return hidden
+def record_access(services: FormDevServices, principal: Principal) -> RecordAccess:
+    return RecordAccess(services, principal)
 
 
-def write_guard(services: FormDevServices, principal: Principal) -> tuple[Callable[[str], set[str]], Callable[[str, str], bool]]:
-    """(form_id -> fields this principal may not change, (form_id, action) -> allowed) for sync writes (Phase 2.8)."""
-    hidden = hidden_fields(services, principal)
+def hidden_fields(services: FormDevServices, principal: Principal, access: RecordAccess | None = None):
+    """form_id -> latest-version data keys this principal may not read: the form's field policy (Phase 4, failing
+    closed when it cannot be applied) plus the definition's view permissions (Phase 2.8)."""
+    view = access or RecordAccess(services, principal)
+    return lambda form_id: view.form(form_id).hidden_latest
+
+
+def write_guard(services: FormDevServices, principal: Principal, access: RecordAccess | None = None) -> tuple[Callable[[str], set[str]], Callable[..., bool]]:
+    """(form_id -> fields this principal may not change, (form_id, action, current record) -> allowed) for sync
+    writes. Creating needs only the definition's create permission (offline data entry, integrations); changing
+    or deleting an existing record also needs read access to its form, unless the caller created it."""
+    access = access or RecordAccess(services, principal)
+    hidden = hidden_fields(services, principal, access)
 
     def locked(form_id: str) -> set[str]:
         definition = published_definition(services, form_id)
         edit = permission.denied(definition, "edit", principal.codes, principal.is_admin) if definition is not None else set()
         return hidden(form_id) | edit
 
-    def allows(form_id: str, action: str) -> bool:
+    def allows(form_id: str, action: str, current: dict[str, Any] | None = None) -> bool:
         definition = published_definition(services, form_id)
-        return definition is None or permission.record_allows(definition, action, principal.codes, principal.is_admin)
+        if definition is not None and not permission.record_allows(definition, action, principal.codes, principal.is_admin):
+            return False
+        if current is not None and action in ("edit", "delete"):
+            return access.form(form_id).readable or current.get("created_by") == principal.username
+        return True
 
     return locked, allows
 

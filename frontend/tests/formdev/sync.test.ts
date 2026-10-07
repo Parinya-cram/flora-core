@@ -169,3 +169,17 @@ describe("manual sync", () => {
     expect((await local.listQueue()).map(item => item.state)).toEqual(["success"]);
   });
 });
+
+describe("acknowledgements without data", () => {
+  it("a writer who may not read the form keeps its own copy and settles the versions", async () => {
+    const { client, local, server } = await device();
+    const push = server.pushOps.bind(server);
+    server.pushOps = async ops => (await push(ops)).map(ack => (ack.record ? { ...ack, record: { record_id: ack.record.record_id, form_id: ack.record.form_id,
+      schema_version: ack.record.schema_version, status: ack.record.status, version: ack.record.version, updated_at: ack.record.updated_at } as never } : ack));
+    const record = await client.records.create("patient_assessment", submittedData(), "submitted");
+    expect((await client.sync.runOnce({ force: true })).applied).toBe(1);
+    const stored = await local.getLocalRecord(record.record_id);
+    expect(stored?.data).toEqual(record.data);
+    expect([stored?.sync_state, stored?.server_version]).toEqual(["synced", 1]);
+  });
+});

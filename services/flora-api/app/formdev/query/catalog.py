@@ -90,10 +90,11 @@ class SourceCatalog:
             "fields": {fid: {key: info.get(key) for key in ("type", "label", "unit", "indexed", "state", "options")}
                        for fid, info in self.fields.items() if self.can_read(principal, fid)},
             "metadata": sorted(name for name in METADATA if self.can_read(principal, name)),
+            # A relation joins on its local field: hidden when the caller may not read that field.
             "relations": {name: {"local": rel["local"], "foreign": rel["foreign"], "source_id": rel["target"].source_id,
                                  "fields": {fid: {"type": info["type"], "label": info.get("label")} for fid, info in rel["target"].fields.items()
                                             if rel["target"].can_read(principal, fid)}}
-                          for name, rel in self.relations.items() if rel["target"].can_query(principal)},
+                          for name, rel in self.relations.items() if rel["target"].can_query(principal) and self.can_read(principal, rel["local"])},
             "can_export": self.can_export(principal),
         }
 
@@ -178,6 +179,14 @@ def build_catalog(services: Any, source_id: str, with_relations: bool = True) ->
         revision={"published": int(latest["schema_version"]), "policy": policy_row["version"] if policy_row else 0,
                   "source": named["version"] if named else 0},
     )
+    # $subject_id is the subject field's value: it is as restricted as that field (policy, source config and the
+    # definition's view permission), not only by its own metadata entry.
+    subject = (definition.get("extensions") or {}).get("flora.subject_field")
+    if isinstance(subject, str):
+        catalog.metadata_access["$subject_id"] = catalog.metadata_access["$subject_id"] + _lists(policy["fields"].get(subject), config["fields"].get(subject)) \
+            + grants["fields"].get(subject, {}).get("view", [])
+        if subject in config["hidden"]:
+            catalog.metadata_access["$subject_id"] = catalog.metadata_access["$subject_id"] + [[]]
     if with_relations:
         for name, relation in config["relations"].items():
             try:

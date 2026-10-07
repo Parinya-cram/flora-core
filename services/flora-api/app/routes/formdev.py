@@ -21,11 +21,12 @@ from ..formdev import FormDevServices
 from ..formdev.attachments import INLINE_TYPES, MAX_BYTES as MAX_ATTACHMENT_BYTES, refs as attachment_refs
 from ..formdev.definition import Issue, describe_issues, parse_json_strict
 from ..formdev.errors import FormDevError
+from ..formdev.adapters.sql_query import QueryFailed, QueryTimeout
 from ..formdev.formpack import export_formpack, install_formpack, media_type
+from ..formdev.record_access import FormView
 from .auth_canopy import read_token
 from .fleet_control import require_admin
-from ..formdev.logic.permission import form_allows, mask
-from .formdev_runtime import STORAGE, checkout, hidden_fields, principal_for, published_definition, runtime, storage, write_guard
+from .formdev_runtime import STORAGE, checkout, hidden_fields, principal_for, record_access, runtime, storage, write_guard
 
 router = APIRouter(prefix="/api/formdev", tags=["formdev"])
 log = logging.getLogger("flora.formdev")
@@ -39,10 +40,6 @@ def formdev(request: Request) -> Iterator[FormDevServices]:
         request.state.formdev_connection = connection
         with storage(connection) as services:
             yield services
-
-
-def _mask(data: Any, hidden: set[str]) -> Any:
-    return mask(data, hidden)
 
 
 def username(user: dict[str, Any]) -> str:
@@ -143,8 +140,8 @@ async def put_attachment(sha256: str, request: Request, user: dict = Depends(rea
 @router.get("/attachments/{sha256}")
 def get_attachment(sha256: str, request: Request, record_id: str = Query(...), fd: FormDevServices = Depends(formdev)) -> Response:
     """A file of a record the caller may read; only files the record references in fields the caller may view."""
-    record, hidden = _record_access(request, fd, record_id)
-    references = {sha: value for _, sha, value in attachment_refs(_mask(record["data"], hidden))}
+    record, view = _record_access(request, fd, record_id)
+    references = {sha: value for _, sha, value in attachment_refs(view.mask_data(record["data"], record["schema_version"]))}
     found = fd.attachments.get(sha256) if sha256 in references else None
     if found is None:
         raise FormDevError("attachment_not_found", "Attachment not found", 404)
@@ -264,65 +261,72 @@ def search_records(
     fd: FormDevServices = Depends(formdev),
 ) -> dict[str, Any]:
     principal = principal_for(request, request.state.formdev_connection)
-    if not principal.has("formdev.query"):
-        raise FormDevError("form_not_found", f"Form '{form_id}' not found", 404)
-    _require_view(fd, principal, form_id)
-    hidden = hidden_fields(fd, principal)(form_id)
+    view = _form_view(fd, principal, form_id, f"Form '{form_id}' not found", "form_not_found")
+    if status and "deleted" in status and not principal.is_admin:
+        raise FormDevError("deleted_requires_admin", "Only administrators can list deleted records", 403)
     filters = []
     for raw in filter or []:
         match = FILTER.match(raw)
         if not match:
             raise FormDevError("invalid_filter", f"Filter '{raw}' must look like field:op:value")
-        if match.group(1) in hidden:
+        if match.group(1) in view.hidden_latest:
             raise FormDevError("unauthorized_field", f"You may not filter on '{match.group(1)}'", 403)
         filters.append({"field": match.group(1), "op": match.group(2), "value": match.group(3)})
     rt = runtime()
-    rt.rate.take(str(principal.user_id))
-    with rt.concurrency.slot(str(principal.user_id)):
-        if STORAGE.startswith("sqlite:"):
+    # Paged pulls by offline clients get their own, larger bucket and no interactive query slot (see QUERY.md).
+    rt.pull_rate.take(str(principal.user_id))
+    try:
+        if STORAGE.startswith("sqlite:") or STORAGE.startswith("json:"):
             result = fd.records.search(form_id, filters, status, cursor, limit)  # type: ignore[arg-type]
         else:
             # Same connection: the read-only session's statement timeout applies to the search.
             with fd.adapter.read_session(rt.policy["timeout_ms"]["default"]):
                 result = fd.records.search(form_id, filters, status, cursor, limit)  # type: ignore[arg-type]
-    if hidden:
-        result["rows"] = [{**row, "data": _mask(row["data"], hidden)} for row in result["rows"]]
+    except QueryTimeout:
+        raise FormDevError("query_timeout", "The search took too long; narrow the filters and try again", 504) from None
+    except QueryFailed:
+        raise FormDevError("query_failed", "The search could not be run", 500) from None
+    result["rows"] = [view.mask_row(row) for row in result["rows"] if view.can_see(row)]
     return result
 
 
-def _record_access(request: Request, fd: FormDevServices, record_id: str) -> tuple[dict[str, Any], set[str]]:
+def _form_view(fd: FormDevServices, principal: Any, form_id: str, missing: str, code: str) -> FormView:
+    """The caller's view of a form's records, or 404 when they lack FormDev query access and 403 when the form's
+    own rules (definition view permission, policy query list) refuse them."""
+    if not principal.has("formdev.query"):
+        raise FormDevError(code, missing, 404)
+    view = record_access(fd, principal).form(form_id)
+    if not view.readable:
+        raise FormDevError("forbidden", "You may not view records of this form", 403)
+    return view
+
+
+def _record_access(request: Request, fd: FormDevServices, record_id: str) -> tuple[dict[str, Any], FormView]:
     principal = principal_for(request, request.state.formdev_connection)
     record = fd.records.get(record_id)
-    if not principal.has("formdev.query"):
+    view = _form_view(fd, principal, record["form_id"], f"Record '{record_id}' not found", "record_not_found")
+    if not view.can_see(record):
         raise FormDevError("record_not_found", f"Record '{record_id}' not found", 404)
-    _require_view(fd, principal, record["form_id"])
-    return record, hidden_fields(fd, principal)(record["form_id"])
-
-
-def _require_view(fd: FormDevServices, principal: Any, form_id: str) -> None:
-    """The definition's form-level view permission (Phase 2.8)."""
-    definition = published_definition(fd, form_id)
-    if definition is not None and not form_allows(definition, "view", principal.codes, principal.is_admin):
-        raise FormDevError("forbidden", "You may not view records of this form", 403)
+    return record, view
 
 
 @router.get("/records/{record_id}")
 def get_record(request: Request, record_id: str, as_version: int | None = Query(default=None, ge=1), fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
-    _, hidden = _record_access(request, fd, record_id)
-    record = fd.records.get(record_id, as_version)
-    return {"record": {**record, "data": _mask(record["data"], hidden)}}
+    _, view = _record_access(request, fd, record_id)
+    return {"record": view.mask_row(fd.records.get(record_id, as_version))}
 
 
 @router.get("/records/{record_id}/revisions")
 def record_revisions(request: Request, record_id: str, fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
-    _, hidden = _record_access(request, fd, record_id)
-    return {"rows": [{**row, "data": _mask(row["data"], hidden)} for row in fd.records.revisions(record_id)]}
+    _, view = _record_access(request, fd, record_id)
+    return {"rows": [view.mask_row(row) for row in fd.records.revisions(record_id)]}
 
 
 @router.get("/records/{record_id}/conflicts")
 def record_conflicts(request: Request, record_id: str, fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
-    _, hidden = _record_access(request, fd, record_id)
-    return {"rows": [{**row, "local_data": _mask(row["local_data"], hidden), "server_data": _mask(row["server_data"], hidden)}
+    _, view = _record_access(request, fd, record_id)
+    # Conflict payloads carry no schema version: mask the names every version used.
+    return {"rows": [{**row, "local_data": view.mask_data(row["local_data"], None), "server_data": view.mask_data(row["server_data"], None)}
                      for row in fd.adapter.list_conflicts(record_id)]}
 
 
@@ -338,6 +342,16 @@ def upgrade_record(record_id: str, body: Any = Body(...), user: dict = Depends(r
 def sync(request: Request, body: Any = Body(...), user: dict = Depends(read_token), fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
     ops = body.get("ops") if isinstance(body, dict) else None
     principal = principal_for(request, request.state.formdev_connection)
-    locked, allows = write_guard(fd, principal)
-    acks = fd.sync.apply(ops, username(user), protected=hidden_fields(fd, principal), locked=locked, allows=allows)
+    access = record_access(fd, principal)
+    locked, allows = write_guard(fd, principal, access)
+
+    def present(record: dict[str, Any]) -> dict[str, Any]:
+        """Acks show the record as the caller may read it; callers who may not read the form get only its
+        identity and versions (enough for the client to settle its queue), never data."""
+        view = access.form(record["form_id"])
+        if view.can_see(record):
+            return view.mask_row(record)
+        return {key: record.get(key) for key in ("record_id", "form_id", "schema_version", "status", "version", "updated_at")}
+
+    acks = fd.sync.apply(ops, username(user), protected=hidden_fields(fd, principal, access), locked=locked, allows=allows, present=present)
     return {"acks": acks, "server_time": int(time.time() * 1000)}
