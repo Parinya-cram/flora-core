@@ -22,8 +22,9 @@ import canopyReportsIcon from "../assets/canopy-menu-reports.png";
 import canopyConfigIcon from "../assets/canopy-menu-config.png";
 import canopyInfrastructureIcon from "../assets/canopy-menu-infrastructure.png";
 import canopyMonitoringIcon from "../assets/canopy-menu-monitoring.png";
+import canopyFormDevIcon from "../assets/canopy-menu-formdev.png";
 
-export type AppView = "ward" | "case" | "form" | "diagnosis" | "staff" | "io" | "patient" | "report" | "master" | "account" | "dashboard" | "admissions" | "monitoring" | "fleet" | "infrastructure" | "topology" | "gateway-alerts" | "history";
+export type AppView = "ward" | "case" | "form" | "diagnosis" | "staff" | "io" | "patient" | "report" | "master" | "account" | "dashboard" | "admissions" | "monitoring" | "fleet" | "infrastructure" | "topology" | "gateway-alerts" | "formdev" | "history";
 
 type Props = {
   activeView: AppView;
@@ -38,7 +39,7 @@ type Props = {
   wardName?: string | null;
 };
 
-type NavIconName = "ward" | "chart" | "io" | "clinical" | "form" | "staff" | "patient" | "report" | "config" | "archive" | "start" | "fleet" | "dashboard" | "canopy-dashboard" | "canopy-monitoring" | "canopy-charts" | "canopy-reports" | "canopy-config" | "canopy-infrastructure";
+type NavIconName = "ward" | "chart" | "io" | "clinical" | "form" | "staff" | "patient" | "report" | "config" | "archive" | "start" | "fleet" | "dashboard" | "canopy-dashboard" | "canopy-monitoring" | "canopy-charts" | "canopy-reports" | "canopy-config" | "canopy-infrastructure" | "canopy-formdev";
 type NavItem = { view: AppView; label: string; icon: NavIconName };
 type CanopyCasePanelId = "chart" | "io" | "diagnosis" | "forms" | "staff" | "patient" | "report";
 
@@ -76,6 +77,7 @@ const menuIcons: Partial<Record<NavIconName, string>> = {
   "canopy-reports": canopyReportsIcon,
   "canopy-config": canopyConfigIcon,
   "canopy-infrastructure": canopyInfrastructureIcon,
+  "canopy-formdev": canopyFormDevIcon,
 };
 
 function NavIcon({ name }: { name: NavIconName }) {
@@ -200,6 +202,7 @@ function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, colla
         { view: "topology", label: "Topology", icon: "canopy-monitoring" },
         { view: "gateway-alerts", label: "Gateway Alerts", icon: "canopy-infrastructure" },
         { view: "infrastructure", label: "Infrastructure", icon: "canopy-infrastructure" },
+        ...(canConfigureCanopy ? [{ view: "formdev" as AppView, label: t("topbar.formdev"), icon: "canopy-formdev" as NavIconName }] : []),
       ]
     : isIdleLeaf
       ? [

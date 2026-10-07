@@ -1,0 +1,138 @@
+{
+ "label": "300k",
+ "live_records_before": 296985,
+ "updated": 2970,
+ "deleted": 594,
+ "elapsed_s": 7.63,
+ "update": {
+  "n": 2970,
+  "p50_ms": 1.4,
+  "p95_ms": 4.65,
+  "max_ms": 87.69,
+  "per_s": 483
+ },
+ "delete": {
+  "n": 594,
+  "p50_ms": 1.14,
+  "p95_ms": 2.58,
+  "max_ms": 19.92,
+  "per_s": 692
+ },
+ "wal_bytes": 217088824,
+ "autovacuum_disabled_for_measurement": true,
+ "tables_before": {
+  "formdev_record": {
+   "relpages": 25261,
+   "relallvisible": 24928,
+   "n_live_tup": 393271,
+   "n_dead_tup": 0,
+   "n_mod_since_analyze": 0,
+   "last_autovacuum": null,
+   "last_vacuum": "2026-10-06 02:34:32.533086+00",
+   "last_autoanalyze": null,
+   "heap_bytes": 206938112,
+   "index_bytes": 197713920,
+   "reloptions": [
+    "autovacuum_enabled=false"
+   ],
+   "all_visible_fraction": 0.9868
+  },
+  "formdev_record_index": {
+   "relpages": 35791,
+   "relallvisible": 35791,
+   "n_live_tup": 2356912,
+   "n_dead_tup": 0,
+   "n_mod_since_analyze": 0,
+   "last_autovacuum": null,
+   "last_vacuum": "2026-10-06 02:34:33.624143+00",
+   "last_autoanalyze": "2026-10-06 02:34:33.343546+00",
+   "heap_bytes": 293199872,
+   "index_bytes": 454844416,
+   "reloptions": [
+    "autovacuum_vacuum_scale_factor=0.01",
+    "autovacuum_vacuum_insert_scale_factor=0.01",
+    "autovacuum_analyze_scale_factor=0.02",
+    "autovacuum_enabled=false"
+   ],
+   "all_visible_fraction": 1.0
+  }
+ },
+ "tables_after": {
+  "formdev_record": {
+   "relpages": 25261,
+   "relallvisible": 24928,
+   "n_live_tup": 393271,
+   "n_dead_tup": 3564,
+   "n_mod_since_analyze": 3564,
+   "last_autovacuum": null,
+   "last_vacuum": "2026-10-06 02:34:32.533086+00",
+   "last_autoanalyze": null,
+   "heap_bytes": 208846848,
+   "index_bytes": 199090176,
+   "reloptions": [
+    "autovacuum_enabled=false"
+   ],
+   "all_visible_fraction": 0.9868
+  },
+  "formdev_record_index": {
+   "relpages": 35791,
+   "relallvisible": 35791,
+   "n_live_tup": 2357131,
+   "n_dead_tup": 24053,
+   "n_mod_since_analyze": 48325,
+   "last_autovacuum": null,
+   "last_vacuum": "2026-10-06 02:34:33.624143+00",
+   "last_autoanalyze": "2026-10-06 02:34:33.343546+00",
+   "heap_bytes": 296206336,
+   "index_bytes": 456900608,
+   "reloptions": [
+    "autovacuum_vacuum_scale_factor=0.01",
+    "autovacuum_vacuum_insert_scale_factor=0.01",
+    "autovacuum_analyze_scale_factor=0.02",
+    "autovacuum_enabled=false"
+   ],
+   "all_visible_fraction": 1.0
+  }
+ },
+ "tables_after_bench": {
+  "formdev_record": {
+   "relpages": 25261,
+   "relallvisible": 24928,
+   "n_live_tup": 393271,
+   "n_dead_tup": 3564,
+   "n_mod_since_analyze": 3564,
+   "last_autovacuum": null,
+   "last_vacuum": "2026-10-06 02:34:32.533086+00",
+   "last_autoanalyze": null,
+   "heap_bytes": 208846848,
+   "index_bytes": 199090176,
+   "reloptions": [
+    "autovacuum_enabled=false"
+   ],
+   "relallvisible_stale_fraction": 0.9868,
+   "vm_all_visible_pages": 21457,
+   "vm_all_visible_fraction": 0.8416
+  },
+  "formdev_record_index": {
+   "relpages": 35791,
+   "relallvisible": 35791,
+   "n_live_tup": 2357131,
+   "n_dead_tup": 24053,
+   "n_mod_since_analyze": 48325,
+   "last_autovacuum": null,
+   "last_vacuum": "2026-10-06 02:34:33.624143+00",
+   "last_autoanalyze": "2026-10-06 02:34:33.343546+00",
+   "heap_bytes": 296206336,
+   "index_bytes": 456900608,
+   "reloptions": [
+    "autovacuum_vacuum_scale_factor=0.01",
+    "autovacuum_vacuum_insert_scale_factor=0.01",
+    "autovacuum_analyze_scale_factor=0.02",
+    "autovacuum_enabled=false"
+   ],
+   "relallvisible_stale_fraction": 1.0,
+   "vm_all_visible_pages": 32088,
+   "vm_all_visible_fraction": 0.8874
+  }
+ }
+}

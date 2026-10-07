@@ -1,0 +1,85 @@
+{
+ "definitions": {
+  "1": "examples/patient-assessment/v1.form.json",
+  "2": "examples/patient-assessment/v2.form.json"
+ },
+ "cases": [
+  {
+   "name": "full v1 record",
+   "from": 1,
+   "to": 2,
+   "input": {
+    "hn": "HN1",
+    "bp": 130,
+    "weight": "61.5",
+    "fall_risk": "yes",
+    "smoker": true,
+    "remarks": "ok"
+   },
+   "expected": {
+    "hn": "HN1",
+    "bp_sys": 130,
+    "weight_kg": 61.5,
+    "fall_risk_level": "high",
+    "remarks": "ok",
+    "pain_score": null,
+    "_retired": {
+     "smoker": true
+    }
+   }
+  },
+  {
+   "name": "unconvertible weight is retired not lost",
+   "from": 1,
+   "to": 2,
+   "input": {
+    "hn": "HN2",
+    "weight": "sixty"
+   },
+   "expected": {
+    "hn": "HN2",
+    "weight_kg": null,
+    "pain_score": null,
+    "_retired": {
+     "weight_kg": "sixty"
+    }
+   }
+  },
+  {
+   "name": "unmapped value kept",
+   "from": 1,
+   "to": 2,
+   "input": {
+    "fall_risk": "maybe"
+   },
+   "expected": {
+    "fall_risk_level": "maybe",
+    "pain_score": null
+   }
+  },
+  {
+   "name": "same version is identity",
+   "from": 2,
+   "to": 2,
+   "input": {
+    "hn": "HN3",
+    "bp_sys": 110
+   },
+   "expected": {
+    "hn": "HN3",
+    "bp_sys": 110
+   }
+  },
+  {
+   "name": "existing pain score not overwritten",
+   "from": 1,
+   "to": 2,
+   "input": {
+    "pain_score": 3
+   },
+   "expected": {
+    "pain_score": 3
+   }
+  }
+ ]
+}

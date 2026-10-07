@@ -1,0 +1,128 @@
+{
+ "case": "isnull_age",
+ "what": "age is_null (25% missing)",
+ "label": "100k",
+ "statements": {
+  "main": {
+   "planning_ms": 0.13,
+   "execution_ms": 0.462,
+   "planning_buffers": 24,
+   "settings": {
+    "plan_cache_mode": "force_custom_plan",
+    "jit": "off",
+    "max_parallel_workers_per_gather": "0",
+    "work_mem": "32MB"
+   },
+   "nodes": [
+    {
+     "depth": 0,
+     "node": "Nested Loop",
+     "join": "Inner",
+     "est_rows": 51,
+     "act_rows": 51,
+     "loops": 1,
+     "shared_hit": 989,
+     "shared_read": 0,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 0.437
+    },
+    {
+     "depth": 1,
+     "node": "Limit",
+     "parent": "Outer",
+     "est_rows": 51,
+     "act_rows": 51,
+     "loops": 1,
+     "shared_hit": 785,
+     "shared_read": 0,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 0.359
+    },
+    {
+     "depth": 2,
+     "node": "Nested Loop",
+     "parent": "Outer",
+     "join": "Anti",
+     "est_rows": 23414,
+     "act_rows": 51,
+     "loops": 1,
+     "shared_hit": 785,
+     "shared_read": 0,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 0.356
+    },
+    {
+     "depth": 3,
+     "node": "Index Scan",
+     "parent": "Outer",
+     "relation": "formdev_record",
+     "index": "formdev_record_ingest",
+     "alias": "k",
+     "direction": "Backward",
+     "est_rows": 98973,
+     "act_rows": 203,
+     "loops": 1,
+     "removed_by_filter": 3,
+     "removed_by_recheck": 0,
+     "shared_hit": 24,
+     "shared_read": 0,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 0.029,
+     "index_cond": "(form_id = 'perf_assessment'::text)",
+     "filter": "(status <> 'deleted'::text)"
+    },
+    {
+     "depth": 3,
+     "node": "Index Scan",
+     "parent": "Inner",
+     "relation": "formdev_record_index",
+     "index": "formdev_record_index_pkey",
+     "alias": "i1",
+     "direction": "Forward",
+     "est_rows": 1,
+     "act_rows": 1,
+     "loops": 203,
+     "removed_by_filter": 0,
+     "removed_by_recheck": 0,
+     "shared_hit": 761,
+     "shared_read": 0,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 0.001,
+     "index_cond": "((record_id = k.record_id) AND (field_id = 'age'::text))",
+     "filter": "(form_id = 'perf_assessment'::text)"
+    },
+    {
+     "depth": 1,
+     "node": "Index Scan",
+     "parent": "Inner",
+     "relation": "formdev_record",
+     "index": "formdev_record_pkey",
+     "alias": "r",
+     "direction": "Forward",
+     "est_rows": 1,
+     "act_rows": 1,
+     "loops": 51,
+     "removed_by_recheck": 0,
+     "shared_hit": 204,
+     "shared_read": 0,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 0.001,
+     "index_cond": "(record_id = k.record_id)"
+    }
+   ],
+   "sql": "SELECT r.record_id, r.schema_version, r.data, r.ingested_at, page.ok AS order_value FROM (SELECT k.record_id AS rid, k.ingest_seq AS ok FROM formdev_record k WHERE k.form_id = ? AND k.status <> 'deleted' AND NOT EXISTS (SELECT 1 FROM formdev_record_index i1 WHERE i1.record_id = k.record_id AND i1.form_id = ? AND i1.field_id = ?) ORDER BY k.ingest_seq DESC LIMIT ?) page JOIN formdev_record r ON r.record_id = page.rid ORDER BY page.ok DESC",
+   "params": [
+    "perf_assessment",
+    "perf_assessment",
+    "age",
+    51
+   ]
+  }
+ }
+}

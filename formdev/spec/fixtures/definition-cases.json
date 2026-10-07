@@ -1,0 +1,5766 @@
+[
+ {
+  "name": "minimal valid",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "wrong format",
+  "definition": {
+   "format": "flora.form/9",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_format"
+  ]
+ },
+ {
+  "name": "bad form id",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "Demo-Form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_form_id"
+  ]
+ },
+ {
+  "name": "schema version zero",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 0,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_schema_version"
+  ]
+ },
+ {
+  "name": "empty title",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_title"
+  ]
+ },
+ {
+  "name": "bad paper",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A3",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_paper"
+  ]
+ },
+ {
+  "name": "unknown style",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.nope",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "unknown_style"
+  ]
+ },
+ {
+  "name": "unknown font",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "font_id": "comic"
+  },
+  "valid": false,
+  "codes": [
+   "unknown_font"
+  ]
+ },
+ {
+  "name": "unknown top-level property",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "colour": "red"
+  },
+  "valid": false,
+  "codes": [
+   "unknown_property"
+  ]
+ },
+ {
+  "name": "no sections",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": []
+  },
+  "valid": false,
+  "codes": [
+   "no_sections"
+  ]
+ },
+ {
+  "name": "duplicate section",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    },
+    {
+     "id": "main",
+     "title": "Again",
+     "fields": []
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "duplicate_section_id"
+  ]
+ },
+ {
+  "name": "duplicate field across sections",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    },
+    {
+     "id": "other",
+     "title": "Other",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Again"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "duplicate_field_id"
+  ]
+ },
+ {
+  "name": "reserved field id",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "_retired",
+       "type": "text",
+       "label": "x"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_field_id"
+  ]
+ },
+ {
+  "name": "unknown field type",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "age",
+       "type": "numer",
+       "label": "Age"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_field_type"
+  ]
+ },
+ {
+  "name": "select without options",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "sex",
+       "type": "select",
+       "label": "Sex"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "missing_options"
+  ]
+ },
+ {
+  "name": "duplicate option",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "sex",
+       "type": "select",
+       "label": "Sex",
+       "options": [
+        {
+         "value": "m",
+         "label": "M"
+        },
+        {
+         "value": "m",
+         "label": "M2"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "duplicate_option"
+  ]
+ },
+ {
+  "name": "min greater than max",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "age",
+       "type": "integer",
+       "label": "Age",
+       "min": 10,
+       "max": 1
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_range"
+  ]
+ },
+ {
+  "name": "textarea cannot be indexed",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "note",
+       "type": "textarea",
+       "label": "Note",
+       "indexed": true
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "index_not_supported"
+  ]
+ },
+ {
+  "name": "too many indexed fields",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "k0",
+       "type": "text",
+       "label": "K0",
+       "indexed": true
+      },
+      {
+       "id": "k1",
+       "type": "text",
+       "label": "K1",
+       "indexed": true
+      },
+      {
+       "id": "k2",
+       "type": "text",
+       "label": "K2",
+       "indexed": true
+      },
+      {
+       "id": "k3",
+       "type": "text",
+       "label": "K3",
+       "indexed": true
+      },
+      {
+       "id": "k4",
+       "type": "text",
+       "label": "K4",
+       "indexed": true
+      },
+      {
+       "id": "k5",
+       "type": "text",
+       "label": "K5",
+       "indexed": true
+      },
+      {
+       "id": "k6",
+       "type": "text",
+       "label": "K6",
+       "indexed": true
+      },
+      {
+       "id": "k7",
+       "type": "text",
+       "label": "K7",
+       "indexed": true
+      },
+      {
+       "id": "k8",
+       "type": "text",
+       "label": "K8",
+       "indexed": true
+      },
+      {
+       "id": "k9",
+       "type": "text",
+       "label": "K9",
+       "indexed": true
+      },
+      {
+       "id": "k10",
+       "type": "text",
+       "label": "K10",
+       "indexed": true
+      },
+      {
+       "id": "k11",
+       "type": "text",
+       "label": "K11",
+       "indexed": true
+      },
+      {
+       "id": "k12",
+       "type": "text",
+       "label": "K12",
+       "indexed": true
+      },
+      {
+       "id": "k13",
+       "type": "text",
+       "label": "K13",
+       "indexed": true
+      },
+      {
+       "id": "k14",
+       "type": "text",
+       "label": "K14",
+       "indexed": true
+      },
+      {
+       "id": "k15",
+       "type": "text",
+       "label": "K15",
+       "indexed": true
+      },
+      {
+       "id": "k16",
+       "type": "text",
+       "label": "K16",
+       "indexed": true
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "too_many_indexed"
+  ]
+ },
+ {
+  "name": "calculated needs formula",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "bmi",
+       "type": "calculated",
+       "label": "BMI",
+       "readonly": true
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "calculated_requires_formula"
+  ]
+ },
+ {
+  "name": "calculated cannot be required",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "bmi",
+       "type": "calculated",
+       "label": "BMI",
+       "readonly": true,
+       "required": true,
+       "formula": "1 + 1"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "calculated_not_required"
+  ]
+ },
+ {
+  "name": "unknown field property",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name",
+       "colour": "red"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "unknown_property"
+  ]
+ },
+ {
+  "name": "migration on version one",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "migration": {
+    "from": 0,
+    "ops": []
+   }
+  },
+  "valid": false,
+  "codes": [
+   "invalid_migration"
+  ]
+ },
+ {
+  "name": "migration from wrong version",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 3,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "migration": {
+    "from": 1,
+    "ops": []
+   }
+  },
+  "valid": false,
+  "codes": [
+   "invalid_migration"
+  ]
+ },
+ {
+  "name": "rename target missing",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 2,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "migration": {
+    "from": 1,
+    "ops": [
+     {
+      "op": "rename_field",
+      "from": "old",
+      "to": "missing"
+     }
+    ]
+   }
+  },
+  "valid": false,
+  "codes": [
+   "migration_unknown_field"
+  ]
+ },
+ {
+  "name": "removed field still defined",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 2,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "migration": {
+    "from": 1,
+    "ops": [
+     {
+      "op": "remove_field",
+      "field": "name"
+     }
+    ]
+   }
+  },
+  "valid": false,
+  "codes": [
+   "migration_unknown_field"
+  ]
+ },
+ {
+  "name": "unknown migration op",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 2,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "migration": {
+    "from": 1,
+    "ops": [
+     {
+      "op": "drop_table",
+      "field": "name"
+     }
+    ]
+   }
+  },
+  "valid": false,
+  "codes": [
+   "invalid_migration"
+  ]
+ },
+ {
+  "name": "valid migration",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 2,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "migration": {
+    "from": 1,
+    "ops": [
+     {
+      "op": "rename_field",
+      "from": "full_name",
+      "to": "name"
+     },
+     {
+      "op": "remove_field",
+      "field": "legacy"
+     }
+    ]
+   }
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "subject field on a text field",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "extensions": {
+    "flora.subject_field": "name"
+   }
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "subject field must exist",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "extensions": {
+    "flora.subject_field": "nope"
+   }
+  },
+  "valid": false,
+  "codes": [
+   "invalid_subject_field"
+  ]
+ },
+ {
+  "name": "subject field cannot be multiselect",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "tags",
+       "type": "multiselect",
+       "label": "Tags",
+       "options": [
+        {
+         "value": "a",
+         "label": "A"
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "extensions": {
+    "flora.subject_field": "tags"
+   }
+  },
+  "valid": false,
+  "codes": [
+   "invalid_subject_field"
+  ]
+ },
+ {
+  "name": "other extensions are preserved without checks",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "extensions": {
+    "designer.layout": {
+     "columns": 3
+    }
+   }
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "calculated fields can be indexed",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "bmi",
+       "type": "calculated",
+       "label": "BMI",
+       "readonly": true,
+       "formula": "1 + 1",
+       "indexed": true
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "trailing newline in form id",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form\n",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_form_id"
+  ]
+ },
+ {
+  "name": "p1: key differs from id",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "fld_001",
+       "key": "bp_sys",
+       "type": "number",
+       "label": "BP"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: invalid key",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "fld_001",
+       "key": "BP-Sys",
+       "type": "number",
+       "label": "BP"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_field_key"
+  ]
+ },
+ {
+  "name": "p1: duplicate key",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "fld_001",
+       "key": "bp",
+       "type": "number",
+       "label": "BP"
+      },
+      {
+       "id": "fld_002",
+       "key": "bp",
+       "type": "number",
+       "label": "BP 2"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "duplicate_field_key"
+  ]
+ },
+ {
+  "name": "p1: key may equal another field's id",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "fld_001",
+       "key": "other",
+       "type": "number",
+       "label": "A"
+      },
+      {
+       "id": "other",
+       "key": "b2",
+       "type": "text",
+       "label": "B"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: every new type",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "dec",
+       "type": "decimal",
+       "label": "Dec",
+       "decimals": 2,
+       "min": 0,
+       "max": 10
+      },
+      {
+       "id": "rad",
+       "type": "radio",
+       "label": "Radio",
+       "options": [
+        {
+         "value": "a",
+         "label": "A"
+        },
+        {
+         "value": "b",
+         "label": "B"
+        }
+       ]
+      },
+      {
+       "id": "sw",
+       "type": "switch",
+       "label": "Switch",
+       "indexed": true
+      },
+      {
+       "id": "doc",
+       "type": "file",
+       "label": "File",
+       "accept": [
+        "application/pdf"
+       ],
+       "max_size_kb": 100
+      },
+      {
+       "id": "pic",
+       "type": "image",
+       "label": "Image",
+       "multiple": true
+      },
+      {
+       "id": "sig",
+       "type": "signature",
+       "label": "Sign",
+       "max_size_kb": 64
+      },
+      {
+       "id": "grp",
+       "type": "group",
+       "label": "Group",
+       "columns": 6,
+       "fields": [
+        {
+         "id": "g1",
+         "type": "text",
+         "label": "G1"
+        }
+       ]
+      },
+      {
+       "id": "rep",
+       "type": "repeat",
+       "label": "Repeat",
+       "min_items": 1,
+       "max_items": 3,
+       "fields": [
+        {
+         "id": "r1",
+         "type": "text",
+         "label": "R1"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: property not supported by type",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "n",
+       "type": "number",
+       "label": "N",
+       "options": [
+        {
+         "value": "a",
+         "label": "A"
+        },
+        {
+         "value": "b",
+         "label": "B"
+        }
+       ]
+      },
+      {
+       "id": "t",
+       "type": "text",
+       "label": "T",
+       "min": 1
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "property_not_supported",
+   "property_not_supported"
+  ]
+ },
+ {
+  "name": "p1: radio needs options",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "r",
+       "type": "radio",
+       "label": "R"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "missing_options"
+  ]
+ },
+ {
+  "name": "p1: option with unknown property",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "r",
+       "type": "radio",
+       "label": "R",
+       "options": [
+        {
+         "value": "a",
+         "label": "A",
+         "color": "red"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "unknown_property"
+  ]
+ },
+ {
+  "name": "p1: decimals out of range",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "d",
+       "type": "decimal",
+       "label": "D",
+       "decimals": 11
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_decimals"
+  ]
+ },
+ {
+  "name": "p1: bad accept list",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "f",
+       "type": "file",
+       "label": "F",
+       "accept": [
+        "pdf"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_accept"
+  ]
+ },
+ {
+  "name": "p1: bad max size",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "f",
+       "type": "image",
+       "label": "F",
+       "max_size_kb": 0
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_max_size"
+  ]
+ },
+ {
+  "name": "p1: group needs children",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "g",
+       "type": "group",
+       "label": "G"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "container_requires_fields"
+  ]
+ },
+ {
+  "name": "p1: group has no key, index or validation",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "g",
+       "key": "g",
+       "type": "group",
+       "label": "G",
+       "indexed": true,
+       "fields": [
+        {
+         "id": "other",
+         "type": "text",
+         "label": "Other"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "property_not_supported",
+   "property_not_supported"
+  ]
+ },
+ {
+  "name": "p1: repeat min above max",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "r",
+       "type": "repeat",
+       "label": "R",
+       "min_items": 3,
+       "max_items": 1,
+       "fields": [
+        {
+         "id": "other",
+         "type": "text",
+         "label": "Other"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_range"
+  ]
+ },
+ {
+  "name": "p1: no index inside a repeat",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "r",
+       "type": "repeat",
+       "label": "R",
+       "fields": [
+        {
+         "id": "x",
+         "type": "text",
+         "label": "X",
+         "indexed": true
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "index_not_supported"
+  ]
+ },
+ {
+  "name": "p1: repeat item keys are their own scope",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "r",
+       "type": "repeat",
+       "label": "R",
+       "fields": [
+        {
+         "id": "x",
+         "key": "name",
+         "type": "text",
+         "label": "X"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: group children share the form scope",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "g",
+       "type": "group",
+       "label": "G",
+       "fields": [
+        {
+         "id": "x",
+         "key": "name",
+         "type": "text",
+         "label": "X"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "duplicate_field_key"
+  ]
+ },
+ {
+  "name": "p1: containers nest at most four levels",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "g1",
+       "type": "group",
+       "label": "1",
+       "fields": [
+        {
+         "id": "g2",
+         "type": "group",
+         "label": "2",
+         "fields": [
+          {
+           "id": "g3",
+           "type": "group",
+           "label": "3",
+           "fields": [
+            {
+             "id": "g4",
+             "type": "group",
+             "label": "4",
+             "fields": [
+              {
+               "id": "other",
+               "type": "text",
+               "label": "Other"
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "too_deep"
+  ]
+ },
+ {
+  "name": "p1: switch value is indexable",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "s",
+       "type": "switch",
+       "label": "S",
+       "indexed": true
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: display policy",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "uid",
+       "type": "text",
+       "label": "User",
+       "visible": false,
+       "display": {
+        "form": false,
+        "table": false,
+        "detail": false,
+        "query": true,
+        "export": true
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: display context unknown",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "u",
+       "type": "text",
+       "label": "U",
+       "display": {
+        "print": true
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "unknown_property"
+  ]
+ },
+ {
+  "name": "p1: display flag not boolean",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "u",
+       "type": "text",
+       "label": "U",
+       "display": {
+        "table": "yes"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_type"
+  ]
+ },
+ {
+  "name": "p1: display.form disagrees with visible",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "u",
+       "type": "text",
+       "label": "U",
+       "visible": false,
+       "display": {
+        "form": true
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "conflicting_visibility"
+  ]
+ },
+ {
+  "name": "p1: visible disagrees with hidden",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "u",
+       "type": "text",
+       "label": "U",
+       "visible": true,
+       "hidden": true
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "conflicting_visibility"
+  ]
+ },
+ {
+  "name": "p1: layout with responsive rules",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "a",
+       "type": "text",
+       "label": "A",
+       "layout": {
+        "col": 1,
+        "row": 2,
+        "span": 6,
+        "responsive": {
+         "mobile": {
+          "span": 12
+         },
+         "print": {
+          "span": 4,
+          "hidden": false
+         }
+        },
+        "page_break": "before"
+       }
+      }
+     ]
+    }
+   ],
+   "layout": {
+    "type": "grid",
+    "columns": 12,
+    "gap_mm": 2
+   }
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: span wider than the grid",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "a",
+       "type": "text",
+       "label": "A",
+       "layout": {
+        "span": 13
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_span"
+  ]
+ },
+ {
+  "name": "p1: placement past the last column",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "a",
+       "type": "text",
+       "label": "A",
+       "layout": {
+        "col": 10,
+        "span": 4
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "layout_out_of_bounds"
+  ]
+ },
+ {
+  "name": "p1: fields overlap",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "a",
+       "type": "text",
+       "label": "A",
+       "layout": {
+        "row": 1,
+        "col": 1,
+        "span": 6
+       }
+      },
+      {
+       "id": "b",
+       "type": "text",
+       "label": "B",
+       "layout": {
+        "row": 1,
+        "col": 5,
+        "span": 4
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "layout_overlap"
+  ]
+ },
+ {
+  "name": "p1: form grid columns out of range",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "layout": {
+    "type": "grid",
+    "columns": 30
+   }
+  },
+  "valid": false,
+  "codes": [
+   "invalid_columns"
+  ]
+ },
+ {
+  "name": "p1: section layout type",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ],
+     "layout": {
+      "type": "masonry"
+     }
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_layout"
+  ]
+ },
+ {
+  "name": "p1: responsive mode unknown",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "a",
+       "type": "text",
+       "label": "A",
+       "layout": {
+        "responsive": {
+         "watch": {
+          "span": 1
+         }
+        }
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "unknown_property"
+  ]
+ },
+ {
+  "name": "p1: page break value",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ],
+     "page_break": "always"
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_page_break"
+  ]
+ },
+ {
+  "name": "p1: group grid bounds its children",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "g",
+       "type": "group",
+       "label": "G",
+       "columns": 6,
+       "fields": [
+        {
+         "id": "x",
+         "type": "text",
+         "label": "X",
+         "layout": {
+          "span": 8
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_span"
+  ]
+ },
+ {
+  "name": "p1: nested sections",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ],
+     "sections": [
+      {
+       "id": "sub",
+       "title": "Sub",
+       "fields": [
+        {
+         "id": "other",
+         "type": "text",
+         "label": "Other"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: section of subsections only",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    },
+    {
+     "id": "outer",
+     "title": "Outer",
+     "sections": [
+      {
+       "id": "inner",
+       "title": "Inner",
+       "fields": [
+        {
+         "id": "other",
+         "type": "text",
+         "label": "Other"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: sections nest at most four levels",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ],
+     "sections": [
+      {
+       "id": "s2",
+       "title": "2",
+       "fields": [],
+       "sections": [
+        {
+         "id": "s3",
+         "title": "3",
+         "fields": [],
+         "sections": [
+          {
+           "id": "s4",
+           "title": "4",
+           "fields": [],
+           "sections": [
+            {
+             "id": "s5",
+             "title": "5",
+             "fields": [
+              {
+               "id": "other",
+               "type": "text",
+               "label": "Other"
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "too_deep"
+  ]
+ },
+ {
+  "name": "p1: duplicate id in a nested section",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ],
+     "sections": [
+      {
+       "id": "main",
+       "title": "Again",
+       "fields": []
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "duplicate_section_id"
+  ]
+ },
+ {
+  "name": "p1: A4 landscape with bands",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": {
+    "size": "A4",
+    "orientation": "landscape",
+    "margin_mm": {
+     "top": 20,
+     "left": 25
+    },
+    "header": {
+     "left": "{title}",
+     "right": "{date}",
+     "height_mm": 10
+    },
+    "footer": {
+     "center": "{page}/{pages}",
+     "first_page": false
+    }
+   },
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: orientation",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": {
+    "size": "A4",
+    "orientation": "sideways"
+   },
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_paper"
+  ]
+ },
+ {
+  "name": "p1: paper size",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": {
+    "size": "B5"
+   },
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_paper"
+  ]
+ },
+ {
+  "name": "p1: margin out of range",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": {
+    "size": "A4",
+    "margin_mm": {
+     "top": 80
+    }
+   },
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_margin"
+  ]
+ },
+ {
+  "name": "p1: unknown template token",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": {
+    "size": "A4",
+    "footer": {
+     "left": "{patient}"
+    }
+   },
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "unknown_template_token"
+  ]
+ },
+ {
+  "name": "p1: band height",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": {
+    "size": "A4",
+    "header": {
+     "height_mm": 50
+    }
+   },
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_band"
+  ]
+ },
+ {
+  "name": "p1: style object instead of style_id",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "style": {
+    "id": "style.a4.official",
+    "override": {
+     "fontSize": 14
+    }
+   }
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: style and style_id disagree",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "style": {
+    "id": "style.a4.compact"
+   }
+  },
+  "valid": false,
+  "codes": [
+   "style_mismatch"
+  ]
+ },
+ {
+  "name": "p1: style missing",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_style_id"
+  ]
+ },
+ {
+  "name": "p1: section style unknown",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ],
+     "style": {
+      "id": "section.fancy"
+     }
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "unknown_style"
+  ]
+ },
+ {
+  "name": "p1: override token unknown",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "style": {
+    "override": {
+     "fontFamily": "Arial"
+    }
+   }
+  },
+  "valid": false,
+  "codes": [
+   "unknown_style_token"
+  ]
+ },
+ {
+  "name": "p1: override token value",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "a",
+       "type": "text",
+       "label": "A",
+       "style": {
+        "override": {
+         "fontSize": 200,
+         "color": "red"
+        }
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_style_token",
+   "invalid_style_token"
+  ]
+ },
+ {
+  "name": "p1: override font must be registered",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "style": {
+    "override": {
+     "fontId": "comic-sans"
+    }
+   }
+  },
+  "valid": false,
+  "codes": [
+   "unknown_font"
+  ]
+ },
+ {
+  "name": "p1: component override",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "a",
+       "type": "number",
+       "label": "A",
+       "style": {
+        "id": "field.number.large",
+        "override": {
+         "label": {
+          "fontWeight": 700
+         }
+        }
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: official Thai font",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "font_id": "th-sarabun-new"
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: calculator reference",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "b",
+       "type": "calculated",
+       "label": "BMI",
+       "calculator": "bmi"
+      }
+     ]
+    }
+   ],
+   "calculators": [
+    {
+     "id": "bmi",
+     "formula": "ROUND(70 / ((175 / 100) ^ 2), 1)"
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: unknown calculator",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "b",
+       "type": "calculated",
+       "label": "BMI",
+       "calculator": "bmi"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "unknown_calculator"
+  ]
+ },
+ {
+  "name": "p1: formula and calculator",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "b",
+       "type": "calculated",
+       "label": "BMI",
+       "calculator": "bmi",
+       "formula": "1"
+      }
+     ]
+    }
+   ],
+   "calculators": [
+    {
+     "id": "bmi",
+     "formula": "ROUND(70 / ((175 / 100) ^ 2), 1)"
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "calculated_formula_conflict"
+  ]
+ },
+ {
+  "name": "p1: calculator ids",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "calculators": [
+    {
+     "id": "Bad",
+     "formula": "1"
+    },
+    {
+     "id": "ok",
+     "formula": " "
+    },
+    {
+     "id": "ok",
+     "formula": "2"
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "duplicate_calculator_id",
+   "invalid_calculator_id",
+   "invalid_formula"
+  ]
+ },
+ {
+  "name": "p1: calculator output",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "calculators": [
+    {
+     "id": "c",
+     "formula": "1",
+     "output": {
+      "type": "date"
+     }
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_type"
+  ]
+ },
+ {
+  "name": "p1: visibility and/or",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "fever",
+       "type": "switch",
+       "label": "Fever"
+      },
+      {
+       "id": "age",
+       "type": "integer",
+       "label": "Age"
+      },
+      {
+       "id": "t",
+       "type": "decimal",
+       "label": "Temp",
+       "visibility": {
+        "when": {
+         "and": [
+          {
+           "field": "fever",
+           "operator": "equals",
+           "value": true
+          },
+          {
+           "or": [
+            {
+             "field": "age",
+             "operator": "gte",
+             "value": 60
+            },
+            {
+             "field": "age",
+             "operator": "empty"
+            }
+           ]
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: visibility refers to a missing field",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "t",
+       "type": "text",
+       "label": "T",
+       "visibility": {
+        "when": {
+         "field": "nope",
+         "operator": "exists"
+        }
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "unknown_field_reference"
+  ]
+ },
+ {
+  "name": "p1: visibility operator",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "t",
+       "type": "text",
+       "label": "T",
+       "visibility": {
+        "when": {
+         "field": "name",
+         "operator": "like",
+         "value": "a"
+        }
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_operator"
+  ]
+ },
+ {
+  "name": "p1: visibility values",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "t",
+       "type": "text",
+       "label": "T",
+       "visibility": {
+        "when": {
+         "or": [
+          {
+           "field": "name",
+           "operator": "in",
+           "value": "a"
+          },
+          {
+           "field": "name",
+           "operator": "exists",
+           "value": true
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_condition",
+   "invalid_condition"
+  ]
+ },
+ {
+  "name": "p1: visibility needs when",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "t",
+       "type": "text",
+       "label": "T",
+       "visibility": {
+        "field": "name"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_condition"
+  ]
+ },
+ {
+  "name": "p1: repeat child sees its siblings and the form",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "r",
+       "type": "repeat",
+       "label": "R",
+       "fields": [
+        {
+         "id": "kind",
+         "type": "text",
+         "label": "K"
+        },
+        {
+         "id": "x",
+         "type": "text",
+         "label": "X",
+         "visibility": {
+          "when": {
+           "and": [
+            {
+             "field": "kind",
+             "operator": "exists"
+            },
+            {
+             "field": "name",
+             "operator": "exists"
+            }
+           ]
+          }
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: form cannot see inside a repeat",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "r",
+       "type": "repeat",
+       "label": "R",
+       "fields": [
+        {
+         "id": "kind",
+         "type": "text",
+         "label": "K"
+        }
+       ]
+      },
+      {
+       "id": "x",
+       "type": "text",
+       "label": "X",
+       "visibility": {
+        "when": {
+         "field": "kind",
+         "operator": "exists"
+        }
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "unknown_field_reference"
+  ]
+ },
+ {
+  "name": "p1: section visibility",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    },
+    {
+     "id": "more",
+     "title": "More",
+     "visibility": {
+      "when": {
+       "field": "name",
+       "operator": "not_equals",
+       "value": ""
+      }
+     },
+     "fields": [
+      {
+       "id": "note",
+       "type": "text",
+       "label": "Note"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: permissions at every level",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name",
+       "permission": {
+        "view": [
+         "doctor"
+        ],
+        "export": [
+         "admin"
+        ]
+       }
+      }
+     ],
+     "permission": {
+      "edit": [
+       "nurse"
+      ]
+     }
+    }
+   ],
+   "permission": {
+    "view": [
+     "doctor",
+     "nurse"
+    ],
+    "delete": [
+     "admin"
+    ]
+   }
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: permission role code",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "permission": {
+    "view": [
+     "Doctor"
+    ]
+   }
+  },
+  "valid": false,
+  "codes": [
+   "invalid_role"
+  ]
+ },
+ {
+  "name": "p1: permission list empty",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "permission": {
+    "edit": []
+   }
+  },
+  "valid": false,
+  "codes": [
+   "invalid_permission"
+  ]
+ },
+ {
+  "name": "p1: field permission has no create",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name",
+       "permission": {
+        "create": [
+         "nurse"
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "unknown_property"
+  ]
+ },
+ {
+  "name": "p1: validation rules",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "email",
+       "type": "text",
+       "label": "E",
+       "validation": {
+        "required": true,
+        "email": true,
+        "max_length": 80,
+        "message": "อีเมลไม่ถูกต้อง"
+       }
+      },
+      {
+       "id": "when",
+       "type": "date",
+       "label": "D",
+       "validation": {
+        "min_date": "today-30d",
+        "max_date": "today"
+       }
+      },
+      {
+       "id": "n",
+       "type": "integer",
+       "label": "N",
+       "validation": {
+        "min": 0,
+        "max": 10
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: rule does not apply",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "n",
+       "type": "number",
+       "label": "N",
+       "validation": {
+        "pattern": "^1$"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "rule_not_supported"
+  ]
+ },
+ {
+  "name": "p1: rule value",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "t",
+       "type": "text",
+       "label": "T",
+       "validation": {
+        "min_length": -1,
+        "min_date": "yesterday"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_rule",
+   "rule_not_supported"
+  ]
+ },
+ {
+  "name": "p1: pattern compiles",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "t",
+       "type": "text",
+       "label": "T",
+       "validation": {
+        "pattern": "("
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_pattern"
+  ]
+ },
+ {
+  "name": "p1: flat and nested rule disagree",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "t",
+       "type": "text",
+       "label": "T",
+       "required": true,
+       "validation": {
+        "required": false
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "conflicting_rule"
+  ]
+ },
+ {
+  "name": "p1: nested range",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "t",
+       "type": "text",
+       "label": "T",
+       "validation": {
+        "min_length": 5,
+        "max_length": 2
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_range"
+  ]
+ },
+ {
+  "name": "p1: calculated may not be required in validation",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "c",
+       "type": "calculated",
+       "label": "C",
+       "formula": "1",
+       "validation": {
+        "required": true
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "rule_not_supported"
+  ]
+ },
+ {
+  "name": "p1: metadata must be an object",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "metadata": "x"
+  },
+  "valid": false,
+  "codes": [
+   "invalid_type"
+  ]
+ },
+ {
+  "name": "p1: subject field may be a radio",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "sex",
+       "type": "radio",
+       "label": "Sex",
+       "options": [
+        {
+         "value": "a",
+         "label": "A"
+        },
+        {
+         "value": "b",
+         "label": "B"
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "extensions": {
+    "flora.subject_field": "sex"
+   }
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: subject field names a key",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "fld_hn",
+       "key": "hn",
+       "type": "text",
+       "label": "HN"
+      }
+     ]
+    }
+   ],
+   "extensions": {
+    "flora.subject_field": "hn"
+   }
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p2: category",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ],
+     "categories": [
+      {
+       "id": "bp",
+       "title": "ความดันโลหิต",
+       "layout": {
+        "columns": 12
+       },
+       "fields": [
+        {
+         "id": "bp_sys",
+         "type": "number",
+         "label": "ตัวบน",
+         "layout": {
+          "span": 6
+         }
+        },
+        {
+         "id": "bp_dia",
+         "type": "number",
+         "label": "ตัวล่าง",
+         "layout": {
+          "span": 6
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p2: section of categories only",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    },
+    {
+     "id": "vitals",
+     "title": "Vitals",
+     "categories": [
+      {
+       "id": "bp",
+       "title": "ความดันโลหิต",
+       "layout": {
+        "columns": 12
+       },
+       "fields": [
+        {
+         "id": "bp_sys",
+         "type": "number",
+         "label": "ตัวบน",
+         "layout": {
+          "span": 6
+         }
+        },
+        {
+         "id": "bp_dia",
+         "type": "number",
+         "label": "ตัวล่าง",
+         "layout": {
+          "span": 6
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p2: category with style, visibility and permission",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ],
+     "categories": [
+      {
+       "id": "bp",
+       "title": "ความดันโลหิต",
+       "layout": {
+        "columns": 12
+       },
+       "fields": [
+        {
+         "id": "bp_sys",
+         "type": "number",
+         "label": "ตัวบน",
+         "layout": {
+          "span": 6
+         }
+        },
+        {
+         "id": "bp_dia",
+         "type": "number",
+         "label": "ตัวล่าง",
+         "layout": {
+          "span": 6
+         }
+        }
+       ],
+       "style": {
+        "id": "section.header"
+       },
+       "page_break": "avoid",
+       "visibility": {
+        "when": {
+         "field": "name",
+         "operator": "exists"
+        }
+       },
+       "permission": {
+        "view": [
+         "clinician"
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p2: duplicate category id",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ],
+     "categories": [
+      {
+       "id": "bp",
+       "title": "ความดันโลหิต",
+       "layout": {
+        "columns": 12
+       },
+       "fields": [
+        {
+         "id": "bp_sys",
+         "type": "number",
+         "label": "ตัวบน",
+         "layout": {
+          "span": 6
+         }
+        },
+        {
+         "id": "bp_dia",
+         "type": "number",
+         "label": "ตัวล่าง",
+         "layout": {
+          "span": 6
+         }
+        }
+       ]
+      },
+      {
+       "id": "bp",
+       "title": "ความดันโลหิต",
+       "layout": {
+        "columns": 12
+       },
+       "fields": [
+        {
+         "id": "pulse",
+         "type": "number",
+         "label": "ชีพจร"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "duplicate_category_id"
+  ]
+ },
+ {
+  "name": "p2: category id",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ],
+     "categories": [
+      {
+       "id": "BP",
+       "title": "ความดันโลหิต",
+       "layout": {
+        "columns": 12
+       },
+       "fields": [
+        {
+         "id": "bp_sys",
+         "type": "number",
+         "label": "ตัวบน",
+         "layout": {
+          "span": 6
+         }
+        },
+        {
+         "id": "bp_dia",
+         "type": "number",
+         "label": "ตัวล่าง",
+         "layout": {
+          "span": 6
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_category_id"
+  ]
+ },
+ {
+  "name": "p2: category needs fields",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ],
+     "categories": [
+      {
+       "id": "bp",
+       "title": "BP",
+       "fields": []
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "container_requires_fields"
+  ]
+ },
+ {
+  "name": "p2: category unknown property",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ],
+     "categories": [
+      {
+       "id": "bp",
+       "title": "ความดันโลหิต",
+       "layout": {
+        "columns": 12
+       },
+       "fields": [
+        {
+         "id": "bp_sys",
+         "type": "number",
+         "label": "ตัวบน",
+         "layout": {
+          "span": 6
+         }
+        },
+        {
+         "id": "bp_dia",
+         "type": "number",
+         "label": "ตัวล่าง",
+         "layout": {
+          "span": 6
+         }
+        }
+       ],
+       "repeatable": true
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "unknown_property"
+  ]
+ },
+ {
+  "name": "p2: category fields share the section scope",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ],
+     "categories": [
+      {
+       "id": "bp",
+       "title": "ความดันโลหิต",
+       "layout": {
+        "columns": 12
+       },
+       "fields": [
+        {
+         "id": "fld_n",
+         "key": "name",
+         "type": "text",
+         "label": "N"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "duplicate_field_key"
+  ]
+ },
+ {
+  "name": "p2: formula reads an unknown key",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "c",
+       "type": "calculated",
+       "label": "C",
+       "formula": "weight * 2"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "unknown_field_reference"
+  ]
+ },
+ {
+  "name": "p2: formula syntax",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "c",
+       "type": "calculated",
+       "label": "C",
+       "formula": "(1 + 2"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "formula_syntax"
+  ]
+ },
+ {
+  "name": "p2: calculator with an unknown function",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "calculators": [
+    {
+     "id": "x",
+     "formula": "EVAL(1)"
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "unknown_function"
+  ]
+ },
+ {
+  "name": "p2: calculator arity",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "calculators": [
+    {
+     "id": "x",
+     "formula": "IF(TRUE, 1)"
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_arguments"
+  ]
+ },
+ {
+  "name": "p2: repeat item formula sees its item and the form",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "rate",
+       "type": "number",
+       "label": "Rate"
+      },
+      {
+       "id": "items",
+       "type": "repeat",
+       "label": "Items",
+       "fields": [
+        {
+         "id": "qty",
+         "type": "integer",
+         "label": "Qty"
+        },
+        {
+         "id": "price",
+         "type": "number",
+         "label": "Price"
+        },
+        {
+         "id": "total",
+         "type": "calculated",
+         "label": "Total",
+         "formula": "qty * price * rate"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p2: repeat column in a form formula",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "meds",
+       "type": "repeat",
+       "label": "Meds",
+       "fields": [
+        {
+         "id": "dose",
+         "type": "number",
+         "label": "Dose"
+        }
+       ]
+      },
+      {
+       "id": "total_dose",
+       "type": "calculated",
+       "label": "Total",
+       "formula": "SUM(meds.dose)"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p2: unknown repeat column",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "meds",
+       "type": "repeat",
+       "label": "Meds",
+       "fields": [
+        {
+         "id": "dose",
+         "type": "number",
+         "label": "Dose"
+        }
+       ]
+      },
+      {
+       "id": "total_dose",
+       "type": "calculated",
+       "label": "Total",
+       "formula": "SUM(meds.nope)"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "unknown_field_reference"
+  ]
+ },
+ {
+  "name": "p2: calculated fields in a circle",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "a",
+       "type": "calculated",
+       "label": "A",
+       "formula": "b + 1"
+      },
+      {
+       "id": "b",
+       "type": "calculated",
+       "label": "B",
+       "formula": "a + 1"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "circular_dependency"
+  ]
+ },
+ {
+  "name": "p2: visibility that depends on itself",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "x",
+       "type": "text",
+       "label": "X",
+       "visibility": {
+        "when": {
+         "field": "x",
+         "operator": "exists"
+        }
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "circular_dependency"
+  ]
+ },
+ {
+  "name": "p2: a chain is fine: weight -> BMI -> class",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "weight",
+       "type": "number",
+       "label": "W"
+      },
+      {
+       "id": "height",
+       "type": "number",
+       "label": "H"
+      },
+      {
+       "id": "bmi",
+       "type": "calculated",
+       "label": "BMI",
+       "formula": "weight / ((height / 100) ^ 2)"
+      },
+      {
+       "id": "bmi_class",
+       "type": "text",
+       "label": "Class",
+       "visibility": {
+        "when": {
+         "field": "bmi",
+         "operator": "gte",
+         "value": 25
+        }
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p2: field rule",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "bp_sys",
+       "type": "number",
+       "label": "Sys",
+       "validation": {
+        "rules": [
+         {
+          "assert": "bp_sys > bp_dia",
+          "message": "ตัวบนต้องมากกว่าตัวล่าง"
+         }
+        ]
+       }
+      },
+      {
+       "id": "bp_dia",
+       "type": "number",
+       "label": "Dia"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p2: field rule formula and message",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "t",
+       "type": "text",
+       "label": "T",
+       "validation": {
+        "rules": [
+         {
+          "assert": "t ==",
+          "message": ""
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "formula_syntax",
+   "invalid_rule"
+  ]
+ },
+ {
+  "name": "p2: form rule",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "start",
+       "type": "date",
+       "label": "Start"
+      },
+      {
+       "id": "end",
+       "type": "date",
+       "label": "End"
+      }
+     ]
+    }
+   ],
+   "rules": [
+    {
+     "id": "order",
+     "assert": "DAYS(start, end) >= 0",
+     "message": "วันสิ้นสุดต้องไม่ก่อนวันเริ่ม",
+     "fields": [
+      "end"
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p2: form rule names unknown fields and repeats an id",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ],
+   "rules": [
+    {
+     "id": "r",
+     "assert": "TRUE",
+     "message": "m",
+     "fields": [
+      "nope"
+     ]
+    },
+    {
+     "id": "r",
+     "assert": "TRUE",
+     "message": "m",
+     "fields": [
+      "name"
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_rule",
+   "unknown_field_reference"
+  ]
+ },
+ {
+  "name": "p2: rule condition refers to an unknown field",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "t",
+       "type": "text",
+       "label": "T",
+       "validation": {
+        "rules": [
+         {
+          "assert": "TRUE",
+          "message": "m",
+          "when": {
+           "field": "nope",
+           "operator": "exists"
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "unknown_field_reference"
+  ]
+ },
+ {
+  "name": "p2: category span bounded by its grid",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ],
+     "categories": [
+      {
+       "id": "bp",
+       "title": "ความดันโลหิต",
+       "layout": {
+        "columns": 4
+       },
+       "fields": [
+        {
+         "id": "bp_sys",
+         "type": "number",
+         "label": "ตัวบน",
+         "layout": {
+          "span": 6
+         }
+        },
+        {
+         "id": "bp_dia",
+         "type": "number",
+         "label": "ตัวล่าง",
+         "layout": {
+          "span": 6
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_span",
+   "invalid_span"
+  ]
+ },
+ {
+  "name": "p2: lookup options instead of a list",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "province",
+       "type": "select",
+       "label": "P",
+       "lookup": {
+        "source": "thai_address",
+        "value": "province"
+       }
+      },
+      {
+       "id": "district",
+       "type": "select",
+       "label": "D",
+       "lookup": {
+        "source": "thai_address",
+        "value": "district",
+        "label": "district",
+        "filter": {
+         "province": "province"
+        }
+       }
+      },
+      {
+       "id": "postcode",
+       "type": "text",
+       "label": "Z",
+       "derive": {
+        "lookup": "thai_address",
+        "column": "postcode",
+        "match": {
+         "district": "district"
+        }
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p2: lookup and options together",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "p",
+       "type": "select",
+       "label": "P",
+       "options": [
+        {
+         "value": "a",
+         "label": "A"
+        }
+       ],
+       "lookup": {
+        "source": "thai_address",
+        "value": "province"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_lookup"
+  ]
+ },
+ {
+  "name": "p2: lookup without a source and with an unknown key",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "p",
+       "type": "radio",
+       "label": "P",
+       "lookup": {
+        "value": "province",
+        "sort": true
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_lookup",
+   "unknown_property"
+  ]
+ },
+ {
+  "name": "p2: lookup filter names an unknown field",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "d",
+       "type": "select",
+       "label": "D",
+       "lookup": {
+        "source": "thai_address",
+        "value": "district",
+        "filter": {
+         "province": "nope"
+        }
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "unknown_field_reference"
+  ]
+ },
+ {
+  "name": "p2: derive needs a match and only text fields derive",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "z",
+       "type": "text",
+       "label": "Z",
+       "derive": {
+        "lookup": "thai_address",
+        "column": "postcode",
+        "match": {}
+       }
+      },
+      {
+       "id": "n",
+       "type": "number",
+       "label": "N",
+       "derive": {
+        "lookup": "t",
+        "column": "c",
+        "match": {
+         "name": "name"
+        }
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_lookup",
+   "property_not_supported"
+  ]
+ },
+ {
+  "name": "p2: lookups that depend on each other",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "a",
+       "type": "select",
+       "label": "A",
+       "lookup": {
+        "source": "t",
+        "value": "a",
+        "filter": {
+         "b": "b"
+        }
+       }
+      },
+      {
+       "id": "b",
+       "type": "select",
+       "label": "B",
+       "lookup": {
+        "source": "t",
+        "value": "b",
+        "filter": {
+         "a": "a"
+        }
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "circular_dependency"
+  ]
+ },
+ {
+  "name": "p2: option condition names an unknown field",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "s",
+       "type": "radio",
+       "label": "S",
+       "options": [
+        {
+         "value": "a",
+         "label": "A",
+         "when": {
+          "field": "nope",
+          "operator": "exists"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "unknown_field_reference"
+  ]
+ }
+]

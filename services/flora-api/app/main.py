@@ -39,6 +39,10 @@ from .routes.sync_ingest import router as sync_ingest_router
 from .routes.gateway_alerts import fleet_router as gateway_alerts_fleet_router, sync_router as gateway_alerts_sync_router
 from .routes.workstation import router as workstation_router
 from .routes.terminology import router as terminology_router
+from .routes.formdev import router as formdev_router
+from .routes.formdev_query import router as formdev_query_router
+from .routes import formdev_runtime
+from .formdev.errors import FormDevError
 
 
 @asynccontextmanager
@@ -50,7 +54,12 @@ async def lifespan(_: FastAPI):
             ensure_bootstrap_admin(database)
     if api_mode == "leaf":
         device_writer.start()
+    if api_mode == "canopy":
+        formdev_runtime.start_background()
     yield
+    if api_mode == "canopy":
+        # Workers return unfinished jobs to the queue before the pools close.
+        formdev_runtime.stop_background()
     device_writer.stop()
     close_pool()
 
@@ -95,6 +104,8 @@ if API_MODE == "canopy":
     app.include_router(fleet_control_router)
     app.include_router(legacy_archive_router)
     app.include_router(canopy_reports_router)
+    app.include_router(formdev_router)
+    app.include_router(formdev_query_router)
 if API_MODE == "sync":
     app.include_router(sync_ingest_router)
     app.include_router(sync_ward_router)
@@ -113,7 +124,8 @@ async def enforce_canopy_read_only(request: Request, call_next):
         # Public API v1: API-key auth with scopes (e.g. admissions:write).
         canopy_preference_write = canopy_preference_write or request.url.path.startswith("/api/v1/")
         report_generation = request.method == "POST" and request.url.path.startswith("/api/fleet/legacy/cases/") and request.url.path.endswith("/report.pdf")
-        if request.url.path not in {"/api/auth/login", "/api/auth/logout"} and not request.url.path.startswith("/api/fleet/control") and not canopy_preference_write and not report_generation:
+        formdev_write = request.url.path.startswith("/api/formdev/")
+        if request.url.path not in {"/api/auth/login", "/api/auth/logout"} and not request.url.path.startswith("/api/fleet/control") and not canopy_preference_write and not report_generation and not formdev_write:
             return JSONResponse(
                 status_code=403,
                 content={"error": "Flora Canopy is read-only"},
@@ -146,6 +158,14 @@ async def public_api_access_log(request: Request, call_next):
 @app.exception_handler(HTTPException)
 async def legacy_http_error(_: Request, error: HTTPException) -> JSONResponse:
     return JSONResponse(status_code=error.status_code, content={"error": error.detail})
+
+
+@app.exception_handler(FormDevError)
+async def formdev_error(_: Request, error: FormDevError) -> JSONResponse:
+    headers = {}
+    if isinstance(error.details, dict) and "retry_after" in error.details:
+        headers["Retry-After"] = str(error.details["retry_after"])
+    return JSONResponse(status_code=error.status, content={"error": error.message, **error.as_dict()}, headers=headers)
 
 
 @app.get("/health")

@@ -1,0 +1,71 @@
+{
+ "definition": "examples/patient-assessment/v1.form.json",
+ "cases": [
+  {
+   "name": "text number select datetime",
+   "data": {
+    "hn": "HN9",
+    "age": 33,
+    "fall_risk": "no",
+    "assessed_at": "2026-10-05T08:30:00+07:00",
+    "full_name": "not indexed"
+   },
+   "expected": [
+    {
+     "field_id": "age",
+     "value_text": null,
+     "value_num": 33
+    },
+    {
+     "field_id": "assessed_at",
+     "value_text": "2026-10-05T08:30:00+07:00",
+     "value_num": 1791163800000
+    },
+    {
+     "field_id": "fall_risk",
+     "value_text": "no",
+     "value_num": null
+    },
+    {
+     "field_id": "hn",
+     "value_text": "HN9",
+     "value_num": null
+    }
+   ]
+  },
+  {
+   "name": "nulls skipped",
+   "data": {
+    "hn": null,
+    "age": null
+   },
+   "expected": []
+  },
+  {
+   "name": "datetimes index the instant across offsets",
+   "data": {
+    "assessed_at": "2026-10-05T01:30:00Z"
+   },
+   "expected": [
+    {
+     "field_id": "assessed_at",
+     "value_text": "2026-10-05T01:30:00Z",
+     "value_num": 1791163800000
+    }
+   ]
+  },
+  {
+   "name": "datetime without offset uses the default zone",
+   "data": {
+    "assessed_at": "2026-10-05T08:30"
+   },
+   "expected": [
+    {
+     "field_id": "assessed_at",
+     "value_text": "2026-10-05T08:30",
+     "value_num": 1791163800000
+    }
+   ]
+  }
+ ]
+}

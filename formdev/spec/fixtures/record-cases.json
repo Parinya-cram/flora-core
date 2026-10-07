@@ -1,0 +1,195 @@
+{
+ "definition": "examples/patient-assessment/v1.form.json",
+ "cases": [
+  {
+   "name": "valid draft with partial data",
+   "status": "draft",
+   "data": {
+    "hn": "HN1"
+   },
+   "codes": []
+  },
+  {
+   "name": "draft may omit required",
+   "status": "draft",
+   "data": {},
+   "codes": []
+  },
+  {
+   "name": "submit requires required fields",
+   "status": "submitted",
+   "data": {
+    "hn": "HN1"
+   },
+   "codes": [
+    "required",
+    "required"
+   ]
+  },
+  {
+   "name": "valid submitted",
+   "status": "submitted",
+   "data": {
+    "hn": "HN1",
+    "full_name": "A B",
+    "assessed_at": "2026-10-05T08:30:00+07:00",
+    "age": 40,
+    "sex": "female",
+    "bp": 120.5,
+    "smoker": true,
+    "fall_risk": "no"
+   },
+   "codes": []
+  },
+  {
+   "name": "empty string counts as missing",
+   "status": "submitted",
+   "data": {
+    "hn": "",
+    "full_name": "A",
+    "assessed_at": "2026-10-05T08:30:00Z"
+   },
+   "codes": [
+    "required"
+   ]
+  },
+  {
+   "name": "null is empty",
+   "status": "draft",
+   "data": {
+    "age": null,
+    "sex": null
+   },
+   "codes": []
+  },
+  {
+   "name": "unknown field",
+   "status": "draft",
+   "data": {
+    "weight_kg": 60
+   },
+   "codes": [
+    "unknown_field"
+   ]
+  },
+  {
+   "name": "integer rejects fraction",
+   "status": "draft",
+   "data": {
+    "age": 40.5
+   },
+   "codes": [
+    "invalid_type"
+   ]
+  },
+  {
+   "name": "integer rejects boolean",
+   "status": "draft",
+   "data": {
+    "age": true
+   },
+   "codes": [
+    "invalid_type"
+   ]
+  },
+  {
+   "name": "number out of range",
+   "status": "draft",
+   "data": {
+    "bp": 301
+   },
+   "codes": [
+    "out_of_range"
+   ]
+  },
+  {
+   "name": "number rejects string",
+   "status": "draft",
+   "data": {
+    "bp": "120"
+   },
+   "codes": [
+    "invalid_type"
+   ]
+  },
+  {
+   "name": "text too long",
+   "status": "draft",
+   "data": {
+    "hn": "XXXXXXXXXXXXXXXXXXXXX"
+   },
+   "codes": [
+    "too_long"
+   ]
+  },
+  {
+   "name": "invalid option",
+   "status": "draft",
+   "data": {
+    "sex": "other"
+   },
+   "codes": [
+    "invalid_option"
+   ]
+  },
+  {
+   "name": "checkbox must be boolean",
+   "status": "draft",
+   "data": {
+    "smoker": "yes"
+   },
+   "codes": [
+    "invalid_type"
+   ]
+  },
+  {
+   "name": "bad datetime",
+   "status": "draft",
+   "data": {
+    "assessed_at": "2026-13-40T99:00"
+   },
+   "codes": [
+    "invalid_date"
+   ]
+  },
+  {
+   "name": "datetime without time",
+   "status": "draft",
+   "data": {
+    "assessed_at": "2026-10-05"
+   },
+   "codes": [
+    "invalid_date"
+   ]
+  },
+  {
+   "name": "invalid status",
+   "status": "approved",
+   "data": {},
+   "codes": [
+    "invalid_status"
+   ]
+  },
+  {
+   "name": "retired bucket allowed",
+   "status": "draft",
+   "data": {
+    "_retired": {
+     "old": 1
+    }
+   },
+   "codes": []
+  },
+  {
+   "name": "data must be object",
+   "status": "draft",
+   "data": [
+    1,
+    2
+   ],
+   "codes": [
+    "not_object"
+   ]
+  }
+ ]
+}

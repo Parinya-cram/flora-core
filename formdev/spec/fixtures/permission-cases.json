@@ -1,0 +1,688 @@
+{
+ "definition": {
+  "format": "flora.form/1",
+  "form_id": "permission_demo",
+  "schema_version": 1,
+  "title": "Permission demo",
+  "paper": {
+   "size": "A4",
+   "orientation": "portrait"
+  },
+  "style_id": "style.a4.medical",
+  "permission": {
+   "view": [
+    "clinician",
+    "clinical_admin",
+    "viewer"
+   ],
+   "create": [
+    "clinician"
+   ],
+   "edit": [
+    "clinician"
+   ],
+   "delete": [
+    "clinical_admin"
+   ],
+   "export": [
+    "clinical_admin"
+   ]
+  },
+  "sections": [
+   {
+    "id": "general",
+    "title": "ทั่วไป",
+    "fields": [
+     {
+      "id": "hn",
+      "type": "text",
+      "label": "HN"
+     },
+     {
+      "id": "note",
+      "type": "textarea",
+      "label": "บันทึกผู้ดูแลระบบ",
+      "permission": {
+       "edit": [
+        "clinical_admin"
+       ]
+      }
+     },
+     {
+      "id": "contact",
+      "type": "group",
+      "label": "ผู้ติดต่อ",
+      "permission": {
+       "export": [
+        "clinician"
+       ]
+      },
+      "fields": [
+       {
+        "id": "contact_name",
+        "type": "text",
+        "label": "ชื่อ"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "id": "clinical",
+    "title": "ข้อมูลทางคลินิก",
+    "permission": {
+     "view": [
+      "clinician"
+     ]
+    },
+    "fields": [
+     {
+      "id": "diagnosis",
+      "type": "text",
+      "label": "การวินิจฉัย"
+     }
+    ],
+    "categories": [
+     {
+      "id": "labs",
+      "title": "ผลแล็บ",
+      "permission": {
+       "view": [
+        "clinician",
+        "viewer"
+       ]
+      },
+      "fields": [
+       {
+        "id": "hb",
+        "type": "decimal",
+        "label": "Hb",
+        "decimals": 1
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "id": "medication",
+    "title": "ยา",
+    "fields": [
+     {
+      "id": "meds",
+      "type": "repeat",
+      "label": "รายการยา",
+      "fields": [
+       {
+        "id": "drug",
+        "type": "text",
+        "label": "ชื่อยา"
+       },
+       {
+        "id": "cost",
+        "type": "decimal",
+        "label": "ราคา",
+        "permission": {
+         "view": [
+          "clinical_admin"
+         ]
+        }
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ "cases": [
+  {
+   "name": "clinician: no admin note; a repeat with a child they cannot see is locked as a whole",
+   "roles": [
+    "clinician"
+   ],
+   "is_admin": false,
+   "form": {
+    "view": true,
+    "create": true,
+    "edit": true,
+    "delete": false,
+    "export": false
+   },
+   "record": {
+    "create": true,
+    "edit": true,
+    "delete": false
+   },
+   "fields": {
+    "hn": {
+     "view": true,
+     "edit": true,
+     "export": false
+    },
+    "note": {
+     "view": true,
+     "edit": false,
+     "export": false
+    },
+    "contact_name": {
+     "view": true,
+     "edit": true,
+     "export": true
+    },
+    "diagnosis": {
+     "view": true,
+     "edit": true,
+     "export": false
+    },
+    "hb": {
+     "view": true,
+     "edit": true,
+     "export": false
+    },
+    "meds": {
+     "view": true,
+     "edit": false,
+     "export": false
+    },
+    "meds.drug": {
+     "view": true,
+     "edit": true,
+     "export": false
+    },
+    "meds.cost": {
+     "view": false,
+     "edit": false,
+     "export": false
+    }
+   },
+   "denied": {
+    "view": [],
+    "edit": [
+     "meds",
+     "note"
+    ],
+    "export": [
+     "diagnosis",
+     "hb",
+     "hn",
+     "meds",
+     "note"
+    ]
+   }
+  },
+  {
+   "name": "clinical admin: no clinical section, may edit only the note",
+   "roles": [
+    "clinical_admin"
+   ],
+   "is_admin": false,
+   "form": {
+    "view": true,
+    "create": false,
+    "edit": false,
+    "delete": true,
+    "export": true
+   },
+   "record": {
+    "create": false,
+    "edit": true,
+    "delete": true
+   },
+   "fields": {
+    "hn": {
+     "view": true,
+     "edit": false,
+     "export": true
+    },
+    "note": {
+     "view": true,
+     "edit": true,
+     "export": true
+    },
+    "contact_name": {
+     "view": true,
+     "edit": false,
+     "export": false
+    },
+    "diagnosis": {
+     "view": false,
+     "edit": false,
+     "export": false
+    },
+    "hb": {
+     "view": false,
+     "edit": false,
+     "export": false
+    },
+    "meds": {
+     "view": true,
+     "edit": false,
+     "export": true
+    },
+    "meds.drug": {
+     "view": true,
+     "edit": false,
+     "export": true
+    },
+    "meds.cost": {
+     "view": true,
+     "edit": false,
+     "export": true
+    }
+   },
+   "denied": {
+    "view": [
+     "diagnosis",
+     "hb"
+    ],
+    "edit": [
+     "contact_name",
+     "diagnosis",
+     "hb",
+     "hn",
+     "meds"
+    ],
+    "export": [
+     "contact_name",
+     "diagnosis",
+     "hb"
+    ]
+   }
+  },
+  {
+   "name": "viewer: a category list widens the section's (innermost wins)",
+   "roles": [
+    "viewer"
+   ],
+   "is_admin": false,
+   "form": {
+    "view": true,
+    "create": false,
+    "edit": false,
+    "delete": false,
+    "export": false
+   },
+   "record": {
+    "create": false,
+    "edit": false,
+    "delete": false
+   },
+   "fields": {
+    "hn": {
+     "view": true,
+     "edit": false,
+     "export": false
+    },
+    "note": {
+     "view": true,
+     "edit": false,
+     "export": false
+    },
+    "contact_name": {
+     "view": true,
+     "edit": false,
+     "export": false
+    },
+    "diagnosis": {
+     "view": false,
+     "edit": false,
+     "export": false
+    },
+    "hb": {
+     "view": true,
+     "edit": false,
+     "export": false
+    },
+    "meds": {
+     "view": true,
+     "edit": false,
+     "export": false
+    },
+    "meds.drug": {
+     "view": true,
+     "edit": false,
+     "export": false
+    },
+    "meds.cost": {
+     "view": false,
+     "edit": false,
+     "export": false
+    }
+   },
+   "denied": {
+    "view": [
+     "diagnosis"
+    ],
+    "edit": [
+     "contact_name",
+     "diagnosis",
+     "hb",
+     "hn",
+     "meds",
+     "note"
+    ],
+    "export": [
+     "contact_name",
+     "diagnosis",
+     "hb",
+     "hn",
+     "meds",
+     "note"
+    ]
+   }
+  },
+  {
+   "name": "several roles combine",
+   "roles": [
+    "viewer",
+    "clinical_admin"
+   ],
+   "is_admin": false,
+   "form": {
+    "view": true,
+    "create": false,
+    "edit": false,
+    "delete": true,
+    "export": true
+   },
+   "record": {
+    "create": false,
+    "edit": true,
+    "delete": true
+   },
+   "fields": {
+    "hn": {
+     "view": true,
+     "edit": false,
+     "export": true
+    },
+    "note": {
+     "view": true,
+     "edit": true,
+     "export": true
+    },
+    "contact_name": {
+     "view": true,
+     "edit": false,
+     "export": false
+    },
+    "diagnosis": {
+     "view": false,
+     "edit": false,
+     "export": false
+    },
+    "hb": {
+     "view": true,
+     "edit": false,
+     "export": true
+    },
+    "meds": {
+     "view": true,
+     "edit": false,
+     "export": true
+    },
+    "meds.drug": {
+     "view": true,
+     "edit": false,
+     "export": true
+    },
+    "meds.cost": {
+     "view": true,
+     "edit": false,
+     "export": true
+    }
+   },
+   "denied": {
+    "view": [
+     "diagnosis"
+    ],
+    "edit": [
+     "contact_name",
+     "diagnosis",
+     "hb",
+     "hn",
+     "meds"
+    ],
+    "export": [
+     "contact_name",
+     "diagnosis"
+    ]
+   }
+  },
+  {
+   "name": "no roles: nothing",
+   "roles": [],
+   "is_admin": false,
+   "form": {
+    "view": false,
+    "create": false,
+    "edit": false,
+    "delete": false,
+    "export": false
+   },
+   "record": {
+    "create": false,
+    "edit": false,
+    "delete": false
+   },
+   "fields": {
+    "hn": {
+     "view": false,
+     "edit": false,
+     "export": false
+    },
+    "note": {
+     "view": false,
+     "edit": false,
+     "export": false
+    },
+    "contact_name": {
+     "view": false,
+     "edit": false,
+     "export": false
+    },
+    "diagnosis": {
+     "view": false,
+     "edit": false,
+     "export": false
+    },
+    "hb": {
+     "view": false,
+     "edit": false,
+     "export": false
+    },
+    "meds": {
+     "view": false,
+     "edit": false,
+     "export": false
+    },
+    "meds.drug": {
+     "view": false,
+     "edit": false,
+     "export": false
+    },
+    "meds.cost": {
+     "view": false,
+     "edit": false,
+     "export": false
+    }
+   },
+   "denied": {
+    "view": [
+     "contact_name",
+     "diagnosis",
+     "hb",
+     "hn",
+     "meds",
+     "note"
+    ],
+    "edit": [
+     "contact_name",
+     "diagnosis",
+     "hb",
+     "hn",
+     "meds",
+     "note"
+    ],
+    "export": [
+     "contact_name",
+     "diagnosis",
+     "hb",
+     "hn",
+     "meds",
+     "note"
+    ]
+   }
+  },
+  {
+   "name": "an unknown role: nothing",
+   "roles": [
+    "auditor"
+   ],
+   "is_admin": false,
+   "form": {
+    "view": false,
+    "create": false,
+    "edit": false,
+    "delete": false,
+    "export": false
+   },
+   "record": {
+    "create": false,
+    "edit": false,
+    "delete": false
+   },
+   "fields": {
+    "hn": {
+     "view": false,
+     "edit": false,
+     "export": false
+    },
+    "note": {
+     "view": false,
+     "edit": false,
+     "export": false
+    },
+    "contact_name": {
+     "view": false,
+     "edit": false,
+     "export": false
+    },
+    "diagnosis": {
+     "view": false,
+     "edit": false,
+     "export": false
+    },
+    "hb": {
+     "view": false,
+     "edit": false,
+     "export": false
+    },
+    "meds": {
+     "view": false,
+     "edit": false,
+     "export": false
+    },
+    "meds.drug": {
+     "view": false,
+     "edit": false,
+     "export": false
+    },
+    "meds.cost": {
+     "view": false,
+     "edit": false,
+     "export": false
+    }
+   },
+   "denied": {
+    "view": [
+     "contact_name",
+     "diagnosis",
+     "hb",
+     "hn",
+     "meds",
+     "note"
+    ],
+    "edit": [
+     "contact_name",
+     "diagnosis",
+     "hb",
+     "hn",
+     "meds",
+     "note"
+    ],
+    "export": [
+     "contact_name",
+     "diagnosis",
+     "hb",
+     "hn",
+     "meds",
+     "note"
+    ]
+   }
+  },
+  {
+   "name": "system administrator passes everything",
+   "roles": [],
+   "is_admin": true,
+   "form": {
+    "view": true,
+    "create": true,
+    "edit": true,
+    "delete": true,
+    "export": true
+   },
+   "record": {
+    "create": true,
+    "edit": true,
+    "delete": true
+   },
+   "fields": {
+    "hn": {
+     "view": true,
+     "edit": true,
+     "export": true
+    },
+    "note": {
+     "view": true,
+     "edit": true,
+     "export": true
+    },
+    "contact_name": {
+     "view": true,
+     "edit": true,
+     "export": true
+    },
+    "diagnosis": {
+     "view": true,
+     "edit": true,
+     "export": true
+    },
+    "hb": {
+     "view": true,
+     "edit": true,
+     "export": true
+    },
+    "meds": {
+     "view": true,
+     "edit": true,
+     "export": true
+    },
+    "meds.drug": {
+     "view": true,
+     "edit": true,
+     "export": true
+    },
+    "meds.cost": {
+     "view": true,
+     "edit": true,
+     "export": true
+    }
+   },
+   "denied": {
+    "view": [],
+    "edit": [],
+    "export": []
+   }
+  }
+ ]
+}

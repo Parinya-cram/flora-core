@@ -1,0 +1,55 @@
+{
+  "format": "flora.form/1",
+  "form_id": "patient_assessment",
+  "schema_version": 2,
+  "title": "แบบประเมินผู้ป่วย",
+  "paper": "A4",
+  "style_id": "form.a4.medical",
+  "font_id": "noto-sans-thai",
+  "offline": true,
+  "sections": [
+    {
+      "id": "patient",
+      "title": "ข้อมูลผู้ป่วย",
+      "fields": [
+        { "id": "hn", "type": "text", "label": "HN", "required": true, "indexed": true, "max_length": 20 },
+        { "id": "full_name", "type": "text", "label": "ชื่อ-นามสกุล", "required": true, "max_length": 200 },
+        { "id": "age", "type": "integer", "label": "อายุ", "unit": "ปี", "min": 0, "max": 150, "indexed": true },
+        { "id": "sex", "type": "select", "label": "เพศ", "options": [ { "value": "male", "label": "ชาย" }, { "value": "female", "label": "หญิง" } ] },
+        { "id": "assessed_at", "type": "datetime", "label": "วันเวลาที่ประเมิน", "required": true, "indexed": true }
+      ]
+    },
+    {
+      "id": "vital_sign",
+      "title": "Vital Signs",
+      "fields": [
+        { "id": "bp_sys", "type": "number", "label": "ความดันตัวบน", "unit": "mmHg", "min": 0, "max": 300 },
+        { "id": "bp_dia", "type": "number", "label": "ความดันตัวล่าง", "unit": "mmHg", "min": 0, "max": 200 },
+        { "id": "weight_kg", "type": "number", "label": "น้ำหนัก", "unit": "kg", "min": 0, "max": 500 },
+        { "id": "height_cm", "type": "number", "label": "ส่วนสูง", "unit": "cm", "min": 0, "max": 260 },
+        { "id": "bmi", "type": "calculated", "label": "BMI", "unit": "kg/m2", "readonly": true, "formula": "weight_kg / ((height_cm / 100) ^ 2)" },
+        { "id": "pain_score", "type": "integer", "label": "คะแนนความปวด", "min": 0, "max": 10 }
+      ]
+    },
+    {
+      "id": "risk",
+      "title": "ความเสี่ยง",
+      "fields": [
+        { "id": "fall_risk_level", "type": "select", "label": "ระดับความเสี่ยงหกล้ม", "indexed": true, "options": [ { "value": "low", "label": "ต่ำ" }, { "value": "high", "label": "สูง" } ] },
+        { "id": "remarks", "type": "textarea", "label": "หมายเหตุ", "max_length": 2000 }
+      ]
+    }
+  ],
+  "migration": {
+    "from": 1,
+    "ops": [
+      { "op": "rename_field", "from": "bp", "to": "bp_sys" },
+      { "op": "rename_field", "from": "weight", "to": "weight_kg" },
+      { "op": "convert_type", "field": "weight_kg", "to": "number" },
+      { "op": "rename_field", "from": "fall_risk", "to": "fall_risk_level" },
+      { "op": "map_values", "field": "fall_risk_level", "mapping": { "yes": "high", "no": "low" } },
+      { "op": "remove_field", "field": "smoker" },
+      { "op": "add_field", "field": "pain_score", "default": null }
+    ]
+  }
+}
