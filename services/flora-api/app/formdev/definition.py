@@ -79,8 +79,15 @@ SIGNATURE_DATA = re.compile(r"^data:image/(png|svg\+xml);base64,[A-Za-z0-9+/=]+\
 
 DEFINITION_KEYS = {"format", "form_id", "schema_version", "title", "description", "paper", "style_id", "style", "font_id", "offline", "metadata",
                    "layout", "calculators", "rules", "permission", "sections", "migration", "extensions"}
-SECTION_KEYS = {"id", "title", "description", "fields", "categories", "sections", "layout", "style", "visibility", "permission", "page_break", "repeat"}
-CATEGORY_KEYS = {"id", "title", "description", "fields", "layout", "style", "visibility", "permission", "page_break", "repeat"}
+SECTION_KEYS = {"id", "title", "description", "fields", "categories", "sections", "layout", "style", "visibility", "permission", "page_break", "repeat",
+                "print_style", "hide_title", "repeat_on_pages"}
+CATEGORY_KEYS = {"id", "title", "description", "fields", "layout", "style", "visibility", "permission", "page_break", "repeat", "print_style", "hide_title"}
+# Paper layout (Template phase): bordered cells with "Label: value", and top-level sections drawn on every page.
+PRINT_STYLES = ("plain", "boxed")
+PAGE_BANDS = ("header", "footer")
+MATRIX_CELL_TYPES = ("integer", "number", "text", "select")
+MATRIX_NUMERIC = ("integer", "number")
+MAX_MATRIX_ITEMS = 60
 PAPER_KEYS = {"size", "orientation", "margin_mm", "header", "footer"}
 BAND_KEYS = {"left", "center", "right", "height_mm", "first_page"}
 MARGIN_KEYS = ("top", "right", "bottom", "left")
@@ -778,6 +785,13 @@ def _rule_value_ok(name: str, value: Any) -> bool:
     return isinstance(value, str) and (_valid_date_text(value) or bool(RELATIVE_DATE.match(value)))
 
 
+def _validate_paper_keys(ctx: _Ctx, block: dict[str, Any], path: str) -> None:
+    if "print_style" in block and block["print_style"] not in PRINT_STYLES:
+        ctx.add(f"{path}.print_style", "invalid_layout", f"print_style must be one of {', '.join(PRINT_STYLES)}")
+    if "hide_title" in block and not isinstance(block["hide_title"], bool):
+        ctx.add(f"{path}.hide_title", "invalid_type", "hide_title must be a boolean")
+
+
 def _validate_section(ctx: _Ctx, section: Any, path: str, scope: _Scope, columns: int, depth: int) -> None:
     if not isinstance(section, dict):
         ctx.add(path, "not_object", "Section must be an object")
@@ -803,6 +817,12 @@ def _validate_section(ctx: _Ctx, section: Any, path: str, scope: _Scope, columns
         _validate_permission(ctx, section["permission"], f"{path}.permission", SECTION_ACTIONS)
     if "page_break" in section and section["page_break"] not in PAGE_BREAKS:
         ctx.add(f"{path}.page_break", "invalid_page_break", f"page_break must be one of {', '.join(PAGE_BREAKS)}")
+    _validate_paper_keys(ctx, section, path)
+    if "repeat_on_pages" in section:
+        if section["repeat_on_pages"] not in PAGE_BANDS:
+            ctx.add(f"{path}.repeat_on_pages", "invalid_layout", "repeat_on_pages is header or footer")
+        elif depth > 1:
+            ctx.add(f"{path}.repeat_on_pages", "invalid_layout", "Only top-level sections repeat on every page")
     children: list[Any] = []
     if "sections" in section:
         if not isinstance(section["sections"], list):
@@ -858,6 +878,7 @@ def _validate_category(ctx: _Ctx, category: Any, path: str, scope: _Scope, colum
         _validate_visibility(ctx, category["visibility"], f"{path}.visibility", scope)
     if "permission" in category:
         _validate_permission(ctx, category["permission"], f"{path}.permission", SECTION_ACTIONS)
+    _validate_paper_keys(ctx, category, path)
     if "page_break" in category and category["page_break"] not in PAGE_BREAKS:
         ctx.add(f"{path}.page_break", "invalid_page_break", f"page_break must be one of {', '.join(PAGE_BREAKS)}")
     category_fields = category.get("fields")
@@ -969,6 +990,10 @@ def _validate_field(ctx: _Ctx, field: Any, path: str, scope: _Scope, columns: in
             ctx.formulas.append((f"{path}.formula", field["formula"], scope))
     if value_kind in ("file", "signature"):
         _validate_file_props(ctx, field, path)
+    if "option_columns" in field and "option_columns" in allowed and not (is_int(field["option_columns"]) and 1 <= field["option_columns"] <= 6):
+        ctx.add(f"{path}.option_columns", "invalid_columns", "option_columns must be an integer 1-6")
+    if field_type == "matrix":
+        _validate_matrix(ctx, field, path)
     if "derive" in field and "derive" in allowed:
         _validate_derive(ctx, field, path, scope)
 
@@ -994,6 +1019,86 @@ def _validate_field(ctx: _Ctx, field: Any, path: str, scope: _Scope, columns: in
     if field_type in ("group", "repeat"):
         _validate_container_field(ctx, field, path, scope, columns, in_repeat, depth)
     return cell
+
+
+def _matrix_cell_ok(ctx: _Ctx, cell: Any, path: str) -> None:
+    if not isinstance(cell, dict):
+        ctx.add(path, "invalid_type", "cell must be {type, options?, min?, max?}")
+        return
+    ctx.unknown(cell, {"type", "options", "min", "max"}, path)
+    if cell.get("type") not in MATRIX_CELL_TYPES:
+        ctx.add(f"{path}.type", "invalid_field_type", f"cell type is one of {', '.join(MATRIX_CELL_TYPES)}")
+    for bound in ("min", "max"):
+        if bound in cell and not is_number(cell[bound]):
+            ctx.add(f"{path}.{bound}", "invalid_type", f"{bound} must be a number")
+    if cell.get("type") == "select":
+        options = cell.get("options")
+        if not isinstance(options, list) or not options or not all(isinstance(o, dict) and isinstance(o.get("value"), str) and o["value"] != ""
+                                                                   and isinstance(o.get("label"), str) for o in options):
+            ctx.add(f"{path}.options", "invalid_option", "A select cell needs options [{value, label}]")
+        elif len({o["value"] for o in options}) != len(options):
+            ctx.add(f"{path}.options", "invalid_option", "Option values must be unique")
+
+
+def _matrix_items(ctx: _Ctx, items: Any, path: str, name: str) -> list[dict[str, Any]]:
+    if not isinstance(items, list) or not items or len(items) > MAX_MATRIX_ITEMS:
+        ctx.add(path, "invalid_type", f"{name} must be a list of 1-{MAX_MATRIX_ITEMS} {{id, label}}")
+        return []
+    seen: set[str] = set()
+    out = []
+    for index, item in enumerate(items):
+        item_path = f"{path}[{index}]"
+        if not isinstance(item, dict) or not isinstance(item.get("id"), str) or not ITEM_ID.match(item["id"]):
+            ctx.add(f"{item_path}.id", "invalid_field_id", "id must be lower snake case")
+            continue
+        if item["id"] in seen:
+            ctx.add(f"{item_path}.id", "duplicate_field_id", f"Duplicate id '{item['id']}'")
+        seen.add(item["id"])
+        if not isinstance(item.get("label"), str) or not item["label"].strip():
+            ctx.add(f"{item_path}.label", "invalid_label", "label is required")
+        out.append(item)
+    return out
+
+
+def _validate_matrix(ctx: _Ctx, field: dict[str, Any], path: str) -> None:
+    """matrix: fixed rows x cols of cells (score sheets such as the Aldrete score); a row may override the cell;
+    totals are computed rows (sums of numeric rows), never stored."""
+    _matrix_cell_ok(ctx, field.get("cell"), f"{path}.cell")
+    rows = _matrix_items(ctx, field.get("rows"), f"{path}.rows", "rows")
+    _matrix_items(ctx, field.get("cols"), f"{path}.cols", "cols")
+    for index, row in enumerate(rows):
+        ctx.unknown(row, {"id", "label", "cell"}, f"{path}.rows[{index}]")
+        if "cell" in row:
+            _matrix_cell_ok(ctx, row["cell"], f"{path}.rows[{index}].cell")
+    numeric = {row["id"] for row in rows if (row.get("cell") or field.get("cell") or {}).get("type") in MATRIX_NUMERIC}
+    if "totals" in field:
+        totals = _matrix_items(ctx, field["totals"], f"{path}.totals", "totals")
+        for index, total in enumerate(totals):
+            total_path = f"{path}.totals[{index}]"
+            ctx.unknown(total, {"id", "label", "of"}, total_path)
+            if total["id"] in {row["id"] for row in rows}:
+                ctx.add(f"{total_path}.id", "duplicate_field_id", f"'{total['id']}' is also a row id")
+            of = total.get("of")
+            if not isinstance(of, list) or not of or not all(isinstance(key, str) and key in numeric for key in of):
+                ctx.add(f"{total_path}.of", "unknown_field_reference", "of lists the numeric rows to add up")
+
+
+def matrix_cell(field: dict[str, Any], row: dict[str, Any]) -> dict[str, Any]:
+    return row.get("cell") if isinstance(row.get("cell"), dict) else field.get("cell") or {}
+
+
+def matrix_totals(field: dict[str, Any], value: Any) -> dict[str, dict[str, float | None]]:
+    """Total rows of a matrix value: per column, the sum of the listed rows (None when none of them has a value)."""
+    data = value if isinstance(value, dict) else {}
+    out: dict[str, dict[str, float | None]] = {}
+    for total in field.get("totals") or []:
+        sums: dict[str, float | None] = {}
+        for col in field.get("cols") or []:
+            cells = [(data.get(row) or {}).get(col["id"]) for row in total.get("of") or []]
+            numbers = [cell for cell in cells if is_number(cell)]
+            sums[col["id"]] = sum(numbers) if numbers else None
+        out[total["id"]] = sums
+    return out
 
 
 def _validate_calculated(ctx: _Ctx, field: dict[str, Any], path: str) -> None:
@@ -1433,11 +1538,43 @@ def _value_list(field: dict[str, Any], value: Any, path: str) -> list[Issue]:
     return issues
 
 
+def _value_matrix(field: dict[str, Any], value: Any, path: str) -> list[Issue]:
+    if not isinstance(value, dict):
+        return [Issue(path, "invalid_type", "Expected {row: {column: value}}")]
+    rows = {row["id"]: row for row in field.get("rows") or [] if isinstance(row, dict) and "id" in row}
+    cols = {col["id"] for col in field.get("cols") or [] if isinstance(col, dict) and "id" in col}
+    issues: list[Issue] = []
+    for row_id in sorted(value):
+        row_path = f"{path}.{row_id}"
+        cells = value[row_id]
+        if row_id not in rows or not isinstance(cells, dict):
+            issues.append(Issue(row_path, "unknown_field", f"'{row_id}' is not a row of this matrix"))
+            continue
+        cell = matrix_cell(field, rows[row_id])
+        for col_id in sorted(cells):
+            cell_path, item = f"{row_path}.{col_id}", cells[col_id]
+            if col_id not in cols:
+                issues.append(Issue(cell_path, "unknown_field", f"'{col_id}' is not a column of this matrix"))
+            elif item is None:
+                continue
+            elif cell.get("type") in MATRIX_NUMERIC:
+                if not is_number(item) or (cell["type"] == "integer" and not float(item).is_integer()):
+                    issues.append(Issue(cell_path, "invalid_type", "Expected an integer" if cell["type"] == "integer" else "Expected a number"))
+                elif (is_number(cell.get("min")) and item < cell["min"]) or (is_number(cell.get("max")) and item > cell["max"]):
+                    issues.append(Issue(cell_path, "out_of_range", "Value is outside the allowed range"))
+            elif cell.get("type") == "select":
+                if item not in {option.get("value") for option in cell.get("options") or []}:
+                    issues.append(Issue(cell_path, "invalid_option", "Not one of the options"))
+            elif not isinstance(item, str) or len(item) > 200:
+                issues.append(Issue(cell_path, "invalid_type", "Expected text (at most 200 characters)"))
+    return issues
+
+
 VALUE_VALIDATORS: dict[str, Callable[[dict[str, Any], Any, str], list[Issue]]] = {
     "text": _value_text, "number": _value_number, "integer": _value_number, "decimal": _value_number,
     "date": _value_temporal, "datetime": _value_temporal, "time": _value_temporal,
     "option": _value_option, "options": _value_options, "boolean": _value_boolean,
-    "file": _value_file, "signature": _value_signature, "list": _value_list,
+    "file": _value_file, "signature": _value_signature, "list": _value_list, "matrix": _value_matrix,
 }
 
 

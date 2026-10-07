@@ -23,9 +23,9 @@ FIELD_TYPES: dict[str, dict[str, Any]] = {
     "date": {"value": "date", "query": "text", "index": "text", "props": []},
     "datetime": {"value": "datetime", "query": "datetime", "index": "datetime", "props": []},
     "time": {"value": "time", "query": "text", "index": "text", "props": []},
-    "select": {"value": "option", "query": "text", "index": "text", "props": ["options", "placeholder", "lookup"]},
-    "radio": {"value": "option", "query": "text", "index": "text", "props": ["options", "lookup"]},
-    "multiselect": {"value": "options", "query": "multi", "index": None, "props": ["options", "lookup"]},
+    "select": {"value": "option", "query": "text", "index": "text", "props": ["options", "placeholder", "lookup", "option_columns"]},
+    "radio": {"value": "option", "query": "text", "index": "text", "props": ["options", "lookup", "option_columns"]},
+    "multiselect": {"value": "options", "query": "multi", "index": None, "props": ["options", "lookup", "option_columns"]},
     "checkbox": {"value": "boolean", "query": "bool", "index": "num", "props": []},
     "switch": {"value": "boolean", "query": "bool", "index": "num", "props": []},
     "file": {"value": "file", "query": "blob", "index": None, "props": ["accept", "max_size_kb", "multiple"]},
@@ -34,6 +34,7 @@ FIELD_TYPES: dict[str, dict[str, Any]] = {
     "calculated": {"value": "number", "query": "num", "index": "num", "props": ["unit", "formula", "calculator", "decimals"]},
     "group": {"value": None, "query": None, "index": None, "props": ["fields", "columns"]},
     "repeat": {"value": "list", "query": "list", "index": None, "props": ["fields", "columns", "min_items", "max_items", "view"]},
+    "matrix": {"value": "matrix", "query": None, "index": None, "props": ["rows", "cols", "cell", "totals"]},
 }
 
 STYLE_COMPONENTS = ("label", "input", "section", "header", "footer")

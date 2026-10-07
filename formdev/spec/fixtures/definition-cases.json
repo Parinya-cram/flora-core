@@ -1897,6 +1897,424 @@
   ]
  },
  {
+  "name": "p1: matrix with totals",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "m",
+       "type": "matrix",
+       "label": "M",
+       "cell": {
+        "type": "integer",
+        "min": 0,
+        "max": 2
+       },
+       "rows": [
+        {
+         "id": "a",
+         "label": "A"
+        },
+        {
+         "id": "b",
+         "label": "B"
+        }
+       ],
+       "cols": [
+        {
+         "id": "x",
+         "label": "X"
+        }
+       ],
+       "totals": [
+        {
+         "id": "t",
+         "label": "T",
+         "of": [
+          "a",
+          "b"
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: matrix needs rows and cols",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "m",
+       "type": "matrix",
+       "label": "M",
+       "cell": {
+        "type": "text"
+       },
+       "rows": [],
+       "cols": "x"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_type",
+   "invalid_type"
+  ]
+ },
+ {
+  "name": "p1: matrix cell type",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "m",
+       "type": "matrix",
+       "label": "M",
+       "cell": {
+        "type": "date"
+       },
+       "rows": [
+        {
+         "id": "a",
+         "label": "A"
+        }
+       ],
+       "cols": [
+        {
+         "id": "x",
+         "label": "X"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_field_type"
+  ]
+ },
+ {
+  "name": "p1: matrix select cell needs options",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "m",
+       "type": "matrix",
+       "label": "M",
+       "cell": {
+        "type": "select"
+       },
+       "rows": [
+        {
+         "id": "a",
+         "label": "A"
+        }
+       ],
+       "cols": [
+        {
+         "id": "x",
+         "label": "X"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_option"
+  ]
+ },
+ {
+  "name": "p1: matrix duplicate row",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "m",
+       "type": "matrix",
+       "label": "M",
+       "cell": {
+        "type": "text"
+       },
+       "rows": [
+        {
+         "id": "a",
+         "label": "A"
+        },
+        {
+         "id": "a",
+         "label": "B"
+        }
+       ],
+       "cols": [
+        {
+         "id": "x",
+         "label": "X"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "duplicate_field_id"
+  ]
+ },
+ {
+  "name": "p1: matrix total of a text row",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "m",
+       "type": "matrix",
+       "label": "M",
+       "cell": {
+        "type": "text"
+       },
+       "rows": [
+        {
+         "id": "a",
+         "label": "A"
+        }
+       ],
+       "cols": [
+        {
+         "id": "x",
+         "label": "X"
+        }
+       ],
+       "totals": [
+        {
+         "id": "t",
+         "label": "T",
+         "of": [
+          "a"
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "unknown_field_reference"
+  ]
+ },
+ {
+  "name": "p1: option columns",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "c",
+       "type": "multiselect",
+       "label": "C",
+       "option_columns": 4,
+       "options": [
+        {
+         "value": "a",
+         "label": "A"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: option columns range",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "c",
+       "type": "radio",
+       "label": "C",
+       "option_columns": 9,
+       "options": [
+        {
+         "value": "a",
+         "label": "A"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_columns"
+  ]
+ },
+ {
+  "name": "p1: option columns only on choices",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "t",
+       "type": "text",
+       "label": "T",
+       "option_columns": 2
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "property_not_supported"
+  ]
+ },
+ {
   "name": "p1: no index inside a repeat",
   "definition": {
    "format": "flora.form/1",
@@ -2722,6 +3140,157 @@
   },
   "valid": true,
   "codes": []
+ },
+ {
+  "name": "p1: paper header and boxed sections",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ],
+     "print_style": "boxed",
+     "hide_title": true,
+     "repeat_on_pages": "header"
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: paper keys are checked",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ],
+     "print_style": "framed",
+     "hide_title": "yes",
+     "repeat_on_pages": "side"
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_layout",
+   "invalid_layout",
+   "invalid_type"
+  ]
+ },
+ {
+  "name": "p1: only top-level sections repeat on pages",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    },
+    {
+     "id": "outer",
+     "title": "Outer",
+     "sections": [
+      {
+       "id": "inner",
+       "title": "Inner",
+       "fields": [
+        {
+         "id": "other",
+         "type": "text",
+         "label": "Other"
+        }
+       ],
+       "repeat_on_pages": "footer"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_layout"
+  ]
+ },
+ {
+  "name": "p1: categories cannot repeat on pages",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ],
+     "categories": [
+      {
+       "id": "c1",
+       "title": "C",
+       "fields": [
+        {
+         "id": "other",
+         "type": "text",
+         "label": "Other"
+        }
+       ],
+       "repeat_on_pages": "header",
+       "print_style": "boxed"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "unknown_property"
+  ]
  },
  {
   "name": "p1: sections nest at most four levels",

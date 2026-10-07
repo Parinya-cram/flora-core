@@ -4,7 +4,7 @@
  * Adding a field type means a row here, a value validator in validate.ts and an input in the renderer.
  */
 
-export type ValueKind = "text" | "number" | "integer" | "decimal" | "date" | "datetime" | "time" | "option" | "options" | "boolean" | "file" | "signature" | "list";
+export type ValueKind = "text" | "number" | "integer" | "decimal" | "date" | "datetime" | "time" | "option" | "options" | "boolean" | "file" | "signature" | "list" | "matrix";
 export type FieldTypeSpec = { value: ValueKind | null; query: string | null; index: "text" | "num" | "datetime" | null; props: readonly string[] };
 
 export const COMMON_PROPS = ["id", "key", "type", "label", "description", "required", "readonly", "hidden", "visible", "display", "layout", "style",
@@ -21,9 +21,9 @@ export const FIELD_TYPE_SPECS = {
   date: { value: "date", query: "text", index: "text", props: [] },
   datetime: { value: "datetime", query: "datetime", index: "datetime", props: [] },
   time: { value: "time", query: "text", index: "text", props: [] },
-  select: { value: "option", query: "text", index: "text", props: ["options", "placeholder", "lookup"] },
-  radio: { value: "option", query: "text", index: "text", props: ["options", "lookup"] },
-  multiselect: { value: "options", query: "multi", index: null, props: ["options", "lookup"] },
+  select: { value: "option", query: "text", index: "text", props: ["options", "placeholder", "lookup", "option_columns"] },
+  radio: { value: "option", query: "text", index: "text", props: ["options", "lookup", "option_columns"] },
+  multiselect: { value: "options", query: "multi", index: null, props: ["options", "lookup", "option_columns"] },
   checkbox: { value: "boolean", query: "bool", index: "num", props: [] },
   switch: { value: "boolean", query: "bool", index: "num", props: [] },
   file: { value: "file", query: "blob", index: null, props: ["accept", "max_size_kb", "multiple"] },
@@ -32,6 +32,7 @@ export const FIELD_TYPE_SPECS = {
   calculated: { value: "number", query: "num", index: "num", props: ["unit", "formula", "calculator", "decimals"] },
   group: { value: null, query: null, index: null, props: ["fields", "columns"] },
   repeat: { value: "list", query: "list", index: null, props: ["fields", "columns", "min_items", "max_items", "view"] },
+  matrix: { value: "matrix", query: null, index: null, props: ["rows", "cols", "cell", "totals"] },
 } as const satisfies Record<string, FieldTypeSpec>;
 
 export type FieldType = keyof typeof FIELD_TYPE_SPECS;

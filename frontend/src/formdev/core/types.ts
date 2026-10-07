@@ -119,6 +119,13 @@ export type FieldDefinition = {
   max_items?: number;
   /** repeat: "cards" (default, one card per row) or "table" (spreadsheet-like grid: one row per item). */
   view?: "cards" | "table";
+  /** radio, select, multiselect: options laid out in this many columns (1-6). */
+  option_columns?: number;
+  /** matrix: fixed rows x cols of cells; a row may override the default cell; totals are computed rows. */
+  rows?: MatrixRow[];
+  cols?: Array<{ id: string; label: string }>;
+  cell?: MatrixCell;
+  totals?: Array<{ id: string; label: string; of: string[] }>;
 };
 
 /** A named sub-group between section and field (Phase 2.0); its fields share the section's data scope. */
@@ -133,10 +140,17 @@ export type CategoryDefinition = {
   permission?: Pick<Permission, "view" | "edit">;
   page_break?: PageBreak;
   repeat?: RepeatBlock;
-};
+} & PaperKeys;
 
 /** Makes a section or category repeatable: its fields are stored as a list of items under key (Phase 2.7). */
 export type RepeatBlock = { key: string; min_items?: number; max_items?: number };
+
+export type MatrixCell = { type: "integer" | "number" | "text" | "select"; options?: Array<{ value: string; label: string }>; min?: number; max?: number };
+export type MatrixRow = { id: string; label: string; cell?: MatrixCell };
+/** matrix values: {row id: {column id: value}}. */
+export type MatrixValue = Record<string, Record<string, string | number | null>>;
+/** Paper layout (Template phase): boxed = bordered cells with "Label: value"; hide_title leaves the title out. */
+export type PaperKeys = { print_style?: "plain" | "boxed"; hide_title?: boolean };
 
 export type SectionDefinition = {
   id: string;
@@ -151,7 +165,9 @@ export type SectionDefinition = {
   visibility?: Visibility;
   permission?: Pick<Permission, "view" | "edit">;
   page_break?: PageBreak;
-};
+  /** Top-level sections: drawn at the top or bottom of every printed page. */
+  repeat_on_pages?: "header" | "footer";
+} & PaperKeys;
 
 export type CalculatorDefinition = {
   id: string;
