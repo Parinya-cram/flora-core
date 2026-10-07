@@ -14,6 +14,18 @@ services:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
+  # LAN DNS so every device on the network resolves *.flora.local -> this VM
+  # without per-machine /etc/hosts. Point the router's DHCP DNS (or each client)
+  # at this VM's IP. If port 53 fails to bind, disable systemd-resolved stub on
+  # the VM (see docs). Forwards other queries to 1.1.1.1 / 8.8.8.8.
+  dns:
+    build:
+      context: ./dns
+    ports:
+      - "${FLORA_BIND_ADDR:-0.0.0.0}:53:53/udp"
+      - "${FLORA_BIND_ADDR:-0.0.0.0}:53:53/tcp"
+    restart: unless-stopped
+
   # Cloudflare quick tunnel (TryCloudflare) — FREE, no token/domain needed.
   # Gives a random https://<random>.trycloudflare.com URL for demo. Points at the
   # Leaf UI by default; change --url to canopy (6894) or root (7100) if needed.
