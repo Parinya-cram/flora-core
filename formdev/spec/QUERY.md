@@ -123,6 +123,12 @@ process · record pulls (`GET /records`, used by offline clients) 600/min per us
 - On timeout the database cancels the statement, the transaction rolls back, the connection returns
   clean to the pool, the event is logged with the query fingerprint only, and the caller gets
   `query_timeout` (504) with a hint. Driver errors become `query_failed` (500) without driver text.
+- List pages ordered by a metadata column are read order-first (walk the order index, filter each record)
+  unless a bounded density probe finds fewer than one page of matches among the next 20 pages and the
+  candidate set is smaller than that walk: then filter-first (candidates from the index, then a top-N sort).
+  Both return the same pages; this avoids the LIMIT trap when matches are old or rare.
+- Job reads may use parallel workers; when PostgreSQL has no shared memory for them (SQLSTATE 53100, a small
+  `/dev/shm`) the read is retried without them. Run PostgreSQL containers with `shm_size` ≥ 1 GB.
 - Rate and concurrency limits are checked before a connection is taken; pool waits are bounded
   (2 s → `database_busy`, 503).
 - Cache keys combine the query, the page position, the caller's roles and permissions, the source's

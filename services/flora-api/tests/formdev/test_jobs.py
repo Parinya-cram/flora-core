@@ -501,6 +501,32 @@ class JobContract(QueryContract):
         self.assertEqual(self.reindex_jobs("queued"), [], "nothing left to rebuild")
 
 
+    def test_parallel_shared_memory_exhaustion_falls_back_to_a_serial_read(self):
+        """1M benchmark: SQLSTATE 53100 (no /dev/shm for parallel workers) retries the read without parallelism."""
+        from app.formdev.adapters.sql_query import QueryFailed
+
+        body = {"query": {"source": "ward_check", "group": ["ward"], "aggregate": [{"fn": "count", "as": "n"}]}}
+        job = self.jobs().create("report", body, "csv")
+        original = self.adapter.read_session
+        purposes = []
+
+        @contextmanager
+        def no_shared_memory(timeout_ms, purpose="interactive"):
+            purposes.append(purpose)
+            if purpose == "job":
+                raise QueryFailed("sqlstate_53100")
+            with original(timeout_ms, purpose) as session:
+                yield session
+
+        self.adapter.read_session = no_shared_memory
+        try:
+            self.run_all()
+        finally:
+            self.adapter.read_session = original
+        self.assertEqual(self.adapter.get_job(job["job_id"])["status"], "succeeded")
+        self.assertIn("job_serial", purposes)
+
+
 class SQLiteJobContract(JobContract, unittest.TestCase):
     def make_adapter(self):
         from app.formdev.adapters.sqlite import SQLiteAdapter

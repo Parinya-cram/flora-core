@@ -253,7 +253,8 @@ class Generator:
             "fall_risk": "yes" if rng.random() < 0.20 else "no",
             "assessed_at": iso(created - rng.randint(0, 6 * 3_600_000), utc=rng.random() < 0.5),
             "score": round(rng.uniform(0, 100), 1), "weight_kg": weight, "height_cm": height,
-            "bmi": round(weight / ((height / 100) ** 2), 2),
+            # As the form computes it (the server derives calculated fields on every write): no rounding.
+            "bmi": weight / ((height / 100) * (height / 100)),
             "full_name": f"{rng.choice(THAI_FIRST)} {rng.choice(THAI_LAST)} {rng.randrange(1000)}",
         }
         if rng.random() >= 0.25:

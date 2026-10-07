@@ -301,7 +301,7 @@ class Bench:
         folder = tempfile.mkdtemp(prefix="perf-jobs-")
         store = ResultStore(folder)
         service = JobService(self.runtime, self.services, EXPORTER, store)
-        worker = JobWorker(self.runtime, self.job_services, PRINCIPALS.get, store, threads=0)
+        worker = JobWorker(self.runtime, self.job_services, lambda services, user_id: PRINCIPALS.get(user_id), store, threads=0)
         gc.collect()
         rss_before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         if memory:

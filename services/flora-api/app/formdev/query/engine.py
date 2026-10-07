@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from ..adapters.sql_query import QueryFailed, QueryTimeout, compile_plan, relation_lookup
+from ..adapters.sql_query import QueryFailed, QueryTimeout, SqlQueryCompiler, compile_plan, relation_lookup
 from ..errors import FormDevError
 from ..field_types import INDEX_FAMILY
 from ..migration import migrate
@@ -163,6 +163,9 @@ def relation_key(value: Any, column: str) -> Any:
     return str(value)
 
 
+FILTER_FIRST_MAX_CANDIDATES = 100_000  # beyond this, sorting the matches costs more than any walk we would avoid
+
+
 class QueryEngine:
     def __init__(self, runtime: QueryRuntime, services: Any, principal: Principal):
         self.runtime = runtime
@@ -271,6 +274,9 @@ class QueryEngine:
                     return result
                 if test_sleep_ms:
                     session.sleep(test_sleep_ms)
+                if spec["kind"] == "list" and self._filter_first(session, plan):
+                    plan.drive = "filter"
+                    compiled = compile_plan(plan)
                 rows = session.fetch(compiled)
                 total = int(session.fetch(count)[0]["total"]) if count else None
                 relations = self._relations(session, spec, catalog, rows[: plan.limit]) if spec["kind"] == "list" else {}
@@ -299,6 +305,22 @@ class QueryEngine:
         if plan_info is not None:
             result["diagnostics"].update({"storage": self.adapter.vendor, "sql": compiled.sql, "plan": plan_info})
         return result
+
+    def _filter_first(self, session: Any, plan: QueryPlan) -> bool:
+        """The LIMIT trap: walking the order index finds a page quickly only where matches are dense. A bounded
+        probe counts matches among the next DENSITY_WINDOW_PAGES pages of records; when there is less than a page,
+        the expected walk (window x page / hits) is compared with the number of candidates the filter-first page
+        would sort, counted through the index up to that size. Fewer candidates: collect and sort them instead."""
+        compiler = SqlQueryCompiler(plan)
+        if not compiler.can_drive_by_filter():
+            return False
+        hits = int(session.fetch(SqlQueryCompiler(plan).density_probe())[0]["hits"])
+        if hits > plan.limit:
+            return False
+        walk = compiler.density_window() * (plan.limit + 1) // max(hits, 1) * (1 if hits else 2)
+        cap = min(walk, FILTER_FIRST_MAX_CANDIDATES)
+        candidates = int(session.fetch(SqlQueryCompiler(plan).candidate_count(cap))[0]["total"])
+        return candidates <= cap
 
     # Results -------------------------------------------------------------------------------
     def _sign(self, values: list[Any] | None, query_fp: str) -> str | None:

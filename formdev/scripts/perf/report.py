@@ -12,7 +12,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 RESULTS = HERE.parents[1] / "docs" / "perf" / "results"
-ORDER = ["100k", "1m", "1m-churn"]
+ORDER = ["100k", "300k", "1m", "1m-churn"]
 
 
 def load(name: str) -> dict | None:
@@ -37,7 +37,7 @@ def fmt(value, digits: int = 1) -> str:
 def load_table() -> list[str]:
     out = ["| Dataset | Records (all forms) | perf_assessment | Index rows | COPY s | COPY rows/s | Index rebuild s | VACUUM ANALYZE s | Total s | WAL | DB size | Generator check |",
            "|---|---|---|---|---|---|---|---|---|---|---|---|"]
-    for label in ("100k", "1m"):
+    for label in ("100k", "300k", "1m"):
         data = load(f"load-{label}.json")
         if not data:
             continue
@@ -55,7 +55,7 @@ def load_table() -> list[str]:
 
 def size_table() -> list[str]:
     out = ["| Dataset | Relation | Heap | Indexes (total) | Per index |", "|---|---|---|---|---|"]
-    for label in ("100k", "1m"):
+    for label in ("100k", "300k", "1m"):
         data = load(f"load-{label}.json")
         if not data or data.get("aborted"):
             continue

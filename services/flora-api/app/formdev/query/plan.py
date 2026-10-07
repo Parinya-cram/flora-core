@@ -74,6 +74,10 @@ class QueryPlan:
     group_order: tuple[tuple[str, str], ...] = ()  # (output name, direction)
     count_cap: int = 0
     extras: dict[str, Any] = field(default_factory=dict)
+    # list pages ordered by a metadata column: "order" walks that column's index and filters (fast when matches
+    # are dense among the newest records); "filter" collects the matches from the index first and sorts them
+    # (when they are sparse there: the LIMIT trap). The engine chooses with a bounded density probe.
+    drive: str = "order"
 
 
 def _value_values(ref: dict[str, Any], values: list[Any]) -> tuple[Any, ...]:

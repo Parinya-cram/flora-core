@@ -115,7 +115,7 @@ class PostgreSQLAdapter(SqlDataAdapter):
         transaction_timeout ends an interactive session the pool discards the closed connection."""
         interactive = purpose == "interactive"
         settings = [("statement_timeout", f"{int(timeout_ms)}ms"), ("plan_cache_mode", "force_custom_plan"),
-                    ("jit", "off" if interactive else "on"), ("max_parallel_workers_per_gather", "0" if interactive else "2"),
+                    ("jit", "off" if interactive else "on"), ("max_parallel_workers_per_gather", "0" if interactive or purpose == "job_serial" else "2"),
                     ("work_mem", "32MB" if interactive else "128MB")]
         if interactive and self.connection.info.server_version >= 170000:
             settings.append(("transaction_timeout", f"{int(timeout_ms) + 2000}ms"))

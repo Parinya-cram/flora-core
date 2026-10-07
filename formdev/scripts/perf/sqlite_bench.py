@@ -174,7 +174,7 @@ def main() -> int:
     body = {"query": {"source": SOURCE, "group": ["ward"], "aggregate": [{"fn": "count", "as": "n"}]}}
     started = time.perf_counter()
     job = JobService(runtime, services, EXPORTER, store).create("aggregate", body, "json")
-    JobWorker(runtime, connect, PRINCIPALS.get, store, threads=0).run_once("perf-sqlite")
+    JobWorker(runtime, connect, lambda services, user_id: PRINCIPALS.get(user_id), store, threads=0).run_once("perf-sqlite")
     elapsed = time.perf_counter() - started
     row = adapter.get_job(job["job_id"])
     content = json.loads(store.final(job["job_id"], "json").read_text()) if row["status"] == "succeeded" else {"rows": []}

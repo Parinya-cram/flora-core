@@ -18,6 +18,9 @@ RECORD_COLUMNS = {"record_id", "status", "schema_version", "version", "created_a
 # Columns that may be NULL: their conditions are made two-valued so that NOT keeps the NULL rows (plan.py: "not F"
 # is every record for which F is false).
 NULLABLE_COLUMNS = {"subject_id", "ingested_at", "ingest_seq"}
+# formdev_record columns with a (form_id, column) index: a condition on them can drive a filter-first page.
+DRIVING_META = {"subject_id", "created_at", "updated_at", "record_id"}
+DENSITY_WINDOW_PAGES = 20
 VALUE_COLUMNS = {"value_text", "value_num"}
 COMPARE = {"eq": "=", "ne": "<>", "lt": "<", "lte": "<=", "gt": ">", "gte": ">="}
 DIRECTIONS = {"asc": "ASC", "desc": "DESC"}
@@ -138,11 +141,112 @@ class SqlQueryCompiler:
         meta = [f"r.{_col(column, RECORD_COLUMNS)}" for column in self.plan.meta_columns if column not in ("record_id", "schema_version")]
         return ", ".join(["r.record_id", "r.schema_version", "r.data", *meta])
 
+    # Filter-first pages -------------------------------------------------------------------
+    def _driving(self, node: Leaf | Node | None) -> str | None:
+        """A query returning (a superset of) the record_ids that can match ``node``, read through an index, or None
+        when no index can produce it (NOT, missing values, metadata without an index). The full predicate is still
+        applied to every candidate."""
+        if node is None:
+            return None
+        if isinstance(node, Leaf):
+            if node.kind in ("index", "present"):
+                alias = self._next("d")
+                parts = [f"{alias}.form_id = {self._bind(self.plan.form_id)}", f"{alias}.field_id = {self._bind(node.field)}"]
+                if self.plan.live:
+                    parts.append(f"{alias}.{LIVE_INDEX}")
+                if node.kind == "index":
+                    parts.append(self._cond(f"{alias}.{_col(node.column, VALUE_COLUMNS)}", node.op, node.values))
+                return f"SELECT {alias}.record_id FROM formdev_record_index {alias} WHERE {' AND '.join(parts)}"
+            if node.kind == "meta" and node.column in DRIVING_META and node.op not in ("is_null", "is_not_null", "ne"):
+                alias = self._next("d")
+                return (f"SELECT {alias}.record_id FROM formdev_record {alias} WHERE {alias}.form_id = {self._bind(self.plan.form_id)}"
+                        f" AND {self._meta(alias, node)}")
+            return None
+        if node.op == "and":
+            for child in node.args:
+                mark = (len(self.params), self._alias)
+                found = self._driving(child)
+                if found is not None:
+                    return found
+                del self.params[mark[0]:]
+            return None
+        if node.op == "or":
+            mark = len(self.params)
+            parts = []
+            for child in node.args:
+                found = self._driving(child)
+                if found is None:
+                    del self.params[mark:]
+                    return None
+                parts.append(found)
+            return " UNION ".join(parts)
+        return None
+
+    def can_drive_by_filter(self) -> bool:
+        order = self.plan.order
+        if order is None or order.kind != "meta" or not order.unique or self.plan.offset or self.plan.where is None:
+            return False
+        if order.column not in ("ingest_seq", "created_at", "updated_at", "ingested_at"):
+            return False  # numeric order columns only: "column + 0" hides their index from the planner on every vendor
+        return SqlQueryCompiler(self.plan)._driving(self.plan.where) is not None
+
+    def density_probe(self) -> CompiledQuery:
+        """How many of the next DENSITY_WINDOW_PAGES pages of records (in the page's order, after its keyset) match:
+        fewer than one page means the matches are sparse there, and walking the order would scan far."""
+        order = self.plan.order
+        assert order is not None
+        direction = DIRECTIONS[order.direction]
+        column = _col(order.column, RECORD_COLUMNS)
+        window = f"SELECT w.record_id FROM formdev_record w WHERE w.form_id = {self._bind(self.plan.form_id)}"
+        if self.plan.live:
+            window += " AND w.status <> 'deleted'"
+        if self.plan.keyset is not None:
+            window += f" AND w.{column} {'<' if order.direction == 'desc' else '>'} {self._bind(self.plan.keyset[0])}"
+        window += f" ORDER BY w.{column} {direction} LIMIT {self._bind(self.density_window())}"
+        where = self.predicate(self.plan.where, "k")
+        # Stops at one page of matches: dense filters (the common case) cost a few index probes.
+        sql = (f"SELECT COUNT(*) AS hits FROM (SELECT 1 AS one FROM ({window}) win JOIN formdev_record k ON k.record_id = win.record_id"
+               f" WHERE {where} LIMIT {self._bind(self.plan.limit + 1)}) h")
+        return CompiledQuery(sql, tuple(self.params))
+
+    def density_window(self) -> int:
+        return (self.plan.limit + 1) * DENSITY_WINDOW_PAGES
+
+    def candidate_count(self, cap: int) -> CompiledQuery:
+        """How many candidates the filter-first page would sort, counted through the index up to ``cap``."""
+        driving = self._driving(self.plan.where)
+        assert driving is not None
+        return CompiledQuery(f"SELECT COUNT(*) AS total FROM ({driving} LIMIT {self._bind(cap + 1)}) c", tuple(self.params))
+
+    def _filter_first_list(self) -> CompiledQuery:
+        order = self.plan.order
+        assert order is not None and order.unique
+        direction = DIRECTIONS[order.direction]
+        column = _col(order.column, RECORD_COLUMNS)
+        driving = self._driving(self.plan.where)
+        assert driving is not None
+        scope = self._scope("k")
+        keyset = ""
+        if self.plan.keyset is not None:
+            keyset = f" AND k.{column} {'<' if order.direction == 'desc' else '>'} {self._bind(self.plan.keyset[0])}"
+        limit = self._bind(self.plan.limit + 1)
+        # Materialized candidates, and an order expression no index provides: the database collects the matches
+        # through the index and sorts only them, instead of walking the order index past every non-match.
+        sort = f"k.{column} + 0"
+        sql = (f"WITH candidates AS MATERIALIZED ({driving}) "
+               f"SELECT {self._output_columns()}, page.ok AS order_value FROM ("
+               f"SELECT k.record_id AS rid, k.{column} AS ok FROM candidates c JOIN formdev_record k ON k.record_id = c.record_id"
+               f" WHERE {scope}{keyset} ORDER BY {sort} {direction} LIMIT {limit}) page"
+               f" JOIN formdev_record r ON r.record_id = page.rid ORDER BY page.ok {direction}")
+        return CompiledQuery(sql, tuple(self.params))
+
     def list_query(self) -> CompiledQuery:
         order = self.plan.order
         assert order is not None
         if order.kind == "field":
             return self._field_sorted_list()
+        if self.plan.drive == "filter" and self.can_drive_by_filter():
+            return self._filter_first_list()
         direction = DIRECTIONS[order.direction]
         column = _col(order.column, RECORD_COLUMNS)
         scope = self._scope("k")

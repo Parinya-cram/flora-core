@@ -420,6 +420,45 @@ class QueryContract:
         self.assertIn(("index_field", "full_name"), {(item["kind"], item.get("field")) for item in advice})
 
 
+    # Performance review (1M benchmark): the LIMIT trap ---------------------------------------------
+    def test_filter_first_pages_equal_order_first_pages(self):
+        """Both list strategies return the same pages (keyset paging included); the probe picks filter-first when
+        matches are sparse among the next pages of records."""
+        import dataclasses
+
+        from app.formdev.adapters.sql_query import SqlQueryCompiler
+        from app.formdev.query.plan import build_plan
+
+        filters = [
+            {"field": "ward", "op": "eq", "value": "W2"},
+            {"field": "seen_at", "op": "between", "value": ["2026-10-02T00:00:00Z", "2026-10-05T00:00:00Z"]},
+            {"or": [{"field": "$subject_id", "op": "eq", "value": "HN-0007"}, {"field": "ward", "op": "eq", "value": "W3"}]},
+            {"and": [{"not": {"field": "smoker", "op": "eq", "value": True}}, {"field": "age", "op": "gte", "value": 30}]},
+            {"field": "$created_at", "op": "gte", "value": "2026-01-01T00:00:00Z"},
+        ]
+        engine = self.engine(ADMIN)
+        for node in filters:
+            _, spec, _ = engine.require_valid({"query": {"source": "ward_check", "select": ["hn"], "filter": node, "pagination": {"mode": "cursor", "limit": 4}}})
+            keyset, pages = None, {"order": [], "filter": []}
+            for drive in ("order", "filter"):
+                keyset = None
+                while True:
+                    plan = dataclasses.replace(build_plan(spec, keyset), drive=drive)
+                    self.assertTrue(SqlQueryCompiler(plan).can_drive_by_filter(), node)
+                    with self.adapter.read_session(5000) as session:
+                        rows = session.fetch(compile_plan(plan))
+                    pages[drive].append([row["record_id"] for row in rows[: plan.limit]])
+                    if len(rows) <= plan.limit:
+                        break
+                    keyset = (rows[plan.limit - 1]["order_value"],)
+            self.assertEqual(pages["order"], pages["filter"], node)
+            self.assertGreater(sum(map(len, pages["order"])), 0, node)
+        with self.adapter.read_session(5000) as session:
+            dense = build_plan(engine.require_valid({"query": {"source": "ward_check", "select": ["hn"], "filter": {"field": "ward", "op": "in", "value": ["W1", "W2", "W3"]},
+                                                              "pagination": {"mode": "cursor", "limit": 2}}})[1])
+            self.assertGreater(int(session.fetch(SqlQueryCompiler(dense).density_probe())[0]["hits"]), dense.limit)
+
+
 class SQLiteQueryContract(QueryContract, unittest.TestCase):
     def make_adapter(self):
         return SQLiteAdapter(":memory:")

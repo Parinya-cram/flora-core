@@ -1,6 +1,8 @@
 services:
   postgres:
     image: postgres:17.6-alpine
+    # Parallel query (FormDev report and export jobs) needs shared memory; Docker's default /dev/shm is 64 MB.
+    shm_size: 1gb
     environment:
       POSTGRES_DB: ${FLORA_POSTGRES_DB:-flora}
       POSTGRES_USER: ${FLORA_POSTGRES_ADMIN_USER:-flora_admin}

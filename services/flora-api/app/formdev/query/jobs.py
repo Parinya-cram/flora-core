@@ -511,6 +511,20 @@ class JobWorker:
         self._fenced(services, job, owner, {"checkpoint": checkpoint, "rows_processed": rows, "heartbeat_at": now,
                                              "lease_expires_at": now + max(self.policy["lease_ms"], extend_ms or 0)})
 
+    def _read(self, services: Any, timeout_ms: int, work: Callable[[Any], Any]) -> Any:
+        """``work(session)`` in a job read session. Job sessions may use parallel workers; when the server cannot
+        give them shared memory (SQLSTATE 53100: a small /dev/shm, as in a default Docker container), the same
+        work is run once more without parallelism instead of failing the job."""
+        try:
+            with services.adapter.read_session(timeout_ms, "job") as session:
+                return work(session)
+        except QueryFailed as error:
+            if error.code != "sqlstate_53100":
+                raise
+            LOG.warning("formdev job read ran out of shared memory for parallel workers; retrying without them")
+            with services.adapter.read_session(timeout_ms, "job_serial") as session:
+                return work(session)
+
     # Kinds ---------------------------------------------------------------------------------------
     def _export(self, services: Any, engine: QueryEngine, spec: dict[str, Any], catalog: SourceCatalog, job: dict[str, Any], owner: str) -> dict[str, Any]:
         policy = self.policy
@@ -519,9 +533,8 @@ class JobWorker:
             # The partial file of the previous attempt is gone: restart this export from the beginning.
             checkpoint = {**checkpoint, "last_seq": None, "rows": 0, "bytes": 0}
         if not checkpoint:
-            with services.adapter.read_session(policy["batch_timeout_ms"], "job") as session:
-                boundary = session.data_versions([catalog.form_id])[catalog.form_id]
-                total = int(session.fetch(compile_plan(count_plan(spec, 10_000_000)))[0]["total"])
+            boundary, total = self._read(services, policy["batch_timeout_ms"], lambda session: (
+                session.data_versions([catalog.form_id])[catalog.form_id], int(session.fetch(compile_plan(count_plan(spec, 10_000_000)))[0]["total"])))
             checkpoint = {"boundary": boundary, "last_seq": None, "rows": 0, "bytes": 0}
             self._fenced(services, job, owner, {"checkpoint": checkpoint, "total_estimate": total})
         fmt = job["format"]
@@ -541,9 +554,11 @@ class JobWorker:
                 plan.where = Node("and", (plan.where, batch_where)) if plan.where is not None else batch_where
                 plan.keyset = (checkpoint["last_seq"],) if checkpoint["last_seq"] is not None else None
                 plan.meta_columns = tuple(dict.fromkeys((*plan.meta_columns, "ingest_seq")))
-                with services.adapter.read_session(policy["batch_timeout_ms"], "job") as session:
-                    rows = session.fetch(compile_plan(plan))
-                    relations = engine._relations(session, spec, catalog, rows[: plan.limit])
+                def batch(session: Any, plan: Any = plan) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+                    fetched = session.fetch(compile_plan(plan))
+                    return fetched, engine._relations(session, spec, catalog, fetched[: plan.limit])
+
+                rows, relations = self._read(services, policy["batch_timeout_ms"], batch)
                 page = engine._project(spec, catalog, plan, rows, relations, "")
                 if not page["rows"]:
                     break
@@ -573,8 +588,7 @@ class JobWorker:
         budget = self.policy["aggregate_timeout_ms"]
         self._check(services, job, owner, {"phase": "aggregate"}, 0, extend_ms=budget + 60_000)
         plan = build_plan(spec)
-        with services.adapter.read_session(budget, "job") as session:
-            rows = session.fetch(compile_plan(plan))
+        rows = self._read(services, budget, lambda session: session.fetch(compile_plan(plan)))
         # One long statement: a cancel (or shutdown) made while it ran is honoured here, before any result is kept.
         self._check(services, job, owner, {"phase": "aggregate"}, 0)
         result = engine._aggregate_rows(spec, catalog, plan, rows)

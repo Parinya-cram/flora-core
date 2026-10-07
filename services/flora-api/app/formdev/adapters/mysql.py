@@ -47,6 +47,7 @@ def translate(sql: str) -> str:
     sql = IGNORE.sub(lambda match: f" ON DUPLICATE KEY UPDATE {match.group(1).split(',')[0].strip()} = {match.group(1).split(',')[0].strip()}", sql)
     for portable, native in NULL_TYPES.items():
         sql = sql.replace(portable, native)
+    sql = sql.replace(" AS MATERIALIZED (", " AS (")  # MySQL decides CTE materialization itself
     return sql.replace("%", "%%").replace("?", "%s")
 
 

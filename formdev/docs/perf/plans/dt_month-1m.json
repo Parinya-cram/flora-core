@@ -1,0 +1,130 @@
+{
+ "case": "dt_month",
+ "what": "assessed_at in March 2025 (one month, old)",
+ "label": "1m",
+ "statements": {
+  "main": {
+   "planning_ms": 0.36,
+   "execution_ms": 4936.745,
+   "planning_buffers": 26,
+   "settings": {
+    "plan_cache_mode": "force_custom_plan",
+    "jit": "off",
+    "max_parallel_workers_per_gather": "0",
+    "work_mem": "32MB"
+   },
+   "nodes": [
+    {
+     "depth": 0,
+     "node": "Nested Loop",
+     "join": "Inner",
+     "est_rows": 51,
+     "act_rows": 51,
+     "loops": 1,
+     "shared_hit": 3007587,
+     "shared_read": 752433,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 4936.654
+    },
+    {
+     "depth": 1,
+     "node": "Limit",
+     "parent": "Outer",
+     "est_rows": 51,
+     "act_rows": 51,
+     "loops": 1,
+     "shared_hit": 3007478,
+     "shared_read": 752338,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 4935.774
+    },
+    {
+     "depth": 2,
+     "node": "Nested Loop",
+     "parent": "Outer",
+     "join": "Inner",
+     "est_rows": 5321,
+     "act_rows": 51,
+     "loops": 1,
+     "shared_hit": 3007478,
+     "shared_read": 752338,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 4935.766
+    },
+    {
+     "depth": 3,
+     "node": "Index Scan",
+     "parent": "Outer",
+     "relation": "formdev_record",
+     "index": "formdev_record_ingest",
+     "alias": "k",
+     "direction": "Backward",
+     "est_rows": 988798,
+     "act_rows": 738066,
+     "loops": 1,
+     "removed_by_filter": 7516,
+     "removed_by_recheck": 0,
+     "shared_hit": 6725,
+     "shared_read": 62761,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 418.663,
+     "index_cond": "(form_id = 'perf_assessment'::text)",
+     "filter": "(status <> 'deleted'::text)"
+    },
+    {
+     "depth": 3,
+     "node": "Index Scan",
+     "parent": "Inner",
+     "relation": "formdev_record_index",
+     "index": "formdev_record_index_pkey",
+     "alias": "i1",
+     "direction": "Forward",
+     "est_rows": 1,
+     "act_rows": 0,
+     "loops": 738066,
+     "removed_by_filter": 1,
+     "removed_by_recheck": 0,
+     "shared_hit": 3000753,
+     "shared_read": 689577,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 0.006,
+     "index_cond": "((record_id = k.record_id) AND (field_id = 'assessed_at'::text))",
+     "filter": "((status <> 'deleted'::text) AND (value_num >= '1740762000000'::double precision) AND (value_num <= '1743440399000'::double precision) AND (form_id = 'perf_assessment'::text))"
+    },
+    {
+     "depth": 1,
+     "node": "Index Scan",
+     "parent": "Inner",
+     "relation": "formdev_record",
+     "index": "formdev_record_pkey",
+     "alias": "r",
+     "direction": "Forward",
+     "est_rows": 1,
+     "act_rows": 1,
+     "loops": 51,
+     "removed_by_recheck": 0,
+     "shared_hit": 109,
+     "shared_read": 95,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 0.016,
+     "index_cond": "(record_id = k.record_id)"
+    }
+   ],
+   "sql": "SELECT r.record_id, r.schema_version, r.data, r.ingested_at, page.ok AS order_value FROM (SELECT k.record_id AS rid, k.ingest_seq AS ok FROM formdev_record k WHERE k.form_id = ? AND k.status <> 'deleted' AND EXISTS (SELECT 1 FROM formdev_record_index i1 WHERE i1.record_id = k.record_id AND i1.form_id = ? AND i1.status <> 'deleted' AND i1.field_id = ? AND i1.value_num >= ? AND i1.value_num <= ?) ORDER BY k.ingest_seq DESC LIMIT ?) page JOIN formdev_record r ON r.record_id = page.rid ORDER BY page.ok DESC",
+   "params": [
+    "perf_assessment",
+    "perf_assessment",
+    "assessed_at",
+    1740762000000,
+    1743440399000,
+    51
+   ]
+  }
+ }
+}
