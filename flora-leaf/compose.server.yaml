@@ -59,6 +59,11 @@ services:
       # Canopy sync-api on the VM host (flora-canopy stack publishes 6896)
       FLORA_CANOPY_SYNC_URL: ${FLORA_CANOPY_SYNC_URL:-http://host.docker.internal:6896}
       FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-admin}
+      # This leaf's identity — required so leaf-api sends a non-empty leaf_id to
+      # Canopy (device assignment / account-config sync). Must match leaf-sync.
+      FLORA_LEAF_ID: ${FLORA_LEAF_ID:-leaf-or-01}
+      FLORA_HOSPITAL_ID: ${FLORA_HOSPITAL_ID:-hospital-01}
+      FLORA_LEAF_NAME: ${FLORA_LEAF_NAME:-Operating Room 1}
       # Device data from the real Gateway (172.22.1.233)
       VECTOR_READ_URL: ${VECTOR_READ_URL:-http://172.22.1.233:7410/data-api/leaf-or-01/api/observations}
       HIS_GATEWAY_BASE_URL: ${HIS_GATEWAY_BASE_URL:-http://127.0.0.1:9}
