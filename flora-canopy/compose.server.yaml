@@ -73,13 +73,13 @@ services:
   canopy-web:
     build:
       context: ..
-      dockerfile: Dockerfile.frontend.dev
+      dockerfile: Dockerfile.frontend.prod
+      args:
+        FLORA_SURFACE: canopy
     environment:
-      CHOKIDAR_USEPOLLING: "true"
-      VITE_FLORA_SURFACE: canopy
-      VITE_API_PROXY_TARGET: http://canopy-api:8000
+      API_UPSTREAM: http://canopy-api:8000
     ports:
-      - "${FLORA_CANOPY_PORT:-6894}:5173"
+      - "${FLORA_CANOPY_PORT:-6894}:80"
     depends_on:
       canopy-api:
         condition: service_healthy

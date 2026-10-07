@@ -89,13 +89,13 @@ services:
   leaf-web:
     build:
       context: ..
-      dockerfile: Dockerfile.frontend.dev
+      dockerfile: Dockerfile.frontend.prod
+      args:
+        FLORA_SURFACE: leaf
     environment:
-      CHOKIDAR_USEPOLLING: "true"
-      VITE_FLORA_SURFACE: leaf
-      VITE_API_PROXY_TARGET: http://leaf-api:8000
+      API_UPSTREAM: http://leaf-api:8000
     ports:
-      - "${FLORA_LEAF_PORT:-6890}:5173"
+      - "${FLORA_LEAF_PORT:-6890}:80"
     depends_on:
       leaf-api:
         condition: service_healthy

@@ -1,0 +1,24 @@
+# Production frontend: build the SPA once, serve it statically with nginx, and
+# proxy /api + /health to this tier's backend. No Vite dev server at runtime, so
+# there are no on-the-fly dependency re-optimizations / reloads (the cause of the
+# intermittent 502s behind the edge proxy).
+#
+# FLORA_SURFACE is baked at build time (VITE_FLORA_SURFACE); pass leaf or canopy.
+# API_UPSTREAM is read at runtime by the nginx template (e.g. http://leaf-api:8000).
+
+# ---- build ----
+FROM node:22-bookworm-slim AS build
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend ./
+ARG FLORA_SURFACE=leaf
+ENV VITE_FLORA_SURFACE=$FLORA_SURFACE
+RUN npm run build
+
+# ---- serve ----
+FROM nginx:1.27-alpine
+# nginx entrypoint runs envsubst on *.template, filling ${API_UPSTREAM} from the env.
+COPY frontend/nginx.prod.conf.template /etc/nginx/templates/default.conf.template
+COPY --from=build /app/frontend/dist /usr/share/nginx/html
+EXPOSE 80
