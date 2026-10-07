@@ -47,7 +47,10 @@
    - ป้าย **"✓ พร้อมใช้" / "⚠ ต้องแก้ N จุด"** ตรวจแบบฟอร์มตลอดเวลา (ใช้กฎเดียวกับเซิร์ฟเวอร์) คลิกที่ปัญหาเพื่อไปยังช่องนั้น
    - **ทดลองกรอก** ลองกรอกเหมือนผู้ใช้จริง เห็นการคำนวณ เงื่อนไข และการตรวจค่า (ไม่บันทึก)
    - **A4** ดูหน้ากระดาษที่จะพิมพ์
-6. **บันทึกและเผยแพร่**
+6. **PDF**
+   - ในมุมมอง **A4** กด **"ดาวน์โหลด PDF"** ได้ไฟล์ PDF ขนาด A4 (รวมค่าที่ลองกรอกไว้ด้วย)
+   - ในหน้ากรอกข้อมูล เปิดรายการแล้วกด **"ดาวน์โหลด PDF"** ได้ PDF ของรายการนั้น ตามสิทธิ์ของผู้ใช้ (ช่องที่ไม่มีสิทธิ์ดูจะไม่อยู่ใน PDF)
+7. **บันทึกและเผยแพร่**
    - **บันทึกร่าง** เก็บงานไว้บนเซิร์ฟเวอร์
    - **เผยแพร่ใช้งาน** (ยืนยันอีกครั้ง) แล้วกด **"ไปกรอกข้อมูลแบบฟอร์มนี้ →"** เพื่อเริ่มใช้
 
@@ -83,6 +86,10 @@
 
   The server's compatibility check therefore passes.
 - **Drag & drop** is native HTML5. The dragged item travels in a ref, because `dataTransfer` cannot be read during `dragover`. The drop position is computed from the card rectangles: over a card, the left or right half; in empty space, an explicit `layout.col`. Resizing uses pointer events and snaps to columns. Every drag action also has a button alternative (palette click, ↑ ↓, width presets).
+- **PDF:** `render/pdfLayout.ts` (pure page layout, same placement rules as the A4 print view) and `render/formPdf.ts` (drawing with pdf-lib).
+  - Text is drawn as glyph outlines shaped by fontkit from the bundled Noto Sans Thai (Thai and Latin subsets), so Thai tone marks sit correctly. The fonts ship only as WOFF2, which PDF viewers cannot read, and fontkit's subsetter fails on their composite glyphs, so the font cannot be embedded. Text in the PDF is therefore not selectable.
+  - The module and fonts load on demand (a separate chunk); nothing is downloaded at run time.
+  - Tests: `frontend/tests/formdev/pdf.test.ts`.
 - **Tests:** `frontend/tests/formdev/designer.test.ts`.
   - Every palette type, block and starter yields a valid definition.
   - Moves (including into a later group), duplicate, grid placement, key rename propagation, migrations, condition rows, and issue-path mapping.

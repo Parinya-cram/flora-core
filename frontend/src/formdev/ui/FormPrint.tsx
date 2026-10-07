@@ -15,6 +15,7 @@ import type { ResolvedStyle } from "../core/styles";
 import type { CategoryDefinition, ContainerLayout, FieldDefinition, FileValue, FontEntry, FormDefinition, JsonValue, PaperBand, RecordData, SectionDefinition, SignatureValue, StyleEntry } from "../core/types";
 import { formStyle, gridCss, registries, rootCss, sectionCss, typeCss, type Registries } from "./formStyle";
 import { thaiDate } from "./renderUtils";
+import { cellText, optionText, printedText } from "../render/printValues";
 
 type Props = {
   definition: FormDefinition;
@@ -38,17 +39,6 @@ type Ctx = { regs: Registries; hidden: Set<string>; top: Record<string, JsonValu
 const BLANK_LINE: CSSProperties = { borderBottom: "0.3mm dotted #64748b", minHeight: "6mm" };
 const mark = (on: boolean, round: boolean) => (round ? (on ? "●" : "○") : on ? "☑" : "☐");
 const columnsOf = (style: ResolvedStyle) => (typeof style.tokens.columns === "number" ? style.tokens.columns : 2);
-
-function printedText(field: FieldDefinition, value: JsonValue | undefined): string {
-  if (value === null || value === undefined || value === "") return "";
-  if (typeof value === "number" && field.decimals !== undefined && (field.type === "decimal" || field.type === "calculated")) return value.toFixed(field.decimals);
-  if (field.type === "datetime" && typeof value === "string") return value.slice(0, 16).replace("T", " ");
-  return `${String(value)}${field.unit ? ` ${field.unit}` : ""}`;
-}
-
-/** An option label, with the Other text after it when the option asks for one (Phase 2.6). */
-const optionText = (option: { label: string; has_input?: boolean }, chosen: boolean, other?: string) =>
-  option.has_input && chosen && other ? `${option.label}: ${other}` : option.has_input ? `${option.label} ........` : option.label;
 
 function PrintValue({ field, value, other }: { field: FieldDefinition; value: JsonValue | undefined; other?: string }): ReactNode {
   switch (field.type) {
@@ -84,16 +74,6 @@ function PrintValue({ field, value, other }: { field: FieldDefinition; value: Js
       return <div style={{ ...BLANK_LINE, borderBottomStyle: text ? "solid" : "dotted" }}>{text}</div>;
     }
   }
-}
-
-function cellText(child: FieldDefinition, item: Record<string, JsonValue>): string {
-  const value = item[fieldKey(child)];
-  const option = child.options?.find(entry => entry.value === value);
-  if (option) {
-    const other = (item[OTHER_KEY] as Record<string, JsonValue> | undefined)?.[fieldKey(child)];
-    return option.has_input && typeof other === "string" && other ? `${option.label}: ${other}` : option.label;
-  }
-  return printedText(child, value);
 }
 
 function RepeatTable({ field, items, style, ctx }: { field: FieldDefinition; items: Array<Record<string, JsonValue>>; style: ResolvedStyle; ctx: Ctx }) {

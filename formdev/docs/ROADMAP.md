@@ -40,7 +40,7 @@ Target (agreed 2026-10-06):
 | | Rule | Done (Phase 2) | Validation, visibility, dependency (lookups), formula engine, permission, logic graph; Python and TypeScript twins ([LOGIC.md](../spec/LOGIC.md)) |
 | Render engine | Web, Mobile, Offline | Done (Phases 1, 3) | `FormRenderer` (responsive), IndexedDB offline client |
 | | Print | Done (Phase 1) | `FormPrint` (A4 sheets, `@page`) |
-| | PDF | Planned: Designer phase | Direct PDF output reusing Flora's `pdf-lib` + embedded Thai font (as `archiveReportPdf.ts`) |
+| | PDF | Done (Designer) | `render/formPdf.ts`: A4 PDF from a form or a record (pdf-lib + bundled Noto Sans Thai, text shaped by fontkit); "ดาวน์โหลด PDF" in the record view and the designer |
 | Query engine | Filter, Index, Aggregate, Page | Implemented (Phase 4), not accepted | 47 confirmed defects and the performance report remain |
 | Data layer | SQLite, PostgreSQL, API | Done (Phase 3) | `SQLiteAdapter`, `PostgreSQLAdapter`, `RestApiAdapter` |
 | | MySQL | Planned: data-layer phase | `SqlDataAdapter` subclass with PyMySQL; same contract suite |
@@ -49,7 +49,7 @@ Target (agreed 2026-10-06):
 ## Order
 
 1. ~~Phase 2: form logic engine (Rule), beginning with Category.~~ Done.
-2. Designer phase: ~~drag & drop designer with rules editor~~ done; PDF output still to do.
+2. ~~Designer phase: drag & drop designer with rules editor, PDF output.~~ Done.
 3. Data-layer phase: MySQL adapter, attachment storage, file adapter.
 4. Phase 4 fixes (47 findings) and the large-data performance report.
 5. Phase 5: Text DSL, templates, AI generator.

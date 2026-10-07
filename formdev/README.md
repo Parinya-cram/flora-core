@@ -9,7 +9,7 @@ Status (2026-10-06):
 - **Phase 2 (form logic engine): complete**, acceptance below. Twin Python / TypeScript engines held to
   shared fixtures: validation, visibility, dependency (lookups), formulas and calculators, Answer + Other,
   repeat sections, permissions, versioning, logic graph ([spec/LOGIC.md](spec/LOGIC.md)).
-- **Form designer (drag & drop, no code): available** in Canopy → สร้างฟอร์ม → "ออกแบบฟอร์ม" (administrators);
+- **Form designer (drag & drop, no code) and PDF output: available** in Canopy → สร้างฟอร์ม → "ออกแบบฟอร์ม" (administrators);
   user guide in [docs/DESIGNER.md](docs/DESIGNER.md). Works on branch `floraXesm`; FormDev's PostgreSQL migrations
   are numbered 0060-0063 so they follow upstream's 0038-0051.
 - **Phase 3 (data engine + offline + standalone): complete.**

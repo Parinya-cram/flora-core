@@ -57,6 +57,7 @@ function messageOf(error: unknown, language = "en", definition?: FormDefinition)
 
 export default function FormDevWorkspace({ username, isAdmin, principal, language = "en" }: Props) {
   const thai = language.toLowerCase().startsWith("th");
+  const [pdfBusy, setPdfBusy] = useState(false);
   // Role and permission codes for the definition's permissions (Phase 2.8); the server applies the same rules.
   const codes = useMemo(() => [...(principal.roles ?? []), ...(principal.permissions ?? [])], [principal]);
   const [tab, setTab] = useState<Tab>("records");
@@ -206,6 +207,21 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
     }
   };
 
+  /** The open record as a PDF file (loaded on demand: pdf-lib and the fonts stay out of the main bundle). */
+  const savePdf = async () => {
+    if (!editing) return;
+    setPdfBusy(true);
+    try {
+      const { buildFormPdf, downloadPdf } = await import("../render/formPdf");
+      const bytes = await buildFormPdf({ definition: editing.definition, value: editing.data, recordId: editing.record?.record_id, roles: codes, isAdmin, lookups, language });
+      downloadPdf(bytes, `${editing.definition.form_id}-${editing.record?.record_id ?? "new"}.pdf`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
   if (error && !client) return <div className="p-6 text-sm text-rose-500">{error}</div>;
 
   return <main className="h-full overflow-y-auto bg-[var(--app-bg)] p-3 sm:p-5">
@@ -288,6 +304,7 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
                 {editing.view !== "form" ? <button type="button" className={secondary} onClick={() => setEditing(current => current && { ...current, view: "form" })}>Edit</button> : null}
                 {editing.view !== "print" ? <button type="button" className={secondary} onClick={() => setEditing(current => current && { ...current, view: "print" })}>A4 / Print</button>
                   : <button type="button" className={secondary} onClick={() => window.print()}>Print</button>}
+                <button type="button" className={secondary} disabled={pdfBusy} onClick={() => void savePdf()}>{pdfBusy ? "…" : thai ? "ดาวน์โหลด PDF" : "Download PDF"}</button>
                 {editing.view === "form" && recordAllows(editing.definition, editing.record ? "edit" : "create", codes, isAdmin) ? <>
                   <button type="button" className={secondary} disabled={editing.record?.status === "submitted"} onClick={() => void save(false)}>Save draft</button>
                   <button type="button" className={primary} onClick={() => void save(true)}>{editing.record?.status === "submitted" ? "Save amendment" : "Submit"}</button>

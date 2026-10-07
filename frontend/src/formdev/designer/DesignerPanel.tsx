@@ -272,6 +272,18 @@ export default function DesignerPanel({ remote, online, language = "th", onPubli
     }
   };
 
+  const pdf = async () => {
+    setBusy(true);
+    try {
+      const { buildFormPdf, downloadPdf } = await import("../render/formPdf");
+      downloadPdf(await buildFormPdf({ definition, value: tryData, styles: registry.styles, fonts: registry.fonts, lookups: tables, language }), `${definition.form_id}-preview.pdf`);
+    } catch (error) {
+      setMessage({ tone: "error", text: failure(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // Layout -----------------------------------------------------------------------------------------
   const versionLabel = source.exists
     ? source.status === "draft" ? t(`ร่างเวอร์ชัน ${source.version}`, `draft v${source.version}`) : t(`แก้ไขเป็นเวอร์ชัน ${source.version + 1} (v${source.version} ใช้งานอยู่)`, `editing v${source.version + 1} (v${source.version} is live)`)
@@ -371,6 +383,10 @@ export default function DesignerPanel({ remote, online, language = "th", onPubli
       </div>
     </div> : null}
 
+    {view === "print" ? <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--app-muted)]">
+      <button type="button" className={small} disabled={busy} onClick={() => void pdf()}>⬇ {t("ดาวน์โหลด PDF", "Download PDF")}</button>
+      {t("ค่าที่ลองกรอกในแท็บ \"ทดลองกรอก\" จะอยู่ใน PDF ด้วย", "Values typed in \"Try it\" are included")}
+    </div> : null}
     {view === "print" ? <div className="overflow-x-auto rounded-xl bg-slate-200 p-4 dark:bg-slate-800">
       <FormPrint definition={definition} value={tryData} styles={registry.styles} fonts={registry.fonts} lookups={tables} />
     </div> : null}
