@@ -1,6 +1,8 @@
 # Flora edge — TLS per tier on its own port (reach by IP:port, no DNS needed):
 #   https://<vm-ip>:7443 -> Leaf   https://<vm-ip>:8443 -> Root   https://<vm-ip>:9443 -> Canopy
-# nginx terminates TLS (self-signed *.flora cert) and proxies to each tier's web upstream.
+# Plus one Cloudflare quick tunnel PER tier for external/demo internet access:
+# each gives its own https://<random>.trycloudflare.com that serves that tier at
+# root (no SPA path issues). Read each public URL from that container's logs.
 name: flora-edge
 
 services:
@@ -15,12 +17,32 @@ services:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
-  # Cloudflare quick tunnel (TryCloudflare) — FREE, no token/domain needed.
-  # Random https://<random>.trycloudflare.com for external demo. Points at Leaf by
-  # default; read the public URL from this container's logs after it starts.
-  cloudflared:
+  cloudflared-leaf:
     image: cloudflare/cloudflared:latest
     command: ["tunnel", "--no-autoupdate", "--url", "http://host.docker.internal:6890"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  cloudflared-root:
+    image: cloudflare/cloudflared:latest
+    command: ["tunnel", "--no-autoupdate", "--url", "http://host.docker.internal:7100"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  cloudflared-canopy:
+    image: cloudflare/cloudflared:latest
+    command: ["tunnel", "--no-autoupdate", "--url", "http://host.docker.internal:6894"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # Gateway lives on a separate machine (172.22.1.233). Points at its dashboard by
+  # default; override GATEWAY_TUNNEL_TARGET if the reachable port differs.
+  cloudflared-gateway:
+    image: cloudflare/cloudflared:latest
+    command: ["tunnel", "--no-autoupdate", "--url", "${GATEWAY_TUNNEL_TARGET:-http://172.22.1.233:7400}"]
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
