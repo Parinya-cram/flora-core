@@ -181,6 +181,7 @@ Runtime errors:
 | `rate_limited` / `too_many_concurrent_queries` / `job_queue_full` | 429 | With `Retry-After` |
 | `database_busy` / `jobs_unavailable` / `audit_unavailable` | 503 | Temporary |
 | `body_too_large` | 413 | Body above 64 KB |
+| `body_timeout` | 408 | Body not received within 10 s (read before any slot or connection is taken) |
 | `export_forbidden` / `forbidden` | 403 | Missing permission |
 | `field_not_exportable` | 422 | An export selects a field whose `display.export` is false (Phase 1.4 display policy); `details.fields` lists them |
 | `job_not_found` / `query_not_found` | 404 | Not found or not yours |

@@ -2,10 +2,13 @@
 
 Every query endpoint resolves one dependency in a fixed order — token, rate limit, concurrency
 slot, pooled connection (2 s), current permissions — so refused requests never hold a connection.
-Request bodies are capped at max_body_bytes and parsed with duplicate keys rejected.
+Request bodies are read first (``json_body``, declared before the context so FastAPI resolves it
+first): the token is checked, then the body is read within BODY_READ_SECONDS, capped at max_body_bytes
+and parsed with duplicate keys rejected. A slow body therefore never holds a slot or a connection.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from collections.abc import Iterator
@@ -18,7 +21,7 @@ from fastapi.responses import StreamingResponse
 
 from ..formdev import FormDevServices
 from ..formdev.errors import FormDevError
-from ..formdev.query.access import MANAGE_PERMISSION, Principal
+from ..formdev.query.access import MANAGE_PERMISSION, QUERY_PERMISSION, Principal
 from ..formdev.query.advisor import advise
 from ..formdev.query.catalog import SOURCE_ID, build_catalog, validate_policy, validate_source_config
 from ..formdev.query.engine import QueryEngine, QueryRuntime
@@ -27,6 +30,7 @@ from . import formdev_runtime as rt
 from .auth_canopy import read_token
 
 router = APIRouter(prefix="/api/formdev", tags=["formdev-query"])
+BODY_READ_SECONDS = 10.0
 
 
 @dataclass
@@ -80,16 +84,24 @@ def _no_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return dict(pairs)
 
 
-async def read_json(request: Request) -> Any:
+async def read_json(request: Request, deadline: float | None = None) -> Any:
     limit = rt.runtime().policy["max_body_bytes"]
     declared = request.headers.get("content-length")
     if declared and declared.isdigit() and int(declared) > limit:
         raise FormDevError("body_too_large", f"Request bodies are limited to {limit} bytes", 413)
-    body = b""
-    async for chunk in request.stream():
-        body += chunk
-        if len(body) > limit:
-            raise FormDevError("body_too_large", f"Request bodies are limited to {limit} bytes", 413)
+
+    async def receive() -> bytes:
+        body = b""
+        async for chunk in request.stream():
+            body += chunk
+            if len(body) > limit:
+                raise FormDevError("body_too_large", f"Request bodies are limited to {limit} bytes", 413)
+        return body
+
+    try:
+        body = await asyncio.wait_for(receive(), deadline or BODY_READ_SECONDS)
+    except TimeoutError:
+        raise FormDevError("body_timeout", f"The request body was not received within {deadline or BODY_READ_SECONDS:g} s", 408) from None
     try:
         return json.loads(body or b"null", object_pairs_hook=_no_duplicates)
     except RecursionError:
@@ -97,6 +109,18 @@ async def read_json(request: Request) -> Any:
     except ValueError as error:
         code = "dangerous_operation" if "duplicate key" in str(error) else "invalid_request"
         raise FormDevError(code, "Duplicate keys are not allowed" if code == "dangerous_operation" else "Body must be JSON") from None
+
+
+async def json_body(request: Request) -> Any:
+    """The parsed body, read before any rate token, slot or pooled connection is taken (unauthenticated
+    callers are refused before their body is read)."""
+    read_token(request)
+    return await read_json(request)
+
+
+def _require_query(ctx: Context) -> None:
+    if not ctx.principal.has(QUERY_PERMISSION):
+        raise FormDevError("forbidden", "This needs the formdev.query permission", 403)
 
 
 # Catalog and queries -------------------------------------------------------------------------
@@ -125,44 +149,91 @@ def query_catalog(source_id: str, ctx: Context = Depends(api_context)) -> dict[s
 
 
 @router.post("/query/validate")
-async def validate_query(request: Request, ctx: Context = Depends(api_context)) -> dict[str, Any]:
-    body = await read_json(request)
+async def validate_query(body: Any = Depends(json_body), ctx: Context = Depends(api_context)) -> dict[str, Any]:
     issues, _, _ = await run_in_threadpool(ctx.engine().validate, body)
     return {"issues": [issue.as_dict() for issue in issues]}
 
 
 @router.post("/query")
 async def run_query(
-    request: Request,
+    body: Any = Depends(json_body),
     refresh: bool = False,
     explain: bool = False,
     test_sleep_ms: int | None = Query(default=None, include_in_schema=False),
     ctx: Context = Depends(query_context),
 ) -> dict[str, Any]:
-    body = await read_json(request)
     if refresh:
         ctx.runtime.rate.take(f"refresh:{ctx.principal.user_id}")
     return await run_in_threadpool(ctx.engine().run, body, refresh, explain, test_sleep_ms if ctx.runtime.test_hooks else None)
 
 
 # Saved queries --------------------------------------------------------------------------------
+def _saved_source(row: dict[str, Any]) -> Any:
+    return ((row.get("definition") or {}).get("query") or {}).get("source")
+
+
+class SavedQueryAccess:
+    """Saved queries a caller may see: their own (administrators: all), and others' whose source they may
+    query. Others' filter values (patient identifiers, restricted values) and cursors are removed."""
+
+    def __init__(self, ctx: Context):
+        self.ctx = ctx
+        self.engine = ctx.engine()
+        self._sources: dict[Any, bool] = {}
+
+    def owns(self, row: dict[str, Any]) -> bool:
+        return self.ctx.principal.is_admin or row["owner_user_id"] == self.ctx.principal.user_id
+
+    def visible(self, row: dict[str, Any]) -> bool:
+        if self.owns(row):
+            return True
+        source = _saved_source(row)
+        if not isinstance(source, str):
+            return False
+        if source not in self._sources:
+            self._sources[source] = self.engine.catalog(source) is not None
+        return self._sources[source]
+
+    def present(self, row: dict[str, Any]) -> dict[str, Any]:
+        if self.owns(row):
+            return row
+        definition = json.loads(json.dumps(row["definition"]))
+        query = definition.get("query") if isinstance(definition.get("query"), dict) else {}
+        if "filter" in query:
+            query["filter"] = _redact(query["filter"])
+        if isinstance(query.get("pagination"), dict):
+            query["pagination"].pop("cursor", None)
+        return {**row, "definition": definition, "redacted": True}
+
+
+def _redact(node: Any) -> Any:
+    if isinstance(node, list):
+        return [_redact(item) for item in node]
+    if not isinstance(node, dict):
+        return node
+    return {key: (None if key == "value" else _redact(value)) for key, value in node.items()}
+
+
 @router.get("/queries")
 def list_saved(ctx: Context = Depends(api_context)) -> dict[str, Any]:
-    return {"rows": [{key: row[key] for key in ("query_id", "owner", "updated_at")} | {"source": (row["definition"].get("query") or {}).get("source")}
-                     for row in ctx.services.adapter.list_saved_queries()]}
+    _require_query(ctx)
+    access = SavedQueryAccess(ctx)
+    return {"rows": [{key: row[key] for key in ("query_id", "owner", "updated_at")} | {"source": _saved_source(row)}
+                     for row in ctx.services.adapter.list_saved_queries() if access.visible(row)]}
 
 
 @router.get("/queries/{query_id}")
 def get_saved(query_id: str, ctx: Context = Depends(api_context)) -> dict[str, Any]:
+    _require_query(ctx)
+    access = SavedQueryAccess(ctx)
     row = ctx.services.adapter.get_saved_query(query_id)
-    if row is None:
+    if row is None or not access.visible(row):
         raise FormDevError("query_not_found", "Saved query not found", 404)
-    return {"query": row}
+    return {"query": access.present(row)}
 
 
 @router.put("/queries/{query_id}")
-async def save_query(query_id: str, request: Request, ctx: Context = Depends(api_context)) -> dict[str, Any]:
-    body = await read_json(request)
+async def save_query(query_id: str, body: Any = Depends(json_body), ctx: Context = Depends(api_context)) -> dict[str, Any]:
     if not SOURCE_ID.match(query_id):
         raise FormDevError("invalid_value", "query_id is a lower_snake_case name")
     if not isinstance(body, dict) or not isinstance(body.get("query"), dict):
@@ -194,14 +265,19 @@ def delete_saved(query_id: str, ctx: Context = Depends(api_context)) -> dict[str
 
 
 @router.post("/queries/{query_id}/run")
-async def run_saved(query_id: str, request: Request, ctx: Context = Depends(query_context)) -> dict[str, Any]:
-    overrides = await read_json(request) or {}
+async def run_saved(query_id: str, overrides: Any = Depends(json_body), ctx: Context = Depends(query_context)) -> dict[str, Any]:
+    _require_query(ctx)
     row = ctx.services.adapter.get_saved_query(query_id)
-    if row is None:
+    if row is None or not SavedQueryAccess(ctx).visible(row):
         raise FormDevError("query_not_found", "Saved query not found", 404)
     body = json.loads(json.dumps(row["definition"]))
     if isinstance(overrides, dict) and isinstance(overrides.get("cursor"), str):
-        body["query"].setdefault("pagination", {"mode": "cursor", "limit": 50})["cursor"] = overrides["cursor"]
+        query = body["query"]
+        pagination = query.get("pagination") if isinstance(query.get("pagination"), dict) else {"mode": "cursor"}
+        # The top-level limit is QUERY.md's alias for pagination.limit: fold it in rather than disagree with it.
+        pagination.setdefault("limit", query.pop("limit", 50))
+        query.pop("limit", None)
+        query["pagination"] = {**pagination, "cursor": overrides["cursor"]}
     return await run_in_threadpool(ctx.engine().run, body)
 
 
@@ -212,9 +288,8 @@ def _jobs_ready() -> None:
 
 
 @router.post("/jobs")
-async def create_job(request: Request, ctx: Context = Depends(api_context)) -> dict[str, Any]:
+async def create_job(body: Any = Depends(json_body), ctx: Context = Depends(api_context)) -> dict[str, Any]:
     _jobs_ready()
-    body = await read_json(request)
     if not isinstance(body, dict) or not isinstance(body.get("kind"), str):
         raise FormDevError("invalid_job", "Body must be {\"kind\": ..., \"format\"?: ..., \"body\": {\"query\": {...}}}")
     return {"job": await run_in_threadpool(ctx.jobs().create, body["kind"], body.get("body"), body.get("format"))}
@@ -250,9 +325,8 @@ def get_policy(form_id: str, ctx: Context = Depends(api_context)) -> dict[str, A
 
 
 @router.put("/policies/{form_id}")
-async def save_policy(form_id: str, request: Request, ctx: Context = Depends(api_context)) -> dict[str, Any]:
+async def save_policy(form_id: str, body: Any = Depends(json_body), ctx: Context = Depends(api_context)) -> dict[str, Any]:
     _require_manage(ctx)
-    body = await read_json(request)
     adapter = ctx.services.adapter
     definition = ctx.services.schemas.latest_published(form_id)["definition"]
     policy = validate_policy(body.get("policy") if isinstance(body, dict) else None, definition)
@@ -266,9 +340,8 @@ async def save_policy(form_id: str, request: Request, ctx: Context = Depends(api
 
 
 @router.put("/sources/{source_id}")
-async def save_source(source_id: str, request: Request, ctx: Context = Depends(api_context)) -> dict[str, Any]:
+async def save_source(source_id: str, body: Any = Depends(json_body), ctx: Context = Depends(api_context)) -> dict[str, Any]:
     _require_manage(ctx)
-    body = await read_json(request)
     if not SOURCE_ID.match(source_id):
         raise FormDevError("invalid_source", "source_id is a lower_snake_case name")
     config = validate_source_config(body.get("config") if isinstance(body, dict) else None)
@@ -280,14 +353,18 @@ async def save_source(source_id: str, request: Request, ctx: Context = Depends(a
     with adapter.transaction():
         adapter.save_source({"source_id": source_id, "form_id": form_id, "config": {k: v for k, v in config.items() if k != "form_id"},
                              "version": (existing["version"] if existing else 0) + 1, "updated_at": int(time.time() * 1000), "updated_by": ctx.principal.username})
-    catalog = build_catalog(ctx.services, source_id)  # validates relations against real sources
-    for name, relation in catalog.relations.items():
-        foreign = relation["target"].fields.get(relation["foreign"])
-        local = catalog.fields.get(relation["local"])
-        if not foreign or not foreign.get("indexed") or not local:
-            with adapter.transaction():
-                adapter.delete_source(source_id) if existing is None else adapter.save_source(existing)
-            raise FormDevError("invalid_relation", f"Relation '{name}' needs an existing local field and an indexed foreign field")
+    try:
+        catalog = build_catalog(ctx.services, source_id)  # validates relations against real sources
+        for name, relation in catalog.relations.items():
+            foreign = relation["target"].fields.get(relation["foreign"])
+            local = catalog.fields.get(relation["local"])
+            if not foreign or not foreign.get("indexed") or not local:
+                raise FormDevError("invalid_relation", f"Relation '{name}' needs an existing local field and an indexed foreign field")
+    except FormDevError:
+        # Any refusal puts the previous source back (or removes the new one): never leave a broken source.
+        with adapter.transaction():
+            adapter.delete_source(source_id) if existing is None else adapter.save_source(existing)
+        raise
     ctx.runtime.cache.clear()
     return {"source": adapter.get_source(source_id)}
 

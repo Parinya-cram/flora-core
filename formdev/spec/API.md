@@ -39,7 +39,8 @@ Record writes go through `/sync` (one idempotent write path for online and offli
 
 Query endpoints check, in this order: session token → rate limit → concurrency slot → pooled
 connection (2 s) → the caller's current roles and permissions (`auth_user` + RBAC, cached 30 s;
-inactive users and pending password changes get 401). Bodies are limited to 64 KB and duplicate
+inactive users and pending password changes get 401). Bodies are read before the rate limit, slot and
+connection are taken: they must arrive within 10 s (408 `body_timeout`), are limited to 64 KB and duplicate
 JSON keys are refused. Spec: [QUERY.md](QUERY.md).
 
 | Method | Path | Permission | Purpose |
@@ -48,9 +49,9 @@ JSON keys are refused. Spec: [QUERY.md](QUERY.md).
 | GET | `/query/catalog/{source_id}` | `formdev.query` | Readable fields, metadata, relations, index state, effective limits |
 | POST | `/query/validate` | `formdev.query` | `{query}` → `{issues}` (never runs the query) |
 | POST | `/query?refresh=1&explain=1` | `formdev.query` (+ `formdev.diagnostics` for explain) | Run a query |
-| GET | `/queries` | `formdev.query` | Saved queries |
-| GET / PUT / DELETE | `/queries/{query_id}` | owner or admin to change | Saved query (validated on save) |
-| POST | `/queries/{query_id}/run` | `formdev.query` | Run a saved query as the caller (`{cursor}` optional) |
+| GET | `/queries` | `formdev.query` | Saved queries the caller owns, or whose source the caller may query |
+| GET / PUT / DELETE | `/queries/{query_id}` | `formdev.query` to read; owner or admin to change | Saved query (validated on save). Others' queries come with filter values and cursors removed (`redacted: true`) |
+| POST | `/queries/{query_id}/run` | `formdev.query` | Run a saved query as the caller (`{cursor}` optional; a top-level `limit` becomes the page size) |
 | POST | `/jobs` | `formdev.query`; export/report also `formdev.export` | `{kind, format?, body: {query}}` |
 | GET | `/jobs`, `/jobs/{job_id}` | owner or admin | Status and progress |
 | POST | `/jobs/{job_id}/cancel` | owner or admin | Cancel (queued: immediately; running: at the next batch) |
