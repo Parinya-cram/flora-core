@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CaseStatus } from "../api/caseApi";
 import ConfirmDialog from "../components/common/ConfirmDialog";
+import { useCaseWorkflow, workflowFormTabs } from "../components/workflow/caseWorkflow";
 import {
   getCaseDetailDraft,
   patchCaseDetailDraft,
@@ -186,6 +187,8 @@ interface FormViewProps {
 }
 
 const IDLE_CASE: CaseStatus = { status: "IDLE" };
+/** Workflow Studio forms load Form Studio's renderer only when a case has them. */
+const WorkflowFormPanel = lazy(() => import("../components/workflow/WorkflowFormPanel"));
 const FORM_REMOTE_REFRESH_MS = 10_000;
 
 const card =
@@ -1761,6 +1764,15 @@ export default function FormView({
   const [savedPreview, setSavedPreview] = useState("");
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<FormTabId>(FORM_REQUIRED_TAB);
+  // Workflow Studio: the case's Form Studio forms are extra tabs after the built-in ones.
+  const caseWorkflow = useCaseWorkflow(source ? null : leafCaseId);
+  const workflowTabs = useMemo(() => workflowFormTabs(caseWorkflow), [caseWorkflow]);
+  const builtInRecord = caseWorkflow.workflow?.anesthesia_record?.enabled !== false || !workflowTabs.length;
+  const workflowOptionalSections = caseWorkflow.workflow?.anesthesia_record?.optional_sections;
+  const [workflowTabPick, setWorkflowTab] = useState<string | null>(null);
+  const workflowTab = workflowTabs.some(tab => tab.formId === workflowTabPick)
+    ? workflowTabPick
+    : builtInRecord ? null : workflowTabs[0]?.formId ?? null;
 
   useEffect(() => {
     formRef.current = form;
@@ -2664,7 +2676,7 @@ export default function FormView({
 
   const tabClass = (tabId: FormTabId) =>
     `${tabButtonBase} min-h-11 whitespace-nowrap rounded-xl px-3 ${
-      activeTab === tabId
+      activeTab === tabId && !workflowTab
         ? "border-[var(--app-accent)] bg-[var(--app-accent)] text-[var(--app-accent-contrast)] shadow-sm"
         : "border-[var(--app-border)] bg-[var(--app-control-bg)] text-[var(--app-muted)] hover:bg-[var(--app-control-bg-hover)] hover:text-[var(--app-text)]"
     }`;
@@ -2685,20 +2697,29 @@ export default function FormView({
           </div>
 
           <div className="mt-3 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Anesthesia record sections">
-            {visibleTabs.map(tabId => {
+            {builtInRecord ? visibleTabs.map(tabId => {
               const tab = FORM_TAB_DEFS.find(item => item.id === tabId);
               const progress = completionByTab[tabId];
               if (!tab) return null;
               return (
-                <button key={tab.id} type="button" role="tab" aria-selected={activeTab === tab.id} className={tabClass(tab.id)} onClick={() => setActiveTab(tab.id)}>
+                <button key={tab.id} type="button" role="tab" aria-selected={activeTab === tab.id && !workflowTab} className={tabClass(tab.id)} onClick={() => { setActiveTab(tab.id); setWorkflowTab(null); }}>
                   <span className="font-bold">{tab.label}</span>
                   {progress?.percent != null ? <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[9px] ${progress.percent === 100 ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300" : "bg-black/10 dark:bg-white/10"}`}>{progress.done}/{progress.total}</span> : null}
                 </button>
               );
-            })}
+            }) : null}
+            {workflowTabs.map(tab => (
+              <button key={`wf-${tab.formId}`} type="button" role="tab" aria-selected={workflowTab === tab.formId} title={tab.phase !== "any" ? tab.phase : undefined}
+                className={`${tabButtonBase} min-h-11 whitespace-nowrap rounded-xl px-3 ${workflowTab === tab.formId
+                  ? "border-[var(--app-accent)] bg-[var(--app-accent)] text-[var(--app-accent-contrast)] shadow-sm"
+                  : "border-dashed border-[var(--app-border)] bg-[var(--app-control-bg)] text-[var(--app-muted)] hover:bg-[var(--app-control-bg-hover)] hover:text-[var(--app-text)]"}`}
+                onClick={() => setWorkflowTab(tab.formId)}>
+                <span className="font-bold">{tab.title}</span>{tab.required ? <span className="ml-1 text-rose-500">*</span> : null}
+              </button>
+            ))}
           </div>
 
-          {!allowedTabs && !readOnly ? <details className="mt-2 rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] px-3 py-2">
+          {!allowedTabs && !readOnly && builtInRecord ? <details className="mt-2 rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] px-3 py-2">
             <summary className="cursor-pointer text-xs font-bold text-[var(--app-muted)]">Configure procedure-specific sections</summary>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[var(--app-border)] pt-2">
             {/* GA type — radio, mutually exclusive */}
@@ -2720,7 +2741,7 @@ export default function FormView({
             {/* Separator */}
             <div className="h-4 w-px shrink-0 bg-[var(--app-border)]" />
             {/* Other sections — checkboxes */}
-            {NON_GA_ADDABLE_TABS.map(tab => (
+            {NON_GA_ADDABLE_TABS.filter(tab => !workflowOptionalSections || workflowOptionalSections.includes(tab.id) || enabledTabs.includes(tab.id)).map(tab => (
               <label key={tab.id} className="inline-flex items-center gap-1 cursor-pointer text-xs">
                 <input
                   type="checkbox"
@@ -2736,7 +2757,7 @@ export default function FormView({
           </div>
       </div>
 
-      <fieldset disabled={readOnly} className="m-0 min-w-0 space-y-4 border-0 p-0">
+      <fieldset disabled={readOnly} className={`m-0 min-w-0 space-y-4 border-0 p-0 ${workflowTab ? "hidden" : ""}`}>
       <section className={`${card} ${activeTab === "caseInfo" ? "" : "hidden"}`}>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
@@ -3457,6 +3478,11 @@ export default function FormView({
         </section>
       ) : null}
       </fieldset>
+
+      {leafCaseId != null && workflowTabs.length ? <Suspense fallback={workflowTab ? <div className="p-4 text-sm text-[var(--app-muted)]">Loading form…</div> : null}>
+        {workflowTabs.map(tab => <WorkflowFormPanel key={`${leafCaseId}-${tab.formId}`} caseId={leafCaseId} formId={tab.formId}
+          form={caseWorkflow.forms[tab.formId]} readOnly={readOnly || caseStatus.status === "ARCHIVED"} hidden={workflowTab !== tab.formId} />)}
+      </Suspense> : null}
 
       {showSavedPreview ? (
         <div className="fixed inset-0 z-30 bg-black/40 flex items-center justify-center p-4">

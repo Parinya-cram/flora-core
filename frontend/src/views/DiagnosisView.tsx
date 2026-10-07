@@ -175,7 +175,10 @@ function ClinicalSection<M>({
   const [formError, setFormError] = useState("");
   const entryInputRef = React.useRef<HTMLInputElement>(null);
 
-  // Search logic
+  // Search logic. onSearch is usually an inline arrow (new on every render); keep the
+  // latest in a ref so frequent re-renders don't keep cancelling the debounce timer.
+  const onSearchRef = React.useRef(onSearch);
+  onSearchRef.current = onSearch;
   useEffect(() => {
     const q = searchQuery;
     if (q.trim().length < 2) {
@@ -185,7 +188,7 @@ function ClinicalSection<M>({
     }
     const timer = setTimeout(async () => {
       try {
-        const results = await onSearch(q);
+        const results = await onSearchRef.current(q);
         setMatches(results);
         setSelectedIndex(results.length > 0 ? 0 : -1);
         setFormError("");
@@ -196,7 +199,7 @@ function ClinicalSection<M>({
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [onSearch, searchQuery]);
+  }, [searchQuery]);
 
   const handleAdd = async () => {
     if (!entryText.trim() || saving) return;

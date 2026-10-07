@@ -27,6 +27,7 @@ import {
   type ThemeMasterRow,
 } from "../api/authApi";
 import { messages } from "../context/LanguageContext";
+import { assignCanopyLocation, getCanopyLocations, type CanopyLocation, type CanopyLocations } from "../api/wardApi";
 import ConfirmDialog from "../components/common/ConfirmDialog";
 import {
   createClinicalConcept,
@@ -123,10 +124,23 @@ function SchemeColorCard({ label, value, onChange }: { label: string; value: str
   </div>;
 }
 
+const LOCATION_LEVELS: Array<{ kind: CanopyLocation["kind"]; label: string; field: "hospitalName" | "buildingName" | "careUnitName" | "roomName" | "bedName" }> = [
+  { kind: "hospital", label: "Hospital", field: "hospitalName" },
+  { kind: "building", label: "Building", field: "buildingName" },
+  { kind: "care_unit", label: "Care unit", field: "careUnitName" },
+  { kind: "room", label: "Room", field: "roomName" },
+  { kind: "bed", label: "Bed / workstation", field: "bedName" },
+];
+
 function LocationTab() {
   const [value, setValue] = useState(emptyWorkstation);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(true);
+  // Canopy location tree; null while loading, false when Canopy is unreachable.
+  const [tree, setTree] = useState<CanopyLocations | null | false>(null);
+  const [manual, setManual] = useState(false);
+  const [path, setPath] = useState<Array<number | null>>([null, null, null, null, null]);
+  const [leafLookup, setLeafLookup] = useState("");
 
   useEffect(() => {
     void getWorkstationContext().then(context => {
@@ -136,22 +150,101 @@ function LocationTab() {
       setNote(error instanceof Error ? error.message : "Unable to load location");
       setBusy(false);
     });
+    void getCanopyLocations().then(result => {
+      setTree(result);
+      setLeafLookup(result.leaf_id);
+      if (result.current_bed_id) setPath(pathTo(result, result.current_bed_id));
+    }).catch(() => setTree(false));
   }, []);
 
-  const fields: Array<[keyof typeof value, string]> = [
-    ["hospitalName", "Hospital"],
-    ["buildingName", "Building"],
-    ["careUnitName", "Care unit"],
-    ["roomName", "Room"],
-    ["bedName", "Bed / workstation"],
-  ];
+  const byId = useMemo(() => new Map((tree ? tree.locations : []).map(item => [item.id, item])), [tree]);
+  const pathTo = (data: CanopyLocations, bedId: number) => {
+    const lookup = new Map(data.locations.map(item => [item.id, item]));
+    const chain: Array<number | null> = [null, null, null, null, null];
+    let current = lookup.get(bedId);
+    while (current) {
+      const index = LOCATION_LEVELS.findIndex(level => level.kind === current!.kind);
+      if (index >= 0) chain[index] = current.id;
+      current = current.parent_id ? lookup.get(current.parent_id) : undefined;
+    }
+    return chain;
+  };
+  const optionsAt = (index: number) => !tree ? [] : tree.locations.filter(item =>
+    item.kind === LOCATION_LEVELS[index].kind && (index === 0 ? true : item.parent_id === path[index - 1]));
+  const choose = (index: number, id: number | null) => setPath(current => current.map((item, i) => (i < index ? item : i === index ? id : null)));
+  const bedUsers = (bedId: number) => (tree ? tree.assignments : []).filter(item => item.bed_location_id === bedId).map(item => item.leaf_id);
+  // Loads only on Enter, leaving the field or "Load" — never per keystroke, so a partial ID
+  // or a browser suggestion cannot silently switch the location being edited.
+  const lookupLeaf = () => {
+    const leafId = leafLookup.trim();
+    if (!tree || !leafId) return;
+    const found = tree.assignments.find(item => item.leaf_id === leafId);
+    if (!found) {
+      setNote(`${leafId} has no location in Canopy`);
+      return;
+    }
+    setPath(pathTo(tree, found.bed_location_id));
+    setNote(`Location of ${found.leaf_id} loaded`);
+  };
+  const bedId = path[4];
+  const otherUsers = bedId ? bedUsers(bedId).filter(id => tree && id !== tree.leaf_id) : [];
+
+  const fields: Array<[keyof typeof value, string]> = LOCATION_LEVELS.map(level => [level.field, level.label]);
+  const saveManual = () => { setBusy(true); setNote(""); void updateWorkstationContext(value).then(() => { setNote("Location saved. Refreshing…"); window.setTimeout(() => window.location.reload(), 350); }).catch(error => { setNote(error instanceof Error ? error.message : "Unable to save location"); setBusy(false); }); };
+  const saveFromCanopy = () => {
+    if (!bedId) return;
+    setBusy(true);
+    setNote("");
+    void assignCanopyLocation(bedId).then(() => { setNote("Location saved in Canopy and on this Leaf. Refreshing…"); window.setTimeout(() => window.location.reload(), 350); })
+      .catch(error => { setNote(error instanceof Error ? error.message : "Unable to save location"); setBusy(false); });
+  };
+  const useCanopy = tree && !manual;
 
   return <div className="p-4"><div className={`${card} max-w-5xl`}>
-    <div><div className="text-sm font-semibold">Workstation location</div><div className="text-xs text-[var(--app-muted)]">Shown with the live clock throughout Flora Leaf.</div></div>
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {fields.map(([key, label]) => <label key={key} className="space-y-1"><div className="text-xs text-[var(--app-muted)]">{label}</div><input disabled={busy} className={input} value={value[key]} onChange={event => setValue(current => ({ ...current, [key]: event.target.value }))} /></label>)}
+    <div className="flex flex-wrap items-start justify-between gap-2">
+      <div><div className="text-sm font-semibold">Workstation location</div><div className="text-xs text-[var(--app-muted)]">Shown with the live clock throughout Flora Leaf.</div></div>
+      <div className="text-xs text-[var(--app-muted)]">
+        {tree === null ? "Checking Canopy…" : tree === false ? "Canopy not reachable — enter the location manually" : <>
+          <span className="text-emerald-600">● Connected to Canopy</span>{" · "}
+          <button type="button" className="underline" onClick={() => setManual(current => !current)}>{manual ? "Choose from Canopy" : "Enter manually"}</button>
+        </>}
+      </div>
     </div>
-    <div className="flex items-center gap-3"><button type="button" disabled={busy || fields.some(([key]) => !value[key].trim())} className={`${buttonPrimary} disabled:opacity-50`} onClick={() => { setBusy(true); setNote(""); void updateWorkstationContext(value).then(() => { setNote("Location saved. Refreshing…"); window.setTimeout(() => window.location.reload(), 350); }).catch(error => { setNote(error instanceof Error ? error.message : "Unable to save location"); setBusy(false); }); }}>{busy ? "Loading…" : "Save location"}</button>{note ? <span className="text-xs text-[var(--app-muted)]">{note}</span> : null}</div>
+    {useCanopy ? <>
+      <label className="block max-w-md space-y-1">
+        <div className="text-xs text-[var(--app-muted)]">Leaf ID (this workstation is <b>{tree.leaf_id}</b>; enter another Leaf ID to copy its location)</div>
+        <div className="flex gap-2">
+          <input className={input} list="canopy-leaf-ids" value={leafLookup} onChange={event => setLeafLookup(event.target.value)}
+            onBlur={lookupLeaf} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); lookupLeaf(); } }} />
+          <button type="button" className={`${buttonPrimary} shrink-0`} onClick={lookupLeaf}>Load</button>
+        </div>
+        <datalist id="canopy-leaf-ids">{tree.leaves.map(leaf => <option key={leaf.leaf_id} value={leaf.leaf_id}>{leaf.name}</option>)}</datalist>
+      </label>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {LOCATION_LEVELS.map((level, index) => <label key={level.kind} className="space-y-1">
+          <div className="text-xs text-[var(--app-muted)]">{level.label}</div>
+          <select disabled={busy || (index > 0 && !path[index - 1])} className={input} value={path[index] ?? ""}
+            onChange={event => choose(index, event.target.value ? Number(event.target.value) : null)}>
+            <option value="">Select…</option>
+            {optionsAt(index).map(item => {
+              const users = level.kind === "bed" ? bedUsers(item.id) : [];
+              return <option key={item.id} value={item.id}>{item.name}{users.length ? ` (${users.join(", ")})` : ""}</option>;
+            })}
+          </select>
+        </label>)}
+      </div>
+      {otherUsers.length ? <div className="text-xs text-amber-600">This bed is currently assigned to {otherUsers.join(", ")}; saving assigns it to this workstation too.</div> : null}
+      <div className="flex items-center gap-3">
+        <button type="button" disabled={busy || !bedId} className={`${buttonPrimary} disabled:opacity-50`} onClick={saveFromCanopy}>{busy ? "Loading…" : "Save location"}</button>
+        {bedId ? <span className="text-xs text-[var(--app-muted)]">{path.map(id => (id ? byId.get(id)?.name : "")).filter(Boolean).join(" › ")}</span> : null}
+        {note ? <span className="text-xs text-[var(--app-muted)]">{note}</span> : null}
+      </div>
+    </> : <>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {fields.map(([key, label]) => <label key={key} className="space-y-1"><div className="text-xs text-[var(--app-muted)]">{label}</div><input disabled={busy} className={input} value={value[key]} onChange={event => setValue(current => ({ ...current, [key]: event.target.value }))} /></label>)}
+      </div>
+      <div className="flex items-center gap-3"><button type="button" disabled={busy || fields.some(([key]) => !value[key].trim())} className={`${buttonPrimary} disabled:opacity-50`} onClick={saveManual}>{busy ? "Loading…" : "Save location"}</button>{note ? <span className="text-xs text-[var(--app-muted)]">{note}</span> : null}</div>
+    </>}
   </div></div>;
 }
 

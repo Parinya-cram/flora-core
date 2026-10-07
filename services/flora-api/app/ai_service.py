@@ -62,15 +62,47 @@ def anthropic_client(config: dict[str, Any], timeout: float = 60.0):
     return anthropic.Anthropic(**options)
 
 
+# Cloudflare and similar front doors reject Python's default "Python-urllib" agent with a 403
+# (Cloudflare error 1010), which looked exactly like a rejected key.
+USER_AGENT = "ESM-Flora/1.0"
+
+
+class FirewallBlocked(Exception):
+    pass
+
+
+def openai_bases(host: str) -> list[str]:
+    """Where the OpenAI-compatible API may live: the host as typed (OpenRouter .../api/v1, Open WebUI .../api)
+    first, then host + /v1 (Ollama, vLLM and LM Studio are usually entered without it)."""
+    host = host.rstrip("/")
+    return [host] if host.endswith("/v1") else [host, f"{host}/v1"]
+
+
 def _openai_models(config: dict[str, Any]) -> list[str]:
-    host = (config.get("host") or "").rstrip("/")
-    base = host if host.endswith("/v1") else f"{host}/v1"
-    headers = {"Accept": "application/json"}
+    headers = {"Accept": "application/json", "User-Agent": USER_AGENT}
     if config.get("api_key"):
         headers["Authorization"] = f"Bearer {config['api_key']}"
-    with urllib.request.urlopen(urllib.request.Request(f"{base}/models", headers=headers), timeout=10) as response:
-        payload = json.load(response)
-    return [str(item.get("id")) for item in payload.get("data") or [] if isinstance(item, dict)]
+    last: Exception | None = None
+    for base in openai_bases(config.get("host") or ""):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(f"{base}/models", headers=headers), timeout=10) as response:
+                payload = json.load(response)
+        except urllib.error.HTTPError as error:
+            if error.code in {401, 403}:
+                body = error.read(300).decode("utf-8", "replace")
+                cloudflare = "cloudflare" in (error.headers.get("server") or "").lower()
+                if error.code == 403 and ("error code: 10" in body or (cloudflare and "detail" not in body)):
+                    raise FirewallBlocked(body.strip()[:80]) from error
+                raise
+            last = error  # 404 / 405: not this base, try the next
+            continue
+        except ValueError as error:  # not JSON (e.g. a web page at this path)
+            last = error
+            continue
+        if isinstance(payload, dict) and isinstance(payload.get("data"), list):
+            return [str(item.get("id")) for item in payload["data"] if isinstance(item, dict)]
+        last = ValueError("not an OpenAI model list")
+    raise last or ValueError("no OpenAI-compatible model list found")
 
 
 def test(config: dict[str, Any]) -> dict[str, Any]:
@@ -106,7 +138,66 @@ def test(config: dict[str, Any]) -> dict[str, Any]:
             return {"ok": False, "error": "cannot reach the service host"}
         return {"ok": True, "model": info.id, "displayName": getattr(info, "display_name", None),
                 "latencyMs": int((time.monotonic() - started) * 1000)}
+    except FirewallBlocked as error:
+        return {"ok": False, "error": f"the host's firewall blocked the request before it reached the API ({error})"}
     except urllib.error.HTTPError as error:
         return {"ok": False, "error": "API key was rejected" if error.code in {401, 403} else f"service error {error.code}"}
-    except (OSError, ValueError) as error:
+    except ValueError:
+        # The host answered, but not with an OpenAI model list (a web page, or the wrong path).
+        return {"ok": False, "error": "the host answered but no OpenAI-compatible API was found there; check the path (e.g. …/api or …/v1)"}
+    except OSError as error:
         return {"ok": False, "error": f"cannot reach the service host ({type(error).__name__})"}
+
+
+class AiServiceError(Exception):
+    """A chat call failed; the message is safe to show to users."""
+
+
+def _strip_thinking(text: str) -> str:
+    # Reasoning models (Qwen3, DeepSeek R1...) may return their thinking inline.
+    import re
+    return re.sub(r"<think>.*?</think>\s*", "", text, flags=re.S).strip()
+
+
+def complete(config: dict[str, Any], system: str, messages: list[dict[str, str]], *, max_tokens: int = 6000,
+             timeout: float = 180.0) -> str:
+    """One chat turn on the configured service. messages: [{role: user|assistant, content}]."""
+    model = (config.get("model") or "").strip()
+    if not model:
+        raise AiServiceError("The AI service is not configured (Account → AI service).")
+    if config.get("api_format") == "openai":
+        if not config.get("host"):
+            raise AiServiceError("The AI service host is not configured.")
+        body = json.dumps({"model": model, "max_tokens": max_tokens, "temperature": 0.2,
+                           "messages": [{"role": "system", "content": system}, *messages]}).encode("utf-8")
+        headers = {"Content-Type": "application/json", "Accept": "application/json", "User-Agent": USER_AGENT}
+        if config.get("api_key"):
+            headers["Authorization"] = f"Bearer {config['api_key']}"
+        for base in openai_bases(config["host"]):
+            request = urllib.request.Request(f"{base}/chat/completions", data=body, headers=headers, method="POST")
+            try:
+                with urllib.request.urlopen(request, timeout=timeout) as response:
+                    payload = json.load(response)
+            except urllib.error.HTTPError as error:
+                if error.code in {404, 405}:
+                    continue
+                if error.code in {401, 403}:
+                    raise AiServiceError("The AI service rejected the request (check the API key).") from error
+                raise AiServiceError(f"The AI service returned an error ({error.code}).") from error
+            except (OSError, ValueError) as error:
+                raise AiServiceError(f"Cannot reach the AI service ({type(error).__name__}).") from error
+            choice = (payload.get("choices") or [{}])[0]
+            return _strip_thinking(str((choice.get("message") or {}).get("content") or ""))
+        raise AiServiceError("No chat endpoint found at the AI service host.")
+    import anthropic
+
+    try:
+        reply = anthropic_client(config, timeout=timeout).messages.create(
+            model=model, system=system, messages=messages, max_tokens=max_tokens, temperature=0.2)
+    except anthropic.AuthenticationError as error:
+        raise AiServiceError("The AI service rejected the API key.") from error
+    except anthropic.APIStatusError as error:
+        raise AiServiceError(f"The AI service returned an error ({error.status_code}).") from error
+    except anthropic.APIConnectionError as error:
+        raise AiServiceError("Cannot reach the AI service.") from error
+    return _strip_thinking("".join(block.text for block in reply.content if getattr(block, "type", "") == "text"))

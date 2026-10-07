@@ -214,11 +214,12 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
   if (error && !client) return <div className="p-6 text-sm text-rose-500">{error}</div>;
 
   return <main className="h-full overflow-y-auto bg-[var(--app-bg)] p-3 sm:p-5">
-    <div className={`mx-auto space-y-4 ${tab === "designer" ? "max-w-[1800px]" : "max-w-7xl"}`}>
+    {/* Every tab uses the full width of the page, so switching tabs never changes the layout width. */}
+    <div className="w-full space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">Flora Canopy · form development</div>
-          <h1 className="mt-1 text-2xl font-semibold text-[var(--app-text)]">Form Dev</h1>
+          <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">ESM Flora Canopy · Form Studio</div>
+          <h1 className="mt-1 text-2xl font-semibold text-[var(--app-text)]">Form Studio</h1>
           <p className="mt-1 text-sm text-[var(--app-muted)]">Fill forms online or offline. Changes are stored on this device first and synced in order.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -228,7 +229,7 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
           {counts?.failed ? <button type="button" className={secondary} onClick={() => void client?.sync.retryFailed().then(() => syncNow())}>Retry failed</button> : null}
         </div>
       </header>
-      <nav className="flex gap-2 border-b border-[var(--app-border)] pb-2" aria-label="Form Dev sections">
+      <nav className="flex gap-2 border-b border-[var(--app-border)] pb-2" aria-label="Form Studio sections">
         {(isAdmin ? ["records", "designer", "preview", "query", "jobs"] as const : ["records", "preview", "query", "jobs"] as const).map(item => <button key={item} type="button" onClick={() => setTab(item)} aria-current={tab === item ? "page" : undefined}
           className={`rounded-xl px-4 py-2 text-sm font-bold ${tab === item ? "bg-[var(--app-accent)] text-[var(--app-accent-contrast)]" : "text-[var(--app-muted)] hover:bg-[var(--app-control-bg)]"}`}>
           {item === "records" ? (thai ? "กรอกข้อมูล" : "Records") : item === "designer" ? (thai ? "ออกแบบฟอร์ม" : "Form designer") : item === "preview" ? "Preview" : item === "query" ? "Query" : "Jobs"}

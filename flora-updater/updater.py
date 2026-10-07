@@ -229,6 +229,22 @@ def apply(project: Project, release_id: str, images: dict[str, str]) -> None:
     raise RuntimeError(f"rolled back: {reason}")
 
 
+def drifted(project: Project, images: dict[str, str]) -> list[str]:
+    """Release-managed services whose container does not run the pinned image, e.g. after
+    someone ran `docker compose up` without the release env file."""
+    config = json.loads(project.compose("config", "--format", "json"))
+    wanted = {name: svc.get("image") for name, svc in config["services"].items() if svc.get("image") in images.values()}
+    # -a: one-shot services (gateway's parser-image runs `true` and exits) still count.
+    ids = project.compose("ps", "-a", "-q", *wanted, check=False).split() if wanted else []
+    running: dict[str, str] = {}
+    if ids:
+        for line in sh("docker", "inspect", "--format",
+                       '{{index .Config.Labels "com.docker.compose.service"}} {{.Config.Image}}', *ids).splitlines():
+            service, _, image = line.partition(" ")
+            running[service] = image
+    return sorted(name for name, image in wanted.items() if running.get(name) != image)
+
+
 def running_images(project: Project) -> dict[str, str]:
     rows = [json.loads(line) for line in project.compose("ps", "--format", "json", check=False).splitlines() if line.strip()]
     return {row["Service"]: row.get("Image", "") for row in rows}
@@ -246,7 +262,20 @@ def cycle(project: Project, failed: dict[str, str]) -> dict[str, Any]:
     images = {f"FLORA_IMAGE_{key.upper()}": f"{registry}/{image['repository']}@{image['digest']}"
               for key, image in release["services"].items()}
     if current_id == target and current_images == images:
-        return {**report, "state": "current", "detail": None}
+        drift = drifted(project, images)
+        if not drift:
+            return {**report, "state": "current", "detail": None}
+        reason = blocked()
+        if reason:
+            return {**report, "state": "drifted", "target": target, "detail": f"{', '.join(drift)} not on {target}; {reason}"}
+        log.warning("%s not running %s images; restoring", ", ".join(drift), target)
+        haber(f"/api/haber/v1/nodes/{NODE_ID}/report", {**report, "state": "applying", "target": target,
+                                                         "detail": f"restoring {', '.join(drift)}"})
+        try:
+            apply(project, target, images)
+        except RuntimeError as error:
+            return {**report, "state": "failed", "target": target, "detail": str(error)}
+        return {**report, "state": "current", "detail": f"restored {', '.join(drift)} to {target}"}
     if failed.get(target):
         return {**report, "state": "failed", "target": target, "detail": failed[target]}
     reason = blocked()

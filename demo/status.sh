@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
 # One-line health per tier plus the end-to-end data path.
-check() { if curl -fsS --cacert "${3:-flora-canopy/edge/certs/ca.crt}" --max-time 3 "$2" >/dev/null 2>&1; then printf '  %-28s up\n' "$1"; else printf '  %-28s DOWN  (%s)\n' "$1" "$2"; fi; }
+check() { if curl -fsS --cacert "${3:-certs/flora-ca.crt}" --max-time 3 "$2" >/dev/null 2>&1; then printf '  %-28s up\n' "$1"; else printf '  %-28s DOWN  (%s)\n' "$1" "$2"; fi; }
 ROOT_HTTPS_PORT=${ROOT_HTTPS_PORT:-8443} CANOPY_HTTPS_PORT=${CANOPY_HTTPS_PORT:-9443}
 echo "Flora Root";    check "root api :7100"          http://localhost:7100/health
-                      check "root edge :$ROOT_HTTPS_PORT"      "https://localhost:$ROOT_HTTPS_PORT/api/v1/keys" flora-root/edge/certs/ca.crt
+                      check "root edge :$ROOT_HTTPS_PORT"      "https://localhost:$ROOT_HTTPS_PORT/api/v1/keys"
                       check "root registry :7105"     http://localhost:7105/v2/
 echo "Flora Canopy";  check "edge https :$CANOPY_HTTPS_PORT"    "https://localhost:$CANOPY_HTTPS_PORT/api/sync/v1/fingerprint"
                       check "canopy web :7200"        http://localhost:7200
                       check "sync api :7203"          http://localhost:7203/health
                       check "haber :7204"             http://localhost:7204/health
                       check "haber registry :7205"    http://localhost:7205/v2/
-echo "Flora Gateway"; check "gateway service :7400"   http://localhost:7400/health
+echo "Flora Gateway"; check "gateway edge https :7443" https://localhost:7443/health
+                      check "gateway service :7400"   http://localhost:7400/health
                       check "data-api (kong) :7410"   http://localhost:7410/data-api/health
                       check "simulator :7420"         http://localhost:7420/health
-echo "Flora Leaf";    check "leaf-or-01 web :7300"    http://localhost:7300
+echo "Flora Leaf";    check "leaf-or-01 https :7343"  https://localhost:7343/health
+                      check "leaf-icu-01 https :7353" https://localhost:7353/health
+                      check "leaf-or-01 web :7300"    http://localhost:7300
                       check "leaf-or-01 api :7301"    http://localhost:7301/health
                       check "leaf-icu-01 web :7310"   http://localhost:7310
                       check "leaf-icu-01 api :7311"   http://localhost:7311/health

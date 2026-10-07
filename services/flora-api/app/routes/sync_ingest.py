@@ -10,8 +10,8 @@ from pydantic import BaseModel, Field
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 
-from .. import ai_service, central_auth, directory, form_sync, ldap_auth
-from ..database import connection
+from .. import ai_service, central_auth, directory, form_sync, ldap_auth, workflows
+from ..database import connection, pool
 
 
 router = APIRouter(prefix="/api/sync/v1", tags=["leaf-canopy-sync"])
@@ -71,6 +71,7 @@ def ingest_batch(batch: SyncBatch, database: Connection = Depends(connection)) -
     now = datetime.now(timezone.utc)
     accepted = 0
     duplicates = 0
+    workflow_forms: list[dict[str, Any]] = []
     with database.transaction():
         database.execute(
             """
@@ -180,11 +181,21 @@ def ingest_batch(batch: SyncBatch, database: Connection = Depends(connection)) -
                     now,
                 ),
             )
+            if message.payload.get("workflow_forms"):
+                workflow_forms.append({"global_case_id": str(global_case_id), "hn": case.get("hn"),
+                                       "workflow_forms": message.payload["workflow_forms"]})
         assignment = database.execute(
             """SELECT desired_config,desired_version,applied_version
                FROM canopy_leaf_assignment WHERE leaf_id=%s""",
             (batch.leaf_id,),
         ).fetchone()
+    if workflow_forms:
+        # Workflow Studio: bedside workflow forms also become Form Studio records (best effort).
+        try:
+            with pool.connection() as formdev_connection:
+                workflows.ingest_workflow_forms(formdev_connection, workflow_forms, batch.leaf_id)
+        except Exception as error:
+            workflows.LOG.warning("workflow form ingest failed: %s: %s", type(error).__name__, error)
     return {
         "ok": True,
         "accepted": accepted,

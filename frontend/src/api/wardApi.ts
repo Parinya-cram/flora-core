@@ -133,3 +133,16 @@ export const assignGatewayDevices = (gatewayId: string, deviceIds: string[]) =>
 export const verifyGateway = (dataApiUrl: string) => post<GatewayVerify>("/gateway/verify", { data_api_url: dataApiUrl });
 export const saveDeviceSource = (gatewayId: string | null, dataApiUrl: string) =>
   request<{ device_source: unknown }>("/gateway/source", { method: "PUT", body: JSON.stringify({ gateway_id: gatewayId, data_api_url: dataApiUrl }) });
+
+/** Settings > Location: Canopy's location tree (fails when Canopy is unreachable). */
+export type CanopyLocation = { id: number; parent_id: number | null; kind: "hospital" | "building" | "care_unit" | "room" | "bed"; code?: string | null; name: string };
+export type CanopyLocations = {
+  leaf_id: string;
+  locations: CanopyLocation[];
+  assignments: { leaf_id: string; bed_location_id: number; leaf_name?: string | null }[];
+  leaves: { leaf_id: string; name: string }[];
+  current_bed_id: number | null;
+};
+export const getCanopyLocations = () => request<CanopyLocations>("/locations");
+export const assignCanopyLocation = (bedLocationId: number) =>
+  post<{ location: Record<string, string>; version: number }>("/locations/assign", { bed_location_id: bedLocationId });

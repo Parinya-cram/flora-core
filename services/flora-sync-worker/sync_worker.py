@@ -24,6 +24,8 @@ LAST_DIGEST: dict[str, str] = {}
 LAST_EXPORT_DIGEST: dict[str, str] = {}
 # Handovers whose old case this Leaf has locked; acknowledged on the next ward exchange.
 RELEASED_ACK: list[int] = []
+# Workflow Studio: digest of the ward's workflow set last stored on the Leaf.
+LAST_WORKFLOWS_DIGEST = ""
 PREVIOUS_ACTIVE_IDS: set[str] = set()
 INITIAL_SYNC_COMPLETE = False
 
@@ -73,6 +75,8 @@ def build_snapshot(client: httpx.Client, case: dict[str, Any]) -> dict[str, Any]
         "io_runs": f"/api/case/{case_id}/io/runs?from={from_ms}&to={end_ms}",
         "io_events": f"/api/case/{case_id}/io/events?from={from_ms}&to={end_ms}",
         "io_summary": f"/api/case/{case_id}/io/summary?from={from_ms}&to={end_ms}&bucket=1",
+        "workflow": f"/api/case/{case_id}/workflow-snapshot",
+        "workflow_forms": f"/api/case/{case_id}/workflow-forms",
     }
     snapshot: dict[str, Any] = {"case": case, "window": {"from": from_ms, "to": end_ms}}
     for key, path in paths.items():
@@ -227,7 +231,7 @@ def synchronize_admissions() -> None:
 
 def synchronize_ward() -> dict[str, Any]:
     """Ward peers, registered gateways and released handovers for the Leaf Ward page."""
-    global RELEASED_ACK
+    global RELEASED_ACK, LAST_WORKFLOWS_DIGEST
     with httpx.Client(timeout=20) as client:
         response = client.post(
             f"{CANOPY_SYNC_API}/api/sync/v1/ward",
@@ -237,6 +241,17 @@ def synchronize_ward() -> dict[str, Any]:
         response.raise_for_status()
         ward = response.json()
         RELEASED_ACK = []
+        workflows = ward.pop("workflows", None)
+        if isinstance(workflows, dict):
+            digest = hashlib.sha256(json.dumps(workflows, sort_keys=True, default=str).encode()).hexdigest()
+            if digest != LAST_WORKFLOWS_DIGEST:
+                stored = client.put(f"{LEAF_API}/api/case/workflows/state",
+                                    headers={"X-FLORA-Service-Secret": LEAF_SERVICE_SECRET}, json=workflows)
+                if stored.status_code != 404:  # a Leaf API without Workflow Studio
+                    stored.raise_for_status()
+                    LAST_WORKFLOWS_DIGEST = digest
+                    print(f"workflows leaf={LEAF_ID} version={workflows.get('version')} "
+                          f"items={len(workflows.get('items') or [])}", flush=True)
         applied = client.put(f"{LEAF_API}/api/ward/state", headers={"X-FLORA-Service-Secret": LEAF_SERVICE_SECRET}, json=ward)
         applied.raise_for_status()
         locked = set(applied.json().get("released") or [])

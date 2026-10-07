@@ -25,7 +25,7 @@ from ..formdev.adapters.sql_query import QueryFailed, QueryTimeout
 from ..formdev.formpack import export_formpack, install_formpack, media_type
 from ..formdev.record_access import FormView
 from .auth_canopy import read_token
-from .fleet_control import require_admin
+from .studio_access import require_studio_author
 from .formdev_runtime import STORAGE, checkout, hidden_fields, principal_for, record_access, runtime, storage, write_guard
 
 router = APIRouter(prefix="/api/formdev", tags=["formdev"])
@@ -108,7 +108,7 @@ def registry(_: dict = Depends(read_token), fd: FormDevServices = Depends(formde
 
 
 @router.put("/styles/{style_id}")
-def put_style(style_id: str, user: dict = Depends(require_admin), body: Any = Depends(strict_json), fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
+def put_style(style_id: str, user: dict = Depends(require_studio_author), body: Any = Depends(strict_json), fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
     """Add or change a registry style: {"definition": {name, category, inherit?, tokens, components?}}."""
     row = fd.styles.put_style(style_id, body.get("definition") if isinstance(body, dict) else None)
     log.info("formdev style %s saved as version %s by %s", style_id, row["version"], username(user))
@@ -116,7 +116,7 @@ def put_style(style_id: str, user: dict = Depends(require_admin), body: Any = De
 
 
 @router.put("/fonts/{font_id}")
-def put_font(font_id: str, user: dict = Depends(require_admin), body: Any = Depends(strict_json), fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
+def put_font(font_id: str, user: dict = Depends(require_studio_author), body: Any = Depends(strict_json), fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
     """Add or change a font: {"metadata": {family, ...}, "assets": [...], "fallback": [...]} (no font files)."""
     row = fd.styles.put_font(font_id, body)
     log.info("formdev font %s saved by %s", font_id, username(user))
@@ -166,7 +166,7 @@ def get_lookup(lookup_id: str, _: dict = Depends(read_token), fd: FormDevService
 
 
 @router.put("/lookups/{lookup_id}")
-def put_lookup(lookup_id: str, user: dict = Depends(require_admin), body: Any = Depends(strict_lookup), fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
+def put_lookup(lookup_id: str, user: dict = Depends(require_studio_author), body: Any = Depends(strict_lookup), fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
     """Add or replace a lookup table: {"metadata": {title, columns, authoritative?, notice?, source?}, "entries": [...]}."""
     row = fd.lookups.put(lookup_id, body, username(user))
     log.info("formdev lookup %s saved as version %s (%s rows) by %s", lookup_id, row["version"], len(row["entries"]), username(user))
@@ -186,7 +186,7 @@ def validate(_: dict = Depends(read_token), parsed: tuple = Depends(strict_defin
 
 
 @router.post("/forms")
-def create_form(user: dict = Depends(require_admin), parsed: tuple = Depends(strict_definition), fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
+def create_form(user: dict = Depends(require_studio_author), parsed: tuple = Depends(strict_definition), fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
     definition, duplicates = parsed
     _refuse_duplicates(duplicates)
     return {"version": fd.schemas.create_form(definition, username(user))}
@@ -198,7 +198,7 @@ def get_form(form_id: str, _: dict = Depends(read_token), fd: FormDevServices = 
 
 
 @router.post("/forms/{form_id}/versions")
-def new_version(form_id: str, user: dict = Depends(require_admin), fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
+def new_version(form_id: str, user: dict = Depends(require_studio_author), fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
     return {"version": fd.schemas.new_draft(form_id, username(user))}
 
 
@@ -209,7 +209,7 @@ def get_version(form_id: str, schema_version: int, _: dict = Depends(read_token)
 
 @router.put("/forms/{form_id}/versions/{schema_version}")
 def save_version(
-    form_id: str, schema_version: int, user: dict = Depends(require_admin),
+    form_id: str, schema_version: int, user: dict = Depends(require_studio_author),
     parsed: tuple = Depends(strict_definition), fd: FormDevServices = Depends(formdev),
 ) -> dict[str, Any]:
     definition, duplicates = parsed
@@ -220,7 +220,7 @@ def save_version(
 
 
 @router.post("/forms/{form_id}/versions/{schema_version}/publish")
-def publish_version(form_id: str, schema_version: int, user: dict = Depends(require_admin), fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
+def publish_version(form_id: str, schema_version: int, user: dict = Depends(require_studio_author), fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
     return {"version": fd.schemas.publish(form_id, schema_version, username(user))}
 
 
@@ -237,7 +237,7 @@ def get_asset(form_id: str, path: str, _: dict = Depends(read_token), fd: FormDe
 @router.get("/forms/{form_id}/package")
 def export_package(
     form_id: str, version: int | None = Query(default=None, ge=1),
-    _: dict = Depends(require_admin), fd: FormDevServices = Depends(formdev),
+    _: dict = Depends(require_studio_author), fd: FormDevServices = Depends(formdev),
 ) -> Response:
     content = export_formpack(fd.schemas, fd.styles, form_id, version)
     name = f"{form_id.replace('_', '-')}{'.v' + str(version) if version else ''}.formpack"
@@ -245,7 +245,7 @@ def export_package(
 
 
 @router.post("/packages")
-async def install_package(request: Request, user: dict = Depends(require_admin), fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
+async def install_package(request: Request, user: dict = Depends(require_studio_author), fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
     return {"result": install_formpack(await request.body(), fd.schemas, fd.styles, fd.records, username(user))}
 
 
@@ -331,7 +331,7 @@ def record_conflicts(request: Request, record_id: str, fd: FormDevServices = Dep
 
 
 @router.post("/records/{record_id}/upgrade")
-def upgrade_record(record_id: str, body: Any = Body(...), user: dict = Depends(require_admin), fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
+def upgrade_record(record_id: str, body: Any = Body(...), user: dict = Depends(require_studio_author), fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
     if not isinstance(body, dict) or not isinstance(body.get("expected_version"), int):
         raise FormDevError("invalid_request", "expected_version is required")
     return {"record": fd.records.upgrade(record_id, body["expected_version"], username(user), body.get("to_version"))}

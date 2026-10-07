@@ -23,6 +23,7 @@ from .routes.fleet_read import router as fleet_read_router
 from .routes.fleet_control import router as fleet_control_router
 from .routes.legacy_archive import router as legacy_archive_router
 from .routes.canopy_reports import router as canopy_reports_router
+from .routes.ai_studio import router as ai_studio_router
 from .routes.canopy_preferences import router as canopy_preferences_router
 from .routes.canopy_users import router as canopy_users_router
 from .routes.canopy_inbox import router as canopy_inbox_router
@@ -41,6 +42,8 @@ from .routes.workstation import router as workstation_router
 from .routes.terminology import router as terminology_router
 from .routes.formdev import router as formdev_router
 from .routes.formdev_query import router as formdev_query_router
+from .routes.workflows import router as workflows_router
+from .routes.case_workflow import router as case_workflow_router
 from .routes import formdev_runtime
 from .formdev.errors import FormDevError
 
@@ -80,6 +83,7 @@ if API_MODE == "leaf" and os.getenv("FLORA_LEAF_WRITE_API", "false").lower() == 
     app.include_router(build_ai_settings_router())
     app.include_router(canopy_inbox_router)
     app.include_router(ward_router)
+    app.include_router(case_workflow_router)
     app.include_router(cases_lifecycle_router)
     app.include_router(clinical_write_router)
     app.include_router(catalog_write_router)
@@ -104,8 +108,10 @@ if API_MODE == "canopy":
     app.include_router(fleet_control_router)
     app.include_router(legacy_archive_router)
     app.include_router(canopy_reports_router)
+    app.include_router(ai_studio_router)
     app.include_router(formdev_router)
     app.include_router(formdev_query_router)
+    app.include_router(workflows_router)
 if API_MODE == "sync":
     app.include_router(sync_ingest_router)
     app.include_router(sync_ward_router)
@@ -124,7 +130,11 @@ async def enforce_canopy_read_only(request: Request, call_next):
         # Public API v1: API-key auth with scopes (e.g. admissions:write).
         canopy_preference_write = canopy_preference_write or request.url.path.startswith("/api/v1/")
         report_generation = request.method == "POST" and request.url.path.startswith("/api/fleet/legacy/cases/") and request.url.path.endswith("/report.pdf")
-        formdev_write = request.url.path.startswith("/api/formdev/")
+        formdev_write = request.url.path.startswith("/api/formdev/") or request.url.path.startswith("/api/reports/studio/")
+        # Workflow Studio (admin-only writes, checked by the routes).
+        formdev_write = formdev_write or request.url.path.startswith("/api/fleet/workflows")
+        # AI Studio chats and kept visuals (permission checked by the routes).
+        formdev_write = formdev_write or request.url.path.startswith("/api/ai-studio/")
         if request.url.path not in {"/api/auth/login", "/api/auth/logout"} and not request.url.path.startswith("/api/fleet/control") and not canopy_preference_write and not report_generation and not formdev_write:
             return JSONResponse(
                 status_code=403,

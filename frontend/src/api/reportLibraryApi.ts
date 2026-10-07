@@ -11,6 +11,9 @@ export type ReportDefinition = {
   category: ReportCategory;
   source_system: string;
   definition: {
+    /** "studio": built in Report Studio; studio holds its StudioSpec (api/reportStudioApi.ts). */
+    engine?: "studio";
+    studio?: unknown;
     engine_report: string;
     dataset: "innovian_archive";
     mode: "detail" | "summary" | "monthly_drilldown";
@@ -29,6 +32,8 @@ export type ReportDefinition = {
 
 export type ReportResult = {
   report?: string;
+  /** Report Studio results: display labels for the generated row keys. */
+  columns?: Array<{ key: string; label: string; kind: "column" | "group" | "measure"; field?: string | null; data_type: string }>;
   mode?: "summary" | "detail";
   summary?: Record<string, unknown>;
   rows?: Array<Record<string, unknown>>;

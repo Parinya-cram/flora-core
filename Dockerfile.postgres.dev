@@ -53,3 +53,7 @@ COPY infrastructure/postgres/0062-formdev-registry.sql /docker-entrypoint-initdb
 COPY infrastructure/postgres/0063-formdev-lookup.sql /docker-entrypoint-initdb.d/0063-formdev-lookup.sql
 COPY infrastructure/postgres/0064-formdev-attachment.sql /docker-entrypoint-initdb.d/0064-formdev-attachment.sql
 COPY infrastructure/postgres/0065-formdev-index-rebuild.sql /docker-entrypoint-initdb.d/0065-formdev-index-rebuild.sql
+COPY infrastructure/postgres/0045-leaf-location-picker.sql /docker-entrypoint-initdb.d/0045-leaf-location-picker.sql
+COPY infrastructure/postgres/0070-workflow-studio.sql /docker-entrypoint-initdb.d/0070-workflow-studio.sql
+COPY infrastructure/postgres/0075-report-studio.sql /docker-entrypoint-initdb.d/0075-report-studio.sql
+COPY infrastructure/postgres/0076-ai-studio.sql /docker-entrypoint-initdb.d/0076-ai-studio.sql

@@ -279,3 +279,33 @@ def gateway_source(payload: dict[str, Any] = Body(...), actor: dict = Depends(re
     ).fetchone()
     database.commit()
     return {"device_source": row}
+
+
+# ---------------------------------------------------------------- Settings > Location from Canopy
+
+@router.get("/locations")
+def canopy_locations(_: dict = Depends(require_permission("config.manage"))) -> dict:
+    """Canopy's location tree for the Location settings pickers (503 when Canopy is unreachable)."""
+    result = canopy("POST", "/api/sync/v1/locations", {"leaf_id": os.getenv("FLORA_LEAF_ID", "")}, timeout=5)
+    return {**result, "leaf_id": os.getenv("FLORA_LEAF_ID", "")}
+
+
+@router.post("/locations/assign")
+def assign_canopy_location(payload: dict[str, Any] = Body(...), actor: dict = Depends(require_permission("config.manage")),
+                           database: Connection = Depends(connection)) -> dict:
+    """Assign this Leaf to a Canopy bed and apply the location here at once (Canopy stays the source)."""
+    bed_id = payload.get("bed_location_id")
+    if not isinstance(bed_id, int):
+        raise HTTPException(400, "bed_location_id required")
+    context = database.execute("SELECT timezone, date_format, time_format FROM workstation_context WHERE id=1").fetchone() or {}
+    result = canopy("POST", f"/api/sync/v1/leaves/{urllib.parse.quote(os.getenv('FLORA_LEAF_ID', ''))}/location", {
+        "bed_location_id": bed_id, "timezone": context.get("timezone") or "Asia/Bangkok",
+        "date_format": context.get("date_format") or "DD/MM/YYYY", "time_format": context.get("time_format") or "24h"})
+    location = result["location"]
+    database.execute(
+        """UPDATE workstation_context SET hospital_name=%s, building_name=%s, care_unit_name=%s, room_name=%s,
+             bed_name=%s, control_plane_version=%s, updated_at=%s WHERE id=1""",
+        (location["hospitalName"], location["buildingName"], location["careUnitName"], location["roomName"],
+         location["bedName"], result["version"], now_ms()))
+    database.commit()
+    return {**result, "applied": True, "by": actor["username"]}

@@ -1,4 +1,5 @@
 import type { AuthUser } from "../auth/useAuth";
+import { canAuthorStudio } from "../auth/studioAccess";
 import { useLanguage } from "../context/LanguageContext";
 import FormDevWorkspace from "../formdev/ui/FormDevWorkspace";
 
@@ -12,5 +13,6 @@ export default function CanopyFormDevView({ sessionUser }: { sessionUser: AuthUs
     permissions: sessionUser?.permissions ?? [],
   };
   // The server re-checks every permission; this principal only drives instant validation in the UI.
-  return <FormDevWorkspace username={principal.username} isAdmin={role === "admin" || role === "system_admin"} principal={principal} language={language} />;
+  // Studio authors (studio.manage: system and clinical administrators) get the designer.
+  return <FormDevWorkspace username={principal.username} isAdmin={canAuthorStudio(sessionUser)} principal={principal} language={language} />;
 }

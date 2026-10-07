@@ -18,6 +18,7 @@ from ..account_config_sync import claim_canopy_admission
 from ..database import connection
 from .auth_leaf import now_ms, require_permission
 from .cases_read import floor_minute, rate_to_ml_per_hour
+from . import case_workflow
 
 router = APIRouter(prefix="/api/case", tags=["case lifecycle"])
 
@@ -45,6 +46,8 @@ class StartCase(StartTime):
     surgical_priority: str | None = Field(default=None, max_length=80)
     # Start a case admitted in Canopy (listed under "Prepared patients").
     canopy_admission_id: str | None = Field(default=None, max_length=64)
+    # Workflow Studio: one of GET /api/case/workflows (a Canopy admission may preset it).
+    workflow_id: str | None = Field(default=None, max_length=64)
 
 
 class CaseId(BaseModel):
@@ -116,6 +119,7 @@ def overlap_check(payload: StartTime, _: dict = Depends(require_permission("case
 @router.post("/start")
 def start_case(payload: StartCase, actor: dict = Depends(require_permission("case.create")), database: Connection = Depends(connection)):
     admission = None
+    workflow = case_workflow.resolve(database, payload.workflow_id, explicit=True)
     if payload.canopy_admission_id:
         admission = database.execute(
             "SELECT * FROM canopy_admission_inbox WHERE id::text=%s", (payload.canopy_admission_id,)
@@ -131,6 +135,8 @@ def start_case(payload: StartCase, actor: dict = Depends(require_permission("cas
         header = admission["header"] or {}
         patient = header.get("patient") or {}
         details = header.get("admission") or {}
+        if workflow is None:
+            workflow = case_workflow.resolve(database, details.get("workflow_id"), explicit=False)
         payload = payload.model_copy(update={
             "admission_source": "prepared",
             "hn": payload.hn or header.get("hn"),
@@ -234,6 +240,7 @@ def start_case(payload: StartCase, actor: dict = Depends(require_permission("cas
                  (payload.sex or "").strip() or "unknown",(payload.date_of_birth or "").strip() or None,
                  (payload.age_text or "").strip() or None,payload.weight_kg,payload.admission_source.upper(),current,current),
             )
+        case_workflow.apply_on_start(database, case_id, workflow, current)
         items = database.execute("SELECT id FROM io_item_master WHERE kind='output' AND is_active=1 AND code IN ('urine','bloodLoss')").fetchall()
         for item in items:
             run = database.execute(
@@ -245,7 +252,8 @@ def start_case(payload: StartCase, actor: dict = Depends(require_permission("cas
             audit_run(database,case_id,None,run,actor,"default output rows")
     return {"ok":True,"case_id":case_id,"case_code":code,"hn":hn,"start_time":start,
             "admission_source":payload.admission_source,"identity_status":identity_status,
-            "device_capture_start_time":capture,"overlap_policy":payload.overlap_policy if overlap else None}
+            "device_capture_start_time":capture,"overlap_policy":payload.overlap_policy if overlap else None,
+            "workflow_id":workflow.get("id") if workflow else None}
 
 
 def validate_end(database: Connection, case: dict, end: int) -> None:

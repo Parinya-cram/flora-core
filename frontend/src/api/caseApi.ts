@@ -57,6 +57,8 @@ export type StartCaseOptions = {
   surgicalPriority?: string;
   /** Start from an admission prepared in Canopy (fills patient + copies its forms). */
   canopyAdmissionId?: string;
+  /** Workflow Studio workflow to start the case with (GET /api/case/workflows). */
+  workflowId?: string;
 };
 
 /** An admission prepared in Canopy that this Leaf may start. */
@@ -80,6 +82,8 @@ export type CanopyAdmissionRow = {
     asa_emergency?: boolean;
     surgical_priority?: string | null;
     surgeon?: string | null;
+    /** Workflow preset by Canopy for this admission. */
+    workflow_id?: string | null;
   };
   unitName: string | null;
   targetLeafId: string | null;
@@ -167,6 +171,7 @@ export async function startCase(
       ...(options?.asaEmergency ? { asa_emergency: true } : {}),
       ...(options?.surgicalPriority ? { surgical_priority: options.surgicalPriority } : {}),
       ...(options?.canopyAdmissionId ? { canopy_admission_id: options.canopyAdmissionId } : {}),
+      ...(options?.workflowId ? { workflow_id: options.workflowId } : {}),
     }),
   });
   const data = await res.json().catch(() => ({}));

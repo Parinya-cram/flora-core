@@ -28,7 +28,7 @@ set_env flora-root/.env ROOT_HTTPS_PORT "$ROOT_HTTPS_PORT"
 set_env flora-root/.env ROOT_HTTP_PORT "$ROOT_HTTP_PORT"
 
 wait_for() {
-  local name=$1 url=$2 ca=${3:-flora-canopy/edge/certs/ca.crt}
+  local name=$1 url=$2 ca=${3:-certs/flora-ca.crt}
   for _ in $(seq 1 120); do
     if curl -fsS --cacert "$ca" "$url" >/dev/null 2>&1; then echo "  ok  $name"; return 0; fi
     sleep 2
@@ -42,6 +42,9 @@ wait_for() {
 up_app() {
   local dir=$1 project=$2 env_file=$3; shift 3
   local args=(-f "$dir/compose.yaml" -p "$project") build=(--build)
+  # Any --env-file turns off compose's automatic <dir>/.env, so pass it explicitly
+  # (it holds the tier's HTTPS port and TLS_* settings).
+  [ -z "$env_file" ] && [ -f "$dir/.env" ] && env_file="$dir/.env"
   [ -n "$env_file" ] && args+=(--env-file "$env_file")
   if [ -f "$dir/.release/$project.env" ]; then
     args+=(--env-file "$dir/.release/$project.env"); build=()
@@ -51,31 +54,32 @@ up_app() {
 
 echo "[1/4] flora-root (cloud)"
 # TLS edge: dev CA + certificate on first run, trusted by this machine's Canopy (Haber).
-flora-root/edge/make-dev-cert.sh
-demo/install-root-ca.sh >/dev/null
+# HTTPS: one self-signed Flora CA signs every tier (settings in each tier's .env).
+scripts/tls/make-cert.sh flora-root
 up_app flora-root flora-root ""
 wait_for "root api" http://localhost:7100/health
-wait_for "root edge ($ROOT_HTTPS_PORT)" "https://localhost:$ROOT_HTTPS_PORT/api/v1/keys" flora-root/edge/certs/ca.crt
+wait_for "root edge ($ROOT_HTTPS_PORT)" "https://localhost:$ROOT_HTTPS_PORT/api/v1/keys"
 
 echo "[2/4] flora-canopy (hospital)"
 # TLS edge: dev CA + certificate on first run, trusted by this machine's Leaf/Gateway.
-flora-canopy/edge/make-dev-cert.sh
-demo/install-canopy-ca.sh >/dev/null
+scripts/tls/make-cert.sh flora-canopy
 up_app flora-canopy flora-canopy ""
 wait_for "canopy edge ($CANOPY_HTTPS_PORT)" "https://localhost:$CANOPY_HTTPS_PORT/api/sync/v1/fingerprint"
 wait_for "haber" http://localhost:7204/health
 
 echo "[3/4] flora-gateway (devices) + simulator"
+scripts/tls/make-cert.sh flora-gateway
 up_app flora-gateway flora-gateway "" --profile demo
 wait_for "gateway service" http://localhost:7400/health
-wait_for "gateway data-api (kong)" http://localhost:7410/data-api/health
+wait_for "gateway edge (7443)" "https://localhost:$(grep -E '^GATEWAY_HTTPS_PORT=' flora-gateway/.env | cut -d= -f2)/health"
 
 echo "[4/4] flora-leaf x2 (workstations)"
 for leaf in leaf-or-01 leaf-icu-01; do
+  scripts/tls/make-cert.sh flora-leaf "flora-leaf/env/$leaf.env"
   up_app flora-leaf "flora-$leaf" "flora-leaf/env/$leaf.env"
 done
-wait_for "leaf-or-01 api" http://localhost:7301/health
-wait_for "leaf-icu-01 api" http://localhost:7311/health
+wait_for "leaf-or-01 edge (7343)" https://localhost:7343/health
+wait_for "leaf-icu-01 edge (7353)" https://localhost:7353/health
 
 echo "Opening demo cases"
 python3 demo/seed-cases.py
@@ -87,10 +91,11 @@ Flora demo is running (all data is synthetic):
   Canopy (TLS edge)     https://localhost:$CANOPY_HTTPS_PORT   (admin / admin)  443 in production
   Canopy viewer (dev)   http://localhost:7200   (admin / admin)
   Canopy Haber          http://localhost:7204   (admin / admin)  releases · nodes
-  Gateway admin         http://localhost:7400   (admin / admin)
+  Gateway admin         https://localhost:7443   (admin / admin)
   Device simulator      http://localhost:7420
-  Leaf  OR-1            http://localhost:7300   (admin / admin)
-  Leaf  ICU bed 1       http://localhost:7310   (admin / admin)
+  Leaf  OR-1            https://localhost:7343   (admin / admin)
+  Leaf  ICU bed 1       https://localhost:7353   (admin / admin)
+  Trust once per device: certs/flora-ca.crt (the self-signed Flora CA)
 Vitals appear on each Leaf chart within about a minute. See demo/README.md.
 Ship a release through Root -> Haber -> nodes:  ./demo/release.sh 1.2.3
 URLS

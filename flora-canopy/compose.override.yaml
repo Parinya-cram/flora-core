@@ -8,3 +8,8 @@ services:
   sync-api:
     volumes:
       - ../services/flora-api/app:/app/app:ro
+  flora-mcp:
+    volumes:
+      - ../services/flora-mcp:/app/src:ro
+    command: ["uvicorn", "server:app", "--app-dir", "/app/src", "--host", "0.0.0.0", "--port", "8000",
+              "--proxy-headers", "--reload", "--reload-dir", "/app/src"]

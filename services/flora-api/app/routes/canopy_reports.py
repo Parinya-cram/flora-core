@@ -1,18 +1,25 @@
 import csv
 import io
 import math
+import re
+import secrets
+import time
 import zipfile
 from datetime import date, datetime
 from html import escape
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 from psycopg import Connection
+from psycopg.types.json import Jsonb
+from pydantic import BaseModel, Field
 
 from ..database import connection
 from ..demo_ward import DEMO_SOURCE
+from ..report_engine import compile_spec
 from .auth_canopy import read_token
+from .studio_access import require_studio_author
 
 router = APIRouter(prefix="/api/reports", tags=["canopy-reports"], dependencies=[Depends(read_token)])
 
@@ -334,8 +341,79 @@ def _runner(report_id: str) -> ReportRunner:
     return runners[report_id]
 
 
+STUDIO_DATASET = "innovian_cases"
+RUNTIME_FILTERS = ("from", "to", "hn", "staff", "role", "completeness", "page", "page_size")
+
+
+def _studio_catalog(database: Connection, dataset: str) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+    fields = database.execute(
+        """SELECT f.id,f.label,f.data_type,f.cardinality,f.allowed_uses,f.operators,f.source_config
+           FROM canopy_report_field f JOIN canopy_report_dataset d ON d.id=f.dataset_id AND d.is_active AND d.grain='case'
+           WHERE f.is_active AND f.dataset_id=%s""", (dataset,)
+    ).fetchall()
+    options: dict[str, list[dict[str, Any]]] = {}
+    for row in database.execute(
+        """SELECT field_id,value_code AS value,display_label AS label,aliases FROM canopy_report_field_option
+           WHERE is_active AND field_id=ANY(%s)""", ([row["id"] for row in fields],)
+    ).fetchall():
+        options.setdefault(row["field_id"], []).append(row)
+    return fields, options
+
+
+def _studio_compile(database: Connection, spec: Any, query: dict[str, str]):
+    if not isinstance(spec, dict):
+        raise HTTPException(status_code=422, detail="Report definition must be an object")
+    fields, options = _studio_catalog(database, str(spec.get("dataset") or STUDIO_DATASET))
+    if not fields:
+        raise HTTPException(status_code=422, detail="Unknown or unsupported report dataset")
+    where, params = _filters(query)
+    if query.get("completeness") == "complete":
+        where += " AND a.completed_at IS NOT NULL"
+    elif query.get("completeness") == "incomplete":
+        where += " AND a.completed_at IS NULL"
+    return compile_spec(spec, fields, options, where, params)
+
+
+def _studio_run(database: Connection, report_id: str, spec: Any, query: dict[str, str], include_sql: bool = False):
+    compiled = _studio_compile(database, spec, query)
+    sql = compiled.sql
+    if compiled.limit:
+        sql = f"SELECT * FROM ({sql}) top_rows ORDER BY {compiled.order_by} LIMIT {compiled.limit}"
+    # Studio reports are user-built: keep one runaway query from holding a connection.
+    with database.transaction():
+        database.execute("SET LOCAL statement_timeout = '30s'")
+        rows, pagination = _paged(database, sql, compiled.params, query, compiled.order_by)
+        summary = database.execute(
+            f"""WITH {compiled.filtered} SELECT count(*) AS cases,
+                 count(DISTINCT coalesce(nullif(c.hn,''),a.id::text)) AS patients
+               FROM filtered fz JOIN archive_case a ON a.id=fz.id LEFT JOIN archive_case_context c ON c.archive_case_id=a.id""",
+            compiled.params,
+        ).fetchone()
+    result = {"report": report_id, "mode": "detail" if compiled.view == "list" else "summary", "summary": summary,
+              "rows": rows, "pagination": pagination, "columns": compiled.columns}
+    if include_sql:
+        result["sql"] = sql
+    return result
+
+
+def studio_rows(database: Connection, spec: Any, query: dict[str, str], max_rows: int = 5000) -> dict[str, Any]:
+    """Every row of a studio spec (up to max_rows), keyed by column label: AI Studio visuals and queries."""
+    compiled = _studio_compile(database, spec, query)
+    limit = min(compiled.limit or max_rows, max_rows)
+    with database.transaction():
+        database.execute("SET LOCAL statement_timeout = '30s'")
+        rows = database.execute(
+            f"SELECT * FROM ({compiled.sql}) studio_rows ORDER BY {compiled.order_by} LIMIT {limit + 1}", compiled.params
+        ).fetchall()
+    columns = [{"label": column["label"], "kind": column["kind"], "type": column["data_type"]} for column in compiled.columns]
+    return {"columns": columns, "truncated": len(rows) > limit,
+            "rows": [{column["label"]: row.get(column["key"]) for column in compiled.columns} for row in rows[:limit]]}
+
+
 def _execute(database: Connection, report_id: str, query: dict[str, str]):
-    _report(database, report_id)
+    report = _report(database, report_id)
+    if report["definition"].get("engine") == "studio":
+        return _studio_run(database, report_id, report["definition"].get("studio"), query)
     try:
         return _runner(report_id)(database, query)
     except HTTPException:
@@ -522,6 +600,79 @@ def report_field_values(
     return {"field_id": field_id, "rows": rows}
 
 
+class StudioPreviewInput(BaseModel):
+    spec: dict[str, Any]
+    params: dict[str, str | int] = Field(default_factory=dict)
+
+
+class StudioReportInput(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+    description: str = Field(default="", max_length=1000)
+    category: Literal["clinical_timing", "clinical_summary", "operations"] = "clinical_summary"
+    spec: dict[str, Any]
+
+
+def _studio_definition(report_id: str, spec: dict[str, Any]) -> dict[str, Any]:
+    view = spec.get("view")
+    return {"engine": "studio", "engine_report": report_id, "dataset": "innovian_archive",
+            "mode": "detail" if view == "list" else "summary",
+            "filters": ["date_range", "hn", "staff", "role", "completeness"], "studio": spec}
+
+
+def _owned_studio_report(database: Connection, report_id: str) -> dict[str, Any]:
+    row = database.execute(
+        "SELECT id,is_system,definition FROM canopy_report_definition WHERE id=%s AND is_active", (report_id,)
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if row["is_system"] or (row["definition"] or {}).get("engine") != "studio":
+        raise HTTPException(status_code=409, detail="Built-in reports cannot be changed in Report Studio")
+    return row
+
+
+@router.post("/studio/preview")
+def studio_preview(payload: StudioPreviewInput, request: Request, _: dict = Depends(require_studio_author), database: Connection = Depends(connection)):
+    query = {key: str(value) for key, value in payload.params.items() if key in RUNTIME_FILTERS}
+    query["_source"] = _source_system(request, database)
+    return _studio_run(database, "studio-preview", payload.spec, query, include_sql=True)
+
+
+@router.post("/studio/reports")
+def create_studio_report(payload: StudioReportInput, user: dict = Depends(require_studio_author), database: Connection = Depends(connection)):
+    _studio_compile(database, payload.spec, {})
+    slug = re.sub(r"[^a-z0-9]+", "-", payload.title.lower()).strip("-")[:40] or "report"
+    report_id = f"custom-{slug}-{secrets.token_hex(3)}"
+    now = int(time.time() * 1000)
+    order = database.execute("SELECT coalesce(max(sort_order),0)+10 AS n FROM canopy_report_definition").fetchone()["n"]
+    database.execute(
+        """INSERT INTO canopy_report_definition
+             (id,title,description,category,source_system,definition,is_system,is_active,sort_order,created_by,created_at,updated_at)
+           VALUES (%s,%s,%s,%s,'innovian_archive',%s,false,true,%s,%s,%s,%s)""",
+        (report_id, payload.title.strip(), payload.description.strip(), payload.category,
+         Jsonb(_studio_definition(report_id, payload.spec)), order, user.get("username"), now, now),
+    )
+    return _report(database, report_id)
+
+
+@router.put("/studio/reports/{report_id}")
+def update_studio_report(report_id: str, payload: StudioReportInput, _: dict = Depends(require_studio_author), database: Connection = Depends(connection)):
+    _owned_studio_report(database, report_id)
+    _studio_compile(database, payload.spec, {})
+    database.execute(
+        """UPDATE canopy_report_definition SET title=%s,description=%s,category=%s,definition=%s,updated_at=%s WHERE id=%s""",
+        (payload.title.strip(), payload.description.strip(), payload.category,
+         Jsonb(_studio_definition(report_id, payload.spec)), int(time.time() * 1000), report_id),
+    )
+    return _report(database, report_id)
+
+
+@router.delete("/studio/reports/{report_id}")
+def archive_studio_report(report_id: str, _: dict = Depends(require_studio_author), database: Connection = Depends(connection)):
+    _owned_studio_report(database, report_id)
+    database.execute("UPDATE canopy_report_definition SET is_active=false,updated_at=%s WHERE id=%s", (int(time.time() * 1000), report_id))
+    return {"id": report_id, "archived": True}
+
+
 @router.get("/{report_id}")
 def report_definition(report_id: str, database: Connection = Depends(connection)):
     return _report(database, report_id)
@@ -536,7 +687,11 @@ def run_report(report_id: str, request: Request, database: Connection = Depends(
 def export_report(report_id: str, request: Request, export_format: str = Query(alias="format", pattern="^(csv|xlsx)$"), database: Connection = Depends(connection)):
     query = _query(request, database)
     query.update(page="1", page_size="500")
-    rows = _execute(database, report_id, query).get("rows") or []
+    result = _execute(database, report_id, query)
+    rows = result.get("rows") or []
+    if result.get("columns"):
+        # Studio reports use generated keys; exports carry the labels people chose.
+        rows = [{column["label"]: row.get(column["key"]) for column in result["columns"]} for row in rows]
     if export_format == "csv":
         payload, media_type = _csv(rows), "text/csv"
     else:

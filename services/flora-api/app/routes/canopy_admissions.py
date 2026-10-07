@@ -37,6 +37,8 @@ class DetailsInput(BaseModel):
     asa_emergency: bool = False
     surgical_priority: str | None = Field(default=None, max_length=80)
     surgeon: str | None = Field(default=None, max_length=200)
+    # Workflow Studio: preset for the Leaf start dialog (a workflow assigned to the ward).
+    workflow_id: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{1,63}$")
 
 
 class AdmissionInput(BaseModel):

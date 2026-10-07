@@ -28,6 +28,8 @@ import manualPathIcon from "../assets/admission-paths/manual.png";
 import emergencyPathIcon from "../assets/admission-paths/emergency.png";
 import ClinicalDateInput from "../components/ClinicalDateInput";
 import ClinicalDateTimeInput from "../components/ClinicalDateTimeInput";
+import WorkflowPicker from "../components/workflow/WorkflowPicker";
+import { defaultWorkflowId, useLeafWorkflows } from "../components/workflow/leafWorkflows";
 import { searchClinicalConcepts, type ClinicalConcept } from "../api/terminologyApi";
 import {
   formatPatientDisplayName,
@@ -175,6 +177,9 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
   const [manual, setManual] = useState({ name: "", an: "", sex: "unknown", dob: "", dobPrecision: "" as "" | "exact" | "estimated", ageYears: "", ageMonths: "", weight: "" });
   const [now, setNow] = useState(() => new Date());
   const [workstation, setWorkstation] = useState<WorkstationContext | null>(null);
+  const workflows = useLeafWorkflows();
+  /** The clinician's workflow pick, valid only for the admission it was made for. */
+  const [workflowPick, setWorkflowPick] = useState<{ admissionId: string; id: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -245,6 +250,10 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
 
   const hasAllergies = Boolean(lookup?.allergies.length);
   const patientReady = Boolean(lookup?.row && (lookup.row.hn || mode === "manual"));
+  const admissionWorkflowId = canopyAdmission?.admission?.workflow_id || null;
+  const workflowId = workflowPick && workflowPick.admissionId === (canopyAdmission?.id || "") && workflows.some(row => row.id === workflowPick.id)
+    ? workflowPick.id
+    : defaultWorkflowId(workflows, admissionWorkflowId);
   const safeToStart = patientReady && Boolean(procedure.trim()) && allergyReviewed && Boolean(startAt) && !busy;
   const clinician = sessionUser?.name || sessionUser?.username || t("landing.notAssigned");
   const sourceLabel = canopyAdmission ? t("landing.canopySource") : mode === "manual" ? t("admit.manual") : lookup?.offline ? t("landing.bufferSource") : lookup?.exchange?.label || t("landing.hisSource");
@@ -392,6 +401,7 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
         asaEmergency,
         surgicalPriority,
         canopyAdmissionId: canopyAdmission?.id,
+        workflowId: workflowId || undefined,
       });
       const caseId = Number(started?.case_id);
       if (!Number.isFinite(caseId) || caseId <= 0) throw new Error(t("landing.startFailed"));
@@ -453,7 +463,7 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
     setBusy(true);
     setError("");
     try {
-      const started = await startCase("", startTimestamp, { overlapPolicy: policy, admissionSource: "emergency" });
+      const started = await startCase("", startTimestamp, { overlapPolicy: policy, admissionSource: "emergency", workflowId: defaultWorkflowId(workflows) || undefined });
       const caseId = Number(started?.case_id);
       if (!Number.isFinite(caseId) || caseId <= 0) throw new Error(t("landing.startFailed"));
       window.dispatchEvent(new CustomEvent("flora:case-started", { detail: { caseId, hn: started?.hn, admissionSource: "emergency" } }));
@@ -654,6 +664,7 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
                 <div className="rounded-xl bg-[var(--app-control-bg)] p-3"><div className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--app-muted)]">{t("landing.location")}</div><div className="mt-1 text-sm font-semibold text-[var(--app-text)]">{t("landing.thisWorkstation")}</div></div>
                 <div className="rounded-xl bg-[var(--app-control-bg)] p-3"><div className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--app-muted)]">{t("landing.responsibleClinician")}</div><div className="mt-1 text-sm font-semibold text-[var(--app-text)]">{clinician}</div><div className="text-xs text-[var(--app-muted)]">{sessionUser?.role || "—"}</div></div>
                 <label className="block rounded-xl bg-[var(--app-control-bg)] p-3"><span className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--app-muted)]">{t("landing.startTime")}</span><ClinicalDateTimeInput value={startAt} onChange={setStartAt} dateFormat={workstation?.dateFormat || "DD/MM/YYYY"} timeFormat={workstation?.timeFormat || "24h"} /></label>
+                <WorkflowPicker rows={workflows} value={workflowId} admissionWorkflowId={admissionWorkflowId} disabled={busy} onChange={id => setWorkflowPick({ admissionId: canopyAdmission?.id || "", id })} />
               </div>
               <div className="mt-4 space-y-2 text-xs">
                 <div className={patientReady ? "text-emerald-500" : "text-[var(--app-muted)]"}>✓ {t("landing.identityChecked")}</div>

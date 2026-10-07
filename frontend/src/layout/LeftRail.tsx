@@ -13,6 +13,8 @@ import {
   type StartCaseOverlapPolicy,
 } from "../api/caseApi";
 import { getCaseDetailDraft } from "../api/caseDetailApi";
+import { listLeafWorkflows } from "../api/workflowApi";
+import { defaultWorkflowId } from "../components/workflow/leafWorkflows";
 import { saveCaseDetailDraft } from "../api/caseDetailApi";
 import type { CaseStatus } from "../api/caseApi";
 import ConfirmDialog from "../components/common/ConfirmDialog";
@@ -36,6 +38,7 @@ import {
   normalizeTimeInputHHMM,
 } from "../utils/clinicalInput";
 import { useAuth } from "../auth/useAuth";
+import { openTimePicker } from "../components/common/timePicker";
 import { normalizePatientNameLanguage } from "../utils/patientName";
 
 type FormPayload = Record<string, unknown>;
@@ -854,6 +857,15 @@ export default function LeftRail({
   const [hh, setHh] = useState(() => nowHHMM().hh);
   const [mm, setMm] = useState(() => nowHHMM().mm);
   const [autoStartClock, setAutoStartClock] = useState(true);
+  // Desktop: the shared hour/minute grid for the separate HH and MM boxes.
+  const openStartClockPicker = (anchor: HTMLElement) => {
+    const hour = Number(hh), minute = Number(mm);
+    openTimePicker(anchor, Number.isFinite(hour) && Number.isFinite(minute) ? { hour, minute } : null, (h, m) => {
+      setHh(String(h).padStart(2, "0"));
+      setMm(String(m).padStart(2, "0"));
+      setAutoStartClock(false);
+    });
+  };
   const [formPayload, setFormPayload] = useState<FormPayload | null>(null);
   const [diagnosisRows, setDiagnosisRows] = useState<CaseDiagnosisRow[]>([]);
   const [operationRows, setOperationRows] = useState<CaseProcedureRow[]>([]);
@@ -1279,7 +1291,11 @@ export default function LeftRail({
     startTime: number,
     overlapPolicy?: StartCaseOverlapPolicy,
   ) {
-    const started = await startCase(targetHn, startTime, { overlapPolicy });
+    // Quick start has no workflow picker: use the ward's default workflow when there is one.
+    const workflowId = await listLeafWorkflows()
+      .then(result => defaultWorkflowId(result.rows))
+      .catch(() => "");
+    const started = await startCase(targetHn, startTime, { overlapPolicy, ...(workflowId ? { workflowId } : {}) });
     const startedCaseId = Number(started?.case_id);
     const pendingPatientDraft = readPrestartPatientDraft(targetHn);
     if (Number.isFinite(startedCaseId) && startedCaseId > 0 && pendingPatientDraft) {
@@ -2080,6 +2096,7 @@ export default function LeftRail({
                   <input
                     className="w-12 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 text-center text-sm"
                     value={hh}
+                    onFocus={e => openStartClockPicker(e.currentTarget.parentElement!)}
                     onChange={e => {
                       setHh(e.target.value);
                       setAutoStartClock(false);
@@ -2090,6 +2107,7 @@ export default function LeftRail({
                   <input
                     className="w-12 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 text-center text-sm"
                     value={mm}
+                    onFocus={e => openStartClockPicker(e.currentTarget.parentElement!)}
                     onChange={e => {
                       setMm(e.target.value);
                       setAutoStartClock(false);

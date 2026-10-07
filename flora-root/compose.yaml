@@ -64,7 +64,9 @@ services:
       - "${ROOT_HTTP_PORT:-80}:80"
     volumes:
       - ./edge/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./edge/certs:/etc/nginx/certs:ro
+      # Certificate and key from .env (self-signed by scripts/tls/make-cert.sh, or your own).
+      - ${TLS_CERT_FILE:-./certs/server.crt}:/etc/nginx/certs/server.crt:ro
+      - ${TLS_KEY_FILE:-./certs/server.key}:/etc/nginx/certs/server.key:ro
     depends_on:
       - root-api
     healthcheck:

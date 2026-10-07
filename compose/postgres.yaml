@@ -58,6 +58,7 @@ services:
       - ../infrastructure/postgres/0042-canopy-admission.sql:/docker-entrypoint-initdb.d/0042-canopy-admission.sql:ro
       - ../infrastructure/postgres/0043-canopy-gateway-alerts.sql:/docker-entrypoint-initdb.d/0043-canopy-gateway-alerts.sql:ro
       - ../infrastructure/postgres/0044-ward-handover-gateway-link.sql:/docker-entrypoint-initdb.d/0044-ward-handover-gateway-link.sql:ro
+      - ../infrastructure/postgres/0045-leaf-location-picker.sql:/docker-entrypoint-initdb.d/0045-leaf-location-picker.sql:ro
       - ../infrastructure/postgres/0050-hl7-admission-interface.sql:/docker-entrypoint-initdb.d/0050-hl7-admission-interface.sql:ro
       - ../infrastructure/postgres/0051-canopy-public-api.sql:/docker-entrypoint-initdb.d/0051-canopy-public-api.sql:ro
       - ../infrastructure/postgres/0060-formdev.sql:/docker-entrypoint-initdb.d/0060-formdev.sql:ro
@@ -67,6 +68,9 @@ services:
       - ../infrastructure/postgres/0063-formdev-lookup.sql:/docker-entrypoint-initdb.d/0063-formdev-lookup.sql:ro
       - ../infrastructure/postgres/0064-formdev-attachment.sql:/docker-entrypoint-initdb.d/0064-formdev-attachment.sql:ro
       - ../infrastructure/postgres/0065-formdev-index-rebuild.sql:/docker-entrypoint-initdb.d/0065-formdev-index-rebuild.sql:ro
+      - ../infrastructure/postgres/0070-workflow-studio.sql:/docker-entrypoint-initdb.d/0070-workflow-studio.sql:ro
+      - ../infrastructure/postgres/0075-report-studio.sql:/docker-entrypoint-initdb.d/0075-report-studio.sql:ro
+      - ../infrastructure/postgres/0076-ai-studio.sql:/docker-entrypoint-initdb.d/0076-ai-studio.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s

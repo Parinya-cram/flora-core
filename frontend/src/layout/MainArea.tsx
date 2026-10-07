@@ -16,6 +16,9 @@ import AccountView from "../views/AccountView";
 import CanopyReportsView from "../views/CanopyReportsView";
 import CanopyAdmissionsView from "../views/CanopyAdmissionsView";
 import CanopyFormDevView from "../views/CanopyFormDevView";
+import CanopyReportStudioView from "../views/CanopyReportStudioView";
+import CanopyAiStudioView from "../views/CanopyAiStudioView";
+import WorkflowStudioView from "../views/WorkflowStudioView";
 import { getSurfaceInfo } from "../edition/config";
 
 const ClinicalChartView = lazy(() => import("../views/ClinicalChartView"));
@@ -46,6 +49,9 @@ interface Props {
     | "topology"
     | "gateway-alerts"
     | "formdev"
+    | "workflows"
+    | "report-studio"
+    | "ai-studio"
     | "history";
   sessionUser: AuthUser | null;
   onCaseDischargeTimeUpdated?: (caseId: number, dischargeTime: number) => void;
@@ -169,6 +175,12 @@ export default function MainArea({
         <CanopyInfrastructureView />
       ) : activeView === "formdev" ? (
         <CanopyFormDevView sessionUser={sessionUser} />
+      ) : activeView === "report-studio" ? (
+        <CanopyReportStudioView sessionUser={sessionUser} />
+      ) : activeView === "ai-studio" ? (
+        <CanopyAiStudioView sessionUser={sessionUser} />
+      ) : activeView === "workflows" ? (
+        <WorkflowStudioView sessionUser={sessionUser} />
       ) : activeView === "history" ? (
         <HistoryView onOpenCase={onOpenCase ?? (() => {})} />
       ) : (

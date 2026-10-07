@@ -12,6 +12,7 @@ from psycopg import Connection, errors
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
+from .. import workflows
 from ..database import connection
 from .sync_ingest import DEVICE_FIELDS, require_sync_secret
 
@@ -83,6 +84,8 @@ def ward(payload: WardExchange, database: Connection = Depends(connection)) -> d
         "gateways": gateways,
         "released": released,
         "handovers": handovers,
+        # Workflow Studio: published workflows of this ward and their pinned Form Studio forms.
+        "workflows": workflows.leaf_delivery(database, unit["key"] if unit else None),
         "server_ts": current,
     }
 
@@ -257,3 +260,43 @@ def handover_cancel(handover_id: int, payload: HandoverResult, database: Connect
             if row["move_devices"]:
                 move_devices(database, row["to_leaf_id"], row["from_leaf_id"], f"handover {handover_id} cancelled")
     return {"ok": True, "cancelled": bool(row)}
+
+
+# ---------------------------------------------------------------- Leaf picks its bed (Settings > Location)
+
+class LocationQuery(BaseModel):
+    leaf_id: str = Field(min_length=1, max_length=120)
+
+
+@router.post("/locations")
+def locations(payload: LocationQuery, database: Connection = Depends(connection)) -> dict[str, Any]:
+    """Canopy's active location tree and which Leaf sits at which bed."""
+    rows = database.execute(
+        """SELECT id, parent_id, kind, code, name FROM canopy_location
+           WHERE is_active ORDER BY sort_order, lower(name)""").fetchall()
+    assignments = database.execute(
+        """SELECT a.leaf_id, a.bed_location_id, coalesce(nullif(n.canopy_display_name,''), n.display_name) AS leaf_name
+           FROM canopy_leaf_assignment a LEFT JOIN sync_leaf_node n ON n.leaf_id = a.leaf_id
+           ORDER BY a.leaf_id""").fetchall()
+    leaves = database.execute(
+        """SELECT leaf_id, coalesce(nullif(canopy_display_name,''), display_name) AS name FROM sync_leaf_node ORDER BY leaf_id""").fetchall()
+    current = next((row["bed_location_id"] for row in assignments if row["leaf_id"] == payload.leaf_id), None)
+    return {"locations": rows, "assignments": assignments, "leaves": leaves, "current_bed_id": current}
+
+
+class LocationAssign(BaseModel):
+    bed_location_id: int
+    timezone: str = "Asia/Bangkok"
+    date_format: str = "DD/MM/YYYY"
+    time_format: str = "24h"
+
+
+@router.post("/leaves/{leaf_id}/location")
+def assign_location(leaf_id: str, payload: LocationAssign, database: Connection = Depends(connection)) -> dict[str, Any]:
+    from .fleet_control import write_assignment  # same assignment an administrator makes in Canopy
+
+    with database.transaction():
+        row = write_assignment(database, leaf_id, payload.bed_location_id, {
+            "timezone": payload.timezone, "date_format": payload.date_format, "time_format": payload.time_format})
+    return {"leaf_id": leaf_id, "bed_location_id": payload.bed_location_id,
+            "location": row["desired_config"]["location"], "version": row["desired_version"]}

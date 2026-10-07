@@ -23,8 +23,9 @@ import canopyConfigIcon from "../assets/canopy-menu-config.png";
 import canopyInfrastructureIcon from "../assets/canopy-menu-infrastructure.png";
 import canopyMonitoringIcon from "../assets/canopy-menu-monitoring.png";
 import canopyFormDevIcon from "../assets/canopy-menu-formdev.png";
+import { canAuthorStudio, canUseAiStudio } from "../auth/studioAccess";
 
-export type AppView = "ward" | "case" | "form" | "diagnosis" | "staff" | "io" | "patient" | "report" | "master" | "account" | "dashboard" | "admissions" | "monitoring" | "fleet" | "infrastructure" | "topology" | "gateway-alerts" | "formdev" | "history";
+export type AppView = "ward" | "case" | "form" | "diagnosis" | "staff" | "io" | "patient" | "report" | "master" | "account" | "dashboard" | "admissions" | "monitoring" | "fleet" | "infrastructure" | "topology" | "gateway-alerts" | "formdev" | "workflows" | "report-studio" | "ai-studio" | "history";
 
 type Props = {
   activeView: AppView;
@@ -191,6 +192,7 @@ function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, colla
   const isIdleLeaf = surface.code === "leaf" && caseStatus.status === "IDLE";
   const canConfigure = permissions.some(permission => ["account.manage", "config.manage", "clinical_master.manage", "staff.manage"].includes(permission));
   const canConfigureCanopy = permissions.includes("config.manage") || permissions.includes("account.manage") || String(sessionUser?.role || "").trim().toLowerCase() === "admin";
+  const canAuthor = canAuthorStudio(sessionUser);
   const canReport = permissions.includes("report.generate");
   const items: NavItem[] = surface.code === "canopy"
     ? [
@@ -202,7 +204,10 @@ function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, colla
         { view: "topology", label: "Topology", icon: "canopy-monitoring" },
         { view: "gateway-alerts", label: "Gateway Alerts", icon: "canopy-infrastructure" },
         { view: "infrastructure", label: "Infrastructure", icon: "canopy-infrastructure" },
-        ...(canConfigureCanopy ? [{ view: "formdev" as AppView, label: t("topbar.formdev"), icon: "canopy-formdev" as NavIconName }] : []),
+        ...(canConfigureCanopy || canAuthor ? [{ view: "formdev" as AppView, label: t("topbar.formdev"), icon: "canopy-formdev" as NavIconName }] : []),
+        ...(canConfigureCanopy || canAuthor ? [{ view: "workflows" as AppView, label: t("topbar.workflows"), icon: "canopy-formdev" as NavIconName }] : []),
+        ...(canAuthor ? [{ view: "report-studio" as AppView, label: "Report Studio", icon: "canopy-reports" as NavIconName }] : []),
+        ...(canUseAiStudio(sessionUser) ? [{ view: "ai-studio" as AppView, label: "AI Studio", icon: "canopy-charts" as NavIconName }] : []),
       ]
     : isIdleLeaf
       ? [

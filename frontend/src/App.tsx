@@ -11,6 +11,7 @@ import { getEditionInfo, getSurfaceInfo } from "./edition/config";
 import { useLanguage } from "./context/LanguageContext";
 import { useWorkstationSettings } from "./hooks/useWorkstationSettings";
 import { useCanopyWard } from "./hooks/useCanopyWard";
+import DateTimePickerAssist from "./components/common/DateTimePickerAssist";
 
 const NAV_COLLAPSED_KEY = "flora.ui.navigationCollapsed";
 
@@ -418,6 +419,7 @@ export default function App() {
       </div>
 
       {shutdownOverlay}
+      <DateTimePickerAssist />
 
     </div>
   );
