@@ -2203,6 +2203,138 @@
   ]
  },
  {
+  "name": "p1: matrix total of score choices",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "m",
+       "type": "matrix",
+       "label": "M",
+       "cell": {
+        "type": "select",
+        "options": [
+         {
+          "value": "0",
+          "label": "0"
+         },
+         {
+          "value": "2",
+          "label": "2"
+         }
+        ]
+       },
+       "rows": [
+        {
+         "id": "a",
+         "label": "A"
+        }
+       ],
+       "cols": [
+        {
+         "id": "x",
+         "label": "X"
+        }
+       ],
+       "totals": [
+        {
+         "id": "t",
+         "label": "T",
+         "of": [
+          "a"
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: matrix total of a non-numeric choice",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "m",
+       "type": "matrix",
+       "label": "M",
+       "cell": {
+        "type": "select",
+        "options": [
+         {
+          "value": "1",
+          "label": "1"
+         },
+         {
+          "value": "s",
+          "label": "S"
+         }
+        ]
+       },
+       "rows": [
+        {
+         "id": "a",
+         "label": "A"
+        }
+       ],
+       "cols": [
+        {
+         "id": "x",
+         "label": "X"
+        }
+       ],
+       "totals": [
+        {
+         "id": "t",
+         "label": "T",
+         "of": [
+          "a"
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "unknown_field_reference"
+  ]
+ },
+ {
   "name": "p1: option columns",
   "definition": {
    "format": "flora.form/1",

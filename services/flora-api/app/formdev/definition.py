@@ -1070,7 +1070,7 @@ def _validate_matrix(ctx: _Ctx, field: dict[str, Any], path: str) -> None:
         ctx.unknown(row, {"id", "label", "cell"}, f"{path}.rows[{index}]")
         if "cell" in row:
             _matrix_cell_ok(ctx, row["cell"], f"{path}.rows[{index}].cell")
-    numeric = {row["id"] for row in rows if (row.get("cell") or field.get("cell") or {}).get("type") in MATRIX_NUMERIC}
+    numeric = {row["id"] for row in rows if matrix_numeric(matrix_cell(field, row))}
     if "totals" in field:
         totals = _matrix_items(ctx, field["totals"], f"{path}.totals", "totals")
         for index, total in enumerate(totals):
@@ -1087,6 +1087,26 @@ def matrix_cell(field: dict[str, Any], row: dict[str, Any]) -> dict[str, Any]:
     return row.get("cell") if isinstance(row.get("cell"), dict) else field.get("cell") or {}
 
 
+def _number_text(value: Any) -> float | None:
+    if is_number(value):
+        return float(value)
+    try:
+        number = float(value) if isinstance(value, str) and value.strip() else None
+    except ValueError:
+        return None
+    return number if number is not None and math.isfinite(number) else None
+
+
+def matrix_numeric(cell: Any) -> bool:
+    """Rows a total may add up: numbers, or choices whose values are all numbers (a 0 / 1 / 2 score)."""
+    if not isinstance(cell, dict):
+        return False
+    if cell.get("type") in MATRIX_NUMERIC:
+        return True
+    options = cell.get("options") if cell.get("type") == "select" else None
+    return isinstance(options, list) and bool(options) and all(isinstance(o, dict) and _number_text(o.get("value")) is not None for o in options)
+
+
 def matrix_totals(field: dict[str, Any], value: Any) -> dict[str, dict[str, float | None]]:
     """Total rows of a matrix value: per column, the sum of the listed rows (None when none of them has a value)."""
     data = value if isinstance(value, dict) else {}
@@ -1094,8 +1114,8 @@ def matrix_totals(field: dict[str, Any], value: Any) -> dict[str, dict[str, floa
     for total in field.get("totals") or []:
         sums: dict[str, float | None] = {}
         for col in field.get("cols") or []:
-            cells = [(data.get(row) or {}).get(col["id"]) for row in total.get("of") or []]
-            numbers = [cell for cell in cells if is_number(cell)]
+            cells = [(data.get(row) or {}).get(col["id"]) if isinstance(data.get(row), dict) else None for row in total.get("of") or []]
+            numbers = [number for number in (_number_text(cell) for cell in cells) if number is not None]
             sums[col["id"]] = sum(numbers) if numbers else None
         out[total["id"]] = sums
     return out

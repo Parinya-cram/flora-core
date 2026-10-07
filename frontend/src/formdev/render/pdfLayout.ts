@@ -4,20 +4,26 @@
  * with pdf-lib. The rules follow the A4 print view (FormPrint): the same 12-column placement (layout "print"),
  * page breaks, hidden and permission-denied fields left out, options as ○/● and ☐/☑ (drawn as shapes), blank
  * lines to write on, repeat tables, header / footer bands with {page}/{pages}.
+ *
+ * Paper layout (Template phase): a boxed section (print_style: boxed) draws its fields as bordered cells that touch,
+ * "Label: value" on one line when it fits, group titles and section titles as shaded bars; options can sit in columns
+ * (option_columns), a matrix is a bordered score table with its total rows, and top-level sections marked
+ * repeat_on_pages header / footer are drawn on every page (the content flows between them).
  */
 import { asRepeatField } from "../core/blocks";
 import { containerColumns, fillTemplate, formColumns, placeField, type PrintContext, type ResolvedPaper } from "../core/layout";
-import type { CategoryDefinition, FieldDefinition, FileValue, FormDefinition, JsonValue, SectionDefinition, SignatureValue } from "../core/types";
-import { fieldKey, OTHER_KEY } from "../core/validate";
+import type { CategoryDefinition, FieldDefinition, FileValue, FormDefinition, JsonValue, MatrixValue, SectionDefinition, SignatureValue } from "../core/types";
+import { fieldKey, matrixCell, matrixTotals, OTHER_KEY } from "../core/validate";
 import { cellText, optionText, printedText } from "./printValues";
 
 export const MM = 72 / 25.4;
-export type Measure = (text: string, size: number) => number;
+export type Measure = (text: string, size: number, bold?: boolean) => number;
 export type Tone = "text" | "muted" | "accent";
 export type Op =
-  | { kind: "text"; x: number; y: number; size: number; text: string; tone?: Tone }
+  | { kind: "text"; x: number; y: number; size: number; text: string; tone?: Tone; bold?: boolean }
   | { kind: "line"; x1: number; y1: number; x2: number; y2: number; dotted?: boolean; width?: number }
-  | { kind: "rect"; x: number; y: number; w: number; h: number }
+  /** fill: a shaded bar (titles, table headers); the border is always drawn. */
+  | { kind: "rect"; x: number; y: number; w: number; h: number; fill?: boolean }
   | { kind: "mark"; x: number; y: number; size: number; round: boolean; on: boolean }
   | { kind: "image"; x: number; y: number; w: number; h: number; data: string };
 export type PdfLayout = { width: number; height: number; pages: Op[][] };
@@ -28,6 +34,8 @@ export type LayoutInput = {
 };
 
 const SIZE = { title: 14, section: 11.5, category: 10, label: 7.5, value: 9.5, table: 8.5, band: 7.5 };
+/** Boxed (paper) sections use the denser type of printed hospital forms. */
+const BOX = { value: 8, title: 9, section: 10 };
 const LINE = 1.45;
 const GAP = 2.5 * MM;
 const COL_GAP = 3 * MM;
@@ -48,18 +56,19 @@ const pieces = (text: string, by: Intl.Segmenter | null, fallback: RegExp) =>
   by ? [...by.segment(text)].map(part => part.segment) : text.split(fallback).filter(Boolean);
 
 /** Lines of `text` no wider than `width`: words first, then graphemes for a word that does not fit. */
-export function wrap(text: string, size: number, width: number, measure: Measure): string[] {
+export function wrap(text: string, size: number, width: number, measure: Measure, bold = false): string[] {
+  const fits = (candidate: string) => measure(candidate, size, bold) <= width;
   const out: string[] = [];
   for (const paragraph of text.split(/\r?\n/)) {
     if (!paragraph.trim()) { out.push(""); continue; }
     let line = "";
     const push = () => { out.push(line.trimEnd()); line = ""; };
     for (const word of pieces(paragraph, WORDS, /(\s+)/)) {
-      if (measure(line + word, size) <= width) { line += word; continue; }
+      if (fits(line + word)) { line += word; continue; }
       if (line.trim()) push();
-      if (measure(word, size) <= width) { line = word.trimStart(); continue; }
+      if (fits(word)) { line = word.trimStart(); continue; }
       for (const glyph of pieces(word, GRAPHEMES, /(?=.)/u)) {
-        if (line && measure(line + glyph, size) > width) push();
+        if (line && !fits(line + glyph)) push();
         line += glyph;
       }
     }
@@ -75,14 +84,21 @@ export function wrap(text: string, size: number, width: number, measure: Measure
 type Block = { height: number; draw: (x: number, y: number) => Op[]; breakBefore?: boolean; breakAfter?: boolean; repeatHeader?: Block; gapAfter?: number };
 type Ctx = LayoutInput & { contentWidth: number };
 
-function textLines(ctx: Ctx, text: string, size: number, width: number, tone: Tone = "text"): Block {
-  const lines = wrap(text, size, width, ctx.measure);
+function textLines(ctx: Ctx, text: string, size: number, width: number, tone: Tone = "text", bold = false, align: "left" | "center" = "left"): Block {
+  const lines = wrap(text, size, width, ctx.measure, bold);
   const step = size * LINE;
-  return { height: lines.length * step, draw: (x, y) => lines.map((line, index) => ({ kind: "text", x, y: y + size + index * step, size, text: line, tone })) };
+  return {
+    height: lines.length * step,
+    draw: (x, y) => lines.map((line, index) => ({
+      kind: "text", x: align === "center" ? x + Math.max(0, (width - ctx.measure(line, size, bold)) / 2) : x, y: y + size + index * step, size, text: line, tone, bold,
+    })),
+  };
 }
 
-/** Inline items (mark + text) that wrap like words. */
-function markItems(ctx: Ctx, items: Array<{ text: string; on: boolean; round: boolean }>, width: number): Block {
+/** Inline items (mark + text) that wrap like words; with `columns`, a grid of equal columns (bordered cells when
+ * `boxed`, as on a paper checklist). */
+function markItems(ctx: Ctx, items: Array<{ text: string; on: boolean; round: boolean }>, width: number, columns?: number, boxed = false): Block {
+  if (columns) return markGrid(ctx, items, width, columns, boxed);
   const size = SIZE.value;
   const step = size * LINE;
   const box = size * 0.8;
@@ -105,6 +121,33 @@ function markItems(ctx: Ctx, items: Array<{ text: string; on: boolean; round: bo
   };
 }
 
+function markGrid(ctx: Ctx, items: Array<{ text: string; on: boolean; round: boolean }>, width: number, columns: number, boxed: boolean): Block {
+  const size = boxed ? BOX.value : SIZE.value;
+  const pad = boxed ? 1.2 * MM : 0;
+  const box = size * 0.8;
+  const each = width / columns;
+  const cells = items.map(item => ({ item, lines: wrap(item.text, size, Math.max(each - box - 3 - 2 * pad, 20), ctx.measure) }));
+  const rowHeights: number[] = [];
+  cells.forEach((cell, index) => {
+    const row = Math.floor(index / columns);
+    rowHeights[row] = Math.max(rowHeights[row] ?? 0, cell.lines.length * size * LINE + 2 * pad);
+  });
+  const tops = rowHeights.map((_, row) => rowHeights.slice(0, row).reduce((sum, h) => sum + h, 0));
+  return {
+    height: rowHeights.reduce((sum, h) => sum + h, 0),
+    draw: (left, top) => cells.flatMap(({ item, lines }, index) => {
+      const row = Math.floor(index / columns);
+      const x = left + (index % columns) * each;
+      const y = top + tops[row];
+      return [
+        ...(boxed ? [{ kind: "rect" as const, x, y, w: each, h: rowHeights[row] }] : []),
+        { kind: "mark" as const, x: x + pad, y: y + pad + (size * LINE - box) / 2, size: box, round: item.round, on: item.on },
+        ...lines.map((text, line) => ({ kind: "text" as const, x: x + pad + box + 3, y: y + pad + size + line * size * LINE, size, text })),
+      ];
+    }),
+  };
+}
+
 function stack(blocks: Block[], gap = 0): Block {
   const parts = blocks.filter(block => block.height > 0);
   return {
@@ -116,19 +159,21 @@ function stack(blocks: Block[], gap = 0): Block {
   };
 }
 
-function valueBlock(ctx: Ctx, field: FieldDefinition, value: JsonValue | undefined, other: string | undefined, width: number): Block {
+function valueBlock(ctx: Ctx, field: FieldDefinition, value: JsonValue | undefined, other: string | undefined, width: number, boxed = false): Block {
   switch (field.type) {
     case "select":
     case "radio":
       return field.options?.length
-        ? markItems(ctx, field.options.map(option => ({ text: optionText(option, value === option.value, other), on: value === option.value, round: true })), width)
+        ? markItems(ctx, field.options.map(option => ({ text: optionText(option, value === option.value, other), on: value === option.value, round: true })), width, field.option_columns, boxed)
         : underlined(ctx, typeof value === "string" ? value : "", width);
     case "multiselect": {
       const selected = Array.isArray(value) ? value : [];
       return field.options?.length
-        ? markItems(ctx, field.options.map(option => ({ text: optionText(option, selected.includes(option.value), other), on: selected.includes(option.value), round: false })), width)
+        ? markItems(ctx, field.options.map(option => ({ text: optionText(option, selected.includes(option.value), other), on: selected.includes(option.value), round: false })), width, field.option_columns, boxed)
         : underlined(ctx, selected.join(", "), width);
     }
+    case "matrix":
+      return matrixTable(ctx, field, value, width);
     case "checkbox":
     case "switch":
       return markItems(ctx, [{ text: field.label, on: value === true, round: false }], width);
@@ -173,7 +218,8 @@ function underlined(ctx: Ctx, text: string, width: number): Block {
 const visible = (ctx: Ctx, path: string, node: string) => !ctx.hidden.has(path) && !ctx.denied.has(node);
 
 /** Rows of a field list on its grid; repeat fields become full-width tables (each table row its own block). */
-function fieldRows(ctx: Ctx, fields: FieldDefinition[], data: Record<string, JsonValue>, columns: number, width: number, containerType: "grid" | "row" | "column" = "grid", prefix = ""): Block[] {
+function fieldRows(ctx: Ctx, fields: FieldDefinition[], data: Record<string, JsonValue>, columns: number, width: number, containerType: "grid" | "row" | "column" = "grid", prefix = "", boxed = false): Block[] {
+  if (boxed) return boxedRows(ctx, fields, data, columns, width, containerType, prefix);
   const colWidth = (width + COL_GAP) / columns;
   const out: Block[] = [];
   let row: Array<{ start: number; span: number; block: Block }> = [];
@@ -216,6 +262,167 @@ function fieldRows(ctx: Ctx, fields: FieldDefinition[], data: Record<string, Jso
   return out;
 }
 
+// Boxed sections (paper layout) ---------------------------------------------------------------------
+
+const PAD = 1.2 * MM;
+/** One-line values that read as "Label: value" in a box. */
+const INLINE = new Set(["text", "number", "decimal", "integer", "date", "datetime", "time", "calculated", "select"]);
+
+/** A shaded title bar, centred and bold (section titles, group titles, matrix titles). */
+function titleBar(ctx: Ctx, text: string, width: number, size = BOX.title): Block {
+  const lines = textLines(ctx, text, size, width - 2 * PAD, "text", true, "center");
+  const height = lines.height + 2 * PAD;
+  return { height, gapAfter: 0, draw: (x, y) => [{ kind: "rect", x, y, w: width, h: height, fill: true }, ...lines.draw(x + PAD, y + PAD)] };
+}
+
+/** A boxed cell's label, as printed on paper (no required mark; units of numbers follow the value). */
+const fieldLabel = (field: FieldDefinition) => `${field.label}${field.unit && !["decimal", "number", "integer", "calculated"].includes(field.type) ? ` (${field.unit})` : ""}`;
+
+/** "Label: value" on one line when both fit, otherwise the label above the value. */
+function labelled(ctx: Ctx, label: string, value: string, width: number): Block {
+  const size = BOX.value;
+  const head = `${label}:`;
+  const headWidth = ctx.measure(head, size, true);
+  if (!value) return textLines(ctx, head, size, width, "text", true);
+  if (headWidth + 4 + ctx.measure(value, size) <= width) {
+    return { height: size * LINE, draw: (x, y) => [{ kind: "text", x, y: y + size, size, text: head, bold: true }, { kind: "text", x: x + headWidth + 4, y: y + size, size, text: value }] };
+  }
+  return stack([textLines(ctx, head, size, width, "text", true), textLines(ctx, value, size, width)]);
+}
+
+/** The content of a boxed cell (without its border). Groups are handled by boxedRows. */
+function boxedContent(ctx: Ctx, field: FieldDefinition, data: Record<string, JsonValue>, width: number): Block {
+  const key = fieldKey(field);
+  const value = data[key];
+  const other = (data[OTHER_KEY] as Record<string, JsonValue> | undefined)?.[key] as string | undefined;
+  if (INLINE.has(field.type) && !(field.type === "select" && field.option_columns)) {
+    const option = field.options?.find(item => item.value === value);
+    return labelled(ctx, fieldLabel(field), option ? optionText(option, true, other) : printedText(field, value), width);
+  }
+  if (field.type === "checkbox" || field.type === "switch") return markGrid(ctx, [{ text: field.label, on: value === true, round: false }], width, 1, false);
+  if (field.type === "signature") {
+    const signature = value as SignatureValue | undefined;
+    const image = typeof signature?.data === "string" && /^data:image\/(png|jpe?g);base64,/.test(signature.data) ? signature.data : null;
+    const h = 12 * MM;
+    const name = textLines(ctx, signature?.signer ? `( ${signature.signer} )` : `(${".".repeat(28)})`, BOX.value, width, "text", false, "center");
+    const role = textLines(ctx, field.label, BOX.value, width, "text", true, "center");
+    return {
+      height: h + name.height + role.height,
+      draw: (x, y) => [
+        ...(image ? [{ kind: "image" as const, x: x + width / 2 - 20 * MM, y, w: 40 * MM, h, data: image }] : []),
+        ...name.draw(x, y + h), ...role.draw(x, y + h + name.height),
+      ],
+    };
+  }
+  const body = field.type === "radio" || field.type === "multiselect"
+    ? markGrid(ctx, (field.options ?? []).map(option => {
+      const on = Array.isArray(value) ? value.includes(option.value) : value === option.value;
+      return { text: optionText(option, on, other), on, round: field.type === "radio" };
+    }), width, 1, false)
+    : field.type === "textarea" ? textLines(ctx, typeof value === "string" ? value : "", BOX.value, width) : valueBlock(ctx, field, value, other, width, false);
+  return stack([textLines(ctx, fieldLabel(field), BOX.value, width, "text", true), body], 1);
+}
+
+/** Rows of bordered cells that touch (no column gap); every cell of a row has the row's height. Option grids and
+ * matrices draw their own borders; a group is a titled block of boxed rows. */
+function boxedRows(ctx: Ctx, fields: FieldDefinition[], data: Record<string, JsonValue>, columns: number, width: number, containerType: "grid" | "row" | "column", prefix: string): Block[] {
+  const colWidth = width / columns;
+  const out: Block[] = [];
+  let row: Array<{ start: number; span: number; content: Block; frame: boolean }> = [];
+  let cursor = 1;
+  const flush = () => {
+    if (!row.length) return;
+    const cells = row;
+    const height = Math.max(...cells.map(cell => cell.content.height + (cell.frame ? 2 * PAD : 0)));
+    out.push({
+      height, gapAfter: 0,
+      draw: (x, y) => cells.flatMap(cell => {
+        const left = x + (cell.start - 1) * colWidth;
+        const w = cell.span * colWidth;
+        return cell.frame ? [{ kind: "rect" as const, x: left, y, w, h: height }, ...cell.content.draw(left + PAD, y + PAD)] : cell.content.draw(left, y);
+      }),
+    });
+    row = [];
+    cursor = 1;
+  };
+  for (const field of fields) {
+    const key = fieldKey(field);
+    const placement = placeField(field, "print", columns, ctx.styleColumns, containerType, fields.length);
+    if (placement.hidden || (field.type !== "group" && !visible(ctx, `$.data.${prefix}${key}`, key))) continue;
+    if (placement.pageBreak === "before") { flush(); out.push({ height: 0, breakBefore: true, draw: () => [] }); }
+    if (field.type === "repeat") {
+      flush();
+      out.push(...repeatTable(ctx, field, Array.isArray(data[key]) ? data[key] as Array<Record<string, JsonValue>> : [], width).map(block => ({ ...block, gapAfter: 0 })));
+      continue;
+    }
+    const span = Math.min(placement.span, columns);
+    let start = placement.col ?? cursor;
+    if (start < cursor || start + span - 1 > columns) { flush(); start = placement.col ?? 1; }
+    const w = span * colWidth;
+    let content: Block;
+    let frame = true;
+    if (field.type === "group") {
+      const inner = fieldRows(ctx, field.fields ?? [], data, containerColumns({ columns: field.columns }, columns), w, "grid", prefix, true);
+      content = stack([titleBar(ctx, field.label, w, BOX.value + 0.5), ...inner]);
+      frame = false;
+    } else if (field.type === "matrix") {
+      content = matrixTable(ctx, field, data[key], w);
+      frame = false;
+    } else if ((field.type === "multiselect" || field.type === "radio" || field.type === "select") && field.option_columns && field.options?.length) {
+      const chosen = Array.isArray(data[key]) ? data[key] as JsonValue[] : [data[key]];
+      const other = (data[OTHER_KEY] as Record<string, JsonValue> | undefined)?.[key] as string | undefined;
+      const grid = markGrid(ctx, field.options.map(option => ({ text: optionText(option, chosen.includes(option.value), other), on: chosen.includes(option.value), round: field.type !== "multiselect" })), w, field.option_columns, true);
+      content = stack([titleBar(ctx, fieldLabel(field), w, BOX.value + 0.5), grid]);
+      frame = false;
+    } else {
+      content = boxedContent(ctx, field, data, w - 2 * PAD);
+    }
+    row.push({ start, span, content, frame });
+    cursor = start + span;
+    if (placement.pageBreak === "after") { flush(); out.push({ height: 0, breakAfter: true, draw: () => [] }); }
+  }
+  flush();
+  return out;
+}
+
+/** matrix: a bordered score table (row labels, a column per time point, total rows in bold after the rows they add). */
+function matrixTable(ctx: Ctx, field: FieldDefinition, value: JsonValue | undefined, width: number): Block {
+  const data = (value && typeof value === "object" && !Array.isArray(value) ? value : {}) as MatrixValue;
+  const totals = matrixTotals(field, data);
+  const cols = field.cols ?? [];
+  const first = Math.min(width * 0.32, 60 * MM);
+  const each = cols.length ? (width - first) / cols.length : width - first;
+  const size = BOX.value;
+  const pad = 0.9 * MM;
+  const tableRow = (cells: string[], bold: boolean, fill: boolean): Block => {
+    const blocks = cells.map((text, index) => textLines(ctx, text, size, (index === 0 ? first : each) - 2 * pad, "text", bold, index === 0 ? "left" : "center"));
+    const height = Math.max(...blocks.map(block => block.height)) + 2 * pad;
+    return {
+      height, gapAfter: 0,
+      draw: (x, y) => blocks.flatMap((block, index) => {
+        const left = index === 0 ? x : x + first + (index - 1) * each;
+        const w = index === 0 ? first : each;
+        return [{ kind: "rect" as const, x: left, y, w, h: height, fill }, ...block.draw(left + pad, y + pad)];
+      }),
+    };
+  };
+  const text = (rowId: string, colId: string) => {
+    const row = (field.rows ?? []).find(item => item.id === rowId);
+    const raw = data[rowId]?.[colId];
+    if (raw === null || raw === undefined) return "";
+    const cell = row ? matrixCell(field, row) : {};
+    return (cell as { options?: Array<{ value: string; label: string }> }).options?.find(option => option.value === raw)?.label ?? String(raw);
+  };
+  const rows: Block[] = [tableRow([field.label, ...cols.map(col => col.label)], true, true)];
+  for (const row of field.rows ?? []) {
+    rows.push(tableRow([row.label, ...cols.map(col => text(row.id, col.id))], false, false));
+    for (const total of field.totals ?? []) {
+      if (total.of[total.of.length - 1] === row.id) rows.push(tableRow([total.label, ...cols.map(col => { const sum = totals[total.id]?.[col.id]; return sum === null || sum === undefined ? "" : String(sum); })], true, false));
+    }
+  }
+  return stack(rows);
+}
+
 function repeatTable(ctx: Ctx, field: FieldDefinition, items: Array<Record<string, JsonValue>>, width: number): Block[] {
   const key = fieldKey(field);
   const children = (field.fields ?? []).filter(child => child.type !== "group" && child.type !== "repeat" && !ctx.denied.has(`${key}.${fieldKey(child)}`));
@@ -255,12 +462,18 @@ function sectionBlocks(ctx: Ctx, section: SectionDefinition | CategoryDefinition
   const holder = section as SectionDefinition;
   if (section.page_break === "before") out.push({ height: 0, breakBefore: true, draw: () => [] });
   const inner = containerColumns(section.layout, columns);
-  out.push(blockHeading(ctx, section.title, isCategory ? SIZE.category : depth === 1 ? SIZE.section : SIZE.category, ctx.contentWidth, !isCategory));
+  const boxed = section.print_style === "boxed";
+  if (!section.hide_title) {
+    out.push(boxed ? titleBar(ctx, section.title, ctx.contentWidth, isCategory ? BOX.title : BOX.section)
+      : blockHeading(ctx, section.title, isCategory ? SIZE.category : depth === 1 ? SIZE.section : SIZE.category, ctx.contentWidth, !isCategory));
+  }
   if (section.repeat) {
     out.push(...repeatTable(ctx, asRepeatField(section as unknown as Record<string, unknown>), Array.isArray(top[section.repeat.key]) ? top[section.repeat.key] as Array<Record<string, JsonValue>> : [], ctx.contentWidth));
   } else {
-    out.push(...fieldRows(ctx, section.fields ?? [], top, inner, ctx.contentWidth, section.layout?.type ?? "grid"));
+    out.push(...fieldRows(ctx, section.fields ?? [], top, inner, ctx.contentWidth, section.layout?.type ?? "grid", "", boxed));
   }
+  // The last row of a boxed block keeps the normal gap below it.
+  if (boxed && out.length && out[out.length - 1].gapAfter === 0) out[out.length - 1] = { ...out[out.length - 1], gapAfter: GAP };
   if (!isCategory) {
     for (const category of holder.categories ?? []) if (shown(ctx, category)) out.push(...sectionBlocks(ctx, category, inner, depth + 1, true));
     for (const child of holder.sections ?? []) if (shown(ctx, child)) out.push(...sectionBlocks(ctx, child, inner, depth + 1));
@@ -288,20 +501,31 @@ export function layoutPdf(input: LayoutInput): PdfLayout {
   const contentWidth = width - left - paper.margin.right * MM;
   const bottom = height - paper.margin.bottom * MM;
   const ctx: Ctx = { ...input, contentWidth };
+  const columns = formColumns(input.definition);
+  const band = (kind: "header" | "footer"): Block | null => {
+    const parts = input.definition.sections.filter(section => section.repeat_on_pages === kind && shown(ctx, section))
+      .flatMap(section => sectionBlocks(ctx, section, columns, 1));
+    return parts.length ? stack(parts.map(part => ({ ...part, gapAfter: undefined }))) : null;
+  };
+  // Sections repeated on every page: the header replaces the default title, the content flows between them.
+  const pageHeader = band("header");
+  const pageFooter = band("footer");
+  const contentTop = pageHeader ? top + pageHeader.height + GAP : top;
+  const contentBottom = pageFooter ? bottom - pageFooter.height - GAP : bottom;
 
-  const blocks: Block[] = [
+  const blocks: Block[] = pageHeader ? [] : [
     stack([textLines(ctx, input.definition.title, SIZE.title, contentWidth),
       textLines(ctx, [input.context.record_id ? `#${input.context.record_id}` : "", `${input.definition.form_id} v${input.definition.schema_version}`, input.context.date].filter(Boolean).join(" · "), SIZE.label, contentWidth, "muted")], 2),
   ];
-  for (const section of input.definition.sections) if (shown(ctx, section)) blocks.push(...sectionBlocks(ctx, section, formColumns(input.definition), 1));
+  for (const section of input.definition.sections) if (!section.repeat_on_pages && shown(ctx, section)) blocks.push(...sectionBlocks(ctx, section, columns, 1));
 
   const pages: Op[][] = [[]];
-  let y = top;
-  const newPage = () => { pages.push([]); y = top; };
+  let y = contentTop;
+  const newPage = () => { pages.push([]); y = contentTop; };
   for (const block of blocks) {
     const repeated = block.repeatHeader;
-    if (block.breakBefore && y > top) newPage();
-    if (block.height > 0 && y + block.height > bottom && y > top) {
+    if (block.breakBefore && y > contentTop) newPage();
+    if (block.height > 0 && y + block.height > contentBottom && y > contentTop) {
       newPage();
       if (repeated) { pages[pages.length - 1].push(...repeated.draw(left, y)); y += repeated.height; }
     }
@@ -312,6 +536,10 @@ export function layoutPdf(input: LayoutInput): PdfLayout {
     if (block.breakAfter) newPage();
   }
   while (pages.length > 1 && !pages[pages.length - 1].length) pages.pop();
+  pages.forEach(ops => {
+    if (pageHeader) ops.unshift(...pageHeader.draw(left, top));
+    if (pageFooter) ops.push(...pageFooter.draw(left, bottom - pageFooter.height));
+  });
 
   // Bands: header / footer slots, {page}/{pages}; a page number at the bottom right when no footer is set.
   const footer = paper.footer ?? { right: "{page}/{pages}" };

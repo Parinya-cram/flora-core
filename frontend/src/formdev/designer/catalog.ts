@@ -6,6 +6,7 @@ import type { CalculatorDefinition, FieldDefinition, FieldType, FormDefinition, 
 import { instantiateTemplate } from "../logic/calculators";
 import { CALCULATOR_TEMPLATES } from "../registry/defaults";
 import { emptyForm, newField, uniqueName } from "./model";
+import { PAPER_TEMPLATES } from "./templates";
 
 export type Lang = "th" | "en";
 export const langOf = (language: string): Lang => (language.toLowerCase().startsWith("th") ? "th" : "en");
@@ -209,10 +210,14 @@ export const STARTERS: Starter[] = [
       { th: "ผู้บันทึก", en: "Recorded by", blocks: ["sign"] }] },
   { id: "address", icon: "🏠", th: "ข้อมูลที่อยู่และการติดต่อ", en: "Address and contact", hintTh: "ผู้ป่วย, ที่อยู่แบบเลือกต่อกัน, โทรศัพท์", hintEn: "Patient, linked address, phone",
     sections: [{ th: "ข้อมูลผู้ป่วย", en: "Patient", blocks: ["patient"] }, { th: "ที่อยู่และการติดต่อ", en: "Address and contact", blocks: ["thai_address", "contact"] }] },
+  { id: "pacu", icon: "🛏", th: "PACU: บันทึกหลังให้ยาระงับความรู้สึก", en: "PACU: Post Anesthetic Record", hintTh: "แบบกระดาษ: หัวผู้ป่วย, Aldrete score, ภาวะแทรกซ้อน, ลายเซ็น",
+    hintEn: "Paper layout: patient header, Aldrete score, problems, signatures", sections: [] },
 ];
 
 /** A new form from a starting point; every name is unique and every formula / lookup is wired. */
 export function starterForm(starter: Starter, formId: string, title: string, lang: Lang): FormDefinition {
+  const paper = PAPER_TEMPLATES[starter.id];
+  if (paper) return paper(formId, title);
   const blank = emptyForm(formId, title, tr(lang, "ส่วนที่ 1", "Section 1"), used => paletteField("text", used, lang));
   if (!starter.sections.length) return blank;
   const used = new Set<string>();

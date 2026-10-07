@@ -5,7 +5,7 @@
 import type { ReactElement } from "react";
 import type { FieldDefinition } from "../core/types";
 import {
-  CalculatedOutput, CheckboxInput, FileInput, MultiSelectInput, NumberInput, RadioInput, SelectInput, SignatureInput, SwitchInput, TemporalInput, TextArea, TextInput,
+  CalculatedOutput, CheckboxInput, FileInput, MatrixInput, MultiSelectInput, NumberInput, RadioInput, SelectInput, SignatureInput, SwitchInput, TemporalInput, TextArea, TextInput,
   type InputProps,
 } from "./fieldInputs";
 
@@ -13,5 +13,5 @@ export const FIELD_INPUTS: Partial<Record<FieldDefinition["type"], (props: Input
   text: TextInput, textarea: TextArea, number: NumberInput, decimal: NumberInput, integer: NumberInput,
   date: TemporalInput, datetime: TemporalInput, time: TemporalInput,
   select: SelectInput, radio: RadioInput, multiselect: MultiSelectInput, checkbox: CheckboxInput, switch: SwitchInput,
-  file: FileInput, image: FileInput, signature: SignatureInput, calculated: CalculatedOutput,
+  file: FileInput, image: FileInput, signature: SignatureInput, calculated: CalculatedOutput, matrix: MatrixInput,
 };

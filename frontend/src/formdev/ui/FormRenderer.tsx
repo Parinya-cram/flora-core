@@ -67,8 +67,11 @@ function blockViewable(block: SectionDefinition | CategoryDefinition, ctx: Ctx):
 const STYLE_COLUMNS_DEFAULT = 2;
 const styleColumns = (style: ResolvedStyle) => (typeof style.tokens.columns === "number" ? style.tokens.columns : STYLE_COLUMNS_DEFAULT);
 
-function FieldBlock({ field, scope, columns, style, ctx, containerType, siblings }: {
-  field: FieldDefinition; scope: Scope; columns: number; style: ResolvedStyle; ctx: Ctx; containerType: ContainerLayout["type"]; siblings: number;
+/** Cells of a boxed section (print_style: boxed) touch and carry a border, like the paper form. */
+const BOXED_CELL: CSSProperties = { border: "0.3mm solid #94a3b8", padding: "1.2mm 1.8mm", marginRight: "-0.3mm", marginBottom: "-0.3mm" };
+
+function FieldBlock({ field, scope, columns, style, ctx, containerType, siblings, boxed = false }: {
+  field: FieldDefinition; scope: Scope; columns: number; style: ResolvedStyle; ctx: Ctx; containerType: ContainerLayout["type"]; siblings: number; boxed?: boolean;
 }) {
   const placement = placeField(field, ctx.mode, columns, styleColumns(style), containerType, siblings, ctx.context);
   const dataPath = scope.path ? `${scope.path}.${fieldKey(field)}` : fieldKey(field);
@@ -107,7 +110,7 @@ function FieldBlock({ field, scope, columns, style, ctx, containerType, siblings
       {field.description ? <span style={{ display: "block", fontSize: "8pt", color: "#64748b", marginTop: "0.5mm" }}>{field.description}</span> : null}
     </label>;
   }
-  return <div data-field={key} data-span={placement.span} style={gridArea(placement)}>
+  return <div data-field={key} data-span={placement.span} style={boxed ? { ...gridArea(placement), ...BOXED_CELL } : gridArea(placement)}>
     {body}
     {error ? <span role="alert" style={{ display: "block", marginTop: "0.5mm", fontSize: "8.5pt", color: "#e11d48" }}>{error}</span> : null}
   </div>;
@@ -134,11 +137,11 @@ function OtherText({ field, scope, disabled, css }: { field: FieldDefinition; sc
     onChange={event => scope.set(OTHER_KEY, { ...other, [key]: event.target.value } as JsonValue)} />;
 }
 
-function FieldGrid({ fields, scope, columns, style, ctx, containerType = "grid" }: {
-  fields: FieldDefinition[]; scope: Scope; columns: number; style: ResolvedStyle; ctx: Ctx; containerType?: ContainerLayout["type"];
+function FieldGrid({ fields, scope, columns, style, ctx, containerType = "grid", boxed = false }: {
+  fields: FieldDefinition[]; scope: Scope; columns: number; style: ResolvedStyle; ctx: Ctx; containerType?: ContainerLayout["type"]; boxed?: boolean;
 }) {
-  return <div style={gridCss(columns, style)}>
-    {fields.map(field => <FieldBlock key={field.id} field={field} scope={scope} columns={columns} style={style} ctx={ctx} containerType={containerType} siblings={fields.length} />)}
+  return <div style={boxed ? { ...gridCss(columns, style), gap: 0, paddingRight: "0.3mm", paddingBottom: "0.3mm" } : gridCss(columns, style)}>
+    {fields.map(field => <FieldBlock key={field.id} field={field} scope={scope} columns={columns} style={style} ctx={ctx} containerType={containerType} siblings={fields.length} boxed={boxed} />)}
   </div>;
 }
 
@@ -279,7 +282,7 @@ const blockShown = (block: { visibility?: { when: unknown } }, ctx: Ctx) => !blo
 /** Fields of a section or category; a repeatable block (Phase 2.7) renders as a list of items. */
 function BlockFields({ block, scope, columns, style, ctx }: { block: SectionDefinition | CategoryDefinition; scope: Scope; columns: number; style: ResolvedStyle; ctx: Ctx }) {
   if (block.repeat) return <RepeatItems field={asRepeatField(block as unknown as Record<string, unknown>)} scope={scope} columns={columns} style={style} ctx={ctx} />;
-  return block.fields?.length ? <FieldGrid fields={block.fields} scope={scope} columns={columns} style={style} ctx={ctx} containerType={block.layout?.type ?? "grid"} /> : null;
+  return block.fields?.length ? <FieldGrid fields={block.fields} scope={scope} columns={columns} style={style} ctx={ctx} containerType={block.layout?.type ?? "grid"} boxed={block.print_style === "boxed"} /> : null;
 }
 
 function SectionBlock({ section, scope, columns, style, ctx, depth }: { section: SectionDefinition; scope: Scope; columns: number; style: ResolvedStyle; ctx: Ctx; depth: number }) {
@@ -288,7 +291,7 @@ function SectionBlock({ section, scope, columns, style, ctx, depth }: { section:
   const inner = containerColumns(section.layout, columns);
   const Heading = depth === 1 ? "h3" : "h4";
   return <section data-section={section.id} style={{ ...sectionCss(own), display: "grid", gap: "3mm" }}>
-    <Heading style={{ ...typeCss(own, ctx.regs, "section"), margin: 0 }}>{section.title}</Heading>
+    {section.hide_title ? null : <Heading style={{ ...typeCss(own, ctx.regs, "section"), margin: 0 }}>{section.title}</Heading>}
     {section.description ? <p style={{ margin: 0, fontSize: "9pt", color: "#64748b" }}>{section.description}</p> : null}
     <BlockFields block={section} scope={scope} columns={inner} style={own} ctx={ctx} />
     {(section.categories ?? []).map(category => <CategoryBlock key={category.id} category={category} scope={scope} columns={inner} style={own} ctx={ctx} />)}
@@ -301,11 +304,18 @@ function CategoryBlock({ category, scope, columns, style, ctx }: { category: Cat
   if (!blockShown(category, ctx) || !blockViewable(category, ctx)) return null;
   const own = ctx.regs.styles.apply(style, category.style);
   return <div data-category={category.id} style={{ display: "grid", gap: "2mm", borderLeft: "0.6mm solid #cbd5e1", paddingLeft: "3mm" }}>
-    <div style={{ ...typeCss(own, ctx.regs, "label"), fontWeight: 700 }}>{category.title}</div>
+    {category.hide_title ? null : <div style={{ ...typeCss(own, ctx.regs, "label"), fontWeight: 700 }}>{category.title}</div>}
     {category.description ? <p style={{ margin: 0, fontSize: "9pt", color: "#64748b" }}>{category.description}</p> : null}
     <BlockFields block={category} scope={scope} columns={containerColumns(category.layout, columns)} style={own} ctx={ctx} />
   </div>;
 }
+
+/** Sections repeated on every printed page come first (header) and last (footer) on screen too. */
+const pageOrder = (sections: SectionDefinition[]) => [
+  ...sections.filter(section => section.repeat_on_pages === "header"),
+  ...sections.filter(section => !section.repeat_on_pages),
+  ...sections.filter(section => section.repeat_on_pages === "footer"),
+];
 
 /** Width-driven mode for the live form; fixed in previews. */
 function useMode(fixed: Props["mode"]): [RefObject<HTMLDivElement | null>, Exclude<LayoutMode, "print">] {
@@ -338,6 +348,6 @@ export default function FormRenderer({ definition, value, issues = [], readOnly 
   const scope: Scope = { data, path: "", node: "", set: (key, next) => onChange(changeRecord(definition, data, key, next, lookups)) };
   const columns = formColumns(definition);
   return <div ref={ref} data-mode={current} style={{ ...rootCss(style, regs), display: "grid", gap: "4mm", padding: "4mm", borderRadius: "3mm" }}>
-    {definition.sections.map(section => <SectionBlock key={section.id} section={section} scope={scope} columns={columns} style={style} ctx={ctx} depth={1} />)}
+    {pageOrder(definition.sections).map(section => <SectionBlock key={section.id} section={section} scope={scope} columns={columns} style={style} ctx={ctx} depth={1} />)}
   </div>;
 }

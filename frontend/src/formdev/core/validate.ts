@@ -940,7 +940,7 @@ function validateMatrix(ctx: Ctx, field: Obj, path: string) {
     if ("cell" in row) matrixCellOk(ctx, row.cell, `${path}.rows[${index}].cell`);
   });
   const rowIds = new Set(rows.map(row => row.id as string));
-  const numeric = new Set(rows.filter(row => MATRIX_NUMERIC.includes(((row.cell ?? field.cell ?? {}) as Obj).type as string)).map(row => row.id as string));
+  const numeric = new Set(rows.filter(row => matrixNumeric((row.cell ?? field.cell) as Obj | undefined)).map(row => row.id as string));
   if ("totals" in field) {
     matrixItems(ctx, field.totals, `${path}.totals`, "totals").forEach((total, index) => {
       const totalPath = `${path}.totals[${index}]`;
@@ -954,6 +954,21 @@ function validateMatrix(ctx: Ctx, field: Obj, path: string) {
 
 export const matrixCell = (field: FieldDefinition, row: { cell?: MatrixCell }): MatrixCell | Record<string, never> => row.cell ?? field.cell ?? {};
 
+const numberText = (value: unknown): number | null => {
+  if (isNumber(value)) return value;
+  if (!isText(value) || !value.trim()) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+};
+
+/** Rows a total may add up: numbers, or choices whose values are all numbers (a 0 / 1 / 2 score). */
+function matrixNumeric(cell: Obj | undefined): boolean {
+  if (!isObject(cell)) return false;
+  if (MATRIX_NUMERIC.includes(cell.type as string)) return true;
+  const options = cell.type === "select" ? cell.options : undefined;
+  return Array.isArray(options) && options.length > 0 && options.every(option => isObject(option) && numberText(option.value) !== null);
+}
+
 /** Total rows of a matrix value: per column, the sum of the listed rows (null when none of them has a value). */
 export function matrixTotals(field: FieldDefinition, value: unknown): Record<string, Record<string, number | null>> {
   const data = isObject(value) ? value : {};
@@ -961,7 +976,7 @@ export function matrixTotals(field: FieldDefinition, value: unknown): Record<str
   for (const total of field.totals ?? []) {
     const sums: Record<string, number | null> = {};
     for (const col of field.cols ?? []) {
-      const numbers = total.of.map(row => (isObject(data[row]) ? (data[row] as Obj)[col.id] : undefined)).filter(isNumber);
+      const numbers = total.of.map(row => numberText(isObject(data[row]) ? (data[row] as Obj)[col.id] : undefined)).filter((item): item is number => item !== null);
       sums[col.id] = numbers.length ? numbers.reduce((sum, item) => sum + item, 0) : null;
     }
     out[total.id] = sums;

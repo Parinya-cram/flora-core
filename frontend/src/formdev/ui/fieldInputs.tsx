@@ -2,12 +2,17 @@
 import { useContext, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { AttachmentContext } from "./attachments";
 import { localIso } from "./renderUtils";
-import type { FieldDefinition, FileValue, JsonValue, SignatureValue } from "../core/types";
+import type { FieldDefinition, FileValue, JsonValue, MatrixCell, MatrixValue, SignatureValue } from "../core/types";
+import { matrixCell, matrixTotals } from "../core/validate";
 
 export type InputProps = { field: FieldDefinition; value: JsonValue | undefined; disabled: boolean; css: CSSProperties; label: string; onChange: (value: JsonValue) => void };
 
 const textOf = (value: JsonValue | undefined) => (value === null || value === undefined ? "" : String(value));
 const options = (field: FieldDefinition) => field.options ?? [];
+/** option_columns: options in columns (fewer when the box is narrow, as on a phone); otherwise they wrap like words. */
+const optionLayout = (field: FieldDefinition): CSSProperties => field.option_columns
+  ? { display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(max(34mm, calc(${100 / field.option_columns}% - 3mm)), 1fr))`, gap: "1mm 3mm", alignItems: "center" }
+  : { display: "flex", flexWrap: "wrap", gap: "1mm 4mm", minHeight: "8mm", alignItems: "center" };
 
 export function TextInput({ field, value, disabled, css, label, onChange }: InputProps) {
   return <input aria-label={label} style={css} value={textOf(value)} disabled={disabled} maxLength={field.max_length} placeholder={field.placeholder} onChange={event => onChange(event.target.value || null)} />;
@@ -38,7 +43,7 @@ export function SelectInput({ field, value, disabled, css, label, onChange }: In
 }
 
 export function RadioInput({ field, value, disabled, label, onChange }: InputProps) {
-  return <div role="radiogroup" aria-label={label} style={{ display: "flex", flexWrap: "wrap", gap: "1mm 4mm", minHeight: "8mm", alignItems: "center" }}>
+  return <div role="radiogroup" aria-label={label} style={optionLayout(field)}>
     {options(field).map(option => <label key={option.value} style={{ display: "inline-flex", gap: "1.5mm", alignItems: "center" }}>
       <input type="radio" name={field.id} value={option.value} checked={value === option.value} disabled={disabled} onChange={() => onChange(option.value)} />{option.label}
     </label>)}
@@ -47,7 +52,7 @@ export function RadioInput({ field, value, disabled, label, onChange }: InputPro
 
 export function MultiSelectInput({ field, value, disabled, label, onChange }: InputProps) {
   const selected = Array.isArray(value) ? value.map(String) : [];
-  return <div role="group" aria-label={label} style={{ display: "flex", flexWrap: "wrap", gap: "1mm 4mm", minHeight: "8mm", alignItems: "center" }}>
+  return <div role="group" aria-label={label} style={optionLayout(field)}>
     {options(field).map(option => <label key={option.value} style={{ display: "inline-flex", gap: "1.5mm", alignItems: "center" }}>
       <input type="checkbox" disabled={disabled} checked={selected.includes(option.value)}
         onChange={event => onChange(event.target.checked ? [...selected, option.value] : selected.filter(item => item !== option.value))} />{option.label}
@@ -183,4 +188,55 @@ export function SignatureInput({ field, value, disabled, label, onChange }: Inpu
 export function CalculatedOutput({ field, value, css, label }: InputProps) {
   const shown = typeof value === "number" && field.decimals !== undefined ? value.toFixed(field.decimals) : textOf(value);
   return <output aria-label={label} title={field.formula ?? field.calculator} style={{ ...css, display: "flex", alignItems: "center", background: "#f8fafc" }}>{shown || "—"}</output>;
+}
+
+/** matrix: a score sheet (rows x columns of cells) with computed total rows, e.g. the Modified Aldrete score. */
+export function MatrixInput({ field, value, disabled, css, label, onChange }: InputProps) {
+  const data = (value && typeof value === "object" && !Array.isArray(value) ? value : {}) as MatrixValue;
+  const totals = matrixTotals(field, data);
+  const set = (row: string, col: string, next: string | number | null) => {
+    const cells = { ...(data[row] ?? {}) };
+    if (next === null) delete cells[col];
+    else cells[col] = next;
+    const out = { ...data, [row]: cells };
+    if (!Object.keys(cells).length) delete out[row];
+    onChange(Object.keys(out).length ? (out as JsonValue) : null);
+  };
+  const border: CSSProperties = { border: "0.3mm solid #cbd5e1", padding: "0.6mm", textAlign: "center" };
+  const head: CSSProperties = { ...border, background: "#f1f5f9", fontWeight: 600 };
+  const input: CSSProperties = { ...css, minHeight: 0, width: "100%", minWidth: "11mm", boxSizing: "border-box", textAlign: "center", padding: "0.8mm" };
+  const editor = (row: string, col: string, cell: Partial<MatrixCell>) => {
+    const current = data[row]?.[col];
+    const name = `${label}: ${(field.rows ?? []).find(item => item.id === row)?.label ?? row} / ${(field.cols ?? []).find(item => item.id === col)?.label ?? col}`;
+    if (cell.type === "select") {
+      return <select aria-label={name} style={input} value={current === null || current === undefined ? "" : String(current)} disabled={disabled} onChange={event => set(row, col, event.target.value || null)}>
+        <option value="">—</option>
+        {(cell.options ?? []).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>;
+    }
+    if (cell.type === "integer" || cell.type === "number") {
+      return <input aria-label={name} type="number" style={input} value={current === null || current === undefined ? "" : String(current)} disabled={disabled}
+        min={cell.min} max={cell.max} step={cell.type === "integer" ? 1 : "any"} onChange={event => set(row, col, event.target.value === "" ? null : Number(event.target.value))} />;
+    }
+    return <input aria-label={name} style={input} value={current === null || current === undefined ? "" : String(current)} disabled={disabled} maxLength={200} onChange={event => set(row, col, event.target.value || null)} />;
+  };
+  const rows: Array<{ id: string; label: string; total?: true }> = [];
+  for (const row of field.rows ?? []) {
+    rows.push(row);
+    // A total row follows the last row it adds up (as on paper: criteria, Total, then other scores).
+    for (const total of field.totals ?? []) if (total.of[total.of.length - 1] === row.id) rows.push({ id: total.id, label: total.label, total: true });
+  }
+  return <div style={{ overflowX: "auto" }} data-matrix={field.id}>
+    <table aria-label={label} style={{ borderCollapse: "collapse", width: "100%", fontSize: "9.5pt" }}>
+      <thead><tr><th style={{ ...head, textAlign: "left", minWidth: "30mm" }} />{(field.cols ?? []).map(col => <th key={col.id} style={head}>{col.label}</th>)}</tr></thead>
+      <tbody>
+        {rows.map(row => <tr key={row.id} style={row.total ? { background: "#f8fafc", fontWeight: 700 } : undefined}>
+          <td style={{ ...border, textAlign: "left" }}>{row.label}</td>
+          {(field.cols ?? []).map(col => <td key={col.id} style={border}>
+            {row.total ? totals[row.id]?.[col.id] ?? "" : editor(row.id, col.id, matrixCell(field, (field.rows ?? []).find(item => item.id === row.id) ?? { id: row.id, label: row.label }))}
+          </td>)}
+        </tr>)}
+      </tbody>
+    </table>
+  </div>;
 }
