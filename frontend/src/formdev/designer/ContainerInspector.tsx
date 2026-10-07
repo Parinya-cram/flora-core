@@ -71,6 +71,15 @@ export default function ContainerInspector({ definition, lang, styles, formIdEdi
         onChange={on => set({ repeat: on ? { key: uniqueName(`${node.id}_items`, usedNames(definition)), max_items: 20 } : undefined })} />
       {node.repeat ? <NumberField label={t("จำนวนชุดสูงสุด", "Maximum entries")} value={node.repeat.max_items} min={1} onChange={value => set({ repeat: { ...node.repeat, max_items: value } })} /> : null}
     </Group>
+    <Group title={t("รูปแบบกระดาษ (พิมพ์ / PDF)", "Paper layout (print / PDF)")} badge={node.print_style === "boxed" || (node as SectionDefinition).repeat_on_pages ? "✓" : undefined}>
+      <Toggle label={t("ตารางมีเส้น: ช่องติดกันมีกรอบ, \"หัวข้อ: ค่า\" ในบรรทัดเดียว", "Bordered table: cells touch with borders, \"Label: value\" on one line")}
+        checked={node.print_style === "boxed"} onChange={on => set({ print_style: on ? "boxed" : undefined })} />
+      <Toggle label={t("ไม่พิมพ์หัวข้อของส่วนนี้", "Do not print this block's title")} checked={node.hide_title === true} onChange={on => set({ hide_title: on || undefined })} />
+      {isSection && target.path.length === 2 ? <SelectField label={t("พิมพ์ซ้ำทุกหน้า", "Print on every page")} value={(node as SectionDefinition).repeat_on_pages ?? ""}
+        options={[{ value: "", label: t("ไม่ซ้ำ", "No") }, { value: "header", label: t("เป็นหัวกระดาษ (เช่น ข้อมูลผู้ป่วย)", "As the page header (e.g. patient details)") },
+          { value: "footer", label: t("เป็นท้ายกระดาษ (เช่น ลายเซ็น)", "As the page footer (e.g. signatures)") }]}
+        onChange={value => set({ repeat_on_pages: value || undefined })} /> : null}
+    </Group>
     <Group title={t("แสดงเมื่อ (เงื่อนไข)", "Show when")} badge={node.visibility ? "✓" : undefined}>
       <span className={label}>{t("ซ่อนทั้งส่วนจนกว่าเงื่อนไขจะเป็นจริง", "The whole block stays hidden until this is true")}</span>
       <ConditionEditor key={`vis-${node.id}`} condition={node.visibility?.when} candidates={candidates} lang={lang} onChange={when => set({ visibility: when ? { when } : undefined })} />

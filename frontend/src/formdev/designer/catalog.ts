@@ -39,6 +39,7 @@ export const PALETTE: PaletteGroup[] = [
     { type: "calculated", icon: "ƒ", th: "ค่าคำนวณ", en: "Calculated", hintTh: "BMI, อายุ, คะแนนรวม", hintEn: "BMI, age, total" },
     { type: "group", icon: "▣", th: "กลุ่มช่อง", en: "Group", hintTh: "จัดหลายช่องไว้ด้วยกัน", hintEn: "Fields kept together" },
     { type: "repeat", icon: "≡", th: "ตารางเพิ่มแถวได้", en: "Repeating rows", hintTh: "รายการยา, ประวัติ", hintEn: "Medications, history" },
+    { type: "matrix", icon: "▤", th: "ตารางคะแนน (แถว × คอลัมน์)", en: "Score table (rows × columns)", hintTh: "Aldrete score, คะแนนตามเวลา", hintEn: "Aldrete score, scores over time" },
   ] },
   { th: "ไฟล์และลายเซ็น", en: "Files and signature", items: [
     { type: "image", icon: "🖼", th: "รูปภาพ", en: "Image", hintTh: "ภาพแผล, ฟิล์ม", hintEn: "Wound photo" },

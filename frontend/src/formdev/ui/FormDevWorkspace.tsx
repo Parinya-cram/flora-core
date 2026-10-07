@@ -12,7 +12,7 @@ import type { QueueCounts } from "../offline/SyncEngine";
 import type { QueryPrincipal } from "../query/types";
 import DesignerPanel from "../designer/DesignerPanel";
 import FormPreview from "./FormPreview";
-import FormPrint from "./FormPrint";
+import PdfPreview, { type PdfPreviewHandle } from "./PdfPreview";
 import FormRenderer from "./FormRenderer";
 import JobsPanel from "./JobsPanel";
 import QueryPanel from "./QueryPanel";
@@ -47,6 +47,7 @@ function messageOf(error: unknown, language = "en", definition?: FormDefinition)
 export default function FormDevWorkspace({ username, isAdmin, principal, language = "en" }: Props) {
   const thai = language.toLowerCase().startsWith("th");
   const [pdfBusy, setPdfBusy] = useState(false);
+  const printView = useRef<PdfPreviewHandle>(null);
   // Role and permission codes for the definition's permissions (Phase 2.8); the server applies the same rules.
   const codes = useMemo(() => [...(principal.roles ?? []), ...(principal.permissions ?? [])], [principal]);
   const [tab, setTab] = useState<Tab>("records");
@@ -271,7 +272,7 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
                 <button type="button" className={secondary} onClick={() => setEditing(null)}>Close</button>
                 {editing.view !== "form" ? <button type="button" className={secondary} onClick={() => setEditing(current => current && { ...current, view: "form" })}>Edit</button> : null}
                 {editing.view !== "print" ? <button type="button" className={secondary} onClick={() => setEditing(current => current && { ...current, view: "print" })}>A4 / Print</button>
-                  : <button type="button" className={secondary} onClick={() => window.print()}>Print</button>}
+                  : <button type="button" className={secondary} onClick={() => printView.current?.print()}>Print</button>}
                 <button type="button" className={secondary} disabled={pdfBusy} onClick={() => void savePdf()}>{pdfBusy ? "…" : thai ? "ดาวน์โหลด PDF" : "Download PDF"}</button>
                 {editing.view === "form" && recordAllows(editing.definition, editing.record ? "edit" : "create", codes, isAdmin) ? <>
                   <button type="button" className={secondary} disabled={editing.record?.status === "submitted"} onClick={() => void save(false)}>Save draft</button>
@@ -281,7 +282,7 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
             </div>
             <AttachmentContext.Provider value={attachments}>
             {editing.view === "print"
-              ? <div className="overflow-x-auto rounded-xl bg-slate-200 p-4 dark:bg-slate-800"><FormPrint definition={editing.definition} value={editing.data} recordId={editing.record?.record_id} roles={codes} isAdmin={isAdmin} lookups={lookups} /></div>
+              ? <PdfPreview ref={printView} definition={editing.definition} value={editing.data} recordId={editing.record?.record_id} roles={codes} isAdmin={isAdmin} lookups={lookups} language={language} />
               : <FormRenderer definition={editing.definition} value={editing.data} issues={editing.issues} context={editing.view === "detail" ? "detail" : "form"} language={language}
                 roles={codes} isAdmin={isAdmin} lookups={lookups} onChange={data => setEditing(current => current && { ...current, data })} />}
             </AttachmentContext.Provider>
