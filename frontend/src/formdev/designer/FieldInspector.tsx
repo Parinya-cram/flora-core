@@ -82,7 +82,8 @@ export default function FieldInspector({ definition, fieldRef, lang, lookups, pu
   const formulaErrors = typeof field.formula === "string" && field.formula.trim() ? check(field.formula, knownName) : [];
 
   // Auto-fill from a lookup ---------------------------------------------------------------------
-  const derive = field.derive;
+  // A derive saved without match (older drafts, hand-written JSON) is read as "no column matched yet".
+  const derive = field.derive ? { ...field.derive, match: field.derive.match ?? {} } : undefined;
   const deriveTable = lookups.find(item => item.lookup_id === derive?.lookup);
   const setDerive = (patch: Partial<LookupDerive>) => {
     const next = { ...(derive ?? { lookup: lookups[0]?.lookup_id ?? "", column: "", match: {} }), ...patch } as LookupDerive;
