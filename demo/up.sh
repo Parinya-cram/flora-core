@@ -10,6 +10,23 @@ export ROOT_HTTPS_PORT=${ROOT_HTTPS_PORT:-8443} ROOT_HTTP_PORT=${ROOT_HTTP_PORT:
 export CANOPY_HTTPS_PORT=${CANOPY_HTTPS_PORT:-9443} CANOPY_HTTP_PORT=${CANOPY_HTTP_PORT:-9080}
 export HABER_URL=${HABER_URL:-https://host.docker.internal:$CANOPY_HTTPS_PORT}
 
+# flora-updater re-runs compose when it applies a release and only sees env files, not this
+# shell. Keep the demo ports in flora-canopy/.env and flora-root/.env (git-ignored) so a release
+# keeps every edge and cross-tier URL on the demo ports.
+set_env() {
+  local file=$1 key=$2 value=$3
+  touch "$file"
+  grep -v "^$key=" "$file" > "$file.tmp" || true
+  echo "$key=$value" >> "$file.tmp" && mv "$file.tmp" "$file"
+}
+set_env flora-canopy/.env CANOPY_HTTPS_PORT "$CANOPY_HTTPS_PORT"
+set_env flora-canopy/.env CANOPY_HTTP_PORT "$CANOPY_HTTP_PORT"
+# Haber reaches Root through Root's edge; without this a Canopy release points Haber at :443.
+set_env flora-canopy/.env ROOT_HTTPS_PORT "$ROOT_HTTPS_PORT"
+# Root keeps its edge ports and the registry URL it advertises when compose runs without this shell.
+set_env flora-root/.env ROOT_HTTPS_PORT "$ROOT_HTTPS_PORT"
+set_env flora-root/.env ROOT_HTTP_PORT "$ROOT_HTTP_PORT"
+
 wait_for() {
   local name=$1 url=$2 ca=${3:-flora-canopy/edge/certs/ca.crt}
   for _ in $(seq 1 120); do

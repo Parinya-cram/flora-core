@@ -507,3 +507,66 @@ def remove_demo_ward(database: Connection = Depends(connection)) -> dict[str, An
     with database.transaction():
         removed = database.execute("SELECT canopy_demo_reset() AS removed").fetchone()["removed"]
     return {"ok": True, "removed": removed, **demo_ward.status(database)}
+
+
+class BulkLocationInput(BaseModel):
+    """Create many wards / rooms / beds under one parent in a single step.
+
+    Either list `names`, or generate them: prefix + numbers start..start+count-1
+    (zero-padded to `pad` digits) + suffix, e.g. "OR-" 1..8 -> OR-1 … OR-8.
+    For rooms, `beds_per_room` also creates that many beds inside each new room.
+    """
+    parent_id: int
+    kind: Literal["building", "care_unit", "room", "bed"]
+    names: list[str] = Field(default_factory=list, max_length=200)
+    prefix: str = Field(default="", max_length=80)
+    suffix: str = Field(default="", max_length=40)
+    start: int = Field(default=1, ge=0, le=100000)
+    count: int = Field(default=0, ge=0, le=200)
+    pad: int = Field(default=0, ge=0, le=6)
+    code_from_name: bool = True
+    beds_per_room: int = Field(default=0, ge=0, le=20)
+    bed_prefix: str = Field(default="Bed ", max_length=40)
+
+
+@router.post("/locations/bulk", dependencies=[Depends(require_admin)])
+def bulk_create_locations(payload: BulkLocationInput, database: Connection = Depends(connection)) -> dict[str, Any]:
+    validate_location_parent(database, payload.kind, payload.parent_id)
+    names = [name.strip() for name in payload.names if name.strip()]
+    names += [f"{payload.prefix}{str(number).zfill(payload.pad)}{payload.suffix}".strip()
+              for number in range(payload.start, payload.start + payload.count)]
+    names = list(dict.fromkeys(names))
+    if not names:
+        raise HTTPException(status_code=400, detail="List names or give a prefix and count")
+    if len(names) > 200 or len(names) * max(1, payload.beds_per_room) > 2000:
+        raise HTTPException(status_code=400, detail="Too many locations in one step")
+    current = now_ms()
+    created, skipped, beds = [], [], 0
+    with database.transaction():
+        order = database.execute(
+            "SELECT coalesce(max(sort_order),0) AS n FROM canopy_location WHERE parent_id=%s", (payload.parent_id,)
+        ).fetchone()["n"]
+        for name in names:
+            exists = database.execute(
+                "SELECT id FROM canopy_location WHERE parent_id=%s AND lower(name)=lower(%s)", (payload.parent_id, name)
+            ).fetchone()
+            if exists:
+                skipped.append(name)
+                continue
+            order += 10
+            row = database.execute(
+                """INSERT INTO canopy_location(parent_id,kind,code,name,is_active,sort_order,created_at,updated_at)
+                   VALUES (%s,%s,%s,%s,true,%s,%s,%s) RETURNING *""",
+                (payload.parent_id, payload.kind, name if payload.code_from_name else None, name, order, current, current),
+            ).fetchone()
+            created.append(row)
+            if payload.kind == "room":
+                for number in range(1, payload.beds_per_room + 1):
+                    bed = f"{payload.bed_prefix}{number}".strip()
+                    database.execute(
+                        """INSERT INTO canopy_location(parent_id,kind,code,name,is_active,sort_order,created_at,updated_at)
+                           VALUES (%s,'bed',%s,%s,true,%s,%s,%s)""",
+                        (row["id"], f"{name}-{number}" if payload.code_from_name else None, bed, number * 10, current, current),
+                    )
+                    beds += 1
+    return {"created": created, "skipped": skipped, "beds_created": beds}

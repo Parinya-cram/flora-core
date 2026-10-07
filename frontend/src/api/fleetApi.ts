@@ -344,3 +344,19 @@ export const getGatewaySnapshots = (gatewayId: string) =>
 export const cloneGatewayConfig = (targetGatewayId: string, input: { source_gateway_id: string; snapshot_id?: number | null; include_site: boolean }) =>
   sendJson<{ ok: boolean; gateway_id: string; desired_version: number; devices: number }>(
     `/api/fleet/control/gateways/${encodeURIComponent(targetGatewayId)}/clone`, "POST", input);
+
+export type BulkLocationInput = {
+  parent_id: number;
+  kind: "building" | "care_unit" | "room" | "bed";
+  names?: string[];
+  prefix?: string;
+  suffix?: string;
+  start?: number;
+  count?: number;
+  pad?: number;
+  code_from_name?: boolean;
+  beds_per_room?: number;
+  bed_prefix?: string;
+};
+export const bulkCreateLocations = (input: BulkLocationInput) =>
+  sendJson<{ created: ControlPlaneLocation[]; skipped: string[]; beds_created: number }>("/api/fleet/control/locations/bulk", "POST", input);

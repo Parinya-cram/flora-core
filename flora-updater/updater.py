@@ -89,15 +89,17 @@ class Project:
         if not host_parent.exists():
             host_parent.parent.mkdir(parents=True, exist_ok=True)
             host_parent.symlink_to(HOST_ROOT)
-        if not self.env_files and (Path(self.working_dir) / ".env").exists():
-            self.env_files = [str(Path(self.working_dir) / ".env")]
         self.release_env = Path(self.working_dir) / ".release" / f"{self.name}.env"
 
     def compose(self, *args: str, release_env: bool = True, check: bool = True) -> str:
         command = ["docker", "compose", "-p", self.name, "--project-directory", self.working_dir]
         for file in self.config_files:
             command += ["-f", file]
-        for file in self.env_files:
+        # The project's .env is read on every run (it may be created or edited after we started).
+        # An explicit --env-file turns off compose's own .env loading, so pass it first ourselves.
+        dot_env = str(Path(self.working_dir) / ".env")
+        files = [f for f in self.env_files if f not in (dot_env, str(self.release_env))]
+        for file in ([dot_env] if Path(dot_env).exists() else []) + files:
             command += ["--env-file", file]
         if release_env and self.release_env.exists():
             command += ["--env-file", str(self.release_env)]
