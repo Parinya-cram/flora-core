@@ -45,37 +45,27 @@
 | 7400 | gateway-service admin (ภายในเครื่อง) |
 
 ### VM (172.22.1.151) — Flora production
-| Port | บริการ | เข้าผ่าน |
-|---|---|---|
-| **443 / 80** | **nginx reverse proxy (TLS)** | `https://<tier>.flora.local` |
-| **53** | dnsmasq (LAN DNS *.flora.local) | ตั้ง DNS ของ client/router → `172.22.1.151` |
-| 9443 | Portainer (VM) | `https://172.22.1.151:9443` |
-| 7100 / 7105 | root-api / root-registry | ผ่าน nginx หรือตรง `:7100` |
-| 6893 / 6890 | leaf-api / leaf-web | ผ่าน nginx |
-| 6895 / 6894 / 6896 | canopy-api / canopy-web / sync-api | ผ่าน nginx |
-| 7204 / 7205 | haber / haber-registry | ภายใน/gateway |
-| 6897 | liveagent | ภายใน |
-
-**เข้าใช้งานจริงผ่าน nginx 443 + hostname:**
-| URL | → upstream (tier) |
+**เข้าใช้งานจริง = IP:port ต่อ tier (TLS ผ่าน nginx)** — ทั้งวงพิมพ์ URL เข้าได้เลย ไม่ต้องตั้ง DNS/hosts:
+| URL | tier |
 |---|---|
-| `https://leaf.flora.local` | Flora Leaf (workstation) |
-| `https://canopy.flora.local` | Flora Canopy (central viewer + Haber) |
-| `https://root.flora.local` | Flora Root (cloud control plane) |
+| **`https://172.22.1.151:7443`** | Flora **Leaf** (workstation) |
+| **`https://172.22.1.151:8443`** | Flora **Root** (control plane) |
+| **`https://172.22.1.151:9443`** | Flora **Canopy** (central viewer + Haber) |
 
-> VM เป็นเจ้าของ 443 เอง → ได้ hostname สะอาดไม่ต้องมี :port (ต่างจาก NAS ที่ 443 ถูก UGOS ยึด)
+> cert เป็น self-signed → เบราว์เซอร์เตือน "ไม่ปลอดภัย" กด Advanced → Proceed (ปกติสำหรับ internal)
 
----
+| Port | บริการ |
+|---|---|
+| **7443 / 8443 / 9443** | nginx TLS → leaf / root / canopy |
+| **9444** | Portainer (VM) — `https://172.22.1.151:9444` (ย้ายจาก 9443 ให้ canopy) |
+| 7100 / 7105 | root-api / root-registry |
+| 6893 / 6890 | leaf-api / leaf-web (upstream ของ 7443) |
+| 6895 / 6894 / 6896 | canopy-api / canopy-web (upstream ของ 9443) / sync-api |
+| 7204 / 7205 | haber / haber-registry |
+| 6897 | liveagent |
 
-## 3. DNS (*.flora.local)
-
-`.flora.local` ไม่ใช่ DNS จริง ต้องให้ resolve → VM:
-- **ทั้งวง (แนะนำ):** VM รัน dnsmasq (พอร์ต 53) ตอบ `*.flora.local → 172.22.1.151` อยู่แล้ว
-  → แค่ตั้ง DNS ของ router (DHCP) หรือของเครื่อง client ให้ชี้มาที่ `172.22.1.151` ทีเดียวทั้งวง
-- **ต่อเครื่อง (ถ้าไม่อยากแตะ DNS วง):** เพิ่มใน `/etc/hosts` (Mac/Linux) หรือ `C:\Windows\System32\drivers\etc\hosts`
-  ```
-  172.22.1.151  root.flora.local canopy.flora.local leaf.flora.local
-  ```
+> ไม่มี DNS/hostname แล้ว — เข้าตรงด้วย IP:port (ใครในวงก็ถึง ไม่ต้อง config เครื่อง)
+> dnsmasq ถูกถอดออก (เคยชนพอร์ต 53 กับ systemd-resolved และไม่จำเป็นเมื่อใช้ IP:port)
 
 ---
 
@@ -101,7 +91,7 @@
 | `flora-root` | `flora-root/compose.server.yaml` | root-db, root-api, root-registry |
 | `flora-canopy` | `flora-canopy/compose.server.yaml` | canopy-db, canopy-api, canopy-web, sync-api, haber, haber-registry |
 | `flora-leaf` | `flora-leaf/compose.server.yaml` | leaf-db, leaf-api, leaf-web, leaf-sync, liveagent |
-| `flora-edge` | `flora-edge/compose.server.yaml` | nginx 443 (vhost→upstream) + cloudflared |
+| `flora-edge` | `flora-edge/compose.server.yaml` | nginx TLS 7443/8443/9443 (→leaf/root/canopy) + cloudflared ×4 (1 tunnel/tier) |
 
 **Data flow (offline-first + sync):**
 ```
@@ -128,7 +118,17 @@ Gateway(233) ─data-api→ Leaf(local DB) ─sync เมื่อมีเน�
 
 ## 7. Cloudflare (external access — demo)
 
-- cloudflared tunnel บน VM → map public hostname → nginx :443
+- **1 quick tunnel ต่อ tier** (cloudflared ×4 ใน flora-edge): leaf / root / canopy / gateway
+  → แต่ละตัวได้ `https://<random>.trycloudflare.com` เสิร์ฟ tier นั้นที่ root (ไม่มีปัญหา SPA)
+- อ่าน URL ของแต่ละตัวจาก log container (บน VM):
+  ```bash
+  for c in leaf root canopy gateway; do
+    echo "== $c =="; docker logs flora-edge-cloudflared-$c-1 2>&1 \
+      | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | tail -1
+  done
+  ```
+- URL **เปลี่ยนทุกครั้งที่ container restart** (quick tunnel ฟรี). อยากได้ URL คงที่/สวย → ต้องมี domain + named tunnel
+- gateway tunnel ชี้ `172.22.1.233:7400` (แก้ได้ด้วย env `GATEWAY_TUNNEL_TARGET`)
 - ใช้สำหรับ **demo/โชว์** เท่านั้น → ใช้ข้อมูล synthetic, แนะนำเปิด Cloudflare Access กันคนนอก
 
 ---
