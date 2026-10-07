@@ -1,0 +1,115 @@
+{
+ "case": "or_meta_index",
+ "what": "OR($subject_id eq X, ward eq W_RARE): metadata + index leaf",
+ "label": "300k",
+ "statements": {
+  "main": {
+   "planning_ms": 0.299,
+   "execution_ms": 152.695,
+   "planning_buffers": 8,
+   "settings": {
+    "plan_cache_mode": "force_custom_plan",
+    "jit": "off",
+    "max_parallel_workers_per_gather": "0",
+    "work_mem": "32MB"
+   },
+   "nodes": [
+    {
+     "depth": 0,
+     "node": "Nested Loop",
+     "join": "Inner",
+     "est_rows": 51,
+     "act_rows": 51,
+     "loops": 1,
+     "shared_hit": 3224,
+     "shared_read": 26602,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 152.641
+    },
+    {
+     "depth": 1,
+     "node": "Limit",
+     "parent": "Outer",
+     "est_rows": 51,
+     "act_rows": 51,
+     "loops": 1,
+     "shared_hit": 3088,
+     "shared_read": 26534,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 152.181
+    },
+    {
+     "depth": 2,
+     "node": "Index Scan",
+     "parent": "Outer",
+     "relation": "formdev_record",
+     "index": "formdev_record_ingest",
+     "alias": "k",
+     "direction": "Backward",
+     "est_rows": 147735,
+     "act_rows": 51,
+     "loops": 1,
+     "removed_by_filter": 299837,
+     "removed_by_recheck": 0,
+     "shared_hit": 3088,
+     "shared_read": 26534,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 152.173,
+     "index_cond": "(form_id = 'perf_assessment'::text)",
+     "filter": "((status <> 'deleted'::text) AND ((subject_id = 'HN0012770'::text) OR (ANY (record_id = (hashed SubPlan 2).col1))))"
+    },
+    {
+     "depth": 3,
+     "node": "Index Only Scan",
+     "parent": "SubPlan",
+     "relation": "formdev_record_index",
+     "index": "formdev_ri_text_live",
+     "alias": "i1",
+     "direction": "Forward",
+     "est_rows": 19,
+     "act_rows": 148,
+     "loops": 1,
+     "removed_by_recheck": 0,
+     "heap_fetches": 0,
+     "shared_hit": 1,
+     "shared_read": 6,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 0.078,
+     "index_cond": "((form_id = 'perf_assessment'::text) AND (field_id = 'ward'::text) AND (value_text = 'W_RARE'::text))"
+    },
+    {
+     "depth": 1,
+     "node": "Index Scan",
+     "parent": "Inner",
+     "relation": "formdev_record",
+     "index": "formdev_record_pkey",
+     "alias": "r",
+     "direction": "Forward",
+     "est_rows": 1,
+     "act_rows": 1,
+     "loops": 51,
+     "removed_by_recheck": 0,
+     "shared_hit": 136,
+     "shared_read": 68,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 0.008,
+     "index_cond": "(record_id = k.record_id)"
+    }
+   ],
+   "sql": "SELECT r.record_id, r.schema_version, r.data, r.ingested_at, page.ok AS order_value FROM (SELECT k.record_id AS rid, k.ingest_seq AS ok FROM formdev_record k WHERE k.form_id = ? AND k.status <> 'deleted' AND (k.subject_id = ? OR EXISTS (SELECT 1 FROM formdev_record_index i1 WHERE i1.record_id = k.record_id AND i1.form_id = ? AND i1.status <> 'deleted' AND i1.field_id = ? AND i1.value_text = ?)) ORDER BY k.ingest_seq DESC LIMIT ?) page JOIN formdev_record r ON r.record_id = page.rid ORDER BY page.ok DESC",
+   "params": [
+    "perf_assessment",
+    "HN0012770",
+    "perf_assessment",
+    "ward",
+    "W_RARE",
+    51
+   ]
+  }
+ }
+}

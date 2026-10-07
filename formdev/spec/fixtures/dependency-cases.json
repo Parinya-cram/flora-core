@@ -1,0 +1,712 @@
+{
+ "definition": "examples/phase2-dependency/v1.form.json",
+ "lookups": {
+  "thai_address": "registry/lookups/thai_address.json"
+ },
+ "today": "2026-10-06",
+ "cases": [
+  {
+   "name": "no province yet: every province is offered, no districts",
+   "status": "draft",
+   "data": {
+    "hn": "HN1",
+    "scheme": "uc"
+   },
+   "lookups": true,
+   "expect": {
+    "data": {
+     "hn": "HN1",
+     "scheme": "uc"
+    },
+    "codes": [],
+    "paths": [],
+    "hidden": [],
+    "options": {
+     "$.data.province": [
+      {
+       "value": "กรุงเทพมหานคร",
+       "label": "กรุงเทพมหานคร"
+      },
+      {
+       "value": "เชียงใหม่",
+       "label": "เชียงใหม่"
+      },
+      {
+       "value": "ขอนแก่น",
+       "label": "ขอนแก่น"
+      },
+      {
+       "value": "ภูเก็ต",
+       "label": "ภูเก็ต"
+      }
+     ],
+     "$.data.district": [],
+     "$.data.subdistrict": [],
+     "$.data.benefits": [
+      {
+       "value": "opd",
+       "label": "ผู้ป่วยนอก"
+      },
+      {
+       "value": "ipd",
+       "label": "ผู้ป่วยใน"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "districts follow the province",
+   "status": "draft",
+   "data": {
+    "hn": "HN1",
+    "scheme": "uc",
+    "province": "เชียงใหม่"
+   },
+   "lookups": true,
+   "expect": {
+    "data": {
+     "hn": "HN1",
+     "scheme": "uc",
+     "province": "เชียงใหม่"
+    },
+    "codes": [],
+    "paths": [],
+    "hidden": [],
+    "options": {
+     "$.data.province": [
+      {
+       "value": "กรุงเทพมหานคร",
+       "label": "กรุงเทพมหานคร"
+      },
+      {
+       "value": "เชียงใหม่",
+       "label": "เชียงใหม่"
+      },
+      {
+       "value": "ขอนแก่น",
+       "label": "ขอนแก่น"
+      },
+      {
+       "value": "ภูเก็ต",
+       "label": "ภูเก็ต"
+      }
+     ],
+     "$.data.district": [
+      {
+       "value": "อำเภอเมืองเชียงใหม่",
+       "label": "อำเภอเมืองเชียงใหม่"
+      },
+      {
+       "value": "อำเภอสันทราย",
+       "label": "อำเภอสันทราย"
+      }
+     ],
+     "$.data.subdistrict": [],
+     "$.data.benefits": [
+      {
+       "value": "opd",
+       "label": "ผู้ป่วยนอก"
+      },
+      {
+       "value": "ipd",
+       "label": "ผู้ป่วยใน"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "the chain derives the postcode and overwrites the client's",
+   "status": "submitted",
+   "data": {
+    "hn": "HN1",
+    "scheme": "uc",
+    "province": "เชียงใหม่",
+    "district": "อำเภอสันทราย",
+    "subdistrict": "ตำบลสันทรายหลวง",
+    "postcode": "99999"
+   },
+   "lookups": true,
+   "expect": {
+    "data": {
+     "hn": "HN1",
+     "scheme": "uc",
+     "province": "เชียงใหม่",
+     "district": "อำเภอสันทราย",
+     "subdistrict": "ตำบลสันทรายหลวง",
+     "postcode": "50210"
+    },
+    "codes": [],
+    "paths": [],
+    "hidden": [],
+    "options": {
+     "$.data.province": [
+      {
+       "value": "กรุงเทพมหานคร",
+       "label": "กรุงเทพมหานคร"
+      },
+      {
+       "value": "เชียงใหม่",
+       "label": "เชียงใหม่"
+      },
+      {
+       "value": "ขอนแก่น",
+       "label": "ขอนแก่น"
+      },
+      {
+       "value": "ภูเก็ต",
+       "label": "ภูเก็ต"
+      }
+     ],
+     "$.data.district": [
+      {
+       "value": "อำเภอเมืองเชียงใหม่",
+       "label": "อำเภอเมืองเชียงใหม่"
+      },
+      {
+       "value": "อำเภอสันทราย",
+       "label": "อำเภอสันทราย"
+      }
+     ],
+     "$.data.subdistrict": [
+      {
+       "value": "ตำบลสันทรายหลวง",
+       "label": "ตำบลสันทรายหลวง"
+      }
+     ],
+     "$.data.benefits": [
+      {
+       "value": "opd",
+       "label": "ผู้ป่วยนอก"
+      },
+      {
+       "value": "ipd",
+       "label": "ผู้ป่วยใน"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "changing the province clears the district, sub-district and postcode",
+   "status": "draft",
+   "data": {
+    "hn": "HN1",
+    "scheme": "uc",
+    "province": "ภูเก็ต",
+    "district": "อำเภอสันทราย",
+    "subdistrict": "ตำบลสันทรายหลวง",
+    "postcode": "50210"
+   },
+   "lookups": true,
+   "expect": {
+    "data": {
+     "hn": "HN1",
+     "scheme": "uc",
+     "province": "ภูเก็ต"
+    },
+    "codes": [],
+    "paths": [],
+    "hidden": [],
+    "options": {
+     "$.data.province": [
+      {
+       "value": "กรุงเทพมหานคร",
+       "label": "กรุงเทพมหานคร"
+      },
+      {
+       "value": "เชียงใหม่",
+       "label": "เชียงใหม่"
+      },
+      {
+       "value": "ขอนแก่น",
+       "label": "ขอนแก่น"
+      },
+      {
+       "value": "ภูเก็ต",
+       "label": "ภูเก็ต"
+      }
+     ],
+     "$.data.district": [
+      {
+       "value": "อำเภอเมืองภูเก็ต",
+       "label": "อำเภอเมืองภูเก็ต"
+      },
+      {
+       "value": "อำเภอกะทู้",
+       "label": "อำเภอกะทู้"
+      }
+     ],
+     "$.data.subdistrict": [],
+     "$.data.benefits": [
+      {
+       "value": "opd",
+       "label": "ผู้ป่วยนอก"
+      },
+      {
+       "value": "ipd",
+       "label": "ผู้ป่วยใน"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "a cleared required value is reported on submit",
+   "status": "submitted",
+   "data": {
+    "hn": "HN1",
+    "scheme": "uc",
+    "province": "ภูเก็ต",
+    "district": "อำเภอสันทราย"
+   },
+   "lookups": true,
+   "expect": {
+    "data": {
+     "hn": "HN1",
+     "scheme": "uc",
+     "province": "ภูเก็ต"
+    },
+    "codes": [
+     "required",
+     "required"
+    ],
+    "paths": [
+     "$.data.district",
+     "$.data.subdistrict"
+    ],
+    "hidden": [],
+    "options": {
+     "$.data.province": [
+      {
+       "value": "กรุงเทพมหานคร",
+       "label": "กรุงเทพมหานคร"
+      },
+      {
+       "value": "เชียงใหม่",
+       "label": "เชียงใหม่"
+      },
+      {
+       "value": "ขอนแก่น",
+       "label": "ขอนแก่น"
+      },
+      {
+       "value": "ภูเก็ต",
+       "label": "ภูเก็ต"
+      }
+     ],
+     "$.data.district": [
+      {
+       "value": "อำเภอเมืองภูเก็ต",
+       "label": "อำเภอเมืองภูเก็ต"
+      },
+      {
+       "value": "อำเภอกะทู้",
+       "label": "อำเภอกะทู้"
+      }
+     ],
+     "$.data.subdistrict": [],
+     "$.data.benefits": [
+      {
+       "value": "opd",
+       "label": "ผู้ป่วยนอก"
+      },
+      {
+       "value": "ipd",
+       "label": "ผู้ป่วยใน"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "a value that is not in the table is cleared",
+   "status": "draft",
+   "data": {
+    "hn": "HN1",
+    "scheme": "uc",
+    "province": "ไม่มีจังหวัดนี้"
+   },
+   "lookups": true,
+   "expect": {
+    "data": {
+     "hn": "HN1",
+     "scheme": "uc"
+    },
+    "codes": [],
+    "paths": [],
+    "hidden": [],
+    "options": {
+     "$.data.province": [
+      {
+       "value": "กรุงเทพมหานคร",
+       "label": "กรุงเทพมหานคร"
+      },
+      {
+       "value": "เชียงใหม่",
+       "label": "เชียงใหม่"
+      },
+      {
+       "value": "ขอนแก่น",
+       "label": "ขอนแก่น"
+      },
+      {
+       "value": "ภูเก็ต",
+       "label": "ภูเก็ต"
+      }
+     ],
+     "$.data.district": [],
+     "$.data.subdistrict": [],
+     "$.data.benefits": [
+      {
+       "value": "opd",
+       "label": "ผู้ป่วยนอก"
+      },
+      {
+       "value": "ipd",
+       "label": "ผู้ป่วยใน"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "without the table nothing is cleared or derived",
+   "status": "draft",
+   "data": {
+    "hn": "HN1",
+    "scheme": "uc",
+    "province": "ไม่มีจังหวัดนี้",
+    "district": "x",
+    "postcode": "12345"
+   },
+   "lookups": false,
+   "expect": {
+    "data": {
+     "hn": "HN1",
+     "scheme": "uc",
+     "province": "ไม่มีจังหวัดนี้",
+     "district": "x",
+     "postcode": "12345"
+    },
+    "codes": [],
+    "paths": [],
+    "hidden": [],
+    "options": {
+     "$.data.benefits": [
+      {
+       "value": "opd",
+       "label": "ผู้ป่วยนอก"
+      },
+      {
+       "value": "ipd",
+       "label": "ผู้ป่วยใน"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "option conditions: dental is offered to social security",
+   "status": "draft",
+   "data": {
+    "hn": "HN1",
+    "scheme": "sss",
+    "benefits": [
+     "opd",
+     "dental"
+    ]
+   },
+   "lookups": true,
+   "expect": {
+    "data": {
+     "hn": "HN1",
+     "scheme": "sss",
+     "benefits": [
+      "opd",
+      "dental"
+     ]
+    },
+    "codes": [],
+    "paths": [],
+    "hidden": [],
+    "options": {
+     "$.data.province": [
+      {
+       "value": "กรุงเทพมหานคร",
+       "label": "กรุงเทพมหานคร"
+      },
+      {
+       "value": "เชียงใหม่",
+       "label": "เชียงใหม่"
+      },
+      {
+       "value": "ขอนแก่น",
+       "label": "ขอนแก่น"
+      },
+      {
+       "value": "ภูเก็ต",
+       "label": "ภูเก็ต"
+      }
+     ],
+     "$.data.district": [],
+     "$.data.subdistrict": [],
+     "$.data.benefits": [
+      {
+       "value": "opd",
+       "label": "ผู้ป่วยนอก"
+      },
+      {
+       "value": "ipd",
+       "label": "ผู้ป่วยใน"
+      },
+      {
+       "value": "dental",
+       "label": "ทันตกรรม"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "option conditions: a selection no longer offered is dropped",
+   "status": "draft",
+   "data": {
+    "hn": "HN1",
+    "scheme": "uc",
+    "benefits": [
+     "opd",
+     "dental"
+    ]
+   },
+   "lookups": true,
+   "expect": {
+    "data": {
+     "hn": "HN1",
+     "scheme": "uc",
+     "benefits": [
+      "opd"
+     ]
+    },
+    "codes": [],
+    "paths": [],
+    "hidden": [],
+    "options": {
+     "$.data.province": [
+      {
+       "value": "กรุงเทพมหานคร",
+       "label": "กรุงเทพมหานคร"
+      },
+      {
+       "value": "เชียงใหม่",
+       "label": "เชียงใหม่"
+      },
+      {
+       "value": "ขอนแก่น",
+       "label": "ขอนแก่น"
+      },
+      {
+       "value": "ภูเก็ต",
+       "label": "ภูเก็ต"
+      }
+     ],
+     "$.data.district": [],
+     "$.data.subdistrict": [],
+     "$.data.benefits": [
+      {
+       "value": "opd",
+       "label": "ผู้ป่วยนอก"
+      },
+      {
+       "value": "ipd",
+       "label": "ผู้ป่วยใน"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "option conditions: the only selection dropped clears the field",
+   "status": "draft",
+   "data": {
+    "hn": "HN1",
+    "scheme": "uc",
+    "benefits": [
+     "discount"
+    ]
+   },
+   "lookups": true,
+   "expect": {
+    "data": {
+     "hn": "HN1",
+     "scheme": "uc"
+    },
+    "codes": [],
+    "paths": [],
+    "hidden": [],
+    "options": {
+     "$.data.province": [
+      {
+       "value": "กรุงเทพมหานคร",
+       "label": "กรุงเทพมหานคร"
+      },
+      {
+       "value": "เชียงใหม่",
+       "label": "เชียงใหม่"
+      },
+      {
+       "value": "ขอนแก่น",
+       "label": "ขอนแก่น"
+      },
+      {
+       "value": "ภูเก็ต",
+       "label": "ภูเก็ต"
+      }
+     ],
+     "$.data.district": [],
+     "$.data.subdistrict": [],
+     "$.data.benefits": [
+      {
+       "value": "opd",
+       "label": "ผู้ป่วยนอก"
+      },
+      {
+       "value": "ipd",
+       "label": "ผู้ป่วยใน"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "inside a repeat each item filters by its own province",
+   "status": "draft",
+   "data": {
+    "hn": "HN1",
+    "scheme": "uc",
+    "contacts": [
+     {
+      "contact_name": "A",
+      "contact_province": "กรุงเทพมหานคร",
+      "contact_district": "เขตบางรัก"
+     },
+     {
+      "contact_name": "B",
+      "contact_province": "ขอนแก่น",
+      "contact_district": "เขตบางรัก"
+     }
+    ]
+   },
+   "lookups": true,
+   "expect": {
+    "data": {
+     "hn": "HN1",
+     "scheme": "uc",
+     "contacts": [
+      {
+       "contact_name": "A",
+       "contact_province": "กรุงเทพมหานคร",
+       "contact_district": "เขตบางรัก"
+      },
+      {
+       "contact_name": "B",
+       "contact_province": "ขอนแก่น"
+      }
+     ]
+    },
+    "codes": [],
+    "paths": [],
+    "hidden": [],
+    "options": {
+     "$.data.province": [
+      {
+       "value": "กรุงเทพมหานคร",
+       "label": "กรุงเทพมหานคร"
+      },
+      {
+       "value": "เชียงใหม่",
+       "label": "เชียงใหม่"
+      },
+      {
+       "value": "ขอนแก่น",
+       "label": "ขอนแก่น"
+      },
+      {
+       "value": "ภูเก็ต",
+       "label": "ภูเก็ต"
+      }
+     ],
+     "$.data.district": [],
+     "$.data.subdistrict": [],
+     "$.data.benefits": [
+      {
+       "value": "opd",
+       "label": "ผู้ป่วยนอก"
+      },
+      {
+       "value": "ipd",
+       "label": "ผู้ป่วยใน"
+      }
+     ],
+     "$.data.contacts[0].contact_province": [
+      {
+       "value": "กรุงเทพมหานคร",
+       "label": "กรุงเทพมหานคร"
+      },
+      {
+       "value": "เชียงใหม่",
+       "label": "เชียงใหม่"
+      },
+      {
+       "value": "ขอนแก่น",
+       "label": "ขอนแก่น"
+      },
+      {
+       "value": "ภูเก็ต",
+       "label": "ภูเก็ต"
+      }
+     ],
+     "$.data.contacts[1].contact_province": [
+      {
+       "value": "กรุงเทพมหานคร",
+       "label": "กรุงเทพมหานคร"
+      },
+      {
+       "value": "เชียงใหม่",
+       "label": "เชียงใหม่"
+      },
+      {
+       "value": "ขอนแก่น",
+       "label": "ขอนแก่น"
+      },
+      {
+       "value": "ภูเก็ต",
+       "label": "ภูเก็ต"
+      }
+     ],
+     "$.data.contacts[0].contact_district": [
+      {
+       "value": "เขตพระนคร",
+       "label": "เขตพระนคร"
+      },
+      {
+       "value": "เขตปทุมวัน",
+       "label": "เขตปทุมวัน"
+      },
+      {
+       "value": "เขตบางรัก",
+       "label": "เขตบางรัก"
+      }
+     ],
+     "$.data.contacts[1].contact_district": [
+      {
+       "value": "อำเภอเมืองขอนแก่น",
+       "label": "อำเภอเมืองขอนแก่น"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

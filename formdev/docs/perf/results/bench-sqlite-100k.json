@@ -1,0 +1,294 @@
+{
+ "label": "sqlite-100k",
+ "sqlite_version": "3.46.1",
+ "load": {
+  "records": 160100,
+  "index_rows": 919808,
+  "insert_s": 13.62,
+  "rows_per_s": 79272,
+  "analyze_s": 0.46,
+  "file_bytes": 395022336
+ },
+ "values": {
+  "live": 99020,
+  "hn_a": "HN0009555",
+  "hn_b": "HN0000668",
+  "prefix": "HN00012",
+  "counts": {
+   "w_big": 29750
+  }
+ },
+ "cases": [
+  {
+   "name": "eq_hn",
+   "what": "eq on hn (selective, ~10 matches)",
+   "p50_ms": 219.6,
+   "p95_ms": 575.0,
+   "max_ms": 756.6,
+   "rows": 15,
+   "error": null,
+   "indexes": [
+    "formdev_record_ingest",
+    "sqlite_autoindex_formdev_record_1",
+    "sqlite_autoindex_formdev_record_index_1"
+   ],
+   "plan_details": {
+    "main": [
+     "CO-ROUTINE page",
+     "SEARCH k USING INDEX formdev_record_ingest (form_id=?)",
+     "CORRELATED SCALAR SUBQUERY 1",
+     "SEARCH i1 USING INDEX sqlite_autoindex_formdev_record_index_1 (record_id=? AND field_id=?)",
+     "SCAN page",
+     "SEARCH r USING INDEX sqlite_autoindex_formdev_record_1 (record_id=?)",
+     "USE TEMP B-TREE FOR ORDER BY"
+    ]
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": false,
+    "no_full_scan": true
+   },
+   "status": "FAIL"
+  },
+  {
+   "name": "eq_wbig_p1",
+   "what": "eq on ward W_BIG (30%), page 1",
+   "p50_ms": 1.8,
+   "p95_ms": 2.6,
+   "max_ms": 3.0,
+   "rows": 50,
+   "error": null,
+   "indexes": [
+    "formdev_record_ingest",
+    "sqlite_autoindex_formdev_record_1",
+    "sqlite_autoindex_formdev_record_index_1"
+   ],
+   "plan_details": {
+    "main": [
+     "CO-ROUTINE page",
+     "SEARCH k USING INDEX formdev_record_ingest (form_id=?)",
+     "CORRELATED SCALAR SUBQUERY 1",
+     "SEARCH i1 USING INDEX sqlite_autoindex_formdev_record_index_1 (record_id=? AND field_id=?)",
+     "SCAN page",
+     "SEARCH r USING INDEX sqlite_autoindex_formdev_record_1 (record_id=?)",
+     "USE TEMP B-TREE FOR ORDER BY"
+    ]
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_full_scan": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "eq_wbig_deep",
+   "what": "eq on ward W_BIG, keyset page after the 5000th match",
+   "p50_ms": 1.1,
+   "p95_ms": 2.3,
+   "max_ms": 2.4,
+   "rows": 50,
+   "error": null,
+   "indexes": [
+    "formdev_record_ingest",
+    "sqlite_autoindex_formdev_record_1",
+    "sqlite_autoindex_formdev_record_index_1"
+   ],
+   "plan_details": {
+    "main": [
+     "CO-ROUTINE page",
+     "SEARCH k USING INDEX formdev_record_ingest (form_id=? AND ingest_seq<?)",
+     "CORRELATED SCALAR SUBQUERY 1",
+     "SEARCH i1 USING INDEX sqlite_autoindex_formdev_record_index_1 (record_id=? AND field_id=?)",
+     "SCAN page",
+     "SEARCH r USING INDEX sqlite_autoindex_formdev_record_1 (record_id=?)",
+     "USE TEMP B-TREE FOR ORDER BY"
+    ]
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_full_scan": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "and_age_fall",
+   "what": "AND(age between 30..50, fall_risk eq yes)",
+   "p50_ms": 4.2,
+   "p95_ms": 6.3,
+   "max_ms": 7.5,
+   "rows": 50,
+   "error": null,
+   "indexes": [
+    "formdev_record_ingest",
+    "sqlite_autoindex_formdev_record_1",
+    "sqlite_autoindex_formdev_record_index_1"
+   ],
+   "plan_details": {
+    "main": [
+     "CO-ROUTINE page",
+     "SEARCH k USING INDEX formdev_record_ingest (form_id=?)",
+     "CORRELATED SCALAR SUBQUERY 1",
+     "SEARCH i1 USING INDEX sqlite_autoindex_formdev_record_index_1 (record_id=? AND field_id=?)",
+     "CORRELATED SCALAR SUBQUERY 2",
+     "SEARCH i2 USING INDEX sqlite_autoindex_formdev_record_index_1 (record_id=? AND field_id=?)",
+     "SCAN page",
+     "SEARCH r USING INDEX sqlite_autoindex_formdev_record_1 (record_id=?)",
+     "USE TEMP B-TREE FOR ORDER BY"
+    ]
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_full_scan": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "dt_month",
+   "what": "assessed_at in March 2025 (one month, old)",
+   "p50_ms": 164.8,
+   "p95_ms": 257.6,
+   "max_ms": 269.5,
+   "rows": 50,
+   "error": null,
+   "indexes": [
+    "formdev_record_ingest",
+    "sqlite_autoindex_formdev_record_1",
+    "sqlite_autoindex_formdev_record_index_1"
+   ],
+   "plan_details": {
+    "main": [
+     "CO-ROUTINE page",
+     "SEARCH k USING INDEX formdev_record_ingest (form_id=?)",
+     "CORRELATED SCALAR SUBQUERY 1",
+     "SEARCH i1 USING INDEX sqlite_autoindex_formdev_record_index_1 (record_id=? AND field_id=?)",
+     "SCAN page",
+     "SEARCH r USING INDEX sqlite_autoindex_formdev_record_1 (record_id=?)",
+     "USE TEMP B-TREE FOR ORDER BY"
+    ]
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_full_scan": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "nofilter_p1",
+   "what": "no filter, page 1",
+   "p50_ms": 0.7,
+   "p95_ms": 0.9,
+   "max_ms": 1.1,
+   "rows": 50,
+   "error": null,
+   "indexes": [
+    "formdev_record_ingest",
+    "sqlite_autoindex_formdev_record_1"
+   ],
+   "plan_details": {
+    "main": [
+     "CO-ROUTINE page",
+     "SEARCH k USING INDEX formdev_record_ingest (form_id=?)",
+     "SCAN page",
+     "SEARCH r USING INDEX sqlite_autoindex_formdev_record_1 (record_id=?)",
+     "USE TEMP B-TREE FOR ORDER BY"
+    ]
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_full_scan": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "nofilter_deep",
+   "what": "no filter, keyset page at the middle of the form",
+   "p50_ms": 0.7,
+   "p95_ms": 0.7,
+   "max_ms": 0.7,
+   "rows": 50,
+   "error": null,
+   "indexes": [
+    "formdev_record_ingest",
+    "sqlite_autoindex_formdev_record_1"
+   ],
+   "plan_details": {
+    "main": [
+     "CO-ROUTINE page",
+     "SEARCH k USING INDEX formdev_record_ingest (form_id=? AND ingest_seq<?)",
+     "SCAN page",
+     "SEARCH r USING INDEX sqlite_autoindex_formdev_record_1 (record_id=?)",
+     "USE TEMP B-TREE FOR ORDER BY"
+    ]
+   },
+   "checks": {
+    "answered": true,
+    "p95_lt_300ms": true,
+    "no_full_scan": true
+   },
+   "status": "PASS"
+  },
+  {
+   "name": "agg_month_ward",
+   "what": "interactive aggregate: count by ward, one month (probe <= 50000)",
+   "p50_ms": 447.0,
+   "p95_ms": 514.3,
+   "max_ms": 522.5,
+   "rows": 19,
+   "error": {
+    "code": "full_scan_requires_job",
+    "after_ms": 251.6
+   },
+   "indexes": [
+    "formdev_record_status_recent",
+    "sqlite_autoindex_formdev_record_index_1"
+   ],
+   "plan_details": {
+    "main": [
+     "CO-ROUTINE q",
+     "CO-ROUTINE p",
+     "SEARCH k USING COVERING INDEX formdev_record_status_recent (form_id=?)",
+     "CORRELATED SCALAR SUBQUERY 1",
+     "SEARCH i1 USING INDEX sqlite_autoindex_formdev_record_index_1 (record_id=? AND field_id=?)",
+     "SEARCH x USING INDEX sqlite_autoindex_formdev_record_index_1 (record_id=? AND field_id=?) LEFT-JOIN",
+     "USE TEMP B-TREE FOR GROUP BY",
+     "SCAN p",
+     "USE TEMP B-TREE FOR GROUP BY",
+     "SCAN q",
+     "USE TEMP B-TREE FOR ORDER BY"
+    ],
+    "probe": [
+     "CO-ROUTINE c",
+     "SEARCH k USING COVERING INDEX formdev_record_status_recent (form_id=?)",
+     "CORRELATED SCALAR SUBQUERY 1",
+     "SEARCH i1 USING INDEX sqlite_autoindex_formdev_record_index_1 (record_id=? AND field_id=?)",
+     "SCAN c"
+    ]
+   },
+   "checks": {
+    "answered": false,
+    "p95_lt_300ms": false,
+    "no_full_scan": true
+   },
+   "status": "FAIL"
+  }
+ ],
+ "jobs": [
+  {
+   "name": "job_agg_ward",
+   "elapsed_s": 0.27,
+   "status_job": "succeeded",
+   "groups": 20,
+   "total": 99020,
+   "checks": {
+    "succeeded": true,
+    "count_matches_live": true
+   },
+   "status": "PASS"
+  }
+ ]
+}

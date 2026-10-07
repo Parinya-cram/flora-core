@@ -1,0 +1,21 @@
+{
+ "label": "1m",
+ "records": 1000000,
+ "noise": 200000,
+ "aborted": "operator abort: host free space fell below 3 GB (df -h: 2.2 GiB) during the generator-validation phase, after COPY and the index rebuild had finished",
+ "observed": {
+  "host_free_gib_before": 10.0,
+  "host_free_gib_during_index_rebuild": [
+   2.8,
+   2.7
+  ],
+  "host_free_gib_at_abort": 2.2,
+  "postgres_data_dir_at_abort": {
+   "base": "3.7G",
+   "pg_wal": "1.0G"
+  },
+  "host_free_gib_after_drop_database": 5.8,
+  "note": "the loader at that time checked free space only during COPY and before each index build; it was killed (exit 137) and the database dropped. load.py now checks every phase and runs a watchdog that cancels the running statement below 3 GB."
+ },
+ "command": "formdev/scripts/perf/run.sh load.py --records 1000000 --noise 200000 --label 1m --reserve-gb 4.5"
+}

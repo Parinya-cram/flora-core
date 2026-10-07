@@ -1,0 +1,92 @@
+{
+ "case": "nofilter_deep",
+ "what": "no filter, keyset page at the middle of the form",
+ "label": "1m",
+ "statements": {
+  "main": {
+   "planning_ms": 0.061,
+   "execution_ms": 0.107,
+   "planning_buffers": 8,
+   "settings": {
+    "plan_cache_mode": "force_custom_plan",
+    "jit": "off",
+    "max_parallel_workers_per_gather": "0",
+    "work_mem": "32MB"
+   },
+   "nodes": [
+    {
+     "depth": 0,
+     "node": "Nested Loop",
+     "join": "Inner",
+     "est_rows": 51,
+     "act_rows": 51,
+     "loops": 1,
+     "shared_hit": 212,
+     "shared_read": 0,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 0.096
+    },
+    {
+     "depth": 1,
+     "node": "Limit",
+     "parent": "Outer",
+     "est_rows": 51,
+     "act_rows": 51,
+     "loops": 1,
+     "shared_hit": 8,
+     "shared_read": 0,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 0.016
+    },
+    {
+     "depth": 2,
+     "node": "Index Scan",
+     "parent": "Outer",
+     "relation": "formdev_record",
+     "index": "formdev_record_ingest",
+     "alias": "k",
+     "direction": "Backward",
+     "est_rows": 568013,
+     "act_rows": 51,
+     "loops": 1,
+     "removed_by_filter": 0,
+     "removed_by_recheck": 0,
+     "shared_hit": 8,
+     "shared_read": 0,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 0.014,
+     "index_cond": "((form_id = 'perf_assessment'::text) AND (ingest_seq < 499988))",
+     "filter": "(status <> 'deleted'::text)"
+    },
+    {
+     "depth": 1,
+     "node": "Index Scan",
+     "parent": "Inner",
+     "relation": "formdev_record",
+     "index": "formdev_record_pkey",
+     "alias": "r",
+     "direction": "Forward",
+     "est_rows": 1,
+     "act_rows": 1,
+     "loops": 51,
+     "removed_by_recheck": 0,
+     "shared_hit": 204,
+     "shared_read": 0,
+     "temp_read": 0,
+     "temp_written": 0,
+     "act_ms": 0.001,
+     "index_cond": "(record_id = k.record_id)"
+    }
+   ],
+   "sql": "SELECT r.record_id, r.schema_version, r.data, r.ingested_at, page.ok AS order_value FROM (SELECT k.record_id AS rid, k.ingest_seq AS ok FROM formdev_record k WHERE k.form_id = ? AND k.status <> 'deleted' AND k.ingest_seq < ? ORDER BY k.ingest_seq DESC LIMIT ?) page JOIN formdev_record r ON r.record_id = page.rid ORDER BY page.ok DESC",
+   "params": [
+    "perf_assessment",
+    499988,
+    51
+   ]
+  }
+ }
+}

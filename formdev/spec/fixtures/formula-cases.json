@@ -1,0 +1,743 @@
+{
+ "today": "2026-10-06",
+ "cases": [
+  {
+   "name": "number",
+   "formula": "42",
+   "values": {},
+   "value": 42
+  },
+  {
+   "name": "precedence",
+   "formula": "1 + 2 * 3",
+   "values": {},
+   "value": 7
+  },
+  {
+   "name": "parentheses",
+   "formula": "(1 + 2) * 3",
+   "values": {},
+   "value": 9
+  },
+  {
+   "name": "power binds tighter than unary minus",
+   "formula": "-2 ^ 2",
+   "values": {},
+   "value": -4
+  },
+  {
+   "name": "power is right associative",
+   "formula": "2 ^ 3 ^ 2",
+   "values": {},
+   "value": 512
+  },
+  {
+   "name": "remainder keeps the dividend's sign",
+   "formula": "-7 % 3",
+   "values": {},
+   "value": -1
+  },
+  {
+   "name": "BMI",
+   "formula": "weight_kg / ((height_cm / 100) ^ 2)",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null
+   },
+   "value": 22.857142857142858
+  },
+  {
+   "name": "BMI rounded",
+   "formula": "ROUND(weight_kg / ((height_cm / 100) ^ 2), 1)",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null
+   },
+   "value": 22.9
+  },
+  {
+   "name": "MAP",
+   "formula": "(bp_sys + 2 * bp_dia) / 3",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null
+   },
+   "value": 93.33333333333333
+  },
+  {
+   "name": "BSA Mosteller",
+   "formula": "ROUND(SQRT(weight_kg * height_cm / 3600), 2)",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null
+   },
+   "value": 1.84
+  },
+  {
+   "name": "missing input gives null",
+   "formula": "weight_kg / ((pain / 100) ^ 2)",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null
+   },
+   "value": null
+  },
+  {
+   "name": "unknown key gives null",
+   "formula": "nope + 1",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null
+   },
+   "value": null
+  },
+  {
+   "name": "division by zero gives null",
+   "formula": "weight_kg / zero",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null
+   },
+   "value": null
+  },
+  {
+   "name": "text in arithmetic gives null",
+   "formula": "name * 2",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null
+   },
+   "value": null
+  },
+  {
+   "name": "round half away from zero",
+   "formula": "ROUND(2.5) + ROUND(-2.5)",
+   "values": {},
+   "value": 0
+  },
+  {
+   "name": "round 1.005 to 2 digits follows binary floating point",
+   "formula": "ROUND(1.005, 2)",
+   "values": {},
+   "value": 1
+  },
+  {
+   "name": "round digits must be 0-10",
+   "formula": "ROUND(1.5, 11)",
+   "values": {},
+   "value": null
+  },
+  {
+   "name": "IF",
+   "formula": "IF(weight_kg / ((height_cm / 100) ^ 2) >= 25, 'overweight', 'normal')",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null
+   },
+   "value": "normal"
+  },
+  {
+   "name": "IF is lazy",
+   "formula": "IF(TRUE, 1, 1 / 0)",
+   "values": {},
+   "value": 1
+  },
+  {
+   "name": "AND OR NOT",
+   "formula": "has_fever AND NOT (bp_sys < 90 OR bp_dia > 100)",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null
+   },
+   "value": true
+  },
+  {
+   "name": "keywords are case-insensitive",
+   "formula": "true and not False",
+   "values": {},
+   "value": true
+  },
+  {
+   "name": "null equals null only",
+   "formula": "pain = NULL",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null
+   },
+   "value": true
+  },
+  {
+   "name": "ordering with null is unknown",
+   "formula": "pain < 1",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null
+   },
+   "value": null
+  },
+  {
+   "name": "unknown counts as false in OR",
+   "formula": "pain < 1 OR pain >= 1",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null
+   },
+   "value": false
+  },
+  {
+   "name": "AGE of a future date is null",
+   "formula": "AGE('2030-01-01')",
+   "values": {},
+   "value": null
+  },
+  {
+   "name": "not equal across types",
+   "formula": "bp_sys != '120'",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null
+   },
+   "value": true
+  },
+  {
+   "name": "text comparison",
+   "formula": "name = 'สมชาย'",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null
+   },
+   "value": true
+  },
+  {
+   "name": "SUM of a repeat column ignores nulls",
+   "formula": "SUM(meds.dose_mg)",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null,
+    "meds.dose_mg": [
+     500,
+     20,
+     null,
+     40
+    ],
+    "meds.drug": [
+     "A",
+     "B",
+     "C",
+     "D"
+    ],
+    "empty.dose": []
+   },
+   "value": 560
+  },
+  {
+   "name": "COUNT counts values",
+   "formula": "COUNT(meds.drug, meds.dose_mg)",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null,
+    "meds.dose_mg": [
+     500,
+     20,
+     null,
+     40
+    ],
+    "meds.drug": [
+     "A",
+     "B",
+     "C",
+     "D"
+    ],
+    "empty.dose": []
+   },
+   "value": 7
+  },
+  {
+   "name": "AVG",
+   "formula": "AVG(meds.dose_mg)",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null,
+    "meds.dose_mg": [
+     500,
+     20,
+     null,
+     40
+    ],
+    "meds.drug": [
+     "A",
+     "B",
+     "C",
+     "D"
+    ],
+    "empty.dose": []
+   },
+   "value": 186.66666666666666
+  },
+  {
+   "name": "MIN MAX",
+   "formula": "MAX(meds.dose_mg) - MIN(meds.dose_mg, 5)",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null,
+    "meds.dose_mg": [
+     500,
+     20,
+     null,
+     40
+    ],
+    "meds.drug": [
+     "A",
+     "B",
+     "C",
+     "D"
+    ],
+    "empty.dose": []
+   },
+   "value": 495
+  },
+  {
+   "name": "SUM of nothing is 0",
+   "formula": "SUM(empty.dose)",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null,
+    "meds.dose_mg": [
+     500,
+     20,
+     null,
+     40
+    ],
+    "meds.drug": [
+     "A",
+     "B",
+     "C",
+     "D"
+    ],
+    "empty.dose": []
+   },
+   "value": 0
+  },
+  {
+   "name": "AVG of nothing is null",
+   "formula": "AVG(empty.dose)",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null,
+    "meds.dose_mg": [
+     500,
+     20,
+     null,
+     40
+    ],
+    "meds.drug": [
+     "A",
+     "B",
+     "C",
+     "D"
+    ],
+    "empty.dose": []
+   },
+   "value": null
+  },
+  {
+   "name": "total score",
+   "formula": "SUM(1, 2, NULL, 3)",
+   "values": {},
+   "value": 6
+  },
+  {
+   "name": "percentage",
+   "formula": "ROUND(7 / 9 * 100, 1)",
+   "values": {},
+   "value": 77.8
+  },
+  {
+   "name": "COALESCE",
+   "formula": "COALESCE(pain, '', 0)",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null
+   },
+   "value": 0
+  },
+  {
+   "name": "ISBLANK",
+   "formula": "ISBLANK(pain) AND NOT ISBLANK(name)",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null
+   },
+   "value": true
+  },
+  {
+   "name": "AGE completed years (birthday tomorrow)",
+   "formula": "AGE(birth_date)",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null
+   },
+   "value": 65
+  },
+  {
+   "name": "AGE on a given date",
+   "formula": "AGE(birth_date, '2026-10-07')",
+   "values": {
+    "weight_kg": 70,
+    "height_cm": 175,
+    "bp_sys": 120,
+    "bp_dia": 80,
+    "birth_date": "1960-10-07",
+    "has_fever": true,
+    "name": "สมชาย",
+    "meds": null,
+    "pain": null,
+    "zero": 0,
+    "scores": null
+   },
+   "value": 66
+  },
+  {
+   "name": "AGE of a datetime",
+   "formula": "AGE('2000-02-29T10:00:00+07:00', '2026-02-28')",
+   "values": {},
+   "value": 25
+  },
+  {
+   "name": "DAYS",
+   "formula": "DAYS('2026-10-01', TODAY())",
+   "values": {},
+   "value": 5
+  },
+  {
+   "name": "invalid date gives null",
+   "formula": "AGE('2026-02-30')",
+   "values": {},
+   "value": null
+  },
+  {
+   "name": "FLOOR CEIL ABS",
+   "formula": "FLOOR(2.7) + CEIL(2.1) + ABS(-3)",
+   "values": {},
+   "value": 8
+  },
+  {
+   "name": "SQRT of a negative is null",
+   "formula": "SQRT(-4)",
+   "values": {},
+   "value": null
+  },
+  {
+   "name": "escaped quotes",
+   "formula": "'it\\'s'",
+   "values": {},
+   "value": "it's"
+  },
+  {
+   "name": "lower-case function names",
+   "formula": "round(2.345, 2)",
+   "values": {},
+   "value": 2.35
+  },
+  {
+   "name": "syntax: missing operand",
+   "formula": "1 +",
+   "values": {},
+   "error": "formula_syntax",
+   "position": 4
+  },
+  {
+   "name": "syntax: unclosed parenthesis",
+   "formula": "(1 + 2",
+   "values": {},
+   "error": "formula_syntax",
+   "position": 7
+  },
+  {
+   "name": "syntax: unclosed text",
+   "formula": "'abc",
+   "values": {},
+   "error": "formula_syntax",
+   "position": 1
+  },
+  {
+   "name": "syntax: chained comparison",
+   "formula": "1 < 2 < 3",
+   "values": {},
+   "error": "formula_syntax",
+   "position": 7
+  },
+  {
+   "name": "syntax: Thai outside quotes",
+   "formula": "น้ำหนัก * 2",
+   "values": {},
+   "error": "formula_syntax",
+   "position": 1
+  },
+  {
+   "name": "syntax: upper-case key",
+   "formula": "Weight + 1",
+   "values": {},
+   "error": "formula_syntax",
+   "position": 1
+  },
+  {
+   "name": "syntax: stray character",
+   "formula": "weight_kg ; 1",
+   "values": {},
+   "error": "formula_syntax",
+   "position": 11
+  },
+  {
+   "name": "unknown function",
+   "formula": "EVAL('1')",
+   "values": {},
+   "error": "unknown_function",
+   "position": 1
+  },
+  {
+   "name": "arity",
+   "formula": "IF(TRUE, 1)",
+   "values": {},
+   "error": "invalid_arguments",
+   "position": 1
+  },
+  {
+   "name": "arity of TODAY",
+   "formula": "TODAY(1)",
+   "values": {},
+   "error": "invalid_arguments",
+   "position": 1
+  },
+  {
+   "name": "too long",
+   "formula": "1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1",
+   "values": {},
+   "error": "formula_too_complex",
+   "position": 1
+  },
+  {
+   "name": "too deep",
+   "formula": "((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((1))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))",
+   "values": {},
+   "error": "formula_too_complex",
+   "position": 65
+  }
+ ]
+}

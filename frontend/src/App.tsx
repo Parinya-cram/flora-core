@@ -354,7 +354,10 @@ export default function App() {
     return null;
   }
 
-  if (!bootstrap.status.ready || !isAuthenticated) {
+  // Form Dev keeps working on device-local data while the Canopy server is unreachable;
+  // every other view still waits for the server.
+  const offlineFormDev = surface.code === "canopy" && isAuthenticated && activeView === "formdev";
+  if ((!bootstrap.status.ready && !offlineFormDev) || !isAuthenticated) {
     return (
       <>
         <LoginPage

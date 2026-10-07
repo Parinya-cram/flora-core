@@ -1,0 +1,90 @@
+{
+  "format": "flora.form/1",
+  "form_id": "elderly_fall_risk",
+  "schema_version": 1,
+  "title": "แบบประเมินผู้สูงอายุและความเสี่ยงการหกล้ม",
+  "description": "Phase 2 example: formulas, calculators, conditional visibility, custom and form rules, Answer + Other, repeat section.",
+  "paper": { "size": "A4", "orientation": "portrait" },
+  "style_id": "style.a4.medical",
+  "calculators": [
+    { "id": "bmi", "name": "BMI", "formula": "weight_kg / ((height_cm / 100) ^ 2)", "output": { "type": "decimal", "decimals": 1, "unit": "kg/m²" } },
+    { "id": "bmi_class", "name": "BMI class (Asia-Pacific)", "output": { "type": "text" },
+      "formula": "IF(ISBLANK(weight_kg) OR ISBLANK(height_cm), NULL, IF(weight_kg / ((height_cm / 100) ^ 2) < 18.5, 'ต่ำกว่าเกณฑ์', IF(weight_kg / ((height_cm / 100) ^ 2) < 23, 'ปกติ', IF(weight_kg / ((height_cm / 100) ^ 2) < 25, 'น้ำหนักเกิน', 'อ้วน'))))" },
+    { "id": "age", "name": "Age in completed years", "formula": "AGE(birth_date)", "output": { "type": "integer" } }
+  ],
+  "rules": [
+    { "id": "stay_order", "assert": "DAYS(admitted_on, discharged_on) >= 0", "message": "วันจำหน่ายต้องไม่ก่อนวันรับไว้", "fields": ["discharged_on"] }
+  ],
+  "extensions": { "flora.subject_field": "hn" },
+  "sections": [
+    {
+      "id": "patient",
+      "title": "ข้อมูลผู้ป่วย",
+      "fields": [
+        { "id": "hn", "type": "text", "label": "HN", "required": true, "indexed": true, "layout": { "span": 4 } },
+        { "id": "birth_date", "type": "date", "label": "วันเกิด", "required": true, "validation": { "max_date": "today" }, "layout": { "span": 4 } },
+        { "id": "age", "type": "calculated", "label": "อายุ (ปี)", "calculator": "age", "indexed": true, "layout": { "span": 4 } },
+        { "id": "phone", "type": "text", "label": "โทรศัพท์", "validation": { "pattern": "0[0-9]{8,9}", "message": "เบอร์โทรศัพท์ 9-10 หลัก ขึ้นต้นด้วย 0" }, "layout": { "span": 6 } },
+        { "id": "email", "type": "text", "label": "อีเมล", "validation": { "email": true }, "layout": { "span": 6 } },
+        { "id": "admitted_on", "type": "date", "label": "วันรับไว้", "layout": { "span": 6 } },
+        { "id": "discharged_on", "type": "date", "label": "วันจำหน่าย", "layout": { "span": 6 } }
+      ]
+    },
+    {
+      "id": "vitals",
+      "title": "สัญญาณชีพ",
+      "fields": [
+        { "id": "has_fever", "type": "switch", "label": "มีไข้", "layout": { "span": 4 } },
+        { "id": "temperature_c", "type": "decimal", "label": "อุณหภูมิ", "unit": "°C", "decimals": 1, "min": 34, "max": 43, "clear_when_hidden": true,
+          "visibility": { "when": { "field": "has_fever", "operator": "equals", "value": true } }, "validation": { "required": true }, "layout": { "span": 4 } }
+      ],
+      "categories": [
+        {
+          "id": "blood_pressure",
+          "title": "ความดันโลหิต",
+          "fields": [
+            { "id": "bp_sys", "type": "integer", "label": "ตัวบน", "unit": "mmHg", "min": 40, "max": 300, "layout": { "span": 6 },
+              "validation": { "rules": [ { "assert": "bp_sys > bp_dia", "message": "ความดันตัวบนต้องมากกว่าตัวล่าง" } ] } },
+            { "id": "bp_dia", "type": "integer", "label": "ตัวล่าง", "unit": "mmHg", "min": 20, "max": 200, "layout": { "span": 6 } }
+          ]
+        },
+        {
+          "id": "body",
+          "title": "รูปร่าง",
+          "fields": [
+            { "id": "weight_kg", "type": "decimal", "label": "น้ำหนัก", "unit": "kg", "decimals": 1, "min": 1, "max": 400, "layout": { "span": 3 } },
+            { "id": "height_cm", "type": "number", "label": "ส่วนสูง", "unit": "cm", "min": 30, "max": 260, "layout": { "span": 3 } },
+            { "id": "bmi", "type": "calculated", "label": "BMI", "unit": "kg/m²", "calculator": "bmi", "indexed": true, "layout": { "span": 3 } },
+            { "id": "bmi_class", "type": "calculated", "label": "เกณฑ์ BMI", "calculator": "bmi_class", "layout": { "span": 3 } }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "history",
+      "title": "ประวัติ",
+      "fields": [
+        { "id": "symptoms", "type": "multiselect", "label": "อาการ",
+          "options": [ { "value": "dizzy", "label": "เวียนศีรษะ" }, { "value": "weak", "label": "อ่อนแรง" },
+                       { "value": "other", "label": "อื่นๆ (ระบุ)", "has_input": true, "input_required": true } ] },
+        { "id": "smoker", "type": "radio", "label": "การสูบบุหรี่",
+          "options": [ { "value": "never", "label": "ไม่เคย" }, { "value": "former", "label": "เคย" }, { "value": "current", "label": "ปัจจุบัน" } ] },
+        { "id": "packs_per_day", "type": "number", "label": "ซอง/วัน", "min": 0, "max": 10,
+          "visibility": { "when": { "field": "smoker", "operator": "in", "value": ["former", "current"] } } },
+        { "id": "fall_count", "type": "calculated", "label": "จำนวนครั้งที่หกล้ม", "formula": "COUNT(falls.fall_date)" }
+      ]
+    },
+    {
+      "id": "falls",
+      "title": "การหกล้มใน 12 เดือน",
+      "repeat": { "key": "falls", "max_items": 5 },
+      "fields": [
+        { "id": "fall_date", "type": "date", "label": "วันที่", "required": true, "validation": { "max_date": "today" }, "layout": { "span": 4 } },
+        { "id": "injury", "type": "radio", "label": "บาดเจ็บ", "layout": { "span": 4 },
+          "options": [ { "value": "no", "label": "ไม่บาดเจ็บ" }, { "value": "yes", "label": "บาดเจ็บ" }, { "value": "other", "label": "อื่นๆ", "has_input": true } ] },
+        { "id": "injury_detail", "type": "text", "label": "รายละเอียดการบาดเจ็บ", "required": true, "layout": { "span": 4 },
+          "visibility": { "when": { "field": "injury", "operator": "equals", "value": "yes" } } }
+      ]
+    }
+  ]
+}

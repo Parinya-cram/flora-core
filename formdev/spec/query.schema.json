@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flora.local/formdev/query.schema.json",
+  "title": "Flora FormDev query (format flora.query/1)",
+  "description": "Structural schema of a query request. Semantic rules (field existence and access, index readiness, operators per field type, grouped-query rules, policy limits) are enforced by the validators in services/flora-api/app/formdev/query/validator.py and frontend/src/formdev/query/validate.ts; see QUERY.md.",
+  "type": "object",
+  "required": ["query"],
+  "additionalProperties": false,
+  "properties": {
+    "format": { "const": "flora.query/1" },
+    "query": {
+      "type": "object",
+      "required": ["source"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{1,63}$" },
+        "source": { "type": "string", "pattern": "^[a-z][a-z0-9_]{1,63}$" },
+        "select": { "type": "array", "minItems": 1, "maxItems": 40, "uniqueItems": true, "items": { "$ref": "#/$defs/name" } },
+        "filter": { "$ref": "#/$defs/filter" },
+        "sort": { "type": "array", "items": { "$ref": "#/$defs/sortKey" } },
+        "pagination": { "$ref": "#/$defs/pagination" },
+        "limit": { "type": "integer", "minimum": 1 },
+        "group": { "type": "array", "minItems": 1, "maxItems": 3, "items": { "$ref": "#/$defs/groupKey" } },
+        "aggregate": { "type": "array", "minItems": 1, "maxItems": 10, "items": { "$ref": "#/$defs/aggregate" } },
+        "count": { "enum": ["none", "capped"] },
+        "timeout": { "type": "integer", "minimum": 1 },
+        "cache": { "oneOf": [{ "const": false }, { "type": "object", "additionalProperties": false, "required": ["ttl"], "properties": { "ttl": { "type": "number", "minimum": 0 } } }] },
+        "export": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "format": { "enum": ["csv", "jsonl", "json"] },
+            "headers": { "enum": ["ids", "labels"] },
+            "max_rows": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "name": { "type": "string", "pattern": "^(\\$[a-z_]+|[a-z][a-z0-9_]{0,63}(\\.[a-z][a-z0-9_]{0,63})?)$" },
+    "scalar": { "type": ["string", "number", "boolean"] },
+    "leaf": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "op"],
+      "properties": {
+        "field": { "$ref": "#/$defs/name" },
+        "op": { "enum": ["eq", "ne", "lt", "lte", "gt", "gte", "in", "between", "prefix", "is_null", "is_not_null"] },
+        "value": { "oneOf": [{ "$ref": "#/$defs/scalar" }, { "type": "array", "minItems": 1, "maxItems": 500, "items": { "$ref": "#/$defs/scalar" } }] }
+      }
+    },
+    "filter": {
+      "oneOf": [
+        { "$ref": "#/$defs/leaf" },
+        { "type": "object", "additionalProperties": false, "required": ["and"], "properties": { "and": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/filter" } } } },
+        { "type": "object", "additionalProperties": false, "required": ["or"], "properties": { "or": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/filter" } } } },
+        { "type": "object", "additionalProperties": false, "required": ["not"], "properties": { "not": { "$ref": "#/$defs/filter" } } }
+      ]
+    },
+    "sortKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field"],
+      "properties": { "field": { "type": "string" }, "dir": { "enum": ["asc", "desc"] } }
+    },
+    "pagination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["limit"],
+      "properties": {
+        "mode": { "enum": ["cursor", "offset"] },
+        "limit": { "type": "integer", "minimum": 1 },
+        "offset": { "type": "integer", "minimum": 0 },
+        "cursor": { "type": ["string", "null"], "maxLength": 2048 }
+      }
+    },
+    "groupKey": {
+      "oneOf": [
+        { "$ref": "#/$defs/name" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["field"],
+          "properties": {
+            "field": { "$ref": "#/$defs/name" },
+            "bucket": { "const": "day" },
+            "tz_offset_minutes": { "type": "integer", "minimum": -840, "maximum": 840 }
+          }
+        }
+      ]
+    },
+    "aggregate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fn", "as"],
+      "properties": {
+        "fn": { "enum": ["count", "sum", "avg", "min", "max"] },
+        "field": { "$ref": "#/$defs/name" },
+        "as": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" }
+      }
+    }
+  }
+}

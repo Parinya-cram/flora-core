@@ -1,0 +1,96 @@
+# ตัวออกแบบฟอร์มแบบลากวาง (Form designer)
+
+สร้างและแก้ไขแบบฟอร์มได้เองโดยไม่ต้องเขียนโค้ด แล้วเผยแพร่ให้ใช้กรอกข้อมูลได้ทันที (ออนไลน์และออฟไลน์)
+
+เปิดที่ **Canopy → สร้างฟอร์ม → แท็บ "ออกแบบฟอร์ม"** (เฉพาะผู้ดูแลระบบ: `system_admin` หรือผู้มีสิทธิ์ `formdev.manage`)
+
+## ขั้นตอนการใช้งาน
+
+1. **เริ่มต้น**
+   - ตั้งชื่อแบบฟอร์ม และรหัสแบบฟอร์ม (ภาษาอังกฤษตัวเล็ก เช่น `ward5_admission`)
+   - เลือกจุดเริ่มต้นหนึ่งแบบ: *แบบฟอร์มเปล่า*, *แบบประเมินแรกรับ* (ผู้ป่วย, สัญญาณชีพ, BMI, ผู้บันทึก) หรือ *ที่อยู่และการติดต่อ*
+   - หรือเลือก *แก้ไขแบบฟอร์มที่มีอยู่*
+2. **วางช่อง**
+   - ลากช่องจากแถบซ้ายไปวางบนหน้าฟอร์ม
+     - วางบน **ครึ่งซ้าย / ครึ่งขวา** ของช่องเดิม = แทรกก่อน / หลังช่องนั้น
+     - วางใน **ที่ว่าง** = วางที่คอลัมน์ตรงนั้นพอดี (ตาราง 12 คอลัมน์)
+   - **คลิก** ช่องในแถบซ้ายก็ได้ จะเพิ่มต่อจากช่องที่เลือกไว้ (ใช้กับแท็บเล็ตหรือจอสัมผัส)
+   - **ชุดสำเร็จรูป** เพิ่มหลายช่องพร้อมกัน โดยต่อสูตร เงื่อนไข และตารางอ้างอิงไว้ให้แล้ว:
+     - ข้อมูลผู้ป่วย (อายุคำนวณจากวันเกิด)
+     - สัญญาณชีพ (ตรวจว่าความดันตัวบนต้องมากกว่าตัวล่าง)
+     - น้ำหนัก ส่วนสูง BMI (คำนวณ BMI และเกณฑ์)
+     - ที่อยู่ จังหวัด → อำเภอ → ตำบล (เติมรหัสไปรษณีย์ให้)
+     - การติดต่อ, รายการยา, ลงชื่อผู้บันทึก
+3. **จัดหน้า**
+   - ลาก **ขอบขวา** ของช่องเพื่อปรับความกว้าง
+   - ลากตัวช่องเพื่อย้ายที่ ย้ายเข้าไปใน "กลุ่มช่อง" หรือ "ตารางเพิ่มแถวได้" ก็ได้
+   - ปุ่ม ↑ ↓ ⧉ 🗑 บนช่องที่เลือก ใช้เลื่อน ทำสำเนา และลบ
+   - ปุ่ม 🖥 ▭ 📱 ดูหน้าตาบนคอมพิวเตอร์ แท็บเล็ต และมือถือ (ความกว้างบนแท็บเล็ตตั้งแยกได้)
+4. **ตั้งค่าช่อง** (แผงขวา เมื่อคลิกเลือกช่อง)
+
+   | หัวข้อ | ใช้ทำอะไร |
+   |---|---|
+   | ข้อมูลพื้นฐาน | ชื่อช่อง, คำอธิบาย, หน่วย, ต้องกรอก, อ่านอย่างเดียว, เปลี่ยนชนิดช่อง |
+   | ตัวเลือก | พิมพ์ตัวเลือกเอง (เพิ่มหลายข้อพร้อมกันได้ และมี "อื่นๆ ระบุ") หรือดึงจากตารางอ้างอิงที่กรองตามช่องอื่น |
+   | การคำนวณ | เลือกสูตรสำเร็จรูป (BMI, MAP, BSA, อายุ, คะแนนรวม, ระดับความเสี่ยงหกล้ม Morse ฯลฯ) แล้วจับคู่กับช่อง หรือเขียนสูตรเอง |
+   | เติมค่าอัตโนมัติจากตาราง | เช่น รหัสไปรษณีย์จากตำบล |
+   | แสดงเมื่อ | เช่น "แสดงเมื่อ มีไข้ เท่ากับ ใช่" หลายข้อรวมกันได้ (ตรงทุกข้อ / ข้อใดข้อหนึ่ง) ช่องที่ซ่อนจะไม่ถูกบังคับกรอก |
+   | การตรวจสอบค่า | ค่าต่ำสุด/สูงสุด, ความยาว, รูปแบบ (เบอร์โทร, เลขบัตรประชาชน, อีเมล), ช่วงวันที่, ข้อความแจ้งเตือน |
+   | ขนาดและตำแหน่ง | ความกว้าง, คอลัมน์เริ่มต้น, ซ่อนบนมือถือ, ขึ้นหน้ากระดาษใหม่ |
+   | ตาราง / ค้นหา / ส่งออก | แสดงในตารางรายการหรือไม่, ใช้ค้นหาได้เร็ว |
+   | สิทธิ์การเข้าถึง | บทบาทใดเห็น แก้ไข หรือส่งออกช่องนี้ได้ |
+
+   คลิกหัวส่วนหรือหมวดย่อย เพื่อตั้งหัวข้อ กรอกซ้ำได้หลายชุด เงื่อนไข และสิทธิ์
+
+   คลิกพื้นที่ว่าง เพื่อตั้งค่าทั้งแบบฟอร์ม: กระดาษ A4, สไตล์, หัว/ท้ายกระดาษ, ช่องระบุผู้ป่วย, สิทธิ์ของแบบฟอร์ม
+5. **ตรวจและทดลอง**
+   - ป้าย **"✓ พร้อมใช้" / "⚠ ต้องแก้ N จุด"** ตรวจแบบฟอร์มตลอดเวลา (ใช้กฎเดียวกับเซิร์ฟเวอร์) คลิกที่ปัญหาเพื่อไปยังช่องนั้น
+   - **ทดลองกรอก** ลองกรอกเหมือนผู้ใช้จริง เห็นการคำนวณ เงื่อนไข และการตรวจค่า (ไม่บันทึก)
+   - **A4** ดูหน้ากระดาษที่จะพิมพ์
+6. **PDF**
+   - ในมุมมอง **A4** กด **"ดาวน์โหลด PDF"** ได้ไฟล์ PDF ขนาด A4 (รวมค่าที่ลองกรอกไว้ด้วย)
+   - ในหน้ากรอกข้อมูล เปิดรายการแล้วกด **"ดาวน์โหลด PDF"** ได้ PDF ของรายการนั้น ตามสิทธิ์ของผู้ใช้ (ช่องที่ไม่มีสิทธิ์ดูจะไม่อยู่ใน PDF)
+7. **บันทึกและเผยแพร่**
+   - **บันทึกร่าง** เก็บงานไว้บนเซิร์ฟเวอร์
+   - **เผยแพร่ใช้งาน** (ยืนยันอีกครั้ง) แล้วกด **"ไปกรอกข้อมูลแบบฟอร์มนี้ →"** เพื่อเริ่มใช้
+
+### ข้อควรรู้
+
+- **เลิกทำ / ทำซ้ำ** ได้ทุกขั้น (Ctrl+Z / Ctrl+Shift+Z) งานที่ยังไม่บันทึกถูกเก็บในเครื่องนี้อัตโนมัติ และกู้คืนได้จากหน้าเริ่มต้น
+- **เวอร์ชันที่เผยแพร่แล้วแก้ไขไม่ได้** เมื่อแก้แบบฟอร์มที่ใช้งานอยู่ ระบบจะทำเป็นเวอร์ชันใหม่ และปรับข้อมูลเดิมให้อ่านได้อัตโนมัติ (แสดงแถบสีเหลืองก่อนเผยแพร่):
+  - **ลบช่อง** ค่าเดิมถูกเก็บไว้ในประวัติ (`_retired`) ไม่ถูกลบทิ้ง
+  - **เปลี่ยนชื่อข้อมูล (key)** ในหัวข้อ "ขั้นสูง" ระบบย้ายค่าเดิมไปชื่อใหม่ และแก้สูตร เงื่อนไข และตัวกรองที่อ้างถึงให้ด้วย
+  - **เปลี่ยนชนิดช่อง** ค่าเดิมถูกแปลงชนิด ค่าที่แปลงไม่ได้ถูกเก็บไว้ในประวัติ
+- **ตารางอ้างอิงที่อยู่ไทยที่ติดมากับระบบเป็นเพียงตัวอย่าง 13 แถว** ก่อนใช้งานจริงต้องนำเข้าข้อมูลทางการด้วย `formdev/scripts/import_lookup.py`
+- ผู้ดูแลระบบดู/แก้ JSON ของแบบฟอร์มได้ในมุมมอง **JSON** และนำเข้า JSON ได้จากหน้าเริ่มต้น
+
+## Technical notes
+
+- Code: `frontend/src/formdev/designer/`.
+
+  | File | Role |
+  |---|---|
+  | `model.ts` | Pure, immutable edits, addressed by paths |
+  | `catalog.ts` | Palette, blocks, starters, labels |
+  | `conditions.ts` | Condition rows ↔ conditions |
+  | `history.ts` | Undo / redo |
+  | `Canvas.tsx` | Drag & drop, grid placement, resize |
+  | `FieldInspector.tsx`, `ContainerInspector.tsx`, `OptionsEditor.tsx`, `ConditionEditor.tsx`, `PermissionEditor.tsx` | Settings |
+  | `DesignerPanel.tsx` | Start screen, toolbar, save / publish |
+
+- **The output is a plain `flora.form/1` definition.** There is no designer-only format, and the TypeScript validator checks it on every change.
+- **Saving and publishing** use the existing API: `POST /forms`, `PUT /forms/{id}/versions/{v}`, `POST …/publish`. When an earlier version is published, the definition carries `buildMigration(previous, current)`:
+  - `rename_field` for a key changed on the same field id
+  - `remove_field` for removed fields
+  - `convert_type` for a changed value family
+
+  The server's compatibility check therefore passes.
+- **Drag & drop** is native HTML5. The dragged item travels in a ref, because `dataTransfer` cannot be read during `dragover`. The drop position is computed from the card rectangles: over a card, the left or right half; in empty space, an explicit `layout.col`. Resizing uses pointer events and snaps to columns. Every drag action also has a button alternative (palette click, ↑ ↓, width presets).
+- **PDF:** `render/pdfLayout.ts` (pure page layout, same placement rules as the A4 print view) and `render/formPdf.ts` (drawing with pdf-lib).
+  - Text is drawn as glyph outlines shaped by fontkit from the bundled Noto Sans Thai (Thai and Latin subsets), so Thai tone marks sit correctly. The fonts ship only as WOFF2, which PDF viewers cannot read, and fontkit's subsetter fails on their composite glyphs, so the font cannot be embedded. Text in the PDF is therefore not selectable.
+  - The module and fonts load on demand (a separate chunk); nothing is downloaded at run time.
+  - Tests: `frontend/tests/formdev/pdf.test.ts`.
+- **Tests:** `frontend/tests/formdev/designer.test.ts`.
+  - Every palette type, block and starter yields a valid definition.
+  - Moves (including into a later group), duplicate, grid placement, key rename propagation, migrations, condition rows, and issue-path mapping.
+  - Render smoke tests for the canvas, inspectors and start screen.

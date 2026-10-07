@@ -60,8 +60,12 @@ services:
       FLORA_LDAP_TLS_VERIFY: ${FLORA_LDAP_TLS_VERIFY:-true}
       FLORA_LDAP_AUTO_PROVISION: ${FLORA_LDAP_AUTO_PROVISION:-false}
       FLORA_LDAP_DEFAULT_ROLE: ${FLORA_LDAP_DEFAULT_ROLE:-viewer}
+      FORMDEV_JOB_DIR: /var/lib/flora/formdev-jobs
     ports:
       - "127.0.0.1:${CANOPY_API_PORT:-7201}:8000"
+    volumes:
+      - ../services/flora-api/app:/app/app:ro
+      - formdev_jobs:/var/lib/flora/formdev-jobs
     depends_on:
       canopy-db: {condition: service_healthy}
     healthcheck: &api-health
@@ -234,5 +238,6 @@ volumes:
   updater_state:
   haber_registry_data:
   canopy_db_data:
+  formdev_jobs:
   canopy_frontend_modules:
   haber_data:

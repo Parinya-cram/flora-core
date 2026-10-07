@@ -15,6 +15,7 @@ import IdleCaseLanding from "../views/IdleCaseLanding";
 import AccountView from "../views/AccountView";
 import CanopyReportsView from "../views/CanopyReportsView";
 import CanopyAdmissionsView from "../views/CanopyAdmissionsView";
+import CanopyFormDevView from "../views/CanopyFormDevView";
 import { getSurfaceInfo } from "../edition/config";
 
 const ClinicalChartView = lazy(() => import("../views/ClinicalChartView"));
@@ -44,6 +45,7 @@ interface Props {
     | "infrastructure"
     | "topology"
     | "gateway-alerts"
+    | "formdev"
     | "history";
   sessionUser: AuthUser | null;
   onCaseDischargeTimeUpdated?: (caseId: number, dischargeTime: number) => void;
@@ -165,6 +167,8 @@ export default function MainArea({
         <CanopyGatewayAlertsView />
       ) : activeView === "infrastructure" ? (
         <CanopyInfrastructureView />
+      ) : activeView === "formdev" ? (
+        <CanopyFormDevView sessionUser={sessionUser} />
       ) : activeView === "history" ? (
         <HistoryView onOpenCase={onOpenCase ?? (() => {})} />
       ) : (

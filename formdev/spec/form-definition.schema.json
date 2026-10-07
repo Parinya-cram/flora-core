@@ -1,0 +1,1280 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flora.local/formdev/form-definition.schema.json",
+  "title": "Flora FormDev form definition (format flora.form/1)",
+  "description": "Vendor-neutral form definition (Phase 1). It carries no database, UI framework or CSS details; styles, fonts and calculators are referenced by id. Rules JSON Schema cannot express (unique ids and keys, registry and field references, which properties apply to which field type, layout bounds and overlaps, index limits, migration references) are enforced by the twin validators services/flora-api/app/formdev/definition.py and frontend/src/formdev/core/validate.ts. Reference: FORM-SCHEMA.md.",
+  "type": "object",
+  "required": [
+    "format",
+    "form_id",
+    "schema_version",
+    "title",
+    "paper",
+    "sections"
+  ],
+  "anyOf": [
+    {
+      "required": [
+        "style_id"
+      ]
+    },
+    {
+      "required": [
+        "style"
+      ],
+      "properties": {
+        "style": {
+          "required": [
+            "id"
+          ]
+        }
+      }
+    }
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": "flora.form/1"
+    },
+    "form_id": {
+      "$ref": "#/$defs/formId"
+    },
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Free-form descriptive data (owner, department, tags). Preserved verbatim."
+    },
+    "paper": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/paperSize"
+        },
+        {
+          "$ref": "#/$defs/paper"
+        }
+      ]
+    },
+    "style_id": {
+      "$ref": "#/$defs/registryId"
+    },
+    "style": {
+      "$ref": "#/$defs/styleRef"
+    },
+    "font_id": {
+      "$ref": "#/$defs/registryId"
+    },
+    "offline": {
+      "type": "boolean",
+      "description": "Form may be filled while the client is offline."
+    },
+    "layout": {
+      "$ref": "#/$defs/containerLayout"
+    },
+    "calculators": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/calculator"
+      }
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/formRule"
+      }
+    },
+    "permission": {
+      "$ref": "#/$defs/formPermission"
+    },
+    "sections": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/section"
+      }
+    },
+    "migration": {
+      "$ref": "#/$defs/migration"
+    },
+    "extensions": {
+      "type": "object",
+      "description": "Namespaced properties (for example flora.subject_field). Preserved verbatim."
+    }
+  },
+  "$defs": {
+    "formId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{1,63}$"
+    },
+    "itemId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+    },
+    "registryId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.-]{1,63}$"
+    },
+    "role": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+    },
+    "roles": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/role"
+      }
+    },
+    "scalar": {
+      "type": [
+        "string",
+        "number",
+        "boolean"
+      ]
+    },
+    "paperSize": {
+      "enum": [
+        "A4",
+        "A5",
+        "Letter",
+        "screen"
+      ]
+    },
+    "band": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Header or footer. Text may use {title} {form_id} {version} {page} {pages} {date} {record_id}.",
+      "properties": {
+        "left": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "center": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "right": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "height_mm": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 40
+        },
+        "first_page": {
+          "type": "boolean"
+        }
+      }
+    },
+    "paper": {
+      "type": "object",
+      "required": [
+        "size"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "size": {
+          "$ref": "#/$defs/paperSize"
+        },
+        "orientation": {
+          "enum": [
+            "portrait",
+            "landscape"
+          ]
+        },
+        "margin_mm": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "top": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 60
+            },
+            "right": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 60
+            },
+            "bottom": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 60
+            },
+            "left": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 60
+            }
+          }
+        },
+        "header": {
+          "$ref": "#/$defs/band"
+        },
+        "footer": {
+          "$ref": "#/$defs/band"
+        }
+      }
+    },
+    "tokens": {
+      "type": "object",
+      "description": "Style tokens from style-tokens.json; the validators check names and values.",
+      "propertyNames": {
+        "pattern": "^[a-zA-Z]+$"
+      }
+    },
+    "styleRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/registryId"
+        },
+        "override": {
+          "$ref": "#/$defs/tokens"
+        }
+      }
+    },
+    "containerLayout": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "grid",
+            "row",
+            "column"
+          ]
+        },
+        "columns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 24
+        },
+        "gap_mm": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 20
+        }
+      }
+    },
+    "placement": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "col": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 24
+        },
+        "span": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 24
+        },
+        "hidden": {
+          "type": "boolean"
+        }
+      }
+    },
+    "fieldLayout": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "col": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 24
+        },
+        "row": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "span": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 24
+        },
+        "page_break": {
+          "enum": [
+            "before",
+            "after",
+            "avoid"
+          ]
+        },
+        "responsive": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "desktop": {
+              "$ref": "#/$defs/placement"
+            },
+            "tablet": {
+              "$ref": "#/$defs/placement"
+            },
+            "mobile": {
+              "$ref": "#/$defs/placement"
+            },
+            "print": {
+              "$ref": "#/$defs/placement"
+            }
+          }
+        }
+      }
+    },
+    "display": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "form": {
+          "type": "boolean"
+        },
+        "table": {
+          "type": "boolean"
+        },
+        "detail": {
+          "type": "boolean"
+        },
+        "query": {
+          "type": "boolean"
+        },
+        "export": {
+          "type": "boolean"
+        }
+      }
+    },
+    "condition": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "field",
+            "operator"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "field": {
+              "$ref": "#/$defs/itemId"
+            },
+            "operator": {
+              "enum": [
+                "equals",
+                "not_equals",
+                "gt",
+                "gte",
+                "lt",
+                "lte",
+                "in",
+                "not_in",
+                "exists",
+                "empty"
+              ]
+            },
+            "value": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/scalar"
+                },
+                {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 100,
+                  "items": {
+                    "$ref": "#/$defs/scalar"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "and"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "and": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/condition"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "or"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "or": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/condition"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "visibility": {
+      "type": "object",
+      "required": [
+        "when"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "when": {
+          "$ref": "#/$defs/condition"
+        }
+      }
+    },
+    "formPermission": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "view": {
+          "$ref": "#/$defs/roles"
+        },
+        "create": {
+          "$ref": "#/$defs/roles"
+        },
+        "edit": {
+          "$ref": "#/$defs/roles"
+        },
+        "delete": {
+          "$ref": "#/$defs/roles"
+        },
+        "export": {
+          "$ref": "#/$defs/roles"
+        }
+      }
+    },
+    "sectionPermission": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "view": {
+          "$ref": "#/$defs/roles"
+        },
+        "edit": {
+          "$ref": "#/$defs/roles"
+        }
+      }
+    },
+    "fieldPermission": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "view": {
+          "$ref": "#/$defs/roles"
+        },
+        "edit": {
+          "$ref": "#/$defs/roles"
+        },
+        "export": {
+          "$ref": "#/$defs/roles"
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "min_length": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_length": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "pattern": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "email": {
+          "type": "boolean"
+        },
+        "numeric": {
+          "type": "boolean"
+        },
+        "min_date": {
+          "type": "string",
+          "pattern": "^(\\d{4}-\\d{2}-\\d{2}|today([+-]\\d{1,5}d)?)$"
+        },
+        "max_date": {
+          "type": "string",
+          "pattern": "^(\\d{4}-\\d{2}-\\d{2}|today([+-]\\d{1,5}d)?)$"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/fieldRule"
+          }
+        }
+      }
+    },
+    "calculator": {
+      "type": "object",
+      "required": [
+        "id",
+        "formula"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/itemId"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "formula": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "description": "Safe formula DSL over field keys (Phase 2); never evaluated with eval()."
+        },
+        "output": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "enum": [
+                "number",
+                "integer",
+                "decimal",
+                "text",
+                "boolean"
+              ]
+            },
+            "decimals": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "unit": {
+              "type": "string",
+              "maxLength": 40
+            }
+          }
+        }
+      }
+    },
+    "section": {
+      "type": "object",
+      "required": [
+        "id",
+        "title"
+      ],
+      "anyOf": [
+        {
+          "required": [
+            "fields"
+          ]
+        },
+        {
+          "required": [
+            "sections"
+          ]
+        },
+        {
+          "required": [
+            "categories"
+          ]
+        }
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/itemId"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/field"
+          }
+        },
+        "categories": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/category"
+          }
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/section"
+          }
+        },
+        "layout": {
+          "$ref": "#/$defs/containerLayout"
+        },
+        "style": {
+          "$ref": "#/$defs/styleRef"
+        },
+        "visibility": {
+          "$ref": "#/$defs/visibility"
+        },
+        "permission": {
+          "$ref": "#/$defs/sectionPermission"
+        },
+        "page_break": {
+          "enum": [
+            "before",
+            "after",
+            "avoid"
+          ]
+        },
+        "repeat": {
+          "$ref": "#/$defs/repeatBlock"
+        }
+      }
+    },
+    "option": {
+      "type": "object",
+      "required": [
+        "value",
+        "label"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "has_input": {
+          "type": "boolean",
+          "description": "Answer + Other: selecting this option asks for text, stored in data._other.<key> (Phase 2.6)."
+        },
+        "input_required": {
+          "type": "boolean"
+        },
+        "when": {
+          "$ref": "#/$defs/condition"
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "label"
+      ],
+      "additionalProperties": false,
+      "description": "One field. Which properties apply to which type is listed in field-types.json (checked by the validators).",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/itemId"
+        },
+        "key": {
+          "$ref": "#/$defs/itemId",
+          "description": "Data and formula name; defaults to id."
+        },
+        "type": {
+          "enum": [
+            "text",
+            "textarea",
+            "number",
+            "decimal",
+            "integer",
+            "date",
+            "datetime",
+            "time",
+            "select",
+            "radio",
+            "multiselect",
+            "checkbox",
+            "switch",
+            "file",
+            "image",
+            "signature",
+            "calculated",
+            "group",
+            "repeat"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "placeholder": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "unit": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "readonly": {
+          "type": "boolean"
+        },
+        "hidden": {
+          "type": "boolean",
+          "description": "Not shown on the form; values are still stored. Same as visible: false."
+        },
+        "visible": {
+          "type": "boolean"
+        },
+        "indexed": {
+          "type": "boolean",
+          "description": "Copy the value into the record index so it can be filtered without scanning JSON."
+        },
+        "display": {
+          "$ref": "#/$defs/display"
+        },
+        "layout": {
+          "$ref": "#/$defs/fieldLayout"
+        },
+        "style": {
+          "$ref": "#/$defs/styleRef"
+        },
+        "validation": {
+          "$ref": "#/$defs/validation"
+        },
+        "visibility": {
+          "$ref": "#/$defs/visibility"
+        },
+        "clear_when_hidden": {
+          "type": "boolean",
+          "description": "Clear the value while a visibility condition hides the field (Phase 2.2); values are kept by default."
+        },
+        "permission": {
+          "$ref": "#/$defs/fieldPermission"
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "max_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "decimals": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "options": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/option"
+          }
+        },
+        "formula": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Safe formula DSL over field keys (Phase 2); never evaluated with eval()."
+        },
+        "calculator": {
+          "$ref": "#/$defs/itemId"
+        },
+        "accept": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]+/(\\*|[a-z0-9.+-]+)$"
+          }
+        },
+        "max_size_kb": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576
+        },
+        "multiple": {
+          "type": "boolean"
+        },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/field"
+          }
+        },
+        "columns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 24
+        },
+        "min_items": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "max_items": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "lookup": {
+          "type": "object",
+          "required": [
+            "source",
+            "value"
+          ],
+          "additionalProperties": false,
+          "description": "Phase 2.3: options from a registered lookup table (choice fields; instead of options).",
+          "properties": {
+            "source": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$"
+            },
+            "value": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$"
+            },
+            "label": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$"
+            },
+            "filter": {
+              "$ref": "#/$defs/lookupPairs"
+            }
+          }
+        },
+        "derive": {
+          "type": "object",
+          "required": [
+            "lookup",
+            "column",
+            "match"
+          ],
+          "additionalProperties": false,
+          "description": "Phase 2.3: the value is one column of the first lookup row matching match (text fields; recomputed by the server).",
+          "properties": {
+            "lookup": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$"
+            },
+            "column": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$"
+            },
+            "match": {
+              "$ref": "#/$defs/lookupPairs"
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "select",
+                  "radio",
+                  "multiselect"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "oneOf": [
+              {
+                "required": [
+                  "options"
+                ]
+              },
+              {
+                "required": [
+                  "lookup"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "group",
+                  "repeat"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "fields"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "calculated"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "oneOf": [
+              {
+                "required": [
+                  "formula"
+                ]
+              },
+              {
+                "required": [
+                  "calculator"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "migration": {
+      "type": "object",
+      "required": [
+        "from",
+        "ops"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "ops": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/migrationOp"
+          }
+        }
+      }
+    },
+    "migrationOp": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "from",
+            "to"
+          ],
+          "properties": {
+            "op": {
+              "const": "rename_field"
+            },
+            "from": {
+              "type": "string"
+            },
+            "to": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "field"
+          ],
+          "properties": {
+            "op": {
+              "const": "add_field"
+            },
+            "field": {
+              "type": "string"
+            },
+            "default": {}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "field"
+          ],
+          "properties": {
+            "op": {
+              "const": "remove_field"
+            },
+            "field": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "field",
+            "mapping"
+          ],
+          "properties": {
+            "op": {
+              "const": "map_values"
+            },
+            "field": {
+              "type": "string"
+            },
+            "mapping": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "field",
+            "to"
+          ],
+          "properties": {
+            "op": {
+              "const": "convert_type"
+            },
+            "field": {
+              "type": "string"
+            },
+            "to": {
+              "enum": [
+                "text",
+                "number",
+                "integer",
+                "boolean"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "category": {
+      "type": "object",
+      "required": [
+        "id",
+        "title",
+        "fields"
+      ],
+      "additionalProperties": false,
+      "description": "A named sub-group between section and field (Phase 2.0); its fields share the section's data scope.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/itemId"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/field"
+          }
+        },
+        "layout": {
+          "$ref": "#/$defs/containerLayout"
+        },
+        "style": {
+          "$ref": "#/$defs/styleRef"
+        },
+        "visibility": {
+          "$ref": "#/$defs/visibility"
+        },
+        "permission": {
+          "$ref": "#/$defs/sectionPermission"
+        },
+        "page_break": {
+          "enum": [
+            "before",
+            "after",
+            "avoid"
+          ]
+        },
+        "repeat": {
+          "$ref": "#/$defs/repeatBlock"
+        }
+      }
+    },
+    "fieldRule": {
+      "type": "object",
+      "required": [
+        "assert",
+        "message"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "assert": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "description": "Formula that must be true (Phase 2.1); a null result passes."
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "when": {
+          "$ref": "#/$defs/condition"
+        }
+      }
+    },
+    "formRule": {
+      "type": "object",
+      "required": [
+        "id",
+        "assert",
+        "message",
+        "fields"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/itemId"
+        },
+        "assert": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/itemId"
+          }
+        },
+        "when": {
+          "$ref": "#/$defs/condition"
+        }
+      }
+    },
+    "repeatBlock": {
+      "type": "object",
+      "required": [
+        "key"
+      ],
+      "additionalProperties": false,
+      "description": "Turns a section or category into a repeatable block stored as a list under key (Phase 2.7).",
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/itemId"
+        },
+        "min_items": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "max_items": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        }
+      }
+    },
+    "lookupPairs": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 8,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{0,63}$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{0,63}$"
+      },
+      "description": "lookup column -> field key whose value it must equal"
+    }
+  }
+}
