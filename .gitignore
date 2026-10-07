@@ -9,9 +9,6 @@ tmp*/
 .tmp/
 output/
 data/
-# ...but keep the formdev source data/ folder (the rule above is for runtime data only)
-!/frontend/src/formdev/data/
-!/frontend/src/formdev/data/**
 emr/
 __pycache__/
 *.py[cod]
