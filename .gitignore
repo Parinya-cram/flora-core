@@ -9,6 +9,11 @@ tmp*/
 .tmp/
 output/
 data/
+# ...but keep source-code data/ folders (the rule above is for runtime data only)
+!frontend/src/**/data/
+!frontend/src/**/data/**
+!services/**/data/
+!services/**/data/**
 emr/
 __pycache__/
 *.py[cod]
