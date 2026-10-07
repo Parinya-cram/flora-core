@@ -57,7 +57,7 @@ services:
       FLORA_DEVICE_INGEST_ENABLED: "true"
       FLORA_LEAF_SERVICE_SECRET: ${FLORA_LEAF_SERVICE_SECRET:-admin}
       # Canopy sync-api on the VM host (flora-canopy stack publishes 6896)
-      FLORA_CANOPY_SYNC_URL: ${FLORA_CANOPY_SYNC_URL:-http://172.22.1.150:6896}
+      FLORA_CANOPY_SYNC_URL: ${FLORA_CANOPY_SYNC_URL:-http://host.docker.internal:6896}
       FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-admin}
       # Device data from the real Gateway (172.22.1.233)
       VECTOR_READ_URL: ${VECTOR_READ_URL:-http://172.22.1.233:7410/data-api/leaf-or-01/api/observations}
@@ -99,7 +99,7 @@ services:
       context: ../services/flora-sync-worker
     environment:
       FLORA_LEAF_API_URL: http://leaf-api:8000
-      FLORA_CANOPY_SYNC_URL: ${FLORA_CANOPY_SYNC_URL:-http://172.22.1.150:6896}
+      FLORA_CANOPY_SYNC_URL: ${FLORA_CANOPY_SYNC_URL:-http://host.docker.internal:6896}
       FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-admin}
       FLORA_LEAF_SERVICE_SECRET: ${FLORA_LEAF_SERVICE_SECRET:-admin}
       FLORA_LEAF_ID: ${FLORA_LEAF_ID:-leaf-or-01}

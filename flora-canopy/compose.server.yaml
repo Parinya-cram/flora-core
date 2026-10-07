@@ -100,7 +100,7 @@ services:
     build:
       context: ./haber
     environment:
-      FLORA_ROOT_URL: ${FLORA_ROOT_URL:-http://172.22.1.150:7100}
+      FLORA_ROOT_URL: ${FLORA_ROOT_URL:-http://host.docker.internal:7100}
       FLORA_TENANT_ID: ${FLORA_TENANT_ID:-hospital-01}
       FLORA_ROOT_TENANT_KEY: ${FLORA_ROOT_TENANT_KEY:-root-tenant-demo-key}
       FLORA_ROOT_PUBLIC_KEY: ${FLORA_ROOT_PUBLIC_KEY:-}
@@ -112,7 +112,7 @@ services:
       FLORA_CANOPY_SYNC_URL: http://sync-api:8000
       FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-admin}
       HABER_REGISTRY_URL: http://haber-registry:5000
-      HABER_REGISTRY_PUBLIC: ${HABER_REGISTRY_PUBLIC:-172.22.1.150:7205}
+      HABER_REGISTRY_PUBLIC: ${HABER_REGISTRY_PUBLIC:-172.22.1.151:7205}
       HABER_ROOT_SYNC_SEC: ${HABER_ROOT_SYNC_SEC:-15}
     ports:
       - "${FLORA_BIND_ADDR:-127.0.0.1}:${HABER_PORT:-7204}:8000"
