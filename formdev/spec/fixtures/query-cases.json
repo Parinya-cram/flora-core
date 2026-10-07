@@ -86,6 +86,18 @@
     }
    }
   },
+  "rebuilding": {
+   "source_id": "rebuilding",
+   "fields": {
+    "hn": {
+     "type": "text",
+     "indexed": true
+    }
+   },
+   "metadata_building": [
+    "$subject_id"
+   ]
+  },
   "patient": {
    "source_id": "patient",
    "fields": {
@@ -674,6 +686,61 @@
    "paths": [
     "error:index_building:$.query.filter.field"
    ]
+  },
+  {
+   "name": "subject id being backfilled",
+   "catalog": "rebuilding",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "source": "rebuilding",
+     "select": [
+      "hn"
+     ],
+     "filter": {
+      "field": "$subject_id",
+      "op": "eq",
+      "value": "HN-1"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     }
+    }
+   },
+   "errors": [
+    "index_building"
+   ],
+   "warnings": [],
+   "paths": [
+    "error:index_building:$.query.filter.field"
+   ]
+  },
+  {
+   "name": "subject id selectable while backfilled",
+   "catalog": "rebuilding",
+   "principal": "clinician",
+   "body": {
+    "query": {
+     "source": "rebuilding",
+     "select": [
+      "hn",
+      "$subject_id"
+     ],
+     "filter": {
+      "field": "hn",
+      "op": "eq",
+      "value": "HN-1"
+     },
+     "pagination": {
+      "mode": "cursor",
+      "limit": 50
+     }
+    }
+   },
+   "errors": [],
+   "warnings": [],
+   "paths": []
   },
   {
    "name": "textarea not filterable",

@@ -133,6 +133,7 @@ type Catalog = {
   queryAccess: Array<string[] | null>;
   exportAccess: Array<string[] | null>;
   metadataAccess: Map<string, Array<string[] | null>>;
+  metadataBuilding: Set<string>;
   relations: Map<string, { local: string; foreign: string; target: Catalog }>;
 };
 
@@ -154,6 +155,7 @@ function normalizeCatalog(value: QueryCatalog): Catalog {
     queryAccess: isNone(value.query_access) ? [] : [value.query_access as string[]],
     exportAccess: isNone(value.export_access) ? [] : [value.export_access as string[]],
     metadataAccess: new Map(Object.entries(value.metadata_access ?? {}).map(([name, codes]) => [name, [codes]])),
+    metadataBuilding: new Set(value.metadata_building ?? []),
     relations,
   };
 }
@@ -181,6 +183,7 @@ export function catalogFromPublic(value: PublicQueryCatalog): QueryCatalog {
     source_id: value.source_id, form_id: value.form_id, title: value.title, schema_version: value.schema_version,
     fields: Object.fromEntries(Object.entries(value.fields).map(([id, info]) => [id, { ...info, access: null }])),
     metadata_access: Object.fromEntries(METADATA_NAMES.filter(name => !visible.has(name)).map(name => [name, []])),
+    metadata_building: value.metadata_building ?? [],
     relations: Object.fromEntries(Object.entries(value.relations ?? {}).map(([name, relation]) => [name, {
       local: relation.local, foreign: relation.foreign,
       target: { source_id: relation.source_id, fields: Object.fromEntries(Object.entries(relation.fields).map(([id, info]) => [id, { type: info.type, label: info.label }])) },
@@ -295,14 +298,20 @@ function resolve(name: unknown, path: string, ctx: Ctx, allowRelation = false): 
       return null;
     }
     const meta = METADATA[metaName];
-    return { kind: "meta", name: metaName, column: meta.column, family: metaName === "$subject_id" ? "subject" : meta.family };
+    const ref: Ref = { kind: "meta", name: metaName, column: meta.column, family: metaName === "$subject_id" ? "subject" : meta.family };
+    if (catalog.metadataBuilding.has(metaName)) ref.state = "building";
+    return ref;
   }
   error(ctx, path, "invalid_field", `Unknown field '${name}'.${suggest(name, ctx)}`);
   return null;
 }
 
 function requireIndex(ref: Ref, path: string, ctx: Ctx, purpose: string): boolean {
-  if (ref.kind !== "field") return true;
+  if (ref.kind !== "field") {
+    if (ref.state !== "building") return true;
+    error(ctx, path, "index_building", `'${ref.name}' is being rebuilt; try again shortly`); // $subject_id while it is backfilled
+    return false;
+  }
   if (ref.family === "longtext" || ref.family === "multi") {
     error(ctx, path, "not_filterable", `${ref.type} fields cannot be used to ${purpose}`);
     return false;

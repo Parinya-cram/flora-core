@@ -54,6 +54,7 @@ class SourceCatalog:
     metadata_access: dict[str, list[list[str]]] = field(default_factory=dict)
     relations: dict[str, dict[str, Any]] = field(default_factory=dict)
     revision: dict[str, Any] = field(default_factory=dict)
+    metadata_building: list[str] = field(default_factory=list)  # metadata columns being backfilled ($subject_id)
 
     # Access --------------------------------------------------------------------------------
     def can_query(self, principal: Principal) -> bool:
@@ -90,6 +91,7 @@ class SourceCatalog:
             "fields": {fid: {key: info.get(key) for key in ("type", "label", "unit", "indexed", "state", "options")}
                        for fid, info in self.fields.items() if self.can_read(principal, fid)},
             "metadata": sorted(name for name in METADATA if self.can_read(principal, name)),
+            "metadata_building": [name for name in self.metadata_building if self.can_read(principal, name)],
             # A relation joins on its local field: hidden when the caller may not read that field.
             "relations": {name: {"local": rel["local"], "foreign": rel["foreign"], "source_id": rel["target"].source_id,
                                  "fields": {fid: {"type": info["type"], "label": info.get("label")} for fid, info in rel["target"].fields.items()
@@ -178,6 +180,7 @@ def build_catalog(services: Any, source_id: str, with_relations: bool = True) ->
         metadata_access={name: _lists(policy["fields"].get(name), config["fields"].get(name)) for name in METADATA},
         revision={"published": int(latest["schema_version"]), "policy": policy_row["version"] if policy_row else 0,
                   "source": named["version"] if named else 0},
+        metadata_building=services.indexing.metadata_building(form_id),
     )
     # $subject_id is the subject field's value: it is as restricted as that field (policy, source config and the
     # definition's view permission), not only by its own metadata entry.
@@ -213,4 +216,5 @@ def catalog_from_dict(value: dict[str, Any]) -> SourceCatalog:
         export_access=[value["export_access"]] if value.get("export_access") is not None else [],
         metadata_access={name: [codes] for name, codes in (value.get("metadata_access") or {}).items()},
         relations=relations,
+        metadata_building=list(value.get("metadata_building") or []),
     )

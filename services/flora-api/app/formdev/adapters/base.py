@@ -88,7 +88,7 @@ class DataAdapter(ABC):
     def count_records(self, form_id: str) -> int: ...
 
     @abstractmethod
-    def records_after(self, form_id: str, after_record_id: str | None, limit: int) -> list[dict[str, Any]]:
+    def records_after(self, form_id: str, after_record_id: str | None, limit: int, lock: bool = False) -> list[dict[str, Any]]:
         """record_id-ordered batch (record_id, schema_version, status, data, updated_at) for reindexing."""
 
     @abstractmethod

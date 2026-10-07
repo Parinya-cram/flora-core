@@ -49,6 +49,8 @@ PREFIX_UPPER = "\U0010ffff"
 
 
 class SqlDataAdapter(DataAdapter):
+    row_locks = False  # SELECT ... FOR UPDATE available (PostgreSQL, MySQL)
+
     # Vendor hooks ------------------------------------------------------------
     @abstractmethod
     def _execute(self, sql: str, params: tuple[Any, ...] = ()) -> Any:
@@ -187,15 +189,21 @@ class SqlDataAdapter(DataAdapter):
         row = self._one("SELECT COUNT(*) AS total FROM formdev_record WHERE form_id = ?", (form_id,))
         return int(row["total"]) if row else 0
 
-    def records_after(self, form_id: str, after_record_id: str | None, limit: int) -> list[dict[str, Any]]:
-        """Immutable record_id keyset used by reindexing."""
+    def records_after(self, form_id: str, after_record_id: str | None, limit: int, lock: bool = False) -> list[dict[str, Any]]:
+        """Immutable record_id keyset used by reindexing. ``lock`` (inside a transaction) holds the rows until it
+        ends where the database has row locks; SQLite transactions already exclude other writers."""
         columns = ("record_id", "schema_version", "status", "data", "updated_at")
+        suffix = " FOR UPDATE" if lock and self.row_locks else ""
         if after_record_id is None:
-            return self._all(f"SELECT {_cols(columns)} FROM formdev_record WHERE form_id = ? ORDER BY record_id LIMIT ?", (form_id, limit))
+            return self._all(f"SELECT {_cols(columns)} FROM formdev_record WHERE form_id = ? ORDER BY record_id LIMIT ?{suffix}", (form_id, limit))
         return self._all(
-            f"SELECT {_cols(columns)} FROM formdev_record WHERE form_id = ? AND record_id > ? ORDER BY record_id LIMIT ?",
+            f"SELECT {_cols(columns)} FROM formdev_record WHERE form_id = ? AND record_id > ? ORDER BY record_id LIMIT ?{suffix}",
             (form_id, after_record_id, limit),
         )
+
+    def building_forms(self) -> list[str]:
+        """Forms with index coverage still being built."""
+        return [row["form_id"] for row in self._all("SELECT DISTINCT form_id FROM formdev_index_coverage WHERE state = 'building' ORDER BY form_id", ())]
 
     # Index configuration and coverage ---------------------------------------------
     def list_index_config(self, form_id: str) -> list[str]:

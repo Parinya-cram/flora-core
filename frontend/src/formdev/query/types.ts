@@ -109,6 +109,8 @@ export type QueryCatalog = {
   query_access?: string[] | null;
   export_access?: string[] | null;
   metadata_access?: Record<string, string[] | null> | null;
+  /** Metadata columns being backfilled ($subject_id after a subject-field change): refused with index_building. */
+  metadata_building?: string[] | null;
   relations?: Record<string, { local: string; foreign: string; target: QueryCatalog }> | null;
 };
 
@@ -120,6 +122,7 @@ export type PublicQueryCatalog = {
   schema_version: number;
   fields: Record<string, { type: string; label?: string | null; unit?: string | null; indexed?: boolean | null; state?: IndexState | null; options?: string[] | null }>;
   metadata: string[];
+  metadata_building?: string[];
   relations: Record<string, { local: string; foreign: string; source_id: string; fields: Record<string, { type: string; label?: string | null }> }>;
   can_export: boolean;
 };

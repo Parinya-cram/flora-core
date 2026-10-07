@@ -142,6 +142,7 @@ class MySqlReadSession:
 
 class MySQLAdapter(SqlDataAdapter):
     vendor = "mysql"
+    row_locks = True
     capabilities = {"explain_analyze": False, "row_estimate": False}
 
     def __init__(self, url: str | None = None, connection: Any = None):

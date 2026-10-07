@@ -47,6 +47,12 @@ CATALOGS = {
         },
         "relations": {"patient": {"local": "hn", "foreign": "hn", "target": REGISTRATION}},
     },
+    # A subject-field change being backfilled: $subject_id is refused until the rebuild ends.
+    "rebuilding": {
+        "source_id": "rebuilding",
+        "fields": {"hn": {"type": "text", "indexed": True}},
+        "metadata_building": ["$subject_id"],
+    },
     # The example from Flow-Form.md 4.1, verbatim.
     "patient": {
         "source_id": "patient",
@@ -108,6 +114,8 @@ CASES = [
     ("authorized sensitive select", "assessment", "clinician", q(select=["hn", "full_name"], pagination=PAGE), [], ["missing_filter"]),
     ("filter needs an index", "assessment", "clinician", q(select=["hn"], filter=leaf("sex", "eq", "male"), pagination=PAGE), ["not_filterable"], []),
     ("index building", "assessment", "clinician", q(select=["hn"], filter=leaf("ward", "eq", "W1"), pagination=PAGE), ["index_building"], []),
+    ("subject id being backfilled", "rebuilding", "clinician", q(source="rebuilding", select=["hn"], filter=leaf("$subject_id", "eq", "HN-1"), pagination=PAGE), ["index_building"], []),
+    ("subject id selectable while backfilled", "rebuilding", "clinician", q(source="rebuilding", select=["hn", "$subject_id"], filter=leaf("hn", "eq", "HN-1"), pagination=PAGE), [], []),
     ("textarea not filterable", "assessment", "clinician", q(select=["hn"], filter=leaf("remarks", "eq", "x"), pagination=PAGE), ["not_filterable"], []),
     ("multiselect not filterable", "assessment", "clinician", q(select=["hn"], filter=leaf("tags", "eq", "a"), pagination=PAGE), ["not_filterable"], []),
     ("unknown operator", "assessment", "clinician", q(select=["hn"], filter=leaf("hn", "like", "%1"), pagination=PAGE), ["invalid_operator"], []),

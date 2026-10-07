@@ -52,7 +52,8 @@ prefix is_null is_not_null; numbers (`number`, `integer`, `calculated`): eq ne i
 is_null is_not_null; `datetime` (values are ISO datetimes, compared as instants): the numeric
 operators; `checkbox`: eq ne is_null is_not_null; metadata columns: see the validator tables.
 `textarea` and `multiselect` fields cannot be filtered. A dynamic field must be indexed and its
-index must be ready (`index_building` otherwise).
+index must be ready (`index_building` otherwise); so must `$subject_id` while subject ids are
+backfilled after the subject field changed (the catalog lists it in `metadata_building`).
 
 Semantics — "missing" means the record has no value for the field:
 

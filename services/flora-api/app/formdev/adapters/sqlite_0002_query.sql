@@ -2,10 +2,10 @@
 ALTER TABLE formdev_record ADD COLUMN subject_id text;
 ALTER TABLE formdev_record ADD COLUMN ingest_seq integer;
 ALTER TABLE formdev_record ADD COLUMN ingested_at integer;
-UPDATE formdev_record SET
-  ingest_seq = (SELECT count(*) FROM formdev_record o WHERE o.form_id = formdev_record.form_id
-                AND (o.created_at < formdev_record.created_at OR (o.created_at = formdev_record.created_at AND o.record_id <= formdev_record.record_id))),
-  ingested_at = created_at;
+-- One window pass (SQLite 3.33+ UPDATE ... FROM), O(n log n): a correlated count per row was quadratic.
+UPDATE formdev_record SET ingest_seq = numbered.seq, ingested_at = formdev_record.created_at
+FROM (SELECT record_id, row_number() OVER (PARTITION BY form_id ORDER BY created_at, record_id) AS seq FROM formdev_record) AS numbered
+WHERE numbered.record_id = formdev_record.record_id;
 
 ALTER TABLE formdev_record_index ADD COLUMN status text;
 ALTER TABLE formdev_record_index ADD COLUMN updated_at integer;

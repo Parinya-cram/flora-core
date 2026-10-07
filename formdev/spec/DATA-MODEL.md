@@ -111,7 +111,17 @@ computed from the form's latest published definition applied to the record's dat
 version (plus server-side indexed fields). A v1 record is therefore found by a field that was renamed
 or newly indexed in v2. Publishing (or changing the index configuration) reindexes the affected
 fields: inline for forms up to 5 000 records, otherwise as a `reindex` job while the validator
-refuses those fields with `index_building`. Reindexing never changes a record's version or times.
+refuses those fields with `index_building`. Changing `flora.subject_field` rebuilds every record's
+`subject_id` the same way (`$subject_id` is refused while it is building). Reindexing never changes
+a record's version or times.
+
+Rebuild rules: each batch reads its records inside its write transaction (`FOR UPDATE` on PostgreSQL
+and MySQL), so a concurrent record write is never overwritten with older index values. A rebuild
+marks ready only the fields scheduled before it started; a field added while a job runs keeps
+`building` and gets its own job (reindex jobs are deduplicated against queued jobs only). If a
+rebuild fails, the job worker's maintenance queues it again (10 minutes after a failure).
+Upgrades (`0065-formdev-index-rebuild.sql`, SQLite migration 6) mark every form that has records
+`*` (all fields and `$subject_id` building) until its first full rebuild under this rule.
 
 **Datetimes** are indexed both as text and as epoch milliseconds (`value_num`), so ranges and sorts
 compare instants; values without an offset use +07:00 (Asia/Bangkok).

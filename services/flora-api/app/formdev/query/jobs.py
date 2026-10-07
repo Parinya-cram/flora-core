@@ -50,6 +50,7 @@ EXTENSIONS = {"csv": "csv", "jsonl": "jsonl", "json": "json"}
 MEDIA_TYPES = {"csv": "text/csv; charset=utf-8", "jsonl": "application/x-ndjson", "json": "application/json"}
 FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 TERMINAL = ("succeeded", "failed", "cancelled", "expired")
+REINDEX_RETRY_MS = 10 * 60_000
 EXPORTING = ("export", "search", "report")  # kinds whose result is a downloadable file of rows
 ROW_FILES = ("export", "search")
 # Validation issues about index state, not about permissions: they do not withdraw a finished result.
@@ -372,7 +373,24 @@ class JobWorker:
             expired = adapter.expire_jobs(now)
         for job_id in cancelled + expired:
             self.store.remove(job_id)
+        self._resume_rebuilds(adapter, now)
         self.store.sweep(adapter.job_ids_with_files())
+
+    def _resume_rebuilds(self, adapter: Any, now: int) -> None:
+        """Index coverage left 'building' with no reindex job to finish it (the job failed or was abandoned, or an
+        upgrade seeded it) gets a new job; after a failure, not before REINDEX_RETRY_MS has passed."""
+        building = adapter.building_forms()
+        if not building:
+            return
+        reindex = [row for row in adapter.list_jobs(None, 500) if row["kind"] == "reindex"]
+        for form_id in building:
+            mine = [row for row in reindex if row["owner"] == f"reindex:{form_id}"]
+            if any(row["status"] in ("queued", "running") for row in mine):
+                continue
+            if any(row["status"] == "failed" and int(row["finished_at"] or 0) > now - REINDEX_RETRY_MS for row in mine):
+                continue
+            LOG.warning("formdev index for %s is still building with no job: queueing a rebuild", form_id)
+            enqueue_reindex(adapter, self.runtime.clock_ms)(form_id, "maintenance")
 
     def run_once(self, owner: str) -> bool:
         """Claim and run at most one job. Returns True when a job was processed."""
@@ -578,6 +596,10 @@ class JobWorker:
     def _reindex(self, services: Any, job: dict[str, Any], owner: str) -> dict[str, Any]:
         form_id = (job.get("query") or {}).get("form_id")
         checkpoint = job.get("checkpoint") or {"after": None, "rows": 0}
+        if checkpoint.get("since") is None:
+            # When this rebuild began (kept across attempts): only fields scheduled before it become ready.
+            checkpoint["since"] = services.indexing.rebuild_mark()
+        services.indexing.invalidate(form_id)
         if not checkpoint.get("total"):
             checkpoint["total"] = services.adapter.count_records(form_id)
             self._fenced(services, job, owner, {"total_estimate": checkpoint["total"], "checkpoint": checkpoint})
@@ -588,7 +610,7 @@ class JobWorker:
             if after is None:
                 break
             self._check(services, job, owner, checkpoint, checkpoint["rows"])
-        services.indexing.finish(form_id)
+        services.indexing.finish(form_id, checkpoint["since"])
         return {"rows_processed": checkpoint["total"], "result_bytes": 0, "result_sha256": None, "checkpoint": checkpoint}
 
 
@@ -600,8 +622,10 @@ def enqueue_reindex(adapter: Any, clock_ms: Callable[[], int], max_attempts: int
     """Hook for IndexMaintenance: queue a reindex job (deduplicated per form)."""
 
     def enqueue(form_id: str, user: str) -> None:
+        # Deduplicated against queued jobs only: a running job may already have passed records the new change
+        # needs, so the change gets a job of its own (which marks it ready).
         for row in adapter.list_jobs(None, 200):
-            if row["kind"] == "reindex" and row["status"] in ("queued", "running") and row["owner"] == f"reindex:{form_id}":
+            if row["kind"] == "reindex" and row["status"] == "queued" and row["owner"] == f"reindex:{form_id}":
                 return
         now = clock_ms()
         adapter.insert_job({

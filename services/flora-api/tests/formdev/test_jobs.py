@@ -446,6 +446,61 @@ class JobContract(QueryContract):
         self.assertEqual((row["status"], row["attempt"], row["lease_owner"]), ("queued", 0, None))
 
 
+    # Phase 4 review, group D -------------------------------------------------------------------
+    def large_form(self):
+        import app.formdev.indexing as indexing
+
+        self.fd.indexing.enqueue_reindex = enqueue_reindex(self.adapter, self.clock)
+        original = indexing.SYNC_REINDEX_MAX_RECORDS
+        indexing.SYNC_REINDEX_MAX_RECORDS = 0
+        self.addCleanup(setattr, indexing, "SYNC_REINDEX_MAX_RECORDS", original)
+
+    def reindex_jobs(self, status=None):
+        return [row for row in self.adapter.list_jobs(None, 100) if row["kind"] == "reindex" and (status is None or row["status"] == status)]
+
+    def test_a_field_added_during_a_rebuild_is_not_marked_ready_early(self):
+        """reliability:0 / regressions:4 — the running job never covered full_name for the records it had passed."""
+        self.large_form()
+        self.fd.indexing.add_config_field("ward_check", "score", USER)
+        original_check = self.worker._check
+        calls = {"n": 0}
+
+        def change_midway(*args, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                self.assertEqual(self.fd.indexing.add_config_field("ward_check", "full_name", USER), "building")
+            return original_check(*args, **kwargs)
+
+        self.worker._check = change_midway
+        self.assertTrue(self.worker.run_once("worker-a"))
+        self.worker._check = original_check
+        self.assertEqual(self.fd.indexing.indexed_fields("ward_check")["full_name"]["state"], "building", "the first job did not cover it")
+        self.assertEqual(self.fd.indexing.indexed_fields("ward_check")["score"]["state"], "ready")
+        self.assertEqual(len(self.reindex_jobs("queued")), 1, "the change got a job of its own")
+        self.run_all()
+        self.assertEqual(self.fd.indexing.indexed_fields("ward_check")["full_name"]["state"], "ready")
+        for n in (3, 13):
+            found = self.run_query(ADMIN, select=["hn"], filter={"field": "full_name", "op": "eq", "value": f"Patient {n}"}, pagination={"mode": "cursor", "limit": 5})
+            self.assertEqual([row["hn"] for row in found["rows"]], [f"HN-{n:04d}"])
+
+    def test_a_failed_rebuild_is_queued_again(self):
+        """reliability:6 — building coverage with no job left gets a new job (after a pause when one failed)."""
+        self.large_form()
+        self.fd.indexing.add_config_field("ward_check", "full_name", USER)
+        job = self.reindex_jobs("queued")[0]
+        self.adapter.update_job_where(job["job_id"], ("queued",), {"status": "failed", "finished_at": self.clock.now,
+                                                                   "error": {"code": "job_abandoned", "message": "x"}})
+        self.worker.maintenance(self.fd)
+        self.assertEqual(self.reindex_jobs("queued"), [], "not straight after a failure")
+        self.clock.now += 11 * 60_000
+        self.worker.maintenance(self.fd)
+        self.assertEqual(len(self.reindex_jobs("queued")), 1)
+        self.run_all()
+        self.assertEqual(self.fd.indexing.indexed_fields("ward_check")["full_name"]["state"], "ready")
+        self.worker.maintenance(self.fd)
+        self.assertEqual(self.reindex_jobs("queued"), [], "nothing left to rebuild")
+
+
 class SQLiteJobContract(JobContract, unittest.TestCase):
     def make_adapter(self):
         from app.formdev.adapters.sqlite import SQLiteAdapter

@@ -64,6 +64,7 @@ services:
       - ../infrastructure/postgres/0062-formdev-registry.sql:/docker-entrypoint-initdb.d/0062-formdev-registry.sql:ro
       - ../infrastructure/postgres/0063-formdev-lookup.sql:/docker-entrypoint-initdb.d/0063-formdev-lookup.sql:ro
       - ../infrastructure/postgres/0064-formdev-attachment.sql:/docker-entrypoint-initdb.d/0064-formdev-attachment.sql:ro
+      - ../infrastructure/postgres/0065-formdev-index-rebuild.sql:/docker-entrypoint-initdb.d/0065-formdev-index-rebuild.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s

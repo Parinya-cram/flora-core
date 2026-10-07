@@ -156,13 +156,19 @@ def resolve(name: Any, path: str, ctx: _Context, allow_relation: bool = False) -
             return None
         meta = METADATA[meta_name]
         family = "subject" if meta_name == "$subject_id" else meta["family"]
-        return {"kind": "meta", "name": meta_name, "column": meta["column"], "family": family, "order_column": meta.get("order_column", meta["column"])}
+        ref = {"kind": "meta", "name": meta_name, "column": meta["column"], "family": family, "order_column": meta.get("order_column", meta["column"])}
+        if meta_name in catalog.metadata_building:
+            ref["state"] = "building"
+        return ref
     ctx.error(path, "invalid_field", f"Unknown field '{name}'.{_suggest(name, ctx)}")
     return None
 
 
 def _require_index(ref: dict[str, Any], path: str, ctx: _Context, purpose: str) -> bool:
     if ref["kind"] != "field":
+        if ref.get("state") == "building":  # $subject_id while it is backfilled
+            ctx.issues.append(Issue(path, "index_building", f"'{ref['name']}' is being rebuilt; try again shortly", field=ref["name"]))
+            return False
         return True
     if ref["family"] in ("longtext", "multi"):
         ctx.error(path, "not_filterable", f"{ref['type']} fields cannot be used to {purpose}")

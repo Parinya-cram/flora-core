@@ -73,6 +73,7 @@ class PostgreSQLAdapter(SqlDataAdapter):
     """
 
     vendor = "postgresql"
+    row_locks = True
     capabilities = {"explain_analyze": True, "row_estimate": True}
 
     def __init__(self, connection: Connection):
