@@ -93,6 +93,10 @@ class PostgreSQLAdapter(SqlDataAdapter):
     def _decode_json(self, value: Any) -> Any:
         return value
 
+    def interrupt(self) -> None:
+        cancel = getattr(self.connection, "cancel_safe", None) or self.connection.cancel
+        cancel()
+
     def lock_job_quota(self, owner_user_id: Any) -> None:
         # Transaction-scoped advisory locks: one per owner plus a global one, released at commit.
         self._execute("SELECT pg_advisory_xact_lock(hashtext(?))", ("formdev_job:global",))
@@ -101,14 +105,18 @@ class PostgreSQLAdapter(SqlDataAdapter):
     @contextmanager
     def read_session(self, timeout_ms: int, purpose: str = "interactive") -> Iterator[PgReadSession]:
         """READ ONLY transaction with server-side deadlines. statement_timeout bounds each
-        statement, transaction_timeout (PostgreSQL 17) the whole session. Custom plans are forced
-        because selectivity in the index table depends on the bound values; JIT stays off for
-        interactive work. On timeout the transaction is rolled back and the connection is clean."""
+        statement; interactive sessions also get transaction_timeout (PostgreSQL 17) for the whole
+        session. Job sessions do not: on PostgreSQL 17 reaching transaction_timeout terminates the
+        connection, and a job batch (fetch + relation lookups, each with its own statement deadline)
+        must stay on a live connection to record its outcome. Custom plans are forced because
+        selectivity in the index table depends on the bound values; JIT stays off for interactive work.
+        On a statement timeout the transaction is rolled back and the connection is clean; when
+        transaction_timeout ends an interactive session the pool discards the closed connection."""
         interactive = purpose == "interactive"
         settings = [("statement_timeout", f"{int(timeout_ms)}ms"), ("plan_cache_mode", "force_custom_plan"),
                     ("jit", "off" if interactive else "on"), ("max_parallel_workers_per_gather", "0" if interactive else "2"),
                     ("work_mem", "32MB" if interactive else "128MB")]
-        if self.connection.info.server_version >= 170000:
+        if interactive and self.connection.info.server_version >= 170000:
             settings.append(("transaction_timeout", f"{int(timeout_ms) + 2000}ms"))
         try:
             with self.connection.transaction():

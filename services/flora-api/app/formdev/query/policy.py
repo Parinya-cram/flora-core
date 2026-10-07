@@ -52,6 +52,7 @@ DEFAULT_POLICY: dict[str, Any] = {
     },
     "jobs": {
         "per_user_open": 3,
+        "per_user_retained_bytes": 2147483648,
         "global_open": 20,
         "workers": 2,
         "batch_rows": 1000,

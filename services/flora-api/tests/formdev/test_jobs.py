@@ -37,11 +37,14 @@ class JobContract(QueryContract):
         self.clock = Clock()
         self.runtime = QueryRuntime(policy=policy({"jobs": {"batch_rows": 5, "per_user_open": 2, "global_open": 5}}), cursor_secret=b"jobs", clock_ms=self.clock)
         self.active = {ADMIN.user_id: ADMIN, EXPORTER.user_id: EXPORTER, VIEWER.user_id: VIEWER}
-        self.worker = JobWorker(self.runtime, self.connect, self.active.get, self.store, threads=0)
+        self.worker = JobWorker(self.runtime, self.connect, self.owner, self.store, threads=0)
 
     def tearDown(self):
         self.folder.cleanup()
         super().tearDown()
+
+    def owner(self, services, user_id):
+        return self.active.get(user_id)
 
     @contextmanager
     def connect(self):
@@ -241,7 +244,7 @@ class JobContract(QueryContract):
         runtime = QueryRuntime(policy=policy({"interactive_aggregate_max_rows": 5}), cursor_secret=b"x", clock_ms=self.clock)
         body = {"query": {"source": "ward_check", "group": ["ward"], "aggregate": [{"fn": "count", "as": "n"}, {"fn": "avg", "field": "score", "as": "avg_score"}]}}
         job = JobService(runtime, self.fd, EXPORTER, self.store).create("report", body, "csv")
-        JobWorker(runtime, self.connect, self.active.get, self.store, threads=0).run_once("w")
+        JobWorker(runtime, self.connect, self.owner, self.store, threads=0).run_once("w")
         text, _ = self.download_text(job["job_id"])
         rows = list(csv.reader(io.StringIO(text.lstrip("﻿"))))
         self.assertEqual(rows[0], ["ward", "n", "avg_score"])
@@ -263,6 +266,184 @@ class JobContract(QueryContract):
         self.run_all()
         result = self.run_query(ADMIN, select=["hn"], filter={"field": "full_name", "op": "eq", "value": "Patient 3"}, pagination={"mode": "cursor", "limit": 5})
         self.assertEqual([row["hn"] for row in result["rows"]], ["HN-0003"])
+
+
+    # Phase 4 review, group C ---------------------------------------------------------------------
+    def test_search_jobs_need_the_export_permission(self):
+        """security:0 / spec:1 — a search job is a downloadable bulk file."""
+        with self.assertRaises(FormDevError) as caught:
+            self.jobs(VIEWER).create("search", self.export_body("jsonl", select=["hn", "age"]))
+        self.assertEqual(caught.exception.code, "export_forbidden")
+        job = self.jobs().create("search", self.export_body("jsonl", select=["hn"]))
+        self.active[EXPORTER.user_id] = Principal(EXPORTER.user_id, "exporter", EXPORTER.roles, ("formdev.query",))
+        self.run_all()
+        row = self.adapter.get_job(job["job_id"])
+        self.assertEqual((row["status"], row["error"]["code"]), ("failed", "export_forbidden"), "re-checked when claimed")
+
+    def test_download_rechecks_permissions(self):
+        """security:9 / spec:10 — revoking export or a field withdraws finished results."""
+        job = self.jobs().create("export", self.export_body("jsonl", select=["hn", "full_name"]))
+        self.run_all()
+        self.download_text(job["job_id"])
+        revoked = Principal(EXPORTER.user_id, "exporter", EXPORTER.roles, ("formdev.query",))
+        with self.assertRaises(FormDevError) as caught:
+            self.jobs(revoked).download(job["job_id"])
+        self.assertEqual((caught.exception.code, caught.exception.status), ("export_forbidden", 403))
+        self.assertIn("denied", [row["action"] for row in self.adapter.list_audit()])
+        self.adapter.save_form_policy({"form_id": "ward_check", "policy": {"fields": {"full_name": ["system_admin"]}}, "version": 1,
+                                       "updated_at": 0, "updated_by": USER})
+        with self.assertRaises(FormDevError) as caught:
+            self.jobs().download(job["job_id"])
+        self.assertEqual(caught.exception.code, "export_forbidden", "a selected field is no longer readable")
+        self.download_text(job["job_id"], ADMIN)
+
+    def test_retained_results_quota(self):
+        """security:11 — finished results count against a per-user byte quota."""
+        self.runtime.policy["jobs"]["per_user_retained_bytes"] = 1
+        job = self.jobs().create("export", self.export_body())
+        self.run_all()
+        with self.assertRaises(FormDevError) as caught:
+            self.jobs().create("export", self.export_body())
+        self.assertEqual((caught.exception.code, caught.exception.status), ("job_quota_exceeded", 429))
+        self.clock.now += self.runtime.policy["jobs"]["result_ttl_ms"] + 1
+        self.worker.maintenance(self.fd)
+        self.assertEqual(self.adapter.get_job(job["job_id"])["status"], "expired")
+        self.jobs().create("export", self.export_body())
+
+    def test_a_cancelled_job_whose_worker_died_ends(self):
+        """reliability:2 / spec:4 — cancel_requested jobs are never claimable; maintenance finishes them."""
+        job = self.jobs().create("export", self.export_body("jsonl", select=["hn"]))
+        with self.adapter.transaction():
+            self.adapter.claim_job(job["job_id"], "dead-worker", self.clock.now + 1000, self.clock.now)
+        self.assertEqual(self.jobs().cancel(job["job_id"])["status"], "running")
+        self.worker.maintenance(self.fd)
+        self.assertEqual(self.adapter.get_job(job["job_id"])["status"], "running", "the lease is still valid")
+        self.clock.now += 2000
+        self.worker.maintenance(self.fd)
+        self.assertEqual(self.adapter.get_job(job["job_id"])["status"], "cancelled")
+        self.assertEqual(self.adapter.count_open_jobs(EXPORTER.user_id), 0)
+
+    def test_an_infrastructure_failure_after_a_cancel_ends_cancelled(self):
+        job = self.jobs().create("export", self.export_body("jsonl", select=["hn"]))
+        original_check = self.worker._check
+
+        def cancel_then_crash(*args, **kwargs):
+            original_check(*args, **kwargs)
+            self.adapter.update_job_where(job["job_id"], ("running",), {"cancel_requested": 1})
+            raise RuntimeError("simulated crash")
+
+        self.worker._check = cancel_then_crash
+        self.worker.run_once("worker-a")
+        self.assertEqual(self.adapter.get_job(job["job_id"])["status"], "cancelled")
+        self.assertEqual(list(self.store.root.iterdir()), [])
+
+    def test_runtime_is_measured_per_attempt(self):
+        """reliability:3 — a requeued job does not carry its old started_at."""
+        job = self.jobs().create("export", self.export_body("jsonl", select=["hn"]))
+        original_check = self.worker._check
+
+        def stop_then_check(*args, **kwargs):
+            self.worker.stop_event.set()
+            return original_check(*args, **kwargs)
+
+        self.worker._check = stop_then_check
+        self.worker.run_once("worker-a")
+        self.worker.stop_event.clear()
+        self.worker._check = original_check
+        self.clock.now += self.runtime.policy["jobs"]["max_runtime_ms"] + 60_000
+        self.run_all()
+        self.assertEqual(self.adapter.get_job(job["job_id"])["status"], "succeeded")
+
+    def test_a_stale_worker_never_removes_the_new_owners_result(self):
+        """reliability:4 — failure paths remove files only after a fenced update succeeded."""
+        job = self.jobs().create("export", self.export_body("jsonl", select=["hn"]))
+        with self.adapter.transaction():
+            stale = self.adapter.claim_job(job["job_id"], "worker-a", self.clock.now + 1000, self.clock.now)
+        self.clock.now += 5000
+        self.assertTrue(self.worker.run_once("worker-b"))
+        del self.active[EXPORTER.user_id]  # worker-a now fails its own (lost) attempt with owner_inactive
+        self.worker._process(self.fd, stale, "worker-a")
+        self.active[EXPORTER.user_id] = EXPORTER
+        self.assertEqual(self.adapter.get_job(job["job_id"])["status"], "succeeded")
+        self.download_text(job["job_id"])
+
+    def test_a_reclaimed_part_is_copied_not_shared(self):
+        job_id = self.jobs().create("export", self.export_body("jsonl", select=["hn"]))["job_id"]
+        old = self.store.open_part(job_id, 1, None, 0)
+        old.write(b"abc")
+        old.flush()
+        new = self.store.open_part(job_id, 2, self.store.part(job_id, 1), 3)
+        old.write(b"STALE")  # the stale worker's handle
+        old.flush()
+        old.close()
+        new.seek(0)
+        self.assertEqual(new.read(), b"abc")
+        new.close()
+        self.assertFalse(self.store.part(job_id, 1).exists())
+
+    def test_cancel_never_removes_a_result_finished_meanwhile(self):
+        """reliability:8 — the queued->cancelled update decides, not the status read before it."""
+        job = self.jobs().create("export", self.export_body("jsonl", select=["hn"]))
+        service = self.jobs()
+        owned = service._owned
+
+        def finished_meanwhile(job_id):
+            row = owned(job_id)
+            self.run_all()
+            return row
+
+        service._owned = finished_meanwhile
+        self.assertEqual(service.cancel(job["job_id"])["status"], "succeeded")
+        self.download_text(job["job_id"])
+
+    def test_cancelling_a_running_aggregate(self):
+        """spec:11 — a cancel made during the aggregate statement is honoured."""
+        body = {"query": {"source": "ward_check", "group": ["ward"], "aggregate": [{"fn": "count", "as": "n"}]}}
+        job = self.jobs().create("report", body, "csv")
+        original = self.adapter.read_session
+
+        @contextmanager
+        def cancelled_during(*args, **kwargs):
+            with original(*args, **kwargs) as session:
+                yield session
+            self.adapter.update_job_where(job["job_id"], ("running",), {"cancel_requested": 1})
+
+        self.adapter.read_session = cancelled_during
+        try:
+            self.run_all()
+        finally:
+            self.adapter.read_session = original
+        self.assertEqual(self.adapter.get_job(job["job_id"])["status"], "cancelled")
+        self.assertEqual(list(self.store.root.iterdir()), [])
+
+    def test_shutdown_requeues_interrupted_and_stuck_jobs(self):
+        """reliability:5 / spec:15 — no attempt is spent when a statement outlives the shutdown wait."""
+        from app.formdev.adapters.sql_query import QueryFailed
+
+        job = self.jobs().create("export", self.export_body("jsonl", select=["hn"]))
+        original = self.adapter.read_session
+
+        @contextmanager
+        def interrupted(*args, **kwargs):
+            self.worker.stop_event.set()  # shutdown began; the statement is then interrupted
+            raise QueryFailed("interrupted")
+            yield  # pragma: no cover
+
+        self.adapter.read_session = interrupted
+        try:
+            self.worker.run_once("worker-a")
+        finally:
+            self.adapter.read_session = original
+        row = self.adapter.get_job(job["job_id"])
+        self.assertEqual((row["status"], row["attempt"]), ("queued", 0))
+        # A thread that never comes back: stop() requeues its job itself.
+        self.worker.stop_event.clear()
+        with self.adapter.transaction():
+            claimed = self.adapter.claim_job(job["job_id"], "stuck-worker", self.clock.now + 60_000, self.clock.now)
+        self.worker._active["stuck-worker"] = (self.fd, claimed)
+        self.worker.stop(timeout_s=0, interrupt_wait_s=0)
+        row = self.adapter.get_job(job["job_id"])
+        self.assertEqual((row["status"], row["attempt"], row["lease_owner"]), ("queued", 0, None))
 
 
 class SQLiteJobContract(JobContract, unittest.TestCase):

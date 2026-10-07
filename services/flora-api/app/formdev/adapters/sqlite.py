@@ -93,6 +93,7 @@ class SQLiteAdapter(SqlDataAdapter):
 
     def __init__(self, path: str | Path = ":memory:"):
         self.path = str(path)
+        self._readers: set[sqlite3.Connection] = set()
         self.connection = sqlite3.connect(self.path, isolation_level=None, check_same_thread=False)
         self.connection.row_factory = sqlite3.Row
         self.connection.execute("PRAGMA foreign_keys = ON")
@@ -122,6 +123,14 @@ class SQLiteAdapter(SqlDataAdapter):
 
     def close(self) -> None:
         self.connection.close()
+
+    def interrupt(self) -> None:
+        # sqlite3.Connection.interrupt is safe from another thread; read sessions on file databases have their own.
+        for connection in [self.connection, *self._readers]:
+            try:
+                connection.interrupt()
+            except sqlite3.ProgrammingError:
+                pass  # closed meanwhile
 
     @contextmanager
     def transaction(self) -> Iterator[None]:
@@ -164,6 +173,7 @@ class SQLiteAdapter(SqlDataAdapter):
             connection = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True, isolation_level=None, check_same_thread=False)
             connection.row_factory = sqlite3.Row
             connection.execute("PRAGMA query_only = ON")
+            self._readers.add(connection)
         else:
             # In-memory databases (tests) have no second connection; hold the lock for the session.
             self.lock.acquire()
@@ -184,6 +194,7 @@ class SQLiteAdapter(SqlDataAdapter):
         finally:
             connection.set_progress_handler(None, 0)
             if owned:
+                self._readers.discard(connection)
                 connection.close()
             else:
                 connection.execute("PRAGMA query_only = OFF")

@@ -105,11 +105,12 @@ conditions per `and`, 500 `in` values, 2 000 values in total · text values 1 00
 timeout 5 s default, 15 s maximum · result 2 MB · cache TTL 30 s default, 300 s maximum ·
 request body 64 KB · rate 60 queries/min per user (burst 20) · 2 concurrent queries per user, 4 per
 process · record pulls (`GET /records`, used by offline clients) 600/min per user (burst 100), no query slot · jobs: 3 open per user, 20 in total, 1 000-row batches, 30 s per batch, 5 min per aggregate,
-30 min per job, 512 MB per result, results kept 24 h · export rows: 100 000, 1 000 000 for `formdev.manage`.
+30 min per attempt, 512 MB per result, 2 GB of kept results per user, results kept 24 h · export rows: 100 000, 1 000 000 for `formdev.manage`.
 
 ## Execution safeguards
 
-- PostgreSQL sessions are `READ ONLY` with `statement_timeout`, `transaction_timeout` (PG 17),
+- PostgreSQL sessions are `READ ONLY` with `statement_timeout`, `transaction_timeout` (PG 17,
+  interactive sessions only: it ends the whole connection, which a job batch must keep),
   `plan_cache_mode = force_custom_plan`, JIT off and no parallel workers for interactive queries;
   statements are sent with `prepare=False`. SQLite reads use a private read-only connection with a
   progress-handler deadline.
@@ -128,9 +129,19 @@ process · record pulls (`GET /records`, used by offline clients) 600/min per us
 `aggregate` (json), `report` (csv, json); `reindex` is internal. Lifecycle:
 `queued → running → succeeded | failed | cancelled`, then `expired` after 24 h. Workers hold fenced
 leases (`lease_owner` + `attempt`), checkpoint every batch, resume after a crash and return jobs to
-the queue on shutdown. Exports iterate the immutable ingest order up to the boundary taken when the
-job started: every record that existed then appears exactly once. Owners are re-checked when a job
-is claimed and when it is downloaded; job creation and downloads are audited.
+the queue on shutdown (statements still running after 5 s are interrupted; the attempt is not
+spent). Result files are removed only by the worker that still holds the lease. Exports iterate the
+immutable ingest order up to the boundary taken when the job started: every record that existed then
+appears exactly once. `max_runtime_ms` applies to each attempt.
+
+`export`, `search` and `report` produce a downloadable file of rows, so they need the export
+permission (`formdev.export` and the source's `export` list; `export` and `search` also need every
+selected field to be exportable). Owners are re-checked when a job is created, claimed and
+downloaded: revoking query or export access withdraws finished results too (`export_forbidden`).
+A user's finished results may hold at most `jobs.per_user_retained_bytes` (2 GB) until they expire;
+beyond that new jobs get `job_quota_exceeded`. Cancelling takes effect at the next batch (aggregates:
+after their statement); if the worker died first, maintenance finishes the job as cancelled. Job
+creation, downloads and refused downloads are audited.
 
 CSV dialect: UTF-8 with BOM, RFC 4180 quoting, CRLF, header row of names (`headers: labels` adds a
 second row of labels), `true`/`false`, empty cell for null, multiselect values joined with `|`
@@ -179,10 +190,11 @@ Runtime errors:
 | `query_failed` | 500 | Database failure (no driver details) |
 | `diagnostics_forbidden` | 403 | `explain` without `formdev.diagnostics` |
 | `rate_limited` / `too_many_concurrent_queries` / `job_queue_full` | 429 | With `Retry-After` |
+| `job_quota_exceeded` | 429 | Finished results kept for the caller exceed `jobs.per_user_retained_bytes`; `details` has `retained_bytes` and `limit` |
 | `database_busy` / `jobs_unavailable` / `audit_unavailable` | 503 | Temporary |
 | `body_too_large` | 413 | Body above 64 KB |
 | `body_timeout` | 408 | Body not received within 10 s (read before any slot or connection is taken) |
-| `export_forbidden` / `forbidden` | 403 | Missing permission |
+| `export_forbidden` / `forbidden` | 403 | Missing permission (also when downloading a result the caller may no longer export) |
 | `field_not_exportable` | 422 | An export selects a field whose `display.export` is false (Phase 1.4 display policy); `details.fields` lists them |
 | `job_not_found` / `query_not_found` | 404 | Not found or not yours |
 | `job_not_ready` | 409 | Still running |

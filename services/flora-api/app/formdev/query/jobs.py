@@ -5,13 +5,19 @@ report (aggregate query -> csv/json), reindex (internal, record index rebuild).
 
 Guarantees
 - Leases are fenced: every write a worker makes names (lease_owner, attempt); a worker whose lease
-  was taken over writes nothing and stops. Expired leases are reclaimed on every poll.
-- Graceful shutdown returns a running job to the queue without spending an attempt.
+  was taken over writes nothing and stops. Expired leases are reclaimed on every poll. Result files are
+  removed only after a fenced status change succeeded, and a reclaiming worker copies the previous
+  attempt's part file (a stale writer's open handle never reaches the new attempt's file).
+- Graceful shutdown returns a running job to the queue without spending an attempt: the worker waits,
+  then interrupts statements still running, then requeues whatever is left with a fenced update.
 - Results are written to <job>.<attempt>.part, fsync'ed per batch and renamed on success; a
   checkpoint (last ingest_seq, rows, bytes) lets a retried attempt continue where it stopped.
 - Exports read records in ingest order up to the ingest_seq boundary taken when the job started:
   every record that existed then appears exactly once, with its value at read time.
-- Owners are re-checked (active, still allowed) when a job is claimed and when it is downloaded.
+- Every kind that writes a downloadable row file (export, search, report) needs the export permission.
+  Owners are re-checked (active, still allowed to query and export) when a job is created, claimed and
+  downloaded. max_runtime_ms applies per attempt.
+- A cancelled job always ends: if its worker died first, maintenance finishes it as cancelled.
 """
 from __future__ import annotations
 
@@ -23,6 +29,7 @@ import logging
 import os
 import shutil
 import threading
+import time
 import uuid
 from contextlib import AbstractContextManager
 from decimal import Decimal
@@ -43,6 +50,10 @@ EXTENSIONS = {"csv": "csv", "jsonl": "jsonl", "json": "json"}
 MEDIA_TYPES = {"csv": "text/csv; charset=utf-8", "jsonl": "application/x-ndjson", "json": "application/json"}
 FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 TERMINAL = ("succeeded", "failed", "cancelled", "expired")
+EXPORTING = ("export", "search", "report")  # kinds whose result is a downloadable file of rows
+ROW_FILES = ("export", "search")
+# Validation issues about index state, not about permissions: they do not withdraw a finished result.
+INDEX_ISSUES = {"index_building", "not_filterable", "not_sortable", "not_groupable"}
 
 
 class LeaseLost(Exception):
@@ -76,7 +87,15 @@ class ResultStore:
     def open_part(self, job_id: str, attempt: int, resume_from: Path | None, keep_bytes: int) -> io.BufferedRandom:
         path = self.part(job_id, attempt)
         if resume_from is not None and resume_from.exists() and resume_from != path:
-            os.replace(resume_from, path)
+            # Copy, never rename: a stale worker may still hold the old file open and would write into ours.
+            temporary = path.with_suffix(".copy")
+            with open(resume_from, "rb") as source, open(temporary, "wb") as target:
+                shutil.copyfileobj(source, target)
+                target.flush()
+                os.fsync(target.fileno())
+            os.chmod(temporary, 0o600)
+            os.replace(temporary, path)
+            resume_from.unlink(missing_ok=True)
         if not path.exists():
             os.close(os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600))
         handle = open(path, "r+b")
@@ -172,11 +191,11 @@ class JobService:
         fmt = fmt or export.get("format") or formats[0]
         if fmt not in formats:
             raise FormDevError("invalid_job", f"{kind} jobs write {', '.join(formats)}")
-        if kind in ("export", "report") and not catalog.can_export(self.principal):
+        if kind in EXPORTING and not catalog.can_export(self.principal):
             self.engine.audit("denied", spec, catalog, None, None)
             raise FormDevError("export_forbidden", "You may not export this source", 403)
         hidden = [ref["name"] for ref in spec["select"] if ref["kind"] == "field" and not catalog.can_export_field(self.principal, ref["field"])]
-        if kind == "export" and hidden:
+        if kind in ROW_FILES and hidden:
             raise FormDevError("field_not_exportable", f"Excluded from export by the form's display policy or field permissions: {', '.join(hidden)}", 422, {"fields": hidden})
         policy = self.runtime.policy["jobs"]
         now = self.runtime.clock_ms()
@@ -188,6 +207,10 @@ class JobService:
                 raise FormDevError("job_queue_full", f"You already have {policy['per_user_open']} jobs waiting or running", 429, {"retry_after": 30})
             if self.adapter.count_open_jobs(None) >= policy["global_open"]:
                 raise FormDevError("job_queue_full", "The job queue is full; try again later", 429, {"retry_after": 60})
+            retained = self.adapter.retained_job_bytes(self.principal.user_id)
+            if retained >= policy["per_user_retained_bytes"]:
+                raise FormDevError("job_quota_exceeded", "Your finished results use all of your storage; download what you need and wait for them "
+                                   "to expire before starting more jobs", 429, {"retained_bytes": retained, "limit": policy["per_user_retained_bytes"]})
             self.adapter.insert_job({
                 "job_id": job_id, "kind": kind, "status": "queued", "query": body, "format": fmt,
                 "owner_user_id": self.principal.user_id, "owner": self.principal.username, "rows_processed": 0, "total_estimate": None,
@@ -219,18 +242,41 @@ class JobService:
         row = self._owned(job_id)
         now = self.runtime.clock_ms()
         with self.adapter.transaction():
-            if not self.adapter.update_job_where(job_id, ("queued",), {"status": "cancelled", "finished_at": now}):
+            # Decided by the update itself, never by the status read before it (a worker may finish meanwhile).
+            dequeued = self.adapter.update_job_where(job_id, ("queued",), {"status": "cancelled", "finished_at": now})
+            if not dequeued:
                 self.adapter.update_job_where(job_id, ("running",), {"cancel_requested": 1})
             self.engine.audit("job_cancel", None, None, None, None, job_id=job_id)
-        if row["status"] == "queued":
+        if dequeued:
             self.store.remove(job_id)
         return public_job(self.adapter.get_job(job_id))
+
+    def _still_allowed(self, row: dict[str, Any]) -> None:
+        """The caller must still be allowed what the job did: query the source with its fields, and export
+        them for kinds that produce a file of rows. Revoking a permission withdraws finished results too."""
+        issues, spec, catalog = self.engine.validate(row["query"])
+        query = (row["query"] or {}).get("query") if isinstance(row["query"], dict) else None
+        if catalog is None and isinstance(query, dict) and isinstance(query.get("source"), str):
+            catalog = self.engine.catalog(query["source"])
+        allowed = catalog is not None and (spec is not None or (bool(issues) and all(issue.code in INDEX_ISSUES for issue in issues)))
+        if allowed and row["kind"] in EXPORTING:
+            allowed = catalog.can_export(self.principal)
+        if allowed and row["kind"] in ROW_FILES:
+            if spec is not None:
+                fields = [ref["field"] for ref in spec["select"] if ref["kind"] == "field"]
+            else:
+                fields = [name for name in (query.get("select") or []) if isinstance(name, str) and name in catalog.fields]
+            allowed = all(catalog.can_read(self.principal, name) and catalog.can_export_field(self.principal, name) for name in fields)
+        if not allowed:
+            self.engine.audit("denied", spec, catalog, None, None, job_id=row["job_id"])
+            raise FormDevError("export_forbidden", "You are no longer allowed to download this result", 403)
 
     def download(self, job_id: str) -> tuple[Iterator[bytes], str, str, int]:
         row = self._owned(job_id)
         if row["status"] != "succeeded":
             raise FormDevError("job_not_ready" if row["status"] in ("queued", "running") else "job_expired",
                                f"The job is {row['status']}", 409 if row["status"] in ("queued", "running") else 410)
+        self._still_allowed(row)
         path = self.store.final(job_id, row["format"])
         if not path.exists() or path.stat().st_size != int(row["result_bytes"]):
             self.adapter.update_job_where(job_id, ("succeeded",), {"status": "expired"})
@@ -248,10 +294,11 @@ class JobService:
 # Worker ---------------------------------------------------------------------------------------
 class JobWorker:
     """In-process worker threads. ``connect`` yields FormDevServices on a storage connection
-    reserved for jobs; ``load_principal(user_id)`` returns the owner's current entitlements or None."""
+    reserved for jobs; ``load_principal(services, user_id)`` returns the owner's current entitlements
+    or None, reading them on the connection the worker already holds (never a second pooled one)."""
 
     def __init__(self, runtime: QueryRuntime, connect: Callable[[], AbstractContextManager[Any]],
-                 load_principal: Callable[[Any], Principal | None], store: ResultStore, threads: int | None = None):
+                 load_principal: Callable[[Any, Any], Principal | None], store: ResultStore, threads: int | None = None):
         self.runtime = runtime
         self.connect = connect
         self.load_principal = load_principal
@@ -261,6 +308,9 @@ class JobWorker:
         self.stop_event = threading.Event()
         self._threads: list[threading.Thread] = []
         self._polls = 0
+        # Jobs in progress, by worker owner id: (services, job) — for interrupting and requeueing at shutdown.
+        self._active: dict[str, tuple[Any, dict[str, Any]]] = {}
+        self._active_lock = threading.Lock()
 
     # Lifecycle ------------------------------------------------------------------------------
     def start(self) -> None:
@@ -270,10 +320,35 @@ class JobWorker:
             thread.start()
             self._threads.append(thread)
 
-    def stop(self, timeout_s: float = 5.0) -> None:
+    def stop(self, timeout_s: float = 5.0, interrupt_wait_s: float = 2.0) -> None:
+        """Ask workers to stop at their next check; after ``timeout_s`` interrupt statements still running
+        (their jobs are requeued by the worker), and after ``interrupt_wait_s`` more requeue any job whose
+        thread is still stuck, with a fenced update on a fresh connection."""
         self.stop_event.set()
+        deadline = time.monotonic() + timeout_s
         for thread in self._threads:
-            thread.join(timeout_s)
+            thread.join(max(0.0, deadline - time.monotonic()))
+        with self._active_lock:
+            active = dict(self._active)
+        if active:
+            for services, _ in active.values():
+                try:
+                    services.adapter.interrupt()
+                except Exception:  # noqa: BLE001 - best effort
+                    LOG.warning("formdev job worker: could not interrupt a running statement", exc_info=True)
+            deadline = time.monotonic() + interrupt_wait_s
+            for thread in self._threads:
+                thread.join(max(0.0, deadline - time.monotonic()))
+        with self._active_lock:
+            stuck = dict(self._active)
+        for owner, (_, job) in stuck.items():
+            try:
+                with self.connect() as services:
+                    with services.adapter.transaction():
+                        services.adapter.update_job_fenced(job["job_id"], owner, job["attempt"], {"status": "queued", "lease_owner": None,
+                                                                                                  "lease_expires_at": None, "attempt": job["attempt"] - 1})
+            except Exception:  # noqa: BLE001 - the lease expires and the job is reclaimed later
+                LOG.warning("formdev job %s could not be returned to the queue at shutdown", job["job_id"], exc_info=True)
         self._threads = []
 
     def _loop(self) -> None:
@@ -293,8 +368,9 @@ class JobWorker:
         adapter = services.adapter
         with adapter.transaction():
             adapter.fail_exhausted_jobs(now)
+            cancelled = adapter.finish_cancelled_jobs(now)
             expired = adapter.expire_jobs(now)
-        for job_id in expired:
+        for job_id in cancelled + expired:
             self.store.remove(job_id)
         self.store.sweep(adapter.job_ids_with_files())
 
@@ -313,7 +389,13 @@ class JobWorker:
                     break
             if job is None:
                 return False
-            self._process(services, job, owner)
+            with self._active_lock:
+                self._active[owner] = (services, job)
+            try:
+                self._process(services, job, owner)
+            finally:
+                with self._active_lock:
+                    self._active.pop(owner, None)
             return True
 
     def _fenced(self, services: Any, job: dict[str, Any], owner: str, changes: dict[str, Any]) -> None:
@@ -327,12 +409,12 @@ class JobWorker:
             if job["kind"] == "reindex":
                 result = self._reindex(services, job, owner)
             else:
-                principal = self.load_principal(job["owner_user_id"])
+                principal = self.load_principal(services, job["owner_user_id"])
                 if principal is None:
                     raise FormDevError("owner_inactive", "The job owner is no longer active")
                 engine = QueryEngine(self.runtime, services, principal)
                 _, spec, catalog = engine.require_valid(job["query"])
-                if job["kind"] in ("export", "report") and not catalog.can_export(principal):
+                if job["kind"] in EXPORTING and not catalog.can_export(principal):
                     raise FormDevError("export_forbidden", "The job owner may no longer export this source", 403)
                 result = self._export(services, engine, spec, catalog, job, owner) if job["kind"] in ("export", "search") \
                     else self._aggregate(services, engine, spec, catalog, job, owner)
@@ -341,31 +423,61 @@ class JobWorker:
         except LeaseLost:
             LOG.warning("formdev job %s: lease lost, stopping", job["job_id"])
         except Shutdown:
-            with services.adapter.transaction():
-                services.adapter.update_job_fenced(job["job_id"], owner, job["attempt"], {"status": "queued", "lease_owner": None,
-                                                                                          "lease_expires_at": None, "attempt": job["attempt"] - 1})
+            self._requeue(services, job, owner)
         except _Cancelled:
-            self.store.remove(job["job_id"])
-            self._try_finish(services, job, owner, {"status": "cancelled", "finished_at": now(), "lease_owner": None})
-        except (FormDevError, QueryTimeout) as error:
-            code = error.code if isinstance(error, FormDevError) else "query_timeout"
-            message = error.message if isinstance(error, FormDevError) else "A batch took longer than its time budget"
-            self.store.remove(job["job_id"])
-            self._try_finish(services, job, owner, {"status": "failed", "finished_at": now(), "lease_owner": None,
-                                                     "error": {"code": code, "message": message}})
-        except Exception as error:  # noqa: BLE001 - infrastructure problem: retry while attempts remain
-            code = error.code if isinstance(error, QueryFailed) else type(error).__name__
-            LOG.error("formdev job %s attempt %s failed: %s", job["job_id"], job["attempt"], code)
-            final = job["attempt"] >= job["max_attempts"]
-            self._try_finish(services, job, owner, {"status": "failed" if final else "queued", "lease_owner": None, "lease_expires_at": None,
-                                                     "finished_at": now() if final else None,
-                                                     "error": {"code": "job_error", "message": "The job failed; it will be retried" if not final else "The job failed"}})
+            if self._try_finish(services, job, owner, {"status": "cancelled", "finished_at": now(), "lease_owner": None}):
+                self.store.remove(job["job_id"])
+        except Exception as error:  # noqa: BLE001 - every failure ends, retries or requeues the job
+            if self.stop_event.is_set() and not isinstance(error, FormDevError):
+                # Interrupted by a shutdown (or failing because of it): give the job back, attempt unspent.
+                self._requeue(services, job, owner)
+            elif isinstance(error, (FormDevError, QueryTimeout)):
+                code = error.code if isinstance(error, FormDevError) else "query_timeout"
+                message = error.message if isinstance(error, FormDevError) else "A batch took longer than its time budget"
+                if self._try_finish(services, job, owner, {"status": "failed", "finished_at": now(), "lease_owner": None,
+                                                            "error": {"code": code, "message": message}}):
+                    self.store.remove(job["job_id"])
+            else:  # infrastructure problem: retry while attempts remain (unless the owner cancelled meanwhile)
+                code = error.code if isinstance(error, QueryFailed) else type(error).__name__
+                LOG.error("formdev job %s attempt %s failed: %s", job["job_id"], job["attempt"], code)
+                if self._cancel_requested(services, job):
+                    if self._try_finish(services, job, owner, {"status": "cancelled", "finished_at": now(), "lease_owner": None}):
+                        self.store.remove(job["job_id"])
+                    return
+                final = job["attempt"] >= job["max_attempts"]
+                self._try_finish(services, job, owner, {"status": "failed" if final else "queued", "lease_owner": None, "lease_expires_at": None,
+                                                         "finished_at": now() if final else None,
+                                                         "error": {"code": "job_error", "message": "The job failed; it will be retried" if not final else "The job failed"}})
 
-    def _try_finish(self, services: Any, job: dict[str, Any], owner: str, changes: dict[str, Any]) -> None:
+    def _requeue(self, services: Any, job: dict[str, Any], owner: str) -> None:
+        self._try_finish(services, job, owner, {"status": "queued", "lease_owner": None, "lease_expires_at": None, "attempt": job["attempt"] - 1})
+
+    def _cancel_requested(self, services: Any, job: dict[str, Any]) -> bool:
+        try:
+            current = services.adapter.get_job(job["job_id"])
+        except Exception:  # noqa: BLE001 - broken connection: let the fenced update decide
+            return False
+        return bool(current and current["cancel_requested"])
+
+    def _try_finish(self, services: Any, job: dict[str, Any], owner: str, changes: dict[str, Any]) -> bool:
+        """Fenced final update; True when this worker still owned the job and the change was made. A broken
+        connection (for example one PostgreSQL terminated) is retried once on a fresh connection."""
         try:
             self._fenced(services, job, owner, changes)
+            return True
         except LeaseLost:
-            pass
+            return False
+        except Exception:  # noqa: BLE001
+            LOG.warning("formdev job %s: finishing on a fresh connection", job["job_id"], exc_info=True)
+        try:
+            with self.connect() as fresh:
+                self._fenced(fresh, job, owner, changes)
+            return True
+        except LeaseLost:
+            return False
+        except Exception:  # noqa: BLE001 - the lease expires and the job is reclaimed
+            LOG.error("formdev job %s: could not record its outcome", job["job_id"], exc_info=True)
+            return False
 
     def _check(self, services: Any, job: dict[str, Any], owner: str, checkpoint: dict[str, Any], rows: int, extend_ms: int | None = None) -> None:
         current = services.adapter.get_job(job["job_id"])
@@ -435,6 +547,7 @@ class JobWorker:
                     break
         finally:
             handle.close()
+        self._check(services, job, owner, checkpoint, checkpoint["rows"])  # still ours (and not cancelled) before the rename
         size, digest = self.store.finish(job["job_id"], job["attempt"], fmt)
         return {"rows_processed": checkpoint["rows"], "result_bytes": size, "result_sha256": digest, "checkpoint": checkpoint}
 
@@ -444,6 +557,8 @@ class JobWorker:
         plan = build_plan(spec)
         with services.adapter.read_session(budget, "job") as session:
             rows = session.fetch(compile_plan(plan))
+        # One long statement: a cancel (or shutdown) made while it ran is honoured here, before any result is kept.
+        self._check(services, job, owner, {"phase": "aggregate"}, 0)
         result = engine._aggregate_rows(spec, catalog, plan, rows)
         names = [key["name"] for key in spec["group"]] + [agg["as"] for agg in spec["aggregate"]]
         if job["format"] == "csv":

@@ -70,6 +70,7 @@ export type QueryPolicy = {
   concurrency: { per_user: number; global: number };
   jobs: {
     per_user_open: number;
+    per_user_retained_bytes: number;
     global_open: number;
     workers: number;
     batch_rows: number;

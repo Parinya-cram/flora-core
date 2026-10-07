@@ -52,10 +52,10 @@ JSON keys are refused. Spec: [QUERY.md](QUERY.md).
 | GET | `/queries` | `formdev.query` | Saved queries the caller owns, or whose source the caller may query |
 | GET / PUT / DELETE | `/queries/{query_id}` | `formdev.query` to read; owner or admin to change | Saved query (validated on save). Others' queries come with filter values and cursors removed (`redacted: true`) |
 | POST | `/queries/{query_id}/run` | `formdev.query` | Run a saved query as the caller (`{cursor}` optional; a top-level `limit` becomes the page size) |
-| POST | `/jobs` | `formdev.query`; export/report also `formdev.export` | `{kind, format?, body: {query}}` |
+| POST | `/jobs` | `formdev.query`; export/search/report also `formdev.export` | `{kind, format?, body: {query}}`; 2 GB of kept results per user |
 | GET | `/jobs`, `/jobs/{job_id}` | owner or admin | Status and progress |
 | POST | `/jobs/{job_id}/cancel` | owner or admin | Cancel (queued: immediately; running: at the next batch) |
-| GET | `/jobs/{job_id}/download` | owner or admin | Stream the result (session header; never a token in the URL) |
+| GET | `/jobs/{job_id}/download` | owner or admin, still allowed to query (and export) the source | Stream the result (session header; never a token in the URL) |
 | GET / PUT | `/policies/{form_id}` | `formdev.manage` | Form access policy `{query, export, fields}` |
 | PUT / DELETE | `/sources/{source_id}` | `formdev.manage` | Named source `{form_id, config: {relations, query, export, fields, hidden}}` |
 | GET | `/index-config/{form_id}` | `formdev.manage` | Indexed fields with origin and state |

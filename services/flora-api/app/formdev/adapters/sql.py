@@ -374,10 +374,11 @@ class SqlDataAdapter(DataAdapter):
         return [row["job_id"] for row in rows]
 
     def claim_job(self, job_id: str, lease_owner: str, lease_until: int, now: int) -> dict[str, Any] | None:
-        """Compare-and-set claim; the returned row's attempt is the fencing token."""
+        """Compare-and-set claim; the returned row's attempt is the fencing token. started_at is the start of
+        this attempt: the runtime limit applies per attempt, not to time spent queued or waiting for a lease."""
         cursor = self._execute(
             "UPDATE formdev_job SET status = 'running', lease_owner = ?, lease_expires_at = ?, attempt = attempt + 1, "
-            "started_at = COALESCE(started_at, ?), heartbeat_at = ? WHERE job_id = ? AND cancel_requested = 0 AND attempt < max_attempts "
+            "started_at = ?, heartbeat_at = ? WHERE job_id = ? AND cancel_requested = 0 AND attempt < max_attempts "
             "AND (status = 'queued' OR (status = 'running' AND lease_expires_at < ?))",
             (lease_owner, lease_until, now, now, job_id, now),
         )
@@ -410,6 +411,27 @@ class SqlDataAdapter(DataAdapter):
                                                                    "error": {"code": "job_abandoned", "message": "The job stopped responding too many times"}}):
                 failed.append(row["job_id"])
         return failed
+
+    def finish_cancelled_jobs(self, now: int) -> list[str]:
+        """Cancelled jobs nobody is running any more (queued, or running with an expired lease: the worker died
+        before it saw the request) become 'cancelled'; they are never claimable, so nothing else would end them."""
+        condition = "cancel_requested = 1 AND (status = 'queued' OR (status = 'running' AND lease_expires_at < ?))"
+        rows = self._all(f"SELECT job_id FROM formdev_job WHERE {condition}", (now,))
+        finished = []
+        for row in rows:
+            cursor = self._execute(f"UPDATE formdev_job SET status = 'cancelled', finished_at = ?, lease_owner = NULL, lease_expires_at = NULL "
+                                   f"WHERE job_id = ? AND {condition}", (now, row["job_id"], now))
+            if cursor.rowcount == 1:
+                finished.append(row["job_id"])
+        return finished
+
+    def retained_job_bytes(self, owner_user_id: Any) -> int:
+        """Bytes of an owner's finished results still kept for download."""
+        row = self._one("SELECT COALESCE(SUM(result_bytes), 0) AS total FROM formdev_job WHERE status = 'succeeded' AND owner_user_id = ?", (owner_user_id,))
+        return int(row["total"]) if row else 0
+
+    def interrupt(self) -> None:
+        """Stop the statement running on this adapter's connection from another thread (graceful shutdown)."""
 
     def expire_jobs(self, now: int) -> list[str]:
         rows = self._all("SELECT job_id FROM formdev_job WHERE status = 'succeeded' AND expires_at < ?", (now,))

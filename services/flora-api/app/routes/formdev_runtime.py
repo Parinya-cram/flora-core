@@ -195,7 +195,11 @@ def _job_services() -> Iterator[FormDevServices]:
         yield services_on(PostgreSQLAdapter(connection))
 
 
-def _job_principal(user_id: Any) -> Principal | None:
+def _job_principal(services: FormDevServices, user_id: Any) -> Principal | None:
+    # On PostgreSQL storage the worker already holds a job_pool connection: read the owner on it. Taking a
+    # second one would wait for a connection another worker holds for its whole job.
+    if isinstance(services.adapter, PostgreSQLAdapter):
+        return load_principal(services.adapter.connection, user_id)
     with job_pool.connection(timeout=10) as connection:
         return load_principal(connection, user_id)
 
@@ -219,6 +223,12 @@ def start_background() -> None:
     global _worker, _flusher, jobs_available
     try:
         job_pool.open(wait=False)
+        # One connection per worker thread, one for the statistics flusher, one to record an outcome after a
+        # worker's own connection broke.
+        needed = runtime().policy["jobs"]["workers"] + 2
+        if job_pool.max_size < needed:
+            LOG.info("FormDev job pool raised from %d to %d connections for %d workers", job_pool.max_size, needed, needed - 2)
+            job_pool.resize(min_size=job_pool.min_size, max_size=needed)
         _worker = JobWorker(runtime(), _job_services, _job_principal, store())
         _worker.start()
         _stop.clear()

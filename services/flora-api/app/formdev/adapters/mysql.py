@@ -6,7 +6,9 @@ differences:
 * ``?`` placeholders -> PyMySQL's ``%s`` (literal ``%`` doubled);
 * ``ON CONFLICT (...) DO UPDATE SET ... excluded.x`` -> ``AS excluded ON DUPLICATE KEY UPDATE ...`` (row alias,
   8.0.19+) and ``ON CONFLICT (...) DO NOTHING`` -> ``ON DUPLICATE KEY UPDATE <key> = <key>``;
-* ``CAST(NULL AS TEXT / DOUBLE PRECISION)`` -> ``CHAR`` / ``DOUBLE``.
+* ``CAST(NULL AS TEXT / DOUBLE PRECISION)`` -> ``CHAR`` / ``DOUBLE``;
+* connections use CLIENT.FOUND_ROWS, so UPDATE rowcounts are rows matched (compare-and-set claims and
+  fenced job updates rely on it), not rows changed.
 
 Schema: mysql_schema.sql (migration 1) and the generated mysql_0002_registry.sql, applied on open and tracked in
 formdev_schema_migration. JSON is LONGTEXT encoded by the adapter; utf8mb4_bin keeps comparisons byte-ordered
@@ -72,12 +74,15 @@ def split_script(script: str) -> list[str]:
 
 def connect(url: str) -> Any:
     import pymysql  # optional dependency: only MySQL deployments need it
+    from pymysql.constants import CLIENT
     from pymysql.cursors import DictCursor
 
     parsed = urlparse(url)
     return pymysql.connect(
         host=parsed.hostname or "localhost", port=parsed.port or 3306, user=unquote(parsed.username or ""), password=unquote(parsed.password or ""),
         database=parsed.path.lstrip("/"), charset="utf8mb4", cursorclass=DictCursor, autocommit=True, init_command="SET time_zone = '+00:00'",
+        # rowcount = rows matched, as on PostgreSQL and SQLite: fenced updates that rewrite identical values still succeed.
+        client_flag=CLIENT.FOUND_ROWS,
     )
 
 
@@ -141,6 +146,7 @@ class MySQLAdapter(SqlDataAdapter):
 
     def __init__(self, url: str | None = None, connection: Any = None):
         self.connection = connection if connection is not None else connect(url or "")
+        self._url = url
         self._reconnect = connection is None
         self._depth = 0
         self.lock = threading.RLock()
@@ -215,6 +221,16 @@ class MySQLAdapter(SqlDataAdapter):
                 self._raw("COMMIT")
             else:
                 self._raw(f"RELEASE SAVEPOINT formdev_{self._depth}")
+
+    def interrupt(self) -> None:
+        # The running statement is killed from a second connection (KILL QUERY); the session itself survives.
+        if not self._url:
+            return
+        killer = connect(self._url)
+        try:
+            killer.cursor().execute("KILL QUERY %s", (self.connection.thread_id(),))
+        finally:
+            killer.close()
 
     def lock_job_quota(self, owner_user_id: Any) -> None:
         # Row locks held to commit: a global one and one per owner (PostgreSQL uses advisory locks).
