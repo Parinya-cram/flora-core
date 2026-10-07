@@ -677,8 +677,8 @@ function exportOptions(query: Obj, ctx: Ctx): void {
   unknownKeys(raw, new Set(["format", "headers", "max_rows"]), "$.query.export", ctx);
   const format = getOr(raw, "format", "csv");
   const headers = getOr(raw, "headers", "ids");
-  if (!["csv", "jsonl", "json"].includes(format as string) || !["ids", "labels"].includes(headers as string)) {
-    error(ctx, "$.query.export", "invalid_export", "format is csv, jsonl or json; headers is ids or labels");
+  if (!["csv", "jsonl", "json", "xlsx"].includes(format as string) || !["ids", "labels"].includes(headers as string)) {
+    error(ctx, "$.query.export", "invalid_export", "format is csv, jsonl, json or xlsx; headers is ids or labels");
     return;
   }
   const limits = ctx.policy.export_max_rows;

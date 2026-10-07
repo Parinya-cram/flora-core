@@ -39,6 +39,8 @@ export type FormPdfInput = {
 
 const TONES: Record<Tone, ReturnType<typeof rgb>> = { text: rgb(0.12, 0.16, 0.22), muted: rgb(0.38, 0.43, 0.5), accent: rgb(0.05, 0.32, 0.45) };
 const LINE_COLOR = rgb(0.45, 0.5, 0.57);
+/** Shaded title bars and table headers. */
+const FILL_COLOR = rgb(0.9, 0.91, 0.93);
 /** Characters the bundled fonts lack, written with ones they have. */
 const SUBSTITUTE: Record<string, string> = { "₀": "0", "₁": "1", "₂": "2", "₃": "3", "⁰": "0", "¹": "1", "²": "2", "³": "3", "–": "-", "—": "-", "…": "...", "≥": ">=", "≤": "<=", "→": "->", "✓": "/", "✗": "x" };
 
@@ -57,6 +59,9 @@ type GlyphFont = {
     positions: Array<{ xAdvance: number; xOffset: number; yOffset: number }>; advanceWidth: number };
 };
 type Fonts = { list: Array<{ font: GlyphFont; chars: Set<number>; svg: Map<number, string> }> };
+/** Bold text is the regular outline stroked in the text colour (fontkit cannot instance the variable font from
+ * WOFF2): this much of the font size as stroke width, and as extra advance per glyph when measuring. */
+const BOLD_STROKE = 0.045;
 type Run = { entry: Fonts["list"][number]; text: string };
 
 /** Runs of text, each in the first font that has its characters. */
@@ -76,7 +81,11 @@ function runs(fonts: Fonts, text: string): Run[] {
   return out;
 }
 
-const runWidth = (run: Run, size: number) => (run.entry.font.layout(run.text).advanceWidth * size) / run.entry.font.unitsPerEm;
+const runWidth = (run: Run, size: number, bold = false) => {
+  const { font } = run.entry;
+  const shaped = font.layout(run.text);
+  return (shaped.advanceWidth * size) / font.unitsPerEm + (bold ? shaped.glyphs.length * size * BOLD_STROKE : 0);
+};
 
 export async function buildFormPdf(input: FormPdfInput): Promise<Uint8Array> {
   const { definition } = input;
@@ -90,7 +99,7 @@ export async function buildFormPdf(input: FormPdfInput): Promise<Uint8Array> {
     const font = fontkit.create(bytesOf(url)) as unknown as GlyphFont;
     return { font, chars: new Set(font.characterSet), svg: new Map<number, string>() };
   }) };
-  const measure: Measure = (text, size) => runs(fonts, text).reduce((sum, run) => sum + runWidth(run, size), 0);
+  const measure: Measure = (text, size, bold) => runs(fonts, text).reduce((sum, run) => sum + runWidth(run, size, bold), 0);
 
   const columns = typeof style.tokens.columns === "number" ? style.tokens.columns : 2;
   const layout = layoutPdf({
@@ -129,8 +138,10 @@ async function draw(pdf: PDFDocument, page: PDFPage, op: Op, fonts: Fonts, image
             path = glyph.path.scale(1, -1).toSVG(); // font units are y-up, SVG paths y-down
             svg.set(glyph.id, path);
           }
-          if (path) page.drawSvgPath(path, { x: pen + position.xOffset * scale, y: H - op.y + position.yOffset * scale, scale, color, borderWidth: 0 });
-          pen += position.xAdvance * scale;
+          // The stroke width is set inside the path's scaled space, so it is given in font units.
+          if (path) page.drawSvgPath(path, { x: pen + position.xOffset * scale, y: H - op.y + position.yOffset * scale, scale, color,
+            ...(op.bold ? { borderColor: color, borderWidth: (op.size * BOLD_STROKE) / scale } : { borderWidth: 0 }) });
+          pen += position.xAdvance * scale + (op.bold ? op.size * BOLD_STROKE : 0);
         });
       }
       return;
@@ -140,7 +151,7 @@ async function draw(pdf: PDFDocument, page: PDFPage, op: Op, fonts: Fonts, image
         dashArray: op.dotted ? [1, 2] : undefined });
       return;
     case "rect":
-      page.drawRectangle({ x: op.x, y: H - op.y - op.h, width: op.w, height: op.h, borderWidth: 0.4, borderColor: LINE_COLOR });
+      page.drawRectangle({ x: op.x, y: H - op.y - op.h, width: op.w, height: op.h, borderWidth: 0.4, borderColor: LINE_COLOR, color: op.fill ? FILL_COLOR : undefined });
       return;
     case "mark": {
       const half = op.size / 2;

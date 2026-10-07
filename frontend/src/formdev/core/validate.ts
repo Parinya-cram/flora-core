@@ -8,7 +8,7 @@ import { sectionFieldLists } from "./blocks";
 import { check as checkFormula } from "../logic/formula";
 import { build as buildModel, cycles as logicCycles } from "../logic/model";
 import { MESSAGES } from "./messages";
-import type { FieldDefinition, FormDefinition, IndexEntry, Issue, PaperBand, RecordStatus } from "./types";
+import type { FieldDefinition, FormDefinition, IndexEntry, Issue, MatrixCell, PaperBand, RecordStatus } from "./types";
 
 export { INDEXABLE_TYPES };
 export const FORMAT = "flora.form/1";
@@ -17,6 +17,7 @@ export const DEFAULT_TZ_OFFSET_MINUTES = 420;
 export const SUBJECT_FIELD_KEY = "flora.subject_field";
 const SUBJECT_FIELD_TYPES = ["text", "select", "radio", "integer"];
 export const PAPERS = ["A4", "A5", "Letter", "screen"];
+const REPEAT_VIEWS = ["cards", "table"];
 /** Sheet size in mm, portrait. "screen" has no page. */
 export const PAPER_SIZES_MM: Readonly<Record<string, [number, number]>> = { A4: [210, 297], A5: [148, 210], Letter: [215.9, 279.4] };
 const ORIENTATIONS = ["portrait", "landscape"];
@@ -59,8 +60,15 @@ const SIGNATURE_DATA = /^data:image\/(png|svg\+xml);base64,[A-Za-z0-9+/=]+$/;
 
 const DEFINITION_KEYS = new Set(["format", "form_id", "schema_version", "title", "description", "paper", "style_id", "style", "font_id", "offline", "metadata",
   "layout", "calculators", "rules", "permission", "sections", "migration", "extensions"]);
-const SECTION_KEYS = new Set(["id", "title", "description", "fields", "categories", "sections", "layout", "style", "visibility", "permission", "page_break", "repeat"]);
-const CATEGORY_KEYS = new Set(["id", "title", "description", "fields", "layout", "style", "visibility", "permission", "page_break", "repeat"]);
+const SECTION_KEYS = new Set(["id", "title", "description", "fields", "categories", "sections", "layout", "style", "visibility", "permission", "page_break", "repeat",
+  "print_style", "hide_title", "repeat_on_pages"]);
+const CATEGORY_KEYS = new Set(["id", "title", "description", "fields", "layout", "style", "visibility", "permission", "page_break", "repeat", "print_style", "hide_title"]);
+// Paper layout (Template phase): bordered cells with "Label: value", and top-level sections drawn on every page.
+const PRINT_STYLES = ["plain", "boxed"];
+const PAGE_BANDS = ["header", "footer"];
+const MATRIX_CELL_TYPES = ["integer", "number", "text", "select"];
+const MATRIX_NUMERIC = ["integer", "number"];
+const MAX_MATRIX_ITEMS = 60;
 const PAPER_KEYS = new Set(["size", "orientation", "margin_mm", "header", "footer"]);
 const BAND_KEYS = new Set(["left", "center", "right", "height_mm", "first_page"]);
 const MARGIN_KEYS = ["top", "right", "bottom", "left"];
@@ -710,6 +718,11 @@ function validateSection(ctx: Ctx, section: unknown, path: string, scope: Scope,
   if ("visibility" in section) validateVisibility(ctx, section.visibility, `${path}.visibility`, scope);
   if ("permission" in section) validatePermission(ctx, section.permission, `${path}.permission`, SECTION_ACTIONS);
   if ("page_break" in section && !PAGE_BREAKS.includes(section.page_break as string)) ctx.add(`${path}.page_break`, "invalid_page_break", `page_break must be one of ${PAGE_BREAKS.join(", ")}`);
+  validatePaperKeys(ctx, section, path);
+  if ("repeat_on_pages" in section) {
+    if (!PAGE_BANDS.includes(section.repeat_on_pages as string)) ctx.add(`${path}.repeat_on_pages`, "invalid_layout", "repeat_on_pages is header or footer");
+    else if (depth > 1) ctx.add(`${path}.repeat_on_pages`, "invalid_layout", "Only top-level sections repeat on every page");
+  }
   let children: unknown[] = [];
   if ("sections" in section) {
     if (!Array.isArray(section.sections)) ctx.add(`${path}.sections`, "invalid_type", "sections must be an array");
@@ -751,6 +764,7 @@ function validateCategory(ctx: Ctx, category: unknown, path: string, scope: Scop
   if ("style" in category) validateStyleRef(ctx, category.style, `${path}.style`);
   if ("visibility" in category) validateVisibility(ctx, category.visibility, `${path}.visibility`, scope);
   if ("permission" in category) validatePermission(ctx, category.permission, `${path}.permission`, SECTION_ACTIONS);
+  validatePaperKeys(ctx, category, path);
   if ("page_break" in category && !PAGE_BREAKS.includes(category.page_break as string)) ctx.add(`${path}.page_break`, "invalid_page_break", `page_break must be one of ${PAGE_BREAKS.join(", ")}`);
   const categoryFields = category.fields;
   if (!Array.isArray(categoryFields) || categoryFields.length === 0) {
@@ -851,6 +865,10 @@ function validateField(ctx: Ctx, field: unknown, path: string, scope: Scope, col
     if (isText(field.formula) && field.formula.trim() && !("calculator" in field)) ctx.formulas.push([`${path}.formula`, field.formula, scope]);
   }
   if (kind === "file" || kind === "signature") validateFileProps(ctx, field, path);
+  if ("option_columns" in field && allowed.has("option_columns") && !(isInt(field.option_columns) && field.option_columns >= 1 && field.option_columns <= 6)) {
+    ctx.add(`${path}.option_columns`, "invalid_columns", "option_columns must be an integer 1-6");
+  }
+  if (field.type === "matrix") validateMatrix(ctx, field, path);
   if ("derive" in field && allowed.has("derive")) validateDerive(ctx, field, path, scope);
 
   if (field.indexed === true && allowed.has("indexed")) {
@@ -867,6 +885,103 @@ function validateField(ctx: Ctx, field: unknown, path: string, scope: Scope, col
   if ("permission" in field) validatePermission(ctx, field.permission, `${path}.permission`, FIELD_ACTIONS);
   if (type === "group" || type === "repeat") validateContainerField(ctx, field, path, scope, columns, inRepeat, depth);
   return cell;
+}
+
+function validatePaperKeys(ctx: Ctx, block: Obj, path: string) {
+  if ("print_style" in block && !PRINT_STYLES.includes(block.print_style as string)) ctx.add(`${path}.print_style`, "invalid_layout", `print_style must be one of ${PRINT_STYLES.join(", ")}`);
+  if ("hide_title" in block && typeof block.hide_title !== "boolean") ctx.add(`${path}.hide_title`, "invalid_type", "hide_title must be a boolean");
+}
+
+function matrixCellOk(ctx: Ctx, cell: unknown, path: string) {
+  if (!isObject(cell)) {
+    ctx.add(path, "invalid_type", "cell must be {type, options?, min?, max?}");
+    return;
+  }
+  ctx.unknown(cell, new Set(["type", "options", "min", "max"]), path);
+  if (!MATRIX_CELL_TYPES.includes(cell.type as string)) ctx.add(`${path}.type`, "invalid_field_type", `cell type is one of ${MATRIX_CELL_TYPES.join(", ")}`);
+  for (const bound of ["min", "max"]) if (bound in cell && !isNumber(cell[bound])) ctx.add(`${path}.${bound}`, "invalid_type", `${bound} must be a number`);
+  if (cell.type === "select") {
+    const options = cell.options;
+    if (!Array.isArray(options) || !options.length || !options.every(option => isObject(option) && isText(option.value) && option.value !== "" && isText(option.label))) {
+      ctx.add(`${path}.options`, "invalid_option", "A select cell needs options [{value, label}]");
+    } else if (new Set(options.map(option => (option as Obj).value)).size !== options.length) ctx.add(`${path}.options`, "invalid_option", "Option values must be unique");
+  }
+}
+
+function matrixItems(ctx: Ctx, items: unknown, path: string, name: string): Obj[] {
+  if (!Array.isArray(items) || !items.length || items.length > MAX_MATRIX_ITEMS) {
+    ctx.add(path, "invalid_type", `${name} must be a list of 1-${MAX_MATRIX_ITEMS} {id, label}`);
+    return [];
+  }
+  const seen = new Set<string>();
+  const out: Obj[] = [];
+  items.forEach((item, index) => {
+    const itemPath = `${path}[${index}]`;
+    if (!isObject(item) || !isText(item.id) || !ITEM_ID.test(item.id)) {
+      ctx.add(`${itemPath}.id`, "invalid_field_id", "id must be lower snake case");
+      return;
+    }
+    if (seen.has(item.id)) ctx.add(`${itemPath}.id`, "duplicate_field_id", `Duplicate id '${item.id}'`);
+    seen.add(item.id);
+    if (!isText(item.label) || !item.label.trim()) ctx.add(`${itemPath}.label`, "invalid_label", "label is required");
+    out.push(item);
+  });
+  return out;
+}
+
+/** matrix: fixed rows x cols of cells (score sheets such as the Aldrete score); a row may override the cell; totals are
+ * computed rows (sums of numeric rows), never stored. */
+function validateMatrix(ctx: Ctx, field: Obj, path: string) {
+  matrixCellOk(ctx, field.cell, `${path}.cell`);
+  const rows = matrixItems(ctx, field.rows, `${path}.rows`, "rows");
+  matrixItems(ctx, field.cols, `${path}.cols`, "cols");
+  rows.forEach((row, index) => {
+    ctx.unknown(row, new Set(["id", "label", "cell"]), `${path}.rows[${index}]`);
+    if ("cell" in row) matrixCellOk(ctx, row.cell, `${path}.rows[${index}].cell`);
+  });
+  const rowIds = new Set(rows.map(row => row.id as string));
+  const numeric = new Set(rows.filter(row => matrixNumeric((row.cell ?? field.cell) as Obj | undefined)).map(row => row.id as string));
+  if ("totals" in field) {
+    matrixItems(ctx, field.totals, `${path}.totals`, "totals").forEach((total, index) => {
+      const totalPath = `${path}.totals[${index}]`;
+      ctx.unknown(total, new Set(["id", "label", "of"]), totalPath);
+      if (rowIds.has(total.id as string)) ctx.add(`${totalPath}.id`, "duplicate_field_id", `'${String(total.id)}' is also a row id`);
+      const of = total.of;
+      if (!Array.isArray(of) || !of.length || !of.every(key => isText(key) && numeric.has(key))) ctx.add(`${totalPath}.of`, "unknown_field_reference", "of lists the numeric rows to add up");
+    });
+  }
+}
+
+export const matrixCell = (field: FieldDefinition, row: { cell?: MatrixCell }): MatrixCell | Record<string, never> => row.cell ?? field.cell ?? {};
+
+const numberText = (value: unknown): number | null => {
+  if (isNumber(value)) return value;
+  if (!isText(value) || !value.trim()) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+};
+
+/** Rows a total may add up: numbers, or choices whose values are all numbers (a 0 / 1 / 2 score). */
+function matrixNumeric(cell: Obj | undefined): boolean {
+  if (!isObject(cell)) return false;
+  if (MATRIX_NUMERIC.includes(cell.type as string)) return true;
+  const options = cell.type === "select" ? cell.options : undefined;
+  return Array.isArray(options) && options.length > 0 && options.every(option => isObject(option) && numberText(option.value) !== null);
+}
+
+/** Total rows of a matrix value: per column, the sum of the listed rows (null when none of them has a value). */
+export function matrixTotals(field: FieldDefinition, value: unknown): Record<string, Record<string, number | null>> {
+  const data = isObject(value) ? value : {};
+  const out: Record<string, Record<string, number | null>> = {};
+  for (const total of field.totals ?? []) {
+    const sums: Record<string, number | null> = {};
+    for (const col of field.cols ?? []) {
+      const numbers = total.of.map(row => numberText(isObject(data[row]) ? (data[row] as Obj)[col.id] : undefined)).filter((item): item is number => item !== null);
+      sums[col.id] = numbers.length ? numbers.reduce((sum, item) => sum + item, 0) : null;
+    }
+    out[total.id] = sums;
+  }
+  return out;
 }
 
 function validateCalculated(ctx: Ctx, field: Obj, path: string) {
@@ -889,6 +1004,7 @@ function validateContainerField(ctx: Ctx, field: Obj, path: string, scope: Scope
     if (bound in field && !(isInt(field[bound]) && (field[bound] as number) >= 0 && (field[bound] as number) <= 1000)) ctx.add(`${path}.${bound}`, "invalid_type", `${bound} must be an integer 0-1000`);
   }
   if (isInt(field.min_items) && isInt(field.max_items) && field.min_items > field.max_items) ctx.add(path, "invalid_range", "min_items must not be greater than max_items");
+  if ("view" in field && !REPEAT_VIEWS.includes(field.view as string)) ctx.add(`${path}.view`, "invalid_repeat", "view is cards (one card per row) or table (a spreadsheet-like grid)");
   const children = field.fields;
   if (!Array.isArray(children) || children.length === 0) ctx.add(`${path}.fields`, "container_requires_fields", `${String(field.type)} fields need at least one child field`);
   else if (depth >= MAX_NESTING) ctx.add(`${path}.fields`, "too_deep", `Groups and repeats may nest at most ${MAX_NESTING} levels`);
@@ -1298,11 +1414,41 @@ const valueList: ValueValidator = (field, value, path) => {
   return issues;
 };
 
+const valueMatrix: ValueValidator = (field, value, path) => {
+  if (!isObject(value)) return [issue(path, "invalid_type", "Expected {row: {column: value}}")];
+  const rows = new Map((field.rows ?? []).map(row => [row.id, row]));
+  const cols = new Set((field.cols ?? []).map(col => col.id));
+  const issues: Issue[] = [];
+  for (const rowId of Object.keys(value).sort()) {
+    const rowPath = `${path}.${rowId}`;
+    const cells = value[rowId];
+    const row = rows.get(rowId);
+    if (!row || !isObject(cells)) {
+      issues.push(issue(rowPath, "unknown_field", `'${rowId}' is not a row of this matrix`));
+      continue;
+    }
+    const cell = matrixCell(field, row) as Partial<MatrixCell>;
+    for (const colId of Object.keys(cells).sort()) {
+      const cellPath = `${rowPath}.${colId}`;
+      const item = cells[colId];
+      if (!cols.has(colId)) issues.push(issue(cellPath, "unknown_field", `'${colId}' is not a column of this matrix`));
+      else if (item === null || item === undefined) continue;
+      else if (cell.type && MATRIX_NUMERIC.includes(cell.type)) {
+        if (!isNumber(item) || (cell.type === "integer" && !Number.isInteger(item))) issues.push(issue(cellPath, "invalid_type", cell.type === "integer" ? "Expected an integer" : "Expected a number"));
+        else if ((isNumber(cell.min) && item < cell.min) || (isNumber(cell.max) && item > cell.max)) issues.push(issue(cellPath, "out_of_range", "Value is outside the allowed range"));
+      } else if (cell.type === "select") {
+        if (!(cell.options ?? []).some(option => option.value === item)) issues.push(issue(cellPath, "invalid_option", "Not one of the options"));
+      } else if (!isText(item) || textLength(item) > 200) issues.push(issue(cellPath, "invalid_type", "Expected text (at most 200 characters)"));
+    }
+  }
+  return issues;
+};
+
 const VALUE_VALIDATORS: Record<ValueKind, ValueValidator> = {
   text: valueText, number: valueNumber, integer: valueNumber, decimal: valueNumber,
   date: valueTemporal, datetime: valueTemporal, time: valueTemporal,
   option: valueOption, options: valueOptions, boolean: valueBoolean,
-  file: valueFile, signature: valueSignature, list: valueList,
+  file: valueFile, signature: valueSignature, list: valueList, matrix: valueMatrix,
 };
 
 export function validateValue(field: FieldDefinition, value: unknown, path: string): Issue[] {

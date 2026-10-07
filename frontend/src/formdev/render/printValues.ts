@@ -5,7 +5,7 @@ import { fieldKey, OTHER_KEY } from "../core/validate";
 /** A plain value as text: decimals as defined, datetimes without seconds, the unit after it. "" when empty. */
 export function printedText(field: FieldDefinition, value: JsonValue | undefined): string {
   if (value === null || value === undefined || value === "") return "";
-  if (typeof value === "number" && field.decimals !== undefined && (field.type === "decimal" || field.type === "calculated")) return value.toFixed(field.decimals);
+  if (typeof value === "number" && field.decimals !== undefined && (field.type === "decimal" || field.type === "calculated")) return `${value.toFixed(field.decimals)}${field.unit ? ` ${field.unit}` : ""}`;
   if (field.type === "datetime" && typeof value === "string") return value.slice(0, 16).replace("T", " ");
   return `${String(value)}${field.unit ? ` ${field.unit}` : ""}`;
 }

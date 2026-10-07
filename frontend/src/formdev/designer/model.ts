@@ -124,6 +124,13 @@ export function newField(type: FieldType, used: Set<string>, label: string, defa
     field.fields = [{ id: child, type: "text", label: defaults.child }];
   }
   if (type === "repeat") field.max_items = 20;
+  if (type === "matrix") {
+    field.cell = { type: "select", options: ["0", "1", "2"].map(value => ({ value, label: value })) };
+    field.rows = [1, 2, 3].map(n => ({ id: `row${n}`, label: `${defaults.child} ${n}` }));
+    field.cols = [1, 2, 3].map(n => ({ id: `col${n}`, label: String(n) }));
+    field.totals = [{ id: "total", label: "Total", of: ["row1", "row2", "row3"] }];
+    field.layout = { span: 12 };
+  }
   return field;
 }
 

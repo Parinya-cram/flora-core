@@ -6,6 +6,7 @@ import type { CalculatorDefinition, FieldDefinition, FieldType, FormDefinition, 
 import { instantiateTemplate } from "../logic/calculators";
 import { CALCULATOR_TEMPLATES } from "../registry/defaults";
 import { emptyForm, newField, uniqueName } from "./model";
+import { PAPER_TEMPLATES } from "./templates";
 
 export type Lang = "th" | "en";
 export const langOf = (language: string): Lang => (language.toLowerCase().startsWith("th") ? "th" : "en");
@@ -38,6 +39,7 @@ export const PALETTE: PaletteGroup[] = [
     { type: "calculated", icon: "ƒ", th: "ค่าคำนวณ", en: "Calculated", hintTh: "BMI, อายุ, คะแนนรวม", hintEn: "BMI, age, total" },
     { type: "group", icon: "▣", th: "กลุ่มช่อง", en: "Group", hintTh: "จัดหลายช่องไว้ด้วยกัน", hintEn: "Fields kept together" },
     { type: "repeat", icon: "≡", th: "ตารางเพิ่มแถวได้", en: "Repeating rows", hintTh: "รายการยา, ประวัติ", hintEn: "Medications, history" },
+    { type: "matrix", icon: "▤", th: "ตารางคะแนน (แถว × คอลัมน์)", en: "Score table (rows × columns)", hintTh: "Aldrete score, คะแนนตามเวลา", hintEn: "Aldrete score, scores over time" },
   ] },
   { th: "ไฟล์และลายเซ็น", en: "Files and signature", items: [
     { type: "image", icon: "🖼", th: "รูปภาพ", en: "Image", hintTh: "ภาพแผล, ฟิล์ม", hintEn: "Wound photo" },
@@ -64,6 +66,20 @@ const template = (id: string) => CALCULATOR_TEMPLATES.find(item => item.template
 const options = (lang: Lang, items: Array<[string, string, string]>) => items.map(([value, th, en]) => ({ value, label: tr(lang, th, en) }));
 
 export const BLOCKS: BlockItem[] = [
+  { id: "excel_table", icon: "▦", th: "ตารางแบบ Excel", en: "Excel-style table", hintTh: "กรอกเป็นแถว/คอลัมน์ วางจาก Excel ได้", hintEn: "Rows and columns; paste from Excel",
+    build: (used, lang) => {
+      const table = uniqueName("table", used);
+      const taken = new Set([...used, table]);
+      const column = (base: string) => { const name = uniqueName(base, taken); taken.add(name); return name; };
+      return { calculators: [], fields: [
+        { id: table, type: "repeat", view: "table", label: tr(lang, "ตาราง", "Table"), max_items: 100, layout: { span: 12 }, fields: [
+          { id: column("item"), type: "text", label: tr(lang, "รายการ", "Item") },
+          { id: column("date"), type: "date", label: tr(lang, "วันที่", "Date") },
+          { id: column("amount"), type: "number", label: tr(lang, "จำนวน", "Amount") },
+          { id: column("note"), type: "text", label: tr(lang, "หมายเหตุ", "Note") },
+        ] },
+      ] };
+    } },
   { id: "patient", icon: "👤", th: "ข้อมูลผู้ป่วย", en: "Patient", hintTh: "HN, ชื่อ, วันเกิด, อายุ (คำนวณ), เพศ", hintEn: "HN, name, birth date, age, sex",
     build: (used, lang) => {
       const hn = uniqueName("hn", used), name = uniqueName("full_name", used), birth = uniqueName("birth_date", used), age = uniqueName("age", used), sex = uniqueName("sex", used);
@@ -195,10 +211,14 @@ export const STARTERS: Starter[] = [
       { th: "ผู้บันทึก", en: "Recorded by", blocks: ["sign"] }] },
   { id: "address", icon: "🏠", th: "ข้อมูลที่อยู่และการติดต่อ", en: "Address and contact", hintTh: "ผู้ป่วย, ที่อยู่แบบเลือกต่อกัน, โทรศัพท์", hintEn: "Patient, linked address, phone",
     sections: [{ th: "ข้อมูลผู้ป่วย", en: "Patient", blocks: ["patient"] }, { th: "ที่อยู่และการติดต่อ", en: "Address and contact", blocks: ["thai_address", "contact"] }] },
+  { id: "pacu", icon: "🛏", th: "PACU: บันทึกหลังให้ยาระงับความรู้สึก", en: "PACU: Post Anesthetic Record", hintTh: "แบบกระดาษ: หัวผู้ป่วย, Aldrete score, ภาวะแทรกซ้อน, ลายเซ็น",
+    hintEn: "Paper layout: patient header, Aldrete score, problems, signatures", sections: [] },
 ];
 
 /** A new form from a starting point; every name is unique and every formula / lookup is wired. */
 export function starterForm(starter: Starter, formId: string, title: string, lang: Lang): FormDefinition {
+  const paper = PAPER_TEMPLATES[starter.id];
+  if (paper) return paper(formId, title);
   const blank = emptyForm(formId, title, tr(lang, "ส่วนที่ 1", "Section 1"), used => paletteField("text", used, lang));
   if (!starter.sections.length) return blank;
   const used = new Set<string>();

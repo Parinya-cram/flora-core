@@ -4,18 +4,19 @@ import { createFormDevClient, type FormDevClient } from "../index";
 import { AttachmentContext, deviceAttachments, memoryAttachments } from "./attachments";
 import { IndexedDbAdapter } from "../data/IndexedDbAdapter";
 import { RestApiAdapter } from "../data/RestApiAdapter";
-import { FormDevError, type FieldDefinition, type FormDefinition, type FormSummary, type Issue, type JsonValue, type LocalRecord, type RecordData, type SchemaVersion } from "../core/types";
-import { describePath, displayed, fieldKey, fields as fieldsOf, issueText } from "../core/validate";
+import { FormDevError, type FormDefinition, type FormSummary, type Issue, type LocalRecord, type RecordData, type SchemaVersion } from "../core/types";
+import { describePath, issueText } from "../core/validate";
 import { lookupIds, type LookupTables } from "../logic/lookup";
 import { recordAllows } from "../logic/permission";
 import type { QueueCounts } from "../offline/SyncEngine";
 import type { QueryPrincipal } from "../query/types";
 import DesignerPanel from "../designer/DesignerPanel";
 import FormPreview from "./FormPreview";
-import FormPrint from "./FormPrint";
+import PdfPreview, { type PdfPreviewHandle } from "./PdfPreview";
 import FormRenderer from "./FormRenderer";
 import JobsPanel from "./JobsPanel";
 import QueryPanel from "./QueryPanel";
+import RecordsSheet from "./RecordsSheet";
 
 type Props = { username: string; isAdmin: boolean; principal: QueryPrincipal; language?: string };
 type Tab = "records" | "designer" | "preview" | "query" | "jobs";
@@ -32,19 +33,6 @@ const stateTone: Record<string, string> = {
   error: "border-rose-500/40 text-rose-600 dark:text-rose-300",
 };
 
-const TABLE_TYPES = new Set(["text", "number", "decimal", "integer", "date", "datetime", "time", "select", "radio", "checkbox", "switch", "calculated"]);
-
-/** Record table columns: fields the display policy shows in tables (display.table), simple values only. */
-function tableColumns(definition: FormDefinition): FieldDefinition[] {
-  return fieldsOf(definition).filter(field => TABLE_TYPES.has(field.type) && displayed(field, "table")).slice(0, 4);
-}
-
-function cellText(field: FieldDefinition, value: JsonValue | undefined): string {
-  if (value === null || value === undefined || value === "") return "—";
-  if (typeof value === "boolean") return value ? "✓" : "✗";
-  return field.options?.find(option => option.value === value)?.label ?? String(value);
-}
-
 function messageOf(error: unknown, language = "en", definition?: FormDefinition): string {
   if (error instanceof FormDevError && Array.isArray(error.details)) {
     const details = (error.details as Issue[]).map(item => {
@@ -59,6 +47,7 @@ function messageOf(error: unknown, language = "en", definition?: FormDefinition)
 export default function FormDevWorkspace({ username, isAdmin, principal, language = "en" }: Props) {
   const thai = language.toLowerCase().startsWith("th");
   const [pdfBusy, setPdfBusy] = useState(false);
+  const printView = useRef<PdfPreviewHandle>(null);
   // Role and permission codes for the definition's permissions (Phase 2.8); the server applies the same rules.
   const codes = useMemo(() => [...(principal.roles ?? []), ...(principal.permissions ?? [])], [principal]);
   const [tab, setTab] = useState<Tab>("records");
@@ -73,8 +62,7 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
   const [forms, setForms] = useState<FormSummary[]>([]);
   const [formId, setFormId] = useState<string | null>(null);
   const [schema, setSchema] = useState<SchemaVersion | null>(null);
-  const [records, setRecords] = useState<LocalRecord[]>([]);
-  const [search, setSearch] = useState("");
+  const [sheetVersion, setSheetVersion] = useState(0);
   const [editing, setEditing] = useState<Editing | null>(null);
   // Lookup tables the open form reads (Phase 2.3): the offline cache, else the server.
   const [lookups, setLookups] = useState<LookupTables>({});
@@ -131,18 +119,12 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
     if (active !== formId) setFormId(active);
     if (!active) return;
     setSchema(await client.schemas.latestPublished(active).catch(() => null));
-    const filters = search.trim() ? [{ field: "hn", op: "prefix" as const, value: search.trim() }] : [];
-    try {
-      setRecords((await client.records.search({ formId: active, filters, limit: 50 })).rows);
-    } catch {
-      setRecords((await client.records.search({ formId: active, limit: 50 })).rows);
-    }
-  }, [client, formId, search]);
+    setSheetVersion(value => value + 1);  // the records sheet reloads its rows
+  }, [client, formId]);
 
   useEffect(() => {
     if (!client) return;
     // refresh() only sets state after awaiting local storage.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
     return client.sync.subscribe(() => {
       if (client.sync.serverReachable !== null) setOnline(client.sync.serverReachable && navigator.onLine);
@@ -276,31 +258,11 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
         </aside>
 
         <section className="space-y-4">
-          {schema && !editing ? <div className={`${panel} overflow-hidden`}>
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--app-border)] px-4 py-3">
-              <div className="font-semibold text-[var(--app-text)]">{schema.definition.title} <span className="text-xs text-[var(--app-muted)]">v{schema.schema_version}</span></div>
-              <div className="flex gap-2">
-                <input className="rounded-lg border border-[var(--app-border)] bg-[var(--app-control-bg)] px-3 py-2 text-sm" placeholder="Search HN prefix" value={search} onChange={event => setSearch(event.target.value)} />
-                <button type="button" className={primary} disabled={!recordAllows(schema.definition, "create", codes, isAdmin)}
-                  onClick={() => setEditing({ record: null, data: {}, issues: [], definition: schema.definition, view: "form" })}>New record</button>
-              </div>
-            </div>
-            <table className="w-full text-left text-sm">
-              <thead className="text-xs uppercase tracking-wide text-[var(--app-muted)]"><tr>
-                {tableColumns(schema.definition).map(field => <th key={field.id} className="px-4 py-2">{field.label}</th>)}
-                <th className="px-4 py-2">Status</th><th className="px-4 py-2">Version</th><th className="px-4 py-2">Updated</th><th className="px-4 py-2">Sync</th>
-              </tr></thead>
-              <tbody>
-                {records.map(record => <tr key={record.record_id} className="cursor-pointer border-t border-[var(--app-border)] hover:bg-[var(--app-control-bg)]" onClick={() => void open(record)}>
-                  {tableColumns(schema.definition).map((field, index) => <td key={field.id} className={`px-4 py-2 ${index === 0 ? "font-semibold text-[var(--app-text)]" : ""}`}>{cellText(field, record.data[fieldKey(field)])}</td>)}
-                  <td className="px-4 py-2">{record.status}</td>
-                  <td className="px-4 py-2">v{record.schema_version} · r{record.version}</td>
-                  <td className="px-4 py-2 text-[var(--app-muted)]">{new Date(record.updated_at).toLocaleString()}</td>
-                  <td className="px-4 py-2"><span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${stateTone[record.sync_state] || ""}`}>{record.sync_state}</span></td>
-                </tr>)}
-              </tbody>
-            </table>
-            {!records.length ? <div className="px-4 py-10 text-center text-sm text-[var(--app-muted)]">No records yet.</div> : null}
+          {schema && !editing && client ? <div className={`${panel} overflow-hidden`}>
+            <div className="border-b border-[var(--app-border)] px-4 py-3 font-semibold text-[var(--app-text)]">{schema.definition.title} <span className="text-xs text-[var(--app-muted)]">v{schema.schema_version}</span></div>
+            <RecordsSheet client={client} definition={schema.definition} schemaVersion={schema.schema_version} codes={codes} isAdmin={isAdmin} language={language}
+              refreshKey={sheetVersion} onOpen={record => void open(record)} onChanged={() => void refresh()}
+              onNew={() => setEditing({ record: null, data: {}, issues: [], definition: schema.definition, view: "form" })} />
           </div> : null}
 
           {schema && editing ? <div className="space-y-3">
@@ -310,7 +272,7 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
                 <button type="button" className={secondary} onClick={() => setEditing(null)}>Close</button>
                 {editing.view !== "form" ? <button type="button" className={secondary} onClick={() => setEditing(current => current && { ...current, view: "form" })}>Edit</button> : null}
                 {editing.view !== "print" ? <button type="button" className={secondary} onClick={() => setEditing(current => current && { ...current, view: "print" })}>A4 / Print</button>
-                  : <button type="button" className={secondary} onClick={() => window.print()}>Print</button>}
+                  : <button type="button" className={secondary} onClick={() => printView.current?.print()}>Print</button>}
                 <button type="button" className={secondary} disabled={pdfBusy} onClick={() => void savePdf()}>{pdfBusy ? "…" : thai ? "ดาวน์โหลด PDF" : "Download PDF"}</button>
                 {editing.view === "form" && recordAllows(editing.definition, editing.record ? "edit" : "create", codes, isAdmin) ? <>
                   <button type="button" className={secondary} disabled={editing.record?.status === "submitted"} onClick={() => void save(false)}>Save draft</button>
@@ -320,7 +282,7 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
             </div>
             <AttachmentContext.Provider value={attachments}>
             {editing.view === "print"
-              ? <div className="overflow-x-auto rounded-xl bg-slate-200 p-4 dark:bg-slate-800"><FormPrint definition={editing.definition} value={editing.data} recordId={editing.record?.record_id} roles={codes} isAdmin={isAdmin} lookups={lookups} /></div>
+              ? <PdfPreview ref={printView} definition={editing.definition} value={editing.data} recordId={editing.record?.record_id} roles={codes} isAdmin={isAdmin} lookups={lookups} language={language} />
               : <FormRenderer definition={editing.definition} value={editing.data} issues={editing.issues} context={editing.view === "detail" ? "detail" : "form"} language={language}
                 roles={codes} isAdmin={isAdmin} lookups={lookups} onChange={data => setEditing(current => current && { ...current, data })} />}
             </AttachmentContext.Provider>

@@ -11,7 +11,7 @@ import type { RestApiAdapter } from "../data/RestApiAdapter";
 import { evaluateRecord } from "../logic/evaluate";
 import { lookupIds, type LookupTables } from "../logic/lookup";
 import { DEFAULT_FONTS, DEFAULT_STYLES } from "../registry/defaults";
-import FormPrint from "../ui/FormPrint";
+import PdfPreview from "../ui/PdfPreview";
 import FormRenderer from "../ui/FormRenderer";
 import Canvas from "./Canvas";
 import { BLOCKS, PALETTE, STARTERS, langOf, paletteField, starterForm, tr, type Lang } from "./catalog";
@@ -387,9 +387,7 @@ export default function DesignerPanel({ remote, online, language = "th", onPubli
       <button type="button" className={small} disabled={busy} onClick={() => void pdf()}>⬇ {t("ดาวน์โหลด PDF", "Download PDF")}</button>
       {t("ค่าที่ลองกรอกในแท็บ \"ทดลองกรอก\" จะอยู่ใน PDF ด้วย", "Values typed in \"Try it\" are included")}
     </div> : null}
-    {view === "print" ? <div className="overflow-x-auto rounded-xl bg-slate-200 p-4 dark:bg-slate-800">
-      <FormPrint definition={definition} value={tryData} styles={registry.styles} fonts={registry.fonts} lookups={tables} />
-    </div> : null}
+    {view === "print" ? <PdfPreview definition={definition} value={tryData} styles={registry.styles} fonts={registry.fonts} lookups={tables} language={lang} /> : null}
 
     {view === "json" ? <JsonView key={JSON.stringify(definition).length} definition={definition} lang={lang} onApply={next => commit(next)} /> : null}
   </div>;
@@ -466,6 +464,20 @@ function StartScreen({ lang, remote, online, onOpen }: { lang: Lang; remote: Res
       setError(caught instanceof Error ? caught.message : String(caught));
     }
   };
+  /** A new form laid out like an existing one (a user-made template): the copy gets the id and title above, as version 1. */
+  const copyAsNew = async (id: string) => {
+    setError("");
+    try {
+      const versions: SchemaVersion[] = await remote.listSchemas(id);
+      const latest = versions.reduce<SchemaVersion | null>((best, row) => (!best || row.schema_version > best.schema_version ? row : best), null);
+      if (!latest) return;
+      const copy = structuredClone(latest.definition);
+      delete copy.migration;
+      onOpen({ ...copy, form_id: formId, title: title.trim() || copy.title, schema_version: 1 }, NEW_SOURCE);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    }
+  };
   const importJson = () => {
     const { value, issues } = parseJsonStrict(json);
     if (issues.some(item => item.code === "invalid_json") || typeof value !== "object" || value === null || !Array.isArray((value as FormDefinition).sections)) {
@@ -507,12 +519,16 @@ function StartScreen({ lang, remote, online, onOpen }: { lang: Lang; remote: Res
       <h2 className="text-lg font-semibold text-[var(--app-text)]">{t("แก้ไขแบบฟอร์มที่มีอยู่", "Edit an existing form")}</h2>
       {!online ? <p className="text-sm text-[var(--app-muted)]">{t("ต้องเชื่อมต่อเซิร์ฟเวอร์", "Needs the server")}</p> : forms === null ? <p className="text-sm text-[var(--app-muted)]">…</p>
         : <div className="max-h-72 space-y-1 overflow-y-auto">
-          {forms.map(form => <button key={form.form_id} type="button" className="w-full rounded-xl border border-[var(--app-border)] px-3 py-2 text-left hover:border-[var(--app-accent)]"
-            onClick={() => void openExisting(form.form_id)}>
-            <div className="text-sm font-semibold text-[var(--app-text)]">{form.title}</div>
-            <div className="text-[11px] text-[var(--app-muted)]"><code>{form.form_id}</code> · v{form.latest_version}
-              {form.published_version ? t(` · ใช้งาน v${form.published_version}`, ` · live v${form.published_version}`) : t(" · ยังไม่เผยแพร่", " · not published")}</div>
-          </button>)}
+          {forms.map(form => <div key={form.form_id} className="flex items-stretch gap-1">
+            <button type="button" className="min-w-0 flex-1 rounded-xl border border-[var(--app-border)] px-3 py-2 text-left hover:border-[var(--app-accent)]"
+              onClick={() => void openExisting(form.form_id)}>
+              <div className="text-sm font-semibold text-[var(--app-text)]">{form.title}</div>
+              <div className="text-[11px] text-[var(--app-muted)]"><code>{form.form_id}</code> · v{form.latest_version}
+                {form.published_version ? t(` · ใช้งาน v${form.published_version}`, ` · live v${form.published_version}`) : t(" · ยังไม่เผยแพร่", " · not published")}</div>
+            </button>
+            <button type="button" className={small} title={t("สร้างแบบฟอร์มใหม่ตามรูปแบบนี้ โดยใช้ชื่อและรหัสทางซ้าย", "Create a new form laid out like this one, with the title and id on the left")}
+              disabled={!validId || forms.some(item => item.form_id === formId)} onClick={() => void copyAsNew(form.form_id)}>{t("ใช้เป็นแม่แบบ", "Use as template")}</button>
+          </div>)}
           {!forms.length ? <p className="text-sm text-[var(--app-muted)]">{t("ยังไม่มีแบบฟอร์ม", "No forms yet")}</p> : null}
         </div>}
       <details>

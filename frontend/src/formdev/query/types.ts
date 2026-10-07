@@ -15,7 +15,7 @@ export type Pagination = { mode?: "cursor" | "offset"; limit: number; offset?: n
 export type GroupKey = string | { field: string; bucket?: "day"; tz_offset_minutes?: number };
 export type AggregateFn = "count" | "sum" | "avg" | "min" | "max";
 export type Aggregate = { fn: AggregateFn; field?: string; as: string };
-export type ExportOptions = { format?: "csv" | "jsonl" | "json"; headers?: "ids" | "labels"; max_rows?: number };
+export type ExportOptions = { format?: "csv" | "jsonl" | "json" | "xlsx"; headers?: "ids" | "labels"; max_rows?: number };
 
 export type QueryDefinition = {
   id?: string;

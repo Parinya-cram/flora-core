@@ -4,43 +4,222 @@
   "schema_version": 1,
   "title": "แบบบันทึกรับผู้ป่วยใน",
   "description": "Phase 1 showcase: every field type, nested sections, 12-column layout with responsive rules, A4 print layout, style inheritance and display policy.",
-  "metadata": { "department": "อายุรกรรม", "owner": "ward_7a", "tags": ["admission", "showcase"] },
+  "metadata": {
+    "department": "อายุรกรรม",
+    "owner": "ward_7a",
+    "tags": [
+      "admission",
+      "showcase"
+    ]
+  },
   "paper": {
     "size": "A4",
     "orientation": "portrait",
-    "margin_mm": { "top": 18, "right": 12, "bottom": 16, "left": 15 },
-    "header": { "left": "{title}", "right": "เลขที่ {record_id}", "height_mm": 8 },
-    "footer": { "left": "{form_id} v{version}", "center": "พิมพ์ {date}", "right": "หน้า {page}/{pages}", "height_mm": 8 }
+    "margin_mm": {
+      "top": 18,
+      "right": 12,
+      "bottom": 16,
+      "left": 15
+    },
+    "header": {
+      "left": "{title}",
+      "right": "เลขที่ {record_id}",
+      "height_mm": 8
+    },
+    "footer": {
+      "left": "{form_id} v{version}",
+      "center": "พิมพ์ {date}",
+      "right": "หน้า {page}/{pages}",
+      "height_mm": 8
+    }
   },
-  "style": { "id": "style.a4.medical", "override": { "fontSize": 10.5, "label": { "color": "#334155" } } },
+  "style": {
+    "id": "style.a4.medical",
+    "override": {
+      "fontSize": 10.5,
+      "label": {
+        "color": "#334155"
+      }
+    }
+  },
   "font_id": "noto-sans-thai",
-  "layout": { "type": "grid", "columns": 12, "gap_mm": 3 },
+  "layout": {
+    "type": "grid",
+    "columns": 12,
+    "gap_mm": 3
+  },
   "calculators": [
-    { "id": "bmi", "name": "Body mass index", "formula": "weight_kg / ((height_cm / 100) ^ 2)", "output": { "type": "decimal", "decimals": 1, "unit": "kg/m²" } }
+    {
+      "id": "bmi",
+      "name": "Body mass index",
+      "formula": "weight_kg / ((height_cm / 100) ^ 2)",
+      "output": {
+        "type": "decimal",
+        "decimals": 1,
+        "unit": "kg/m²"
+      }
+    }
   ],
-  "permission": { "view": ["clinician", "clinical_admin", "viewer"], "create": ["clinician"], "edit": ["clinician"], "delete": ["clinical_admin"], "export": ["clinical_admin"] },
-  "extensions": { "flora.subject_field": "hn" },
+  "permission": {
+    "view": [
+      "clinician",
+      "clinical_admin",
+      "viewer"
+    ],
+    "create": [
+      "clinician"
+    ],
+    "edit": [
+      "clinician"
+    ],
+    "delete": [
+      "clinical_admin"
+    ],
+    "export": [
+      "clinical_admin"
+    ]
+  },
+  "extensions": {
+    "flora.subject_field": "hn"
+  },
   "sections": [
     {
       "id": "patient",
       "title": "ข้อมูลผู้ป่วย",
-      "style": { "id": "section.header" },
+      "style": {
+        "id": "section.header"
+      },
       "fields": [
-        { "id": "fld_hn", "key": "hn", "type": "text", "label": "HN", "required": true, "indexed": true, "max_length": 20,
-          "layout": { "span": 3, "responsive": { "mobile": { "span": 12 } } } },
-        { "id": "fld_name", "key": "full_name", "type": "text", "label": "ชื่อ-สกุล", "required": true,
-          "layout": { "span": 6, "responsive": { "tablet": { "span": 9 }, "mobile": { "span": 12 } } },
-          "display": { "table": true, "detail": true, "query": false, "export": true } },
-        { "id": "fld_sex", "key": "sex", "type": "radio", "label": "เพศ", "indexed": true,
-          "options": [{ "value": "m", "label": "ชาย" }, { "value": "f", "label": "หญิง" }],
-          "layout": { "span": 3, "responsive": { "tablet": { "span": 3 }, "mobile": { "span": 12 } } } },
-        { "id": "fld_dob", "key": "birth_date", "type": "date", "label": "วันเกิด", "validation": { "max_date": "today" }, "layout": { "span": 4 } },
-        { "id": "fld_admit", "key": "admitted_at", "type": "datetime", "label": "วันเวลารับไว้", "indexed": true, "layout": { "span": 4 } },
-        { "id": "fld_ward", "key": "ward", "type": "select", "label": "หอผู้ป่วย", "indexed": true, "placeholder": "เลือกหอผู้ป่วย",
-          "options": [{ "value": "7a", "label": "อายุรกรรม 7A" }, { "value": "7b", "label": "อายุรกรรม 7B" }, { "value": "icu", "label": "ICU" }],
-          "layout": { "span": 4 } },
-        { "id": "fld_user", "key": "recorded_by", "type": "text", "label": "ผู้บันทึก (user_id)", "visible": false,
-          "display": { "form": false, "table": false, "detail": false, "query": true, "export": true } }
+        {
+          "id": "fld_hn",
+          "key": "hn",
+          "type": "text",
+          "label": "HN",
+          "required": true,
+          "indexed": true,
+          "max_length": 20,
+          "layout": {
+            "span": 3,
+            "responsive": {
+              "mobile": {
+                "span": 12
+              }
+            }
+          }
+        },
+        {
+          "id": "fld_name",
+          "key": "full_name",
+          "type": "text",
+          "label": "ชื่อ-สกุล",
+          "required": true,
+          "layout": {
+            "span": 6,
+            "responsive": {
+              "tablet": {
+                "span": 9
+              },
+              "mobile": {
+                "span": 12
+              }
+            }
+          },
+          "display": {
+            "table": true,
+            "detail": true,
+            "query": false,
+            "export": true
+          }
+        },
+        {
+          "id": "fld_sex",
+          "key": "sex",
+          "type": "radio",
+          "label": "เพศ",
+          "indexed": true,
+          "options": [
+            {
+              "value": "m",
+              "label": "ชาย"
+            },
+            {
+              "value": "f",
+              "label": "หญิง"
+            }
+          ],
+          "layout": {
+            "span": 3,
+            "responsive": {
+              "tablet": {
+                "span": 3
+              },
+              "mobile": {
+                "span": 12
+              }
+            }
+          }
+        },
+        {
+          "id": "fld_dob",
+          "key": "birth_date",
+          "type": "date",
+          "label": "วันเกิด",
+          "validation": {
+            "max_date": "today"
+          },
+          "layout": {
+            "span": 4
+          }
+        },
+        {
+          "id": "fld_admit",
+          "key": "admitted_at",
+          "type": "datetime",
+          "label": "วันเวลารับไว้",
+          "indexed": true,
+          "layout": {
+            "span": 4
+          }
+        },
+        {
+          "id": "fld_ward",
+          "key": "ward",
+          "type": "select",
+          "label": "หอผู้ป่วย",
+          "indexed": true,
+          "placeholder": "เลือกหอผู้ป่วย",
+          "options": [
+            {
+              "value": "7a",
+              "label": "อายุรกรรม 7A"
+            },
+            {
+              "value": "7b",
+              "label": "อายุรกรรม 7B"
+            },
+            {
+              "value": "icu",
+              "label": "ICU"
+            }
+          ],
+          "layout": {
+            "span": 4
+          }
+        },
+        {
+          "id": "fld_user",
+          "key": "recorded_by",
+          "type": "text",
+          "label": "ผู้บันทึก (user_id)",
+          "visible": false,
+          "display": {
+            "form": false,
+            "table": false,
+            "detail": false,
+            "query": true,
+            "export": true
+          }
+        }
       ]
     },
     {
@@ -48,40 +227,317 @@
       "title": "การประเมินแรกรับ",
       "page_break": "avoid",
       "fields": [
-        { "id": "fld_weight", "key": "weight_kg", "type": "decimal", "label": "น้ำหนัก", "unit": "kg", "decimals": 1, "min": 0, "max": 400,
-          "layout": { "span": 3, "responsive": { "mobile": { "span": 6 } } } },
-        { "id": "fld_height", "key": "height_cm", "type": "number", "label": "ส่วนสูง", "unit": "cm", "min": 30, "max": 260,
-          "layout": { "span": 3, "responsive": { "mobile": { "span": 6 } } } },
-        { "id": "fld_bmi", "key": "bmi", "type": "calculated", "label": "BMI", "unit": "kg/m²", "calculator": "bmi", "decimals": 1, "indexed": true,
-          "style": { "id": "field.number.large" }, "layout": { "span": 3, "responsive": { "mobile": { "span": 12 } } } },
-        { "id": "fld_pain", "key": "pain_score", "type": "integer", "label": "คะแนนปวด (0-10)", "validation": { "min": 0, "max": 10 },
-          "layout": { "span": 3, "responsive": { "mobile": { "span": 12 } } } },
-        { "id": "fld_fever", "key": "has_fever", "type": "switch", "label": "มีไข้", "layout": { "span": 4 } },
-        { "id": "fld_temp", "key": "temperature_c", "type": "decimal", "label": "อุณหภูมิ", "unit": "°C", "decimals": 1, "min": 30, "max": 45,
-          "visibility": { "when": { "field": "has_fever", "operator": "equals", "value": true } }, "layout": { "span": 4 } },
-        { "id": "fld_allergy", "key": "drug_allergy", "type": "checkbox", "label": "แพ้ยา", "layout": { "span": 4 } },
-        { "id": "fld_symptoms", "key": "symptoms", "type": "multiselect", "label": "อาการนำ",
-          "options": [{ "value": "fever", "label": "ไข้" }, { "value": "cough", "label": "ไอ" }, { "value": "dyspnea", "label": "หอบเหนื่อย" }, { "value": "pain", "label": "ปวด" }] },
-        { "id": "fld_contact", "type": "group", "label": "ผู้ติดต่อฉุกเฉิน", "columns": 12,
+        {
+          "id": "fld_weight",
+          "key": "weight_kg",
+          "type": "decimal",
+          "label": "น้ำหนัก",
+          "unit": "kg",
+          "decimals": 1,
+          "min": 0,
+          "max": 400,
+          "layout": {
+            "span": 3,
+            "responsive": {
+              "mobile": {
+                "span": 6
+              }
+            }
+          }
+        },
+        {
+          "id": "fld_height",
+          "key": "height_cm",
+          "type": "number",
+          "label": "ส่วนสูง",
+          "unit": "cm",
+          "min": 30,
+          "max": 260,
+          "layout": {
+            "span": 3,
+            "responsive": {
+              "mobile": {
+                "span": 6
+              }
+            }
+          }
+        },
+        {
+          "id": "fld_bmi",
+          "key": "bmi",
+          "type": "calculated",
+          "label": "BMI",
+          "unit": "kg/m²",
+          "calculator": "bmi",
+          "decimals": 1,
+          "indexed": true,
+          "style": {
+            "id": "field.number.large"
+          },
+          "layout": {
+            "span": 3,
+            "responsive": {
+              "mobile": {
+                "span": 12
+              }
+            }
+          }
+        },
+        {
+          "id": "fld_pain",
+          "key": "pain_score",
+          "type": "integer",
+          "label": "คะแนนปวด (0-10)",
+          "validation": {
+            "min": 0,
+            "max": 10
+          },
+          "layout": {
+            "span": 3,
+            "responsive": {
+              "mobile": {
+                "span": 12
+              }
+            }
+          }
+        },
+        {
+          "id": "fld_fever",
+          "key": "has_fever",
+          "type": "switch",
+          "label": "มีไข้",
+          "layout": {
+            "span": 4
+          }
+        },
+        {
+          "id": "fld_temp",
+          "key": "temperature_c",
+          "type": "decimal",
+          "label": "อุณหภูมิ",
+          "unit": "°C",
+          "decimals": 1,
+          "min": 30,
+          "max": 45,
+          "visibility": {
+            "when": {
+              "field": "has_fever",
+              "operator": "equals",
+              "value": true
+            }
+          },
+          "layout": {
+            "span": 4
+          }
+        },
+        {
+          "id": "fld_allergy",
+          "key": "drug_allergy",
+          "type": "checkbox",
+          "label": "แพ้ยา",
+          "layout": {
+            "span": 4
+          }
+        },
+        {
+          "id": "fld_symptoms",
+          "key": "symptoms",
+          "type": "multiselect",
+          "label": "อาการนำ",
+          "options": [
+            {
+              "value": "fever",
+              "label": "ไข้"
+            },
+            {
+              "value": "cough",
+              "label": "ไอ"
+            },
+            {
+              "value": "dyspnea",
+              "label": "หอบเหนื่อย"
+            },
+            {
+              "value": "pain",
+              "label": "ปวด"
+            }
+          ]
+        },
+        {
+          "id": "fld_contact",
+          "type": "group",
+          "label": "ผู้ติดต่อฉุกเฉิน",
+          "columns": 12,
           "fields": [
-            { "id": "fld_contact_name", "key": "contact_name", "type": "text", "label": "ชื่อ", "layout": { "span": 6 } },
-            { "id": "fld_contact_phone", "key": "contact_phone", "type": "text", "label": "โทรศัพท์", "validation": { "pattern": "^[0-9]{9,10}$", "message": "ตัวเลข 9-10 หลัก" },
-              "layout": { "span": 6 } }
-          ] },
-        { "id": "fld_note", "key": "note", "type": "textarea", "label": "บันทึกเพิ่มเติม", "max_length": 2000, "placeholder": "รายละเอียด" }
+            {
+              "id": "fld_contact_name",
+              "key": "contact_name",
+              "type": "text",
+              "label": "ชื่อ",
+              "layout": {
+                "span": 6
+              }
+            },
+            {
+              "id": "fld_contact_phone",
+              "key": "contact_phone",
+              "type": "text",
+              "label": "โทรศัพท์",
+              "validation": {
+                "pattern": "^[0-9]{9,10}$",
+                "message": "ตัวเลข 9-10 หลัก"
+              },
+              "layout": {
+                "span": 6
+              }
+            }
+          ]
+        },
+        {
+          "id": "fld_note",
+          "key": "note",
+          "type": "textarea",
+          "label": "บันทึกเพิ่มเติม",
+          "max_length": 2000,
+          "placeholder": "รายละเอียด"
+        },
+        {
+          "id": "fld_aldrete",
+          "key": "aldrete",
+          "type": "matrix",
+          "label": "Modified Aldrete score",
+          "cell": {
+            "type": "integer",
+            "min": 0,
+            "max": 2
+          },
+          "rows": [
+            {
+              "id": "activity",
+              "label": "Activity"
+            },
+            {
+              "id": "spo2",
+              "label": "SpO2"
+            },
+            {
+              "id": "pain",
+              "label": "Pain score",
+              "cell": {
+                "type": "integer",
+                "min": 0,
+                "max": 10
+              }
+            },
+            {
+              "id": "sedation",
+              "label": "Sedation",
+              "cell": {
+                "type": "select",
+                "options": [
+                  {
+                    "value": "1",
+                    "label": "1"
+                  },
+                  {
+                    "value": "2",
+                    "label": "2"
+                  },
+                  {
+                    "value": "s",
+                    "label": "S"
+                  }
+                ]
+              }
+            }
+          ],
+          "cols": [
+            {
+              "id": "admit",
+              "label": "Admit"
+            },
+            {
+              "id": "m15",
+              "label": "15'"
+            },
+            {
+              "id": "dc",
+              "label": "D/C"
+            }
+          ],
+          "totals": [
+            {
+              "id": "total",
+              "label": "Total",
+              "of": [
+                "activity",
+                "spo2"
+              ]
+            }
+          ],
+          "layout": {
+            "span": 12
+          }
+        }
       ],
       "sections": [
         {
           "id": "medications",
           "title": "ยาที่ใช้ประจำ",
           "fields": [
-            { "id": "fld_meds", "key": "meds", "type": "repeat", "label": "รายการยา", "min_items": 0, "max_items": 20, "columns": 12,
+            {
+              "id": "fld_meds",
+              "key": "meds",
+              "type": "repeat",
+              "label": "รายการยา",
+              "min_items": 0,
+              "max_items": 20,
+              "columns": 12,
               "fields": [
-                { "id": "fld_drug", "key": "drug_name", "type": "text", "label": "ชื่อยา", "required": true, "layout": { "span": 6 } },
-                { "id": "fld_dose", "key": "dose", "type": "text", "label": "ขนาด", "layout": { "span": 3 } },
-                { "id": "fld_freq", "key": "frequency", "type": "select", "label": "ความถี่", "layout": { "span": 3 },
-                  "options": [{ "value": "od", "label": "วันละครั้ง" }, { "value": "bid", "label": "วันละ 2 ครั้ง" }, { "value": "tid", "label": "วันละ 3 ครั้ง" }] }
-              ] }
+                {
+                  "id": "fld_drug",
+                  "key": "drug_name",
+                  "type": "text",
+                  "label": "ชื่อยา",
+                  "required": true,
+                  "layout": {
+                    "span": 6
+                  }
+                },
+                {
+                  "id": "fld_dose",
+                  "key": "dose",
+                  "type": "text",
+                  "label": "ขนาด",
+                  "layout": {
+                    "span": 3
+                  }
+                },
+                {
+                  "id": "fld_freq",
+                  "key": "frequency",
+                  "type": "select",
+                  "label": "ความถี่",
+                  "layout": {
+                    "span": 3
+                  },
+                  "options": [
+                    {
+                      "value": "od",
+                      "label": "วันละครั้ง"
+                    },
+                    {
+                      "value": "bid",
+                      "label": "วันละ 2 ครั้ง"
+                    },
+                    {
+                      "value": "tid",
+                      "label": "วันละ 3 ครั้ง"
+                    }
+                  ]
+                }
+              ]
+            }
           ]
         }
       ]
@@ -90,13 +546,68 @@
       "id": "attachments",
       "title": "เอกสารและลายมือชื่อ",
       "page_break": "before",
-      "permission": { "view": ["clinician", "clinical_admin"], "edit": ["clinician"] },
+      "permission": {
+        "view": [
+          "clinician",
+          "clinical_admin"
+        ],
+        "edit": [
+          "clinician"
+        ]
+      },
       "fields": [
-        { "id": "fld_xray", "key": "xray", "type": "image", "label": "ภาพถ่ายรังสี", "max_size_kb": 10240, "multiple": true, "layout": { "span": 6 },
-          "display": { "export": false } },
-        { "id": "fld_consent", "key": "consent_file", "type": "file", "label": "ใบยินยอม (PDF)", "accept": ["application/pdf"], "max_size_kb": 5120, "layout": { "span": 6 } },
-        { "id": "fld_sign", "key": "nurse_signature", "type": "signature", "label": "ลายมือชื่อพยาบาล", "max_size_kb": 256,
-          "permission": { "edit": ["clinician"], "export": ["clinical_admin"] }, "layout": { "span": 6, "col": 7, "responsive": { "mobile": { "span": 12, "col": 1 } } } }
+        {
+          "id": "fld_xray",
+          "key": "xray",
+          "type": "image",
+          "label": "ภาพถ่ายรังสี",
+          "max_size_kb": 10240,
+          "multiple": true,
+          "layout": {
+            "span": 6
+          },
+          "display": {
+            "export": false
+          }
+        },
+        {
+          "id": "fld_consent",
+          "key": "consent_file",
+          "type": "file",
+          "label": "ใบยินยอม (PDF)",
+          "accept": [
+            "application/pdf"
+          ],
+          "max_size_kb": 5120,
+          "layout": {
+            "span": 6
+          }
+        },
+        {
+          "id": "fld_sign",
+          "key": "nurse_signature",
+          "type": "signature",
+          "label": "ลายมือชื่อพยาบาล",
+          "max_size_kb": 256,
+          "permission": {
+            "edit": [
+              "clinician"
+            ],
+            "export": [
+              "clinical_admin"
+            ]
+          },
+          "layout": {
+            "span": 6,
+            "col": 7,
+            "responsive": {
+              "mobile": {
+                "span": 12,
+                "col": 1
+              }
+            }
+          }
+        }
       ]
     }
   ]

@@ -675,6 +675,24 @@
         },
         "repeat": {
           "$ref": "#/$defs/repeatBlock"
+        },
+        "print_style": {
+          "enum": [
+            "plain",
+            "boxed"
+          ],
+          "description": "boxed: bordered cells with 'Label: value', as on paper forms"
+        },
+        "hide_title": {
+          "type": "boolean",
+          "description": "Do not print the title"
+        },
+        "repeat_on_pages": {
+          "enum": [
+            "header",
+            "footer"
+          ],
+          "description": "Top-level sections only: drawn at the top or bottom of every printed page"
         }
       }
     },
@@ -745,7 +763,8 @@
             "signature",
             "calculated",
             "group",
-            "repeat"
+            "repeat",
+            "matrix"
           ]
         },
         "label": {
@@ -874,6 +893,13 @@
           "minimum": 0,
           "maximum": 1000
         },
+        "view": {
+          "enum": [
+            "cards",
+            "table"
+          ],
+          "description": "repeat: one card per row (default) or a spreadsheet-like table"
+        },
         "lookup": {
           "type": "object",
           "required": [
@@ -921,6 +947,97 @@
             "match": {
               "$ref": "#/$defs/lookupPairs"
             }
+          }
+        },
+        "option_columns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 6,
+          "description": "radio, select, multiselect: lay the options out in this many columns"
+        },
+        "rows": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 60,
+          "description": "matrix: rows {id, label, cell?}",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1
+              },
+              "cell": {
+                "$ref": "#/$defs/matrixCell"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "cols": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 60,
+          "description": "matrix: columns {id, label}",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "cell": {
+          "$ref": "#/$defs/matrixCell",
+          "description": "matrix: the default cell of every row"
+        },
+        "totals": {
+          "type": "array",
+          "description": "matrix: computed rows, the sum of the listed numeric rows per column",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label",
+              "of"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1
+              },
+              "of": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
           }
         }
       },
@@ -1178,6 +1295,17 @@
         },
         "repeat": {
           "$ref": "#/$defs/repeatBlock"
+        },
+        "print_style": {
+          "enum": [
+            "plain",
+            "boxed"
+          ],
+          "description": "boxed: bordered cells with 'Label: value', as on paper forms"
+        },
+        "hide_title": {
+          "type": "boolean",
+          "description": "Do not print the title"
         }
       }
     },
@@ -1275,6 +1403,47 @@
         "pattern": "^[a-z][a-z0-9_]{0,63}$"
       },
       "description": "lookup column -> field key whose value it must equal"
+    },
+    "matrixCell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "integer",
+            "number",
+            "text",
+            "select"
+          ]
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "value",
+              "label"
+            ],
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

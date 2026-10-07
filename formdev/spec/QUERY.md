@@ -37,7 +37,7 @@ and `frontend/src/formdev/query/validate.ts`, kept identical by [`fixtures/query
 | `count` | `none` (default) or `capped`: total up to `count_cap`, flagged as a lower bound beyond it |
 | `timeout` | Milliseconds, clamped to the policy maximum |
 | `cache` | `false` or `{ttl: seconds}`; clamped to the policy maximum |
-| `export` | Used by export jobs: `csv` / `jsonl` / `json`, header style, row cap |
+| `export` | Used by export jobs: `csv` / `jsonl` / `json` / `xlsx`, header style, row cap |
 
 Names: plain names are form field ids; `$name` (or a bare name that is not a field) is a metadata
 column: `$record_id`, `$status`, `$schema_version`, `$version`, `$created_at`, `$updated_at`,
@@ -139,8 +139,8 @@ process · record pulls (`GET /records`, used by offline clients) 600/min per us
 
 ## Background jobs
 
-`POST /api/formdev/jobs {kind, format?, body}` — kinds `export` (csv, jsonl), `search` (jsonl),
-`aggregate` (json), `report` (csv, json); `reindex` is internal. Lifecycle:
+`POST /api/formdev/jobs {kind, format?, body}` — kinds `export` (csv, jsonl, xlsx), `search` (jsonl),
+`aggregate` (json), `report` (csv, json, xlsx); `reindex` is internal. Lifecycle:
 `queued → running → succeeded | failed | cancelled`, then `expired` after 24 h. Workers hold fenced
 leases (`lease_owner` + `attempt`), checkpoint every batch, resume after a crash and return jobs to
 the queue on shutdown (statements still running after 5 s are interrupted; the attempt is not

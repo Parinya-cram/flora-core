@@ -13,6 +13,7 @@ import { FIELD_ACTIONS, PALETTE, PATTERNS, WIDTHS, tr, typeName, type Lang } fro
 import ConditionEditor from "./ConditionEditor";
 import { Group, NumberField, SelectField, TextField, Toggle } from "./controls";
 import { allFields, fieldAt, fieldPath, patchField, placeOnGrid, renameKey, samePath, uniqueName, usedNames, type FieldRef } from "./model";
+import MatrixEditor from "./MatrixEditor";
 import OptionsEditor, { type LookupInfo } from "./OptionsEditor";
 import PermissionEditor from "./PermissionEditor";
 import { input, label, small } from "./styles";
@@ -82,7 +83,8 @@ export default function FieldInspector({ definition, fieldRef, lang, lookups, pu
   const formulaErrors = typeof field.formula === "string" && field.formula.trim() ? check(field.formula, knownName) : [];
 
   // Auto-fill from a lookup ---------------------------------------------------------------------
-  const derive = field.derive;
+  // A derive saved without match (older drafts, hand-written JSON) is read as "no column matched yet".
+  const derive = field.derive ? { ...field.derive, match: field.derive.match ?? {} } : undefined;
   const deriveTable = lookups.find(item => item.lookup_id === derive?.lookup);
   const setDerive = (patch: Partial<LookupDerive>) => {
     const next = { ...(derive ?? { lookup: lookups[0]?.lookup_id ?? "", column: "", match: {} }), ...patch } as LookupDerive;
@@ -109,12 +111,21 @@ export default function FieldInspector({ definition, fieldRef, lang, lookups, pu
       {type === "decimal" || type === "calculated" ? <NumberField label={t("จำนวนตำแหน่งทศนิยม", "Decimal places")} value={field.decimals} min={0} max={10} onChange={value => set({ decimals: value })} /> : null}
       {!CONTAINER.has(type) && type !== "calculated" ? <Toggle label={t("ต้องกรอก", "Required")} checked={field.required === true} onChange={on => set({ required: on || undefined })} /> : null}
       {!CONTAINER.has(type) && type !== "calculated" ? <Toggle label={t("อ่านอย่างเดียว", "Read-only")} checked={field.readonly === true} onChange={on => set({ readonly: on || undefined })} /> : null}
+      {type === "repeat" ? <Toggle label={t("แสดงเป็นตารางแบบ Excel (1 แถวต่อรายการ, วางข้อมูลจาก Excel ได้)", "Show as an Excel-style table (one row per entry; paste from Excel)")}
+        checked={field.view === "table"} onChange={on => set({ view: on ? "table" : undefined })} /> : null}
       <SelectField label={t("ชนิดช่อง", "Field type")} value={type} onChange={value => changeType(value as FieldType)}
         options={PALETTE.flatMap(group => group.items).map(item => ({ value: item.type, label: tr(lang, item.th, item.en) }))} />
     </Group>
 
     {CHOICE.has(type) ? <Group title={t("ตัวเลือก", "Choices")} open badge={field.lookup ? t("ตาราง", "table") : String(field.options?.length ?? 0)}>
       <OptionsEditor field={field} candidates={candidates} lookups={lookups} lang={lang} onPatch={set} />
+      {type !== "select" || field.option_columns ? <SelectField label={t("จัดตัวเลือกเป็นคอลัมน์ (เหมือนแบบฟอร์มกระดาษ)", "Lay the options out in columns (as on paper)")}
+        value={String(field.option_columns ?? "")} options={[{ value: "", label: t("เรียงต่อกัน", "In a line") }, ...[1, 2, 3, 4, 5, 6].map(n => ({ value: String(n), label: t(`${n} คอลัมน์`, `${n} columns`) }))]}
+        onChange={value => set({ option_columns: value ? Number(value) : undefined })} /> : null}
+    </Group> : null}
+
+    {type === "matrix" ? <Group title={t("ตารางคะแนน", "Score table")} open badge={`${field.rows?.length ?? 0}×${field.cols?.length ?? 0}`}>
+      <MatrixEditor field={field} lang={lang} onPatch={set} />
     </Group> : null}
 
     {type === "calculated" ? <Group title={t("การคำนวณ", "Calculation")} open>
@@ -180,7 +191,7 @@ export default function FieldInspector({ definition, fieldRef, lang, lookups, pu
         onChange={on => set({ clear_when_hidden: on || undefined })} /> : null}
     </Group>
 
-    {!CONTAINER.has(type) && type !== "calculated" ? <Group title={t("การตรวจสอบค่า", "Checks")} badge={Object.keys(rules).length || field.min !== undefined || field.max !== undefined ? "✓" : undefined}>
+    {!CONTAINER.has(type) && type !== "calculated" && type !== "matrix" ? <Group title={t("การตรวจสอบค่า", "Checks")} badge={Object.keys(rules).length || field.min !== undefined || field.max !== undefined ? "✓" : undefined}>
       {NUMERIC.has(type) ? <div className="grid grid-cols-2 gap-2">
         <NumberField label={t("ค่าต่ำสุด", "Minimum")} value={field.min} onChange={value => set({ min: value })} />
         <NumberField label={t("ค่าสูงสุด", "Maximum")} value={field.max} onChange={value => set({ max: value })} />
