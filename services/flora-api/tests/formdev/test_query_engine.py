@@ -394,6 +394,32 @@ class QueryContract:
         self.assertIn("plan", explained["diagnostics"])
 
 
+    # Phase 4 review, group G -------------------------------------------------------------------
+    def test_statistics_flush_and_drive_the_advisor(self):
+        """spec:16 — refused queries are recorded by shape, flushed additively and read back by the advisor."""
+        from app.formdev.query.advisor import advise
+        from app.formdev.query.catalog import build_catalog
+
+        for _ in range(3):
+            with self.assertRaises(FormDevError):
+                self.run_query(ADMIN, select=["hn"], filter={"field": "full_name", "op": "eq", "value": "Patient 3"}, pagination={"mode": "cursor", "limit": 5})
+        self.run_query(ADMIN, select=["hn"], filter={"field": "ward", "op": "eq", "value": "W1"}, pagination={"mode": "cursor", "limit": 5})
+
+        def write(rows):
+            with self.adapter.transaction():
+                self.adapter.flush_query_stats(rows)
+
+        self.assertEqual(self.runtime.stats.flush(write), 2)
+        self.run_query(ADMIN, select=["hn"], filter={"field": "ward", "op": "eq", "value": "W2"}, pagination={"mode": "cursor", "limit": 5})
+        self.assertEqual(self.runtime.stats.flush(write), 1)
+        stats = self.adapter.list_query_stats("ward_check")
+        by_runs = sorted((row["runs"], row["ok"], row["rejected"]) for row in stats)
+        self.assertEqual(by_runs, [(2, 2, 0), (3, 0, 3)], "the second flush adds to the same shape")
+        self.assertEqual(next(row for row in stats if row["rejected"])["shape"]["rejected_not_indexed"], ["full_name"])
+        advice = advise(build_catalog(self.fd, "ward_check"), stats, self.adapter.count_records("ward_check"), self.adapter.vendor)
+        self.assertIn(("index_field", "full_name"), {(item["kind"], item.get("field")) for item in advice})
+
+
 class SQLiteQueryContract(QueryContract, unittest.TestCase):
     def make_adapter(self):
         return SQLiteAdapter(":memory:")
