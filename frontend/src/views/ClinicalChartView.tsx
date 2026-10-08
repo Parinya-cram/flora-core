@@ -142,6 +142,7 @@ import {
   type DripGroupColors,
 } from "../utils/chartPreferences";
 import { getHistoricalBolusSuggestion } from "../utils/medicationBolus";
+import DictationButton from "../components/common/DictationButton";
 
 type IoPreparedModalState = {
   runId: number;
@@ -6137,12 +6138,15 @@ export default function ClinicalChartView({
                 ) : null}
                 <div className="grid grid-cols-[90px_1fr] items-start gap-2">
                   <label className="pt-1 text-xs text-[var(--app-muted)]">Detail</label>
-                  <textarea
-                    value={eventModalDetail}
-                    onChange={e => setEventModalDetail(e.target.value)}
-                    className="rounded border px-2 py-1.5 text-sm min-h-[72px]"
-                    placeholder="Optional detail"
-                  />
+                  <div className="grid gap-1.5">
+                    <textarea
+                      value={eventModalDetail}
+                      onChange={e => setEventModalDetail(e.target.value)}
+                      className="rounded border px-2 py-1.5 text-sm min-h-[72px]"
+                      placeholder="Optional detail"
+                    />
+                    <DictationButton value={eventModalDetail} onChange={setEventModalDetail} />
+                  </div>
                 </div>
                 {eventModalError ? (
                   <div className="text-xs text-red-600 dark:text-red-400">{eventModalError}</div>

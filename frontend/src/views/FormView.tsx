@@ -1,6 +1,9 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CaseStatus } from "../api/caseApi";
 import ConfirmDialog from "../components/common/ConfirmDialog";
+import { MicIcon } from "../components/common/DictationButton";
+import FormDictationModal from "../components/dictation/FormDictationModal";
+import { getSurfaceInfo } from "../edition/config";
 import { useCaseWorkflow, workflowFormTabs } from "../components/workflow/caseWorkflow";
 import {
   getCaseDetailDraft,
@@ -1730,6 +1733,9 @@ export default function FormView({
   const formHn = source ? source.hn : caseStatus.status === "IDLE" ? "" : caseStatus.hn;
   const storageKey = source ? source.key : leafCaseId != null ? `doctor_form_${leafCaseId}` : "";
   const readOnly = Boolean(source?.readOnly);
+  const formRootRef = useRef<HTMLDivElement>(null);
+  const [dictationOpen, setDictationOpen] = useState(false);
+  const dictationAvailable = !readOnly && getSurfaceInfo().clinicalWriteEnabled;
   const patientFieldsReadOnly = Boolean(source?.patientFieldsReadOnly);
 
   /**
@@ -2682,7 +2688,7 @@ export default function FormView({
     }`;
 
   return (
-    <div className="app-theme-scope mx-auto max-w-[1500px] space-y-4 p-4 pb-24 text-[var(--app-text)]">
+    <div ref={formRootRef} className="app-theme-scope mx-auto max-w-[1500px] space-y-4 p-4 pb-24 text-[var(--app-text)]">
       <div className="sticky top-3 z-20">
         <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-panel-bg)]/95 p-3 shadow-lg backdrop-blur">
           <div className="flex flex-wrap items-center gap-3">
@@ -3511,6 +3517,14 @@ export default function FormView({
               {isSaving ? "Saving…" : saveNote}
             </div>
           ) : null}
+          {dictationAvailable ? <button
+            type="button"
+            className={`${secondaryButton} inline-flex items-center gap-1.5`}
+            onClick={() => setDictationOpen(true)}
+            title="Speak, and the AI service fills this tab's fields"
+          >
+            <MicIcon /> Dictation
+          </button> : null}
           {!readOnly ? <button
             type="button"
             className={primaryButton}
@@ -3534,6 +3548,15 @@ export default function FormView({
           </button> : null}
         </div>
       </div>
+
+      {dictationAvailable && dictationOpen ? (
+        <FormDictationModal
+          open={dictationOpen}
+          onClose={() => setDictationOpen(false)}
+          rootRef={formRootRef}
+          formName={workflowTab ? "Workflow form" : FORM_TAB_DEFS.find(tab => tab.id === activeTab)?.label || "Anesthesia record"}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={isResetConfirmOpen}

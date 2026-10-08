@@ -29,3 +29,26 @@ to also limit updates to a maintenance window. Once a node is on a release, keep
 `--env-file .release/<project>.env` on manual compose commands (demo/up.sh does),
 otherwise compose puts the dev images back. `compose.override.yaml` (dev only)
 mounts the API source for hot reload.
+
+## Dictation (offline speech-to-text)
+
+`leaf-stt` transcribes speech on this machine; no internet is needed at run time
+(the models are baked into the image at build time, ~2.6 GB).
+
+- **Event note** (Chart → Add entry → Detail): **Speak** types live into the box.
+- **Forms**: **Dictation** next to Save. Speak, then **Stop & fill**: the hospital's
+  AI service (Canopy → AI service) maps the transcript onto the fields of the tab
+  on screen. Review the proposed values, **Fill**, then Save as usual. This step
+  needs the AI service; it can be a local OpenAI-compatible server for fully offline use.
+
+Live text comes from `small` (fast draft, grey); each sentence is rewritten by
+`large-v3-turbo` at a pause. Tune per Leaf in `env/<leaf>.env`:
+
+| Variable | Default | |
+| --- | --- | --- |
+| `LEAF_STT_MODEL` | `large-v3-turbo` | accurate model (build arg) |
+| `LEAF_STT_DRAFT_MODEL` | `small` | live draft model (build arg) |
+| `LEAF_STT_LANGUAGE` | `th` | default language; the UI switches ไทย / EN / Auto |
+| `LEAF_STT_CPU_THREADS` | `8` | CPU threads for decoding |
+
+The microphone needs the desktop app, `http://127.0.0.1`, or the HTTPS edge.

@@ -64,6 +64,8 @@ services:
       VECTOR_READ_URL: ${LEAF_DEVICE_READ_URL:-http://host.docker.internal:7410/data-api/leaf-or-01/api/observations}
       HIS_GATEWAY_BASE_URL: ${HIS_GATEWAY_BASE_URL:-http://127.0.0.1:9}
       FLORA_HIS_DEMO_MODE: ${FLORA_HIS_DEMO_MODE:-true}
+      # Offline speech-to-text for dictation (leaf-stt below).
+      FLORA_STT_URL: http://leaf-stt:8000
     ports:
       # Electron: FLORA_API_BASE_URL=http://127.0.0.1:<LEAF_API_PORT>
       - "127.0.0.1:${LEAF_API_PORT:-7301}:8000"
@@ -96,6 +98,20 @@ services:
     command: ["sh", "-c", "npm ci --ignore-scripts --no-audit --no-fund && npm run dev -- --host 0.0.0.0"]
     depends_on:
       leaf-api: {condition: service_healthy}
+    restart: unless-stopped
+
+  # Offline speech-to-text (faster-whisper on CPU, models baked into the image).
+  # Only leaf-api reaches it; nothing leaves this machine.
+  leaf-stt:
+    build:
+      context: ../services/flora-stt
+      args:
+        STT_MODEL: ${LEAF_STT_MODEL:-large-v3-turbo}
+        STT_DRAFT_MODEL: ${LEAF_STT_DRAFT_MODEL:-small}
+    image: ${FLORA_IMAGE_STT:-flora-stt:dev}
+    environment:
+      STT_LANGUAGE: ${LEAF_STT_LANGUAGE:-th}
+      STT_CPU_THREADS: ${LEAF_STT_CPU_THREADS:-8}
     restart: unless-stopped
 
   leaf-sync:

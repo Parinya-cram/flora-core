@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 
-from .. import ai_service, central_auth, directory, form_sync, ldap_auth, workflows
+from .. import ai_service, central_auth, directory, form_sync, io_catalog, ldap_auth, workflows
 from ..database import connection, pool
 
 
@@ -347,6 +347,11 @@ def exchange_directory(payload: DirectoryExchange, database: Connection = Depend
     result["ldap_enabled"] = ldap_auth.enabled()
     # The shared AI service (including its key) travels with the directory to every Leaf.
     result["ai_service"] = ai_service.load(database)
+    # Medication / fluid / output catalogue; the Leaf applies it only when newer.
+    try:
+        result["io_catalog"] = io_catalog.load(database)
+    except Exception:  # never block the directory over the catalogue
+        result["io_catalog"] = None
     # Only acknowledge pushes that Canopy now holds (applied, or superseded by a newer central edit).
     result["acknowledged"] = [item for item in acknowledged if item["status"] in {"applied", "stale"}]
     result["failed"] = [item for item in acknowledged if item["status"] == "failed"]

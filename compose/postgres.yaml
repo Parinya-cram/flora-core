@@ -71,6 +71,7 @@ services:
       - ../infrastructure/postgres/0070-workflow-studio.sql:/docker-entrypoint-initdb.d/0070-workflow-studio.sql:ro
       - ../infrastructure/postgres/0075-report-studio.sql:/docker-entrypoint-initdb.d/0075-report-studio.sql:ro
       - ../infrastructure/postgres/0076-ai-studio.sql:/docker-entrypoint-initdb.d/0076-ai-studio.sql:ro
+      - ../infrastructure/postgres/0071-io-catalog-sync.sql:/docker-entrypoint-initdb.d/0071-io-catalog-sync.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
