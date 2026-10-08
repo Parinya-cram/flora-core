@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import {
   archiveCase,
@@ -31,8 +31,8 @@ import {
   type CaseProcedureRow,
 } from "../api/caseClinicalApi";
 import type { AuthUser } from "../auth/useAuth";
-import type { TimelineCellProvenance, TimelineChange, TimelineProvenance } from "../api/vitalMinutesApi";
-import { putTimelineChanges } from "../api/vitalMinutesApi";
+import type { TimelineCellProvenance, TimelineChange, TimelineMask, TimelineProvenance } from "../api/vitalMinutesApi";
+import { createTimelineMasks, putTimelineChanges, restoreTimelineMask, revokeTimelineMask } from "../api/vitalMinutesApi";
 import {
   createCaseEvent,
   deleteCaseEvent,
@@ -997,7 +997,39 @@ export default function ClinicalChartView({
     provenance: storedCellProvenance,
     loading: vitalsLoading,
     fetchedAxis: vitalsAxis,
+    masked: serverMaskedValues,
+    masks: serverMasks,
+    reload: reloadVitals,
   } = useVitalMinutes(caseId, caseStatus.status, axis);
+  // Invalid device data. Changes show at once (overlay) and settle when the server answers.
+  const [maskOverlay, setMaskOverlay] = useState<{ added: Array<Pick<TimelineMask, "param_key" | "from_ts" | "to_ts"> & { key: string }>; removed: number[] }>({ added: [], removed: [] });
+  const [maskUndo, setMaskUndo] = useState<Array<{ kind: "mask" | "unmask"; masks: TimelineMask[] }>>([]);
+  const [maskBusy, setMaskBusy] = useState(false);
+  const [maskError, setMaskError] = useState("");
+  const activeMasks = useMemo(
+    () => [...serverMasks.filter(mask => !maskOverlay.removed.includes(mask.id)), ...maskOverlay.added],
+    [serverMasks, maskOverlay],
+  );
+  const { deviceValues, maskedValues } = useMemo(() => {
+    const unmasked: ClinicalTimelineValues = {};
+    const masked: ClinicalTimelineValues = {};
+    for (const rowId of new Set([...Object.keys(liveValues), ...Object.keys(serverMaskedValues)])) {
+      const rowMasks = activeMasks.filter(mask => mask.param_key === rowId);
+      const keep: Record<number, unknown> = {};
+      const out: Record<number, unknown> = {};
+      for (const source of [serverMaskedValues[rowId], liveValues[rowId]]) {
+        for (const [key, value] of Object.entries(source || {})) {
+          const ts = Number(key);
+          // Values a clinician entered are never masked.
+          const covered = !storedCellProvenance[rowId]?.[ts] && rowMasks.some(mask => ts >= mask.from_ts && ts <= mask.to_ts);
+          if (covered) out[ts] = value; else { keep[ts] = value; delete out[ts]; }
+        }
+      }
+      unmasked[rowId] = keep;
+      if (Object.keys(out).length) masked[rowId] = out;
+    }
+    return { deviceValues: unmasked, maskedValues: masked };
+  }, [liveValues, serverMaskedValues, activeMasks, storedCellProvenance]);
   const [optimisticCellProvenance, setOptimisticCellProvenance] = useState<TimelineProvenance>({});
   const cellProvenance = useMemo(() => {
     const merged: TimelineProvenance = {};
@@ -1120,8 +1152,8 @@ export default function ClinicalChartView({
 
   const [editValues, setEditValues] = useState<ClinicalTimelineValues>({});
   const values = useMemo(
-    () => mergeValues(liveValues, editValues),
-    [liveValues, editValues],
+    () => mergeValues(deviceValues, editValues),
+    [deviceValues, editValues],
   );
   const ivyRows = useMemo(() => {
     const rows = new Map<string, ClinicalTimelineRow>();
@@ -1379,7 +1411,76 @@ export default function ClinicalChartView({
   useEffect(() => {
     setEditValues({});
     setOptimisticCellProvenance({});
+    setMaskOverlay({ added: [], removed: [] });
+    setMaskUndo([]);
+    setMaskError("");
   }, [caseId]);
+
+  const runMaskChange = async (
+    overlay: { added?: Array<Pick<TimelineMask, "param_key" | "from_ts" | "to_ts">>; removed?: number[] },
+    request: () => Promise<{ kind: "mask" | "unmask"; masks: TimelineMask[] } | null>,
+  ) => {
+    const key = `pending-${Date.now()}-${Math.random()}`;
+    const added = (overlay.added || []).map((mask, index) => ({ ...mask, key: `${key}-${index}` }));
+    const removed = overlay.removed || [];
+    setMaskOverlay(current => ({ added: [...current.added, ...added], removed: [...current.removed, ...removed] }));
+    setMaskBusy(true);
+    setMaskError("");
+    try {
+      const done = await request();
+      if (done) setMaskUndo(stack => [...stack.slice(-49), done]);
+      await reloadVitals();
+    } catch (error) {
+      setMaskError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setMaskOverlay(current => ({
+        added: current.added.filter(mask => !mask.key.startsWith(key)),
+        removed: current.removed.filter(id => !removed.includes(id)),
+      }));
+      setMaskBusy(false);
+    }
+  };
+
+  const maskTimelineRange = (rowId: string, fromTs: number, toTs: number) => {
+    if (caseId == null) return;
+    const activeCaseId = caseId;
+    const mask = { param_key: rowId, from_ts: fromTs, to_ts: toTs };
+    void runMaskChange({ added: [mask] }, async () => {
+      const result = await createTimelineMasks(activeCaseId, [mask], "Invalid device data");
+      return { kind: "mask", masks: result.masks };
+    });
+  };
+
+  const unmaskTimelineRange = (rowId: string, fromTs: number, toTs: number) => {
+    if (caseId == null) return;
+    const activeCaseId = caseId;
+    const hits = serverMasks.filter(mask => mask.param_key === rowId && mask.to_ts >= fromTs && mask.from_ts <= toTs
+      && !maskOverlay.removed.includes(mask.id));
+    if (!hits.length) return;
+    void runMaskChange({ removed: hits.map(mask => mask.id) }, async () => {
+      for (const mask of hits) await revokeTimelineMask(activeCaseId, mask.id);
+      return { kind: "unmask", masks: hits };
+    });
+  };
+
+  const undoMaskChange = () => {
+    if (caseId == null || maskBusy) return;
+    const last = maskUndo[maskUndo.length - 1];
+    if (!last) return;
+    const activeCaseId = caseId;
+    setMaskUndo(stack => stack.slice(0, -1));
+    void runMaskChange(
+      last.kind === "mask" ? { removed: last.masks.map(mask => mask.id) } : { added: last.masks },
+      async () => {
+        for (const mask of last.masks) {
+          await (last.kind === "mask" ? revokeTimelineMask : restoreTimelineMask)(activeCaseId, mask.id);
+        }
+        return null;
+      },
+    );
+  };
+  const undoMaskRef = useRef(undoMaskChange);
+  useLayoutEffect(() => { undoMaskRef.current = undoMaskChange; });
 
   useEffect(() => {
     pendingChangesRef.current.clear();
@@ -2511,6 +2612,13 @@ export default function ClinicalChartView({
         tag === "INPUT" ||
         tag === "TEXTAREA" ||
         tag === "SELECT";
+      if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z") {
+        // Grid cells are inputs too; their own text undo is not needed while just selected.
+        if (editable && !target?.classList.contains("timegrid-edit-input")) return;
+        event.preventDefault();
+        undoMaskRef.current();
+        return;
+      }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
         if (editable) return;
         event.preventDefault();
@@ -5259,6 +5367,9 @@ export default function ClinicalChartView({
       dripGroupColors={dripGroupColors}
       smartContrast={dripSmartContrast}
       onChange={handleCellChange}
+      maskedValues={maskedValues}
+      onMaskRange={maskTimelineRange}
+      onUnmaskRange={unmaskTimelineRange}
       onIoCellClick={handleIoCellClick}
       onIoHeaderClick={() => setIoAddMenuTs(Date.now())}
       onIoHeaderColumnClick={ts => setIoAddMenuTs(ts)}
@@ -5412,6 +5523,16 @@ export default function ClinicalChartView({
           <span className="case-kronos__sync" role="status" aria-live="polite">
             {rawTimelineLoading ? "Updating…" : lastSyncedAt ? "Synced" : "Connecting…"}
           </span>
+          <button
+            type="button"
+            className="case-kronos__undo inline-flex items-center gap-1 rounded border border-[var(--app-border)] px-2 py-0.5 text-xs font-semibold disabled:opacity-40"
+            disabled={!maskUndo.length || maskBusy}
+            onClick={undoMaskChange}
+            title={maskUndo.length ? `Undo last ${maskUndo[maskUndo.length - 1].kind === "mask" ? "invalid mark" : "valid mark"} (⌘/Ctrl+Z)` : "Nothing to undo"}
+          >
+            <span aria-hidden="true">↶</span> Undo
+          </button>
+          {maskError ? <span className="text-xs text-red-600 dark:text-red-400" role="alert">{maskError}</span> : null}
           {!followLatest && caseStatus.status === "ACTIVE" ? (
             <button type="button" className="case-kronos__latest" onClick={() => setFollowLatest(true)}>Back to now</button>
           ) : null}

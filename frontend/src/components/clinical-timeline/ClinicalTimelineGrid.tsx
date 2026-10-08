@@ -2,7 +2,7 @@ import { ECG_CLEAR_VALUE, ECG_OPTIONS, ecgValueToCode } from "./ecgOptions";
 import { COL_WIDTH, LABEL_COL_WIDTH } from "./layout";
 import type { ClinicalTimelineRow, ClinicalTimelineValues } from "./types";
 import type { TimelineCellProvenance, TimelineProvenance } from "../../api/vitalMinutesApi";
-import { useEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { useVirtualColumns } from "../../hooks/useVirtualColumns";
 import { useWorkstationSettings } from "../../hooks/useWorkstationSettings";
@@ -72,6 +72,23 @@ interface Props {
   smartContrast?: boolean;
   /** Render values without edit controls or entry affordances. */
   readOnly?: boolean;
+  /** Device readings marked invalid (shown grey, left out of graphs and reports). */
+  maskedValues?: ClinicalTimelineValues;
+  /** Mark device readings in [fromTs, toTs] (minutes, inclusive) of one row invalid. */
+  onMaskRange?: (rowId: string, fromTs: number, toTs: number) => void;
+  /** Make masked readings in [fromTs, toTs] of one row count again. */
+  onUnmaskRange?: (rowId: string, fromTs: number, toTs: number) => void;
+}
+
+/** The selected vital cell and, after a second ⊘ press, the start of a range. */
+type MaskSelection = { rowId: string; rowLabel: string; columnIndex: number; element: HTMLElement; armed: boolean };
+
+function InvalidIcon({ className = "h-3.5 w-3.5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="9" /><path d="M5.6 5.6l12.8 12.8" />
+    </svg>
+  );
 }
 
 const SYSTEM_ROWS: ClinicalTimelineRow[] = [
@@ -121,13 +138,16 @@ type IoDisplayCellValue = {
   minuteValues?: Array<{ ts: number; amount: number }>;
 };
 
-function EditableCellInput({ value, numeric, fallback, editedDeviceValue, ariaLabel, onCommit }: {
+function EditableCellInput({ value, numeric, fallback, editedDeviceValue, masked, ariaLabel, onCommit, onFocusCell, onBlurCell }: {
   value: string;
   numeric: boolean;
   fallback: boolean;
   editedDeviceValue?: boolean;
+  masked?: boolean;
   ariaLabel: string;
   onCommit: (value: unknown) => void;
+  onFocusCell?: (element: HTMLInputElement) => void;
+  onBlurCell?: () => void;
 }) {
   const [draft, setDraft] = useState(value);
   const [focused, setFocused] = useState(false);
@@ -146,12 +166,12 @@ function EditableCellInput({ value, numeric, fallback, editedDeviceValue, ariaLa
       type="text"
       inputMode={numeric ? "decimal" : "text"}
       aria-label={ariaLabel}
-      className={`timegrid-edit-input h-full w-full bg-transparent text-center text-[10px] leading-none font-inherit focus:outline-none relative z-10 ${fallback ? "text-amber-600 dark:text-amber-400 font-medium" : "text-[var(--app-text)]"} ${editedDeviceValue ? "underline decoration-dotted decoration-2 underline-offset-2" : ""}`}
+      className={`timegrid-edit-input h-full w-full bg-transparent text-center text-[10px] leading-none font-inherit focus:outline-none relative z-10 ${masked ? "timegrid-masked-value text-gray-400 dark:text-gray-500" : fallback ? "text-amber-600 dark:text-amber-400 font-medium" : "text-[var(--app-text)]"} ${editedDeviceValue ? "underline decoration-dotted decoration-2 underline-offset-2" : ""}`}
       value={focused ? draft : value}
       placeholder="—"
-      onFocus={event => { setDraft(value); setFocused(true); event.currentTarget.select(); }}
+      onFocus={event => { setDraft(value); setFocused(true); event.currentTarget.select(); onFocusCell?.(event.currentTarget); }}
       onChange={event => setDraft(event.target.value)}
-      onBlur={() => { commit(); setFocused(false); }}
+      onBlur={() => { if (draft !== value) commit(); setFocused(false); onBlurCell?.(); }}
       onKeyDown={event => {
         if (event.key === "Enter") event.currentTarget.blur();
         if (event.key === "Escape") { setDraft(value); event.currentTarget.blur(); }
@@ -375,6 +395,9 @@ export default function ClinicalTimelineGrid({
   dripGroupColors = DEFAULT_DRIP_GROUP_COLORS,
   smartContrast = true,
   readOnly = false,
+  maskedValues,
+  onMaskRange,
+  onUnmaskRange,
 }: Props) {
   const workstation = useWorkstationSettings();
   const { color: themeCode, schemes } = useTheme();
@@ -383,6 +406,25 @@ export default function ClinicalTimelineGrid({
   const themeSurface = parseHexColor(activeTheme?.colors[1] || "#1C1C1C") || themeCanvas;
   const timelineBackground = mixRgb(themeCanvas, themeSurface, 0.2);
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
+  const [maskSelection, setMaskSelection] = useState<MaskSelection | null>(null);
+  const [, setToolbarTick] = useState(0);
+  const maskSelectionRef = useRef<MaskSelection | null>(null);
+  useLayoutEffect(() => { maskSelectionRef.current = maskSelection; });
+  const masking = Boolean(onMaskRange) && !readOnly;
+
+  useEffect(() => {
+    if (!maskSelection) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setMaskSelection(null); };
+    const reposition = () => setToolbarTick(tick => tick + 1);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", reposition, true);
+    window.addEventListener("resize", reposition);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", reposition, true);
+      window.removeEventListener("resize", reposition);
+    };
+  }, [maskSelection]);
   const [eventStack, setEventStack] = useState<{
     ts: number;
     markers: ClinicalTimelineEventMarker[];
@@ -514,6 +556,53 @@ export default function ClinicalTimelineGrid({
 
     return { value: undefined, isFallback: false, sourceTs: null };
   };
+
+  // A column summarises the minutes in (previous column, column]; a mask covers all of them.
+  const columnWindow = (columnIndex: number): [number, number] => {
+    const ts = columns[columnIndex];
+    const previous = columnIndex > 0 ? columns[columnIndex - 1] : ts - stepMs;
+    return [Math.min(ts, previous + MINUTE_MS), ts];
+  };
+
+  const maskedInWindow = (rowId: string, columnIndex: number): { value: unknown; sourceTs: number } | null => {
+    const rowMasked = maskedValues?.[rowId];
+    if (!rowMasked) return null;
+    const [from, to] = columnWindow(columnIndex);
+    let best: { value: unknown; sourceTs: number } | null = null;
+    for (const [key, value] of Object.entries(rowMasked)) {
+      const minute = Number(key);
+      if (minute >= from && minute <= to && (!best || minute > best.sourceTs)) best = { value, sourceTs: minute };
+    }
+    return best;
+  };
+
+  const maskRange = (selection: MaskSelection, otherIndex = selection.columnIndex) => {
+    const [from] = columnWindow(Math.min(selection.columnIndex, otherIndex));
+    const [, to] = columnWindow(Math.max(selection.columnIndex, otherIndex));
+    onMaskRange?.(selection.rowId, from, to);
+  };
+
+  const focusVitalCell = (row: ClinicalTimelineRow, columnIndex: number, element: HTMLElement) => {
+    const current = maskSelectionRef.current;
+    if (current?.armed && current.rowId === row.id && current.columnIndex !== columnIndex) {
+      // Second value in the same channel: mask everything between the two.
+      maskRange(current, columnIndex);
+      setMaskSelection({ rowId: row.id, rowLabel: row.label, columnIndex, element, armed: false });
+      return;
+    }
+    setMaskSelection({ rowId: row.id, rowLabel: row.label, columnIndex, element, armed: false });
+  };
+
+  const blurVitalCell = () => {
+    // Keep an armed range alive while the clinician picks the second value.
+    window.setTimeout(() => {
+      const current = maskSelectionRef.current;
+      if (!current || current.armed) return;
+      if (document.activeElement && current.element.contains(document.activeElement)) return;
+      setMaskSelection(null);
+    }, 0);
+  };
+
 
   const normalizeEventTitle = (title: string) =>
     title.toLowerCase().replace(/\s+/g, " ").trim();
@@ -1089,13 +1178,19 @@ export default function ClinicalTimelineGrid({
                 );
               }
 
-              const displayCell = getDisplayCell(row.id, ts, actualIndex);
+              let displayCell = getDisplayCell(row.id, ts, actualIndex);
+              const maskedCell = displayCell.value == null || displayCell.value === "" ? maskedInWindow(row.id, actualIndex) : null;
+              if (maskedCell) displayCell = { value: maskedCell.value, isFallback: maskedCell.sourceTs !== ts, sourceTs: maskedCell.sourceTs };
               const raw = displayCell.value;
               const value = raw == null ? "" : String(raw);
-              const fallbackHint =
-                displayCell.isFallback && displayCell.sourceTs != null
+              const fallbackHint = maskedCell
+                ? "Invalid device data (masked)"
+                : displayCell.isFallback && displayCell.sourceTs != null
                   ? `Nearest from ${formatHHMM(displayCell.sourceTs)}`
                   : "";
+              const canMask = masking && row.type === "vital";
+              const selectedForMask = canMask && maskSelection?.rowId === row.id && maskSelection.columnIndex === actualIndex;
+              const armedRow = canMask && maskSelection?.armed && maskSelection.rowId === row.id;
               const provenanceTs = displayCell.sourceTs ?? ts;
               const provenance = cellProvenance?.[row.id]?.[provenanceTs];
               const editedDeviceValue = provenance?.source === "override";
@@ -1104,12 +1199,12 @@ export default function ClinicalTimelineGrid({
                 <td
                   key={ts}
                   style={{ width: colWidth, minWidth: colWidth }}
-                  className={`app-tooltip ${cellClass} ${editedDeviceValue ? "timegrid-edited-device-cell" : ""}`}
+                  className={`app-tooltip ${cellClass} ${editedDeviceValue ? "timegrid-edited-device-cell" : ""} ${maskedCell ? "timegrid-masked-cell" : ""} ${selectedForMask ? "timegrid-mask-selected" : ""} ${armedRow && !selectedForMask ? "timegrid-mask-armed-row" : ""}`}
                   data-tooltip={clinicalCellTooltip(value, fallbackHint, workstation, provenance)}
                 >
                   {readOnly ? (
                     <span
-                      className={`relative z-10 block h-full w-full px-1 text-center text-[10px] leading-[var(--timegrid-row-height)] ${displayCell.isFallback ? "font-medium text-amber-600 dark:text-amber-400" : "text-[var(--app-text)]"} ${editedDeviceValue ? "underline decoration-dotted decoration-2 underline-offset-2" : ""}`}
+                      className={`relative z-10 block h-full w-full px-1 text-center text-[10px] leading-[var(--timegrid-row-height)] ${maskedCell ? "timegrid-masked-value text-gray-400 dark:text-gray-500" : displayCell.isFallback ? "font-medium text-amber-600 dark:text-amber-400" : "text-[var(--app-text)]"} ${editedDeviceValue ? "underline decoration-dotted decoration-2 underline-offset-2" : ""}`}
                       aria-label={`${row.label} at ${formatHHMM(ts)}`}
                     >
                       {value || "—"}
@@ -1120,8 +1215,11 @@ export default function ClinicalTimelineGrid({
                       numeric={value === "" || isNumericLike(raw)}
                       fallback={displayCell.isFallback}
                       editedDeviceValue={editedDeviceValue}
+                      masked={Boolean(maskedCell)}
                       ariaLabel={`${row.label} at ${formatHHMM(ts)}`}
                       onCommit={nextValue => onChange?.(row.id, ts, nextValue)}
+                      onFocusCell={canMask ? element => focusVitalCell(row, actualIndex, element.closest("td") || element) : undefined}
+                      onBlurCell={canMask ? blurVitalCell : undefined}
                     />
                   )}
                 </td>
@@ -1192,6 +1290,53 @@ export default function ClinicalTimelineGrid({
       </div>,
       document.body,
     ) : null}
+    {maskSelection && masking && maskSelection.element.isConnected && typeof document !== "undefined" ? (() => {
+      const rect = maskSelection.element.getBoundingClientRect();
+      const selectionMasked = Boolean(maskedInWindow(maskSelection.rowId, maskSelection.columnIndex));
+      const [from, to] = columnWindow(maskSelection.columnIndex);
+      const keep = (event: ReactMouseEvent) => event.preventDefault();  // keep the cell focused
+      return createPortal(
+        <div
+          className="app-theme-scope fixed z-[1150] flex items-center gap-1 rounded-xl border border-[var(--app-tooltip-border)] bg-[var(--app-tooltip-bg)] p-1 text-[var(--app-tooltip-text)] shadow-xl"
+          style={{ left: Math.max(8, rect.left + rect.width / 2 - 20), top: Math.max(8, rect.top - 40) }}
+          role="toolbar"
+          aria-label={`${maskSelection.rowLabel} data quality`}
+          onMouseDown={keep}
+        >
+          <button
+            type="button"
+            onMouseDown={keep}
+            onClick={() => {
+              if (!selectionMasked) {
+                maskRange(maskSelection);
+                return;
+              }
+              // Pressing ⊘ again: pick a second value in this channel to mask the range.
+              setMaskSelection({ ...maskSelection, armed: !maskSelection.armed });
+            }}
+            title={selectionMasked ? "Mask a range: press, then click another value in this row" : "Mark invalid (artifact)"}
+            className={`inline-flex h-7 items-center gap-1 rounded-lg px-2 text-xs font-semibold ${maskSelection.armed ? "bg-red-600 text-white" : "text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"}`}
+          >
+            <InvalidIcon /> {maskSelection.armed ? "Range…" : selectionMasked ? "Range" : "Invalid"}
+          </button>
+          {selectionMasked && !maskSelection.armed ? (
+            <button
+              type="button"
+              onMouseDown={keep}
+              onClick={() => onUnmaskRange?.(maskSelection.rowId, from, to)}
+              title="Mark valid again"
+              className="inline-flex h-7 items-center rounded-lg px-2 text-xs font-semibold text-[var(--app-text)] hover:bg-[var(--app-control-bg-hover)]"
+            >
+              Valid
+            </button>
+          ) : null}
+          {maskSelection.armed ? (
+            <span className="px-1 text-[10px] text-[var(--app-muted)]">Click another {maskSelection.rowLabel} value · Esc</span>
+          ) : null}
+        </div>,
+        document.body,
+      );
+    })() : null}
     </>
   );
 }

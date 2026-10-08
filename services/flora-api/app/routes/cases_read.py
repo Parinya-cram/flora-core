@@ -344,11 +344,42 @@ def effective_timeline(
             **audit,
         }
 
+    masks = active_masks(database, case_id, from_ts, to_ts)
+    masked_by_minute = apply_masks(by_minute, provenance_by_minute, masks)
     rows = [
-        {"ts_minute": timestamp, "payload": by_minute[timestamp], "provenance": provenance_by_minute.get(timestamp,{})}
+        {"ts_minute": timestamp, "payload": by_minute[timestamp], "provenance": provenance_by_minute.get(timestamp,{}),
+         **({"masked": masked_by_minute[timestamp]} if timestamp in masked_by_minute else {})}
         for timestamp in sorted(by_minute)
     ]
-    return {"case_id": case_id, "from": from_ts, "to": to_ts, "rows": rows}
+    return {"case_id": case_id, "from": from_ts, "to": to_ts, "rows": rows, "masks": masks}
+
+
+def active_masks(database: Connection, case_id: int, from_ts: int, to_ts: int) -> list[dict]:
+    if database.execute("SELECT to_regclass('case_timeline_mask') AS t").fetchone()["t"] is None:
+        return []
+    return [dict(row) for row in database.execute(
+        """SELECT id, param_key, from_ts, to_ts, reason, created_by, created_at
+        FROM case_timeline_mask
+        WHERE case_id=%s AND revoked_at IS NULL AND to_ts >= %s AND from_ts <= %s
+        ORDER BY from_ts, id""",
+        (case_id, from_ts, to_ts),
+    ).fetchall()]
+
+
+def apply_masks(by_minute: dict[int, dict], provenance: dict[int, dict], masks: list[dict]) -> dict[int, dict]:
+    """Moves masked device readings out of the payload. Clinician-entered values stay."""
+    masked: dict[int, dict] = {}
+    if not masks:
+        return masked
+    for timestamp, payload in by_minute.items():
+        if not isinstance(payload, dict):
+            continue
+        for mask in masks:
+            key = mask["param_key"]
+            if mask["from_ts"] <= timestamp <= mask["to_ts"] and key in payload \
+                    and key not in provenance.get(timestamp, {}):
+                masked.setdefault(timestamp, {})[key] = payload.pop(key)
+    return masked
 
 
 @router.get("/{case_id_raw}/timeline/audit")

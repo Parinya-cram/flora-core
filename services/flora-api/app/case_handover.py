@@ -17,7 +17,7 @@ EXPORT_VERSION = 1
 CASE_TABLES = (
     "case_his_patient", "case_his_allergy", "case_allergy", "case_his_lab", "patient_snapshot",
     "case_diagnosis", "case_procedure", "case_staff", "case_detail", "vital_minutes",
-    "case_event_note", "case_timeline_value", "case_io_run", "case_io_event",
+    "case_event_note", "case_timeline_value", "case_timeline_mask", "case_io_run", "case_io_event",
 )
 CASE_COLUMNS_SKIP = {"id", "status", "case_code", "archive_time", "handover_from_leaf_id", "handover_from_case_id",
                      "handover_global_case_id", "handover_to_leaf_id", "handover_at", "canopy_admission_id"}
@@ -32,8 +32,9 @@ def export_case(database: Connection, case_id: int) -> dict[str, Any] | None:
     case = _rows(database, "SELECT * FROM cases WHERE id=%s", (case_id,))
     if not case:
         return None
+    # A table missing on an older Leaf (not migrated yet) is exported as empty.
     tables = {table: _rows(database, f"SELECT * FROM {table} WHERE case_id=%s ORDER BY id", (case_id,))
-              for table in CASE_TABLES}
+              if _columns(database, table) else [] for table in CASE_TABLES}
     tables["case_io_segment"] = _rows(
         database, "SELECT s.* FROM case_io_segment s JOIN case_io_run r ON r.id=s.run_id WHERE r.case_id=%s ORDER BY s.id",
         (case_id,))
@@ -100,6 +101,8 @@ def import_case(database: Connection, export: dict[str, Any], *, from_leaf_id: s
     tables = export["tables"]
     for table in CASE_TABLES:
         columns = _columns(database, table)
+        if not columns:
+            continue
         for item in tables.get(table) or []:
             item = {**item, "case_id": case_id}
             if "item_id" in item and item["item_id"] is not None:

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { getEffectiveTimeline, type TimelineProvenance, type VitalMinuteRow } from "../api/vitalMinutesApi";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { getEffectiveTimelineWithMasks, type TimelineMask, type TimelineProvenance, type VitalMinuteRow } from "../api/vitalMinutesApi";
 import type { ClinicalTimelineValues } from "../components/clinical-timeline/types";
 
 type CaseStatus = "IDLE" | "ACTIVE" | "DISCHARGED" | "ARCHIVED";
@@ -62,6 +62,10 @@ function toClinicalTimelineValues(
   return next;
 }
 
+function toMaskedValues(rows: VitalMinuteRow[]): ClinicalTimelineValues {
+  return toClinicalTimelineValues(rows.map(row => ({ ts_minute: row.ts_minute, payload: row.masked || {} })));
+}
+
 function toTimelineProvenance(rows: VitalMinuteRow[]): TimelineProvenance {
   const next: TimelineProvenance = {};
   for (const row of rows) {
@@ -97,6 +101,9 @@ export function useVitalMinutes(
   const [provenance, setProvenance] = useState<TimelineProvenance>({});
   const [loading, setLoading] = useState(false);
   const [fetchedAxis, setFetchedAxis] = useState<number[]>([]);
+  const [masked, setMasked] = useState<ClinicalTimelineValues>({});
+  const [masks, setMasks] = useState<TimelineMask[]>([]);
+  const reloadRef = useRef<() => Promise<void>>(async () => undefined);
 
   useEffect(() => {
     if (
@@ -106,6 +113,8 @@ export function useVitalMinutes(
     ) {
       setValues({});
       setProvenance({});
+      setMasked({});
+      setMasks([]);
       setFetchedAxis([]);
       setLoading(false);
       return;
@@ -121,10 +130,13 @@ export function useVitalMinutes(
     async function fetchVitals(showLoading = false) {
       if (showLoading) setLoading(true);
       try {
-        const rows = await getEffectiveTimeline(activeCaseId, fromTs, toTs);
+        const { rows, masks: nextMasks } = await getEffectiveTimelineWithMasks(activeCaseId, fromTs, toTs);
         if (!alive) return;
         const nextValues = toClinicalTimelineValues(rows);
+        const nextMasked = toMaskedValues(rows);
         setValues(previous => sameValues(previous, nextValues) ? previous : nextValues);
+        setMasked(previous => sameValues(previous, nextMasked) ? previous : nextMasked);
+        setMasks(nextMasks);
         setProvenance(toTimelineProvenance(rows));
         setFetchedAxis(currentAxis);
       } catch (err) {
@@ -135,6 +147,7 @@ export function useVitalMinutes(
     }
 
     fetchVitals(true);
+    reloadRef.current = () => fetchVitals(false);
 
     if (status === "ACTIVE") {
       const onStartTimeUpdated = (event: Event) => {
@@ -157,5 +170,8 @@ export function useVitalMinutes(
     };
   }, [caseId, status, axis]);
 
-  return { values, provenance, loading, fetchedAxis };
+  /** Refetch now (after a mask change), resolving when the new data is in. */
+  const reload = useCallback(() => reloadRef.current(), []);
+
+  return { values, provenance, loading, fetchedAxis, masked, masks, reload };
 }

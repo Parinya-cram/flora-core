@@ -2633,3 +2633,28 @@ input {
     display: none !important;
   }
 }
+
+/* Invalid (masked) device readings in the clinical timeline grid. */
+.timegrid-masked-cell {
+  background-color: color-mix(in srgb, #6b7280 12%, transparent);
+  background-image: repeating-linear-gradient(135deg, transparent 0 4px, color-mix(in srgb, #6b7280 38%, transparent) 4px 5.5px);
+}
+.timegrid-masked-value {
+  color: #6b7280 !important;
+  font-weight: 600;
+  text-decoration: line-through;
+  text-decoration-color: #dc2626;
+  text-decoration-thickness: 2px;
+}
+.dark .timegrid-masked-value { color: #9ca3af !important; text-decoration-color: #f87171; }
+.dark .timegrid-masked-cell {
+  background-color: color-mix(in srgb, #9ca3af 14%, transparent);
+  background-image: repeating-linear-gradient(135deg, transparent 0 4px, color-mix(in srgb, #9ca3af 34%, transparent) 4px 5.5px);
+}
+.timegrid-mask-selected {
+  box-shadow: inset 0 0 0 2px var(--app-accent, #a33a68);
+}
+.timegrid-mask-armed-row {
+  background-color: color-mix(in srgb, #dc2626 6%, transparent);
+  cursor: crosshair;
+}

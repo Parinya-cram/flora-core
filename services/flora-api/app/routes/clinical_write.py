@@ -381,3 +381,57 @@ def timeline(case_id:int,payload:dict=Body(...),actor:dict=Depends(require_permi
             insert(database,"case_timeline_audit",audit)
             counts[{"insert":"inserted","update":"updated","delete":"deleted"}[action]]+=1
     return {"ok":True,**counts}
+
+
+# ---- invalid device data: masks over one parameter and a minute range ----
+
+def _mask_row(database: Connection, case_id: int, mask_id: int) -> dict:
+    row = database.execute("SELECT * FROM case_timeline_mask WHERE id=%s AND case_id=%s", (mask_id, case_id)).fetchone()
+    if not row: raise HTTPException(404, "mask not found")
+    return dict(row)
+
+
+@router.post("/{case_id}/timeline/masks")
+def create_masks(case_id:int,payload:dict=Body(...),actor:dict=Depends(require_permission("case.chart")),database:Connection=Depends(connection)):
+    """Body: {masks:[{param_key, from_ts, to_ts}], reason}. Device readings in each range become invalid."""
+    items = payload.get("masks")
+    if not isinstance(items, list) or not items: raise HTTPException(400, "masks required")
+    created = []
+    with database.transaction():
+        editable_case(database, case_id)
+        for item in items[:200]:
+            key = (text(item.get("param_key")) or "").lower()
+            start = timestamp(item.get("from_ts"), "from_ts")
+            end = timestamp(item.get("to_ts"), "to_ts", start)
+            if not key or start is None or end is None: raise HTTPException(400, "param_key, from_ts and to_ts required")
+            start, end = min(start, end), max(start, end)
+            if end - start > 24 * 3600_000: raise HTTPException(400, "a mask covers at most 24 hours")
+            row = insert(database, "case_timeline_mask", dict(case_id=case_id, param_key=key, from_ts=start, to_ts=end,
+                         reason=text(payload.get("reason")) or "Invalid device data", created_by=actor["username"], created_at=now_ms()))
+            case_audit(database, case_id, "timeline.mask", None, {k: row[k] for k in ("id", "param_key", "from_ts", "to_ts", "reason")}, actor)
+            created.append(row)
+    return {"ok": True, "masks": created}
+
+
+@router.post("/{case_id}/timeline/masks/{mask_id}/revoke")
+def revoke_mask(case_id:int,mask_id:int,actor:dict=Depends(require_permission("case.chart")),database:Connection=Depends(connection)):
+    """Undo of a mask (or 'mark valid again'): the readings count again; the row is kept for the trail."""
+    with database.transaction():
+        editable_case(database, case_id)
+        old = _mask_row(database, case_id, mask_id)
+        if old["revoked_at"] is None:
+            update(database, "case_timeline_mask", mask_id, {"revoked_by": actor["username"], "revoked_at": now_ms()})
+            case_audit(database, case_id, "timeline.unmask", {k: old[k] for k in ("id", "param_key", "from_ts", "to_ts")}, None, actor)
+    return {"ok": True, "id": mask_id}
+
+
+@router.post("/{case_id}/timeline/masks/{mask_id}/restore")
+def restore_mask(case_id:int,mask_id:int,actor:dict=Depends(require_permission("case.chart")),database:Connection=Depends(connection)):
+    """Undo of a revoke: the mask applies again."""
+    with database.transaction():
+        editable_case(database, case_id)
+        old = _mask_row(database, case_id, mask_id)
+        if old["revoked_at"] is not None:
+            update(database, "case_timeline_mask", mask_id, {"revoked_by": None, "revoked_at": None})
+            case_audit(database, case_id, "timeline.mask", None, {k: old[k] for k in ("id", "param_key", "from_ts", "to_ts")}, actor)
+    return {"ok": True, "id": mask_id}
