@@ -69,7 +69,7 @@ DEMO_TENANT = {
     "api_key": os.getenv("ROOT_DEMO_TENANT_KEY", "root-tenant-demo-key"),
 }
 DEMO_DEVICE_TYPES = ["hl7-patient-monitor", "json-anesthesia-machine", "http-ventilator", "serial-temp-module",
-                     "draeger-vista-120s"]
+                     "draeger-vista-120s", "draeger-iacs-m540"]
 DEFAULT_GLOBAL_CONFIG = {
     "terminology_release": "2026.09",
     "minimum_versions": {"leaf": "1.2.0", "canopy": "1.2.0", "gateway": "0.1.0"},
@@ -101,6 +101,17 @@ def bootstrap() -> None:
                 (DEMO_TENANT["tenant_id"], DEMO_TENANT["name"], DEMO_TENANT["region"], key_hash(DEMO_TENANT["api_key"]), current, current))
             issue_license(connection, DEMO_TENANT["tenant_id"], LicenseIn(device_types=DEMO_DEVICE_TYPES))
             log.info("seeded demo tenant %s", DEMO_TENANT["tenant_id"])
+        # Keep the demo tenant's live license in sync with DEMO_DEVICE_TYPES: re-issue
+        # (idempotent) only when its current license is missing a newly-added type, so a
+        # deploy that adds a device type reaches the already-seeded tenant without a manual
+        # license replace. Other license fields fall back to defaults (demo uses defaults).
+        if os.getenv("ROOT_SEED_DEMO", "true").lower() == "true":
+            lic = connection.execute(
+                "SELECT device_types FROM root_license WHERE tenant_id=%s AND current",
+                (DEMO_TENANT["tenant_id"],)).fetchone()
+            if lic is not None and not set(DEMO_DEVICE_TYPES).issubset(set(lic["device_types"] or [])):
+                issue_license(connection, DEMO_TENANT["tenant_id"], LicenseIn(device_types=DEMO_DEVICE_TYPES))
+                log.info("re-issued demo license for %s with updated device types", DEMO_TENANT["tenant_id"])
     auth.ensure_bootstrap_admin()
 
 
