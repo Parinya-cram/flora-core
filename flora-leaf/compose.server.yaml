@@ -70,6 +70,8 @@ services:
       VECTOR_READ_URL: ${VECTOR_READ_URL:-http://100.77.34.87:7410/data-api/leaf-or-01/api/observations}
       HIS_GATEWAY_BASE_URL: ${HIS_GATEWAY_BASE_URL:-http://127.0.0.1:9}
       FLORA_HIS_DEMO_MODE: ${FLORA_HIS_DEMO_MODE:-true}
+      # Offline speech-to-text for dictation (leaf-stt service below).
+      FLORA_STT_URL: ${FLORA_STT_URL:-http://leaf-stt:8000}
     ports:
       - "${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_LEAF_API_PORT:-6893}:8000"
     extra_hosts:
@@ -118,6 +120,20 @@ services:
     depends_on:
       leaf-api:
         condition: service_healthy
+    restart: unless-stopped
+
+  # Offline speech-to-text for dictation (faster-whisper on CPU). Models are baked
+  # into the image at build time, so first build is slow/large (downloads models)
+  # and the running service needs no internet. leaf-api reaches it at FLORA_STT_URL.
+  leaf-stt:
+    build:
+      context: ../services/flora-stt
+      args:
+        STT_MODEL: ${LEAF_STT_MODEL:-large-v3-turbo}
+        STT_DRAFT_MODEL: ${LEAF_STT_DRAFT_MODEL:-small}
+    environment:
+      STT_LANGUAGE: ${LEAF_STT_LANGUAGE:-th}
+      STT_CPU_THREADS: ${LEAF_STT_CPU_THREADS:-8}
     restart: unless-stopped
 
 volumes:
