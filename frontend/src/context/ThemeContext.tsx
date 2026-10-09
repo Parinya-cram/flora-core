@@ -17,6 +17,13 @@ interface ThemeContextType {
   color: ThemeColor;
   setColor: (color: ThemeColor) => void;
   schemes: ThemeSchemeOption[];
+  /** Whole-app text/layout scale (1 = 100%). Applied as Chromium `zoom`. */
+  fontScale: number;
+  increaseFont: () => void;
+  decreaseFont: () => void;
+  resetFont: () => void;
+  fontScaleMin: number;
+  fontScaleMax: number;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -88,9 +95,29 @@ function writeStoredUserTheme(mode: ThemeMode, color: ThemeColor) {
   }
 }
 
-function getThemeStorageKey(kind: "mode" | "color", username: string) {
+function getThemeStorageKey(kind: "mode" | "color" | "fontscale", username: string) {
   const scope = username.trim().toLowerCase();
   return scope ? `theme-${kind}.${scope}` : `theme-${kind}`;
+}
+
+const FONT_SCALE_MIN = 0.8;
+const FONT_SCALE_MAX = 1.8;
+const FONT_SCALE_STEP = 0.1;
+const DEFAULT_FONT_SCALE = 1;
+
+function clampFontScale(value: number) {
+  if (!Number.isFinite(value)) return DEFAULT_FONT_SCALE;
+  return Math.min(FONT_SCALE_MAX, Math.max(FONT_SCALE_MIN, Math.round(value * 100) / 100));
+}
+
+function readStoredFontScale(username: string): number {
+  if (typeof window === "undefined") return DEFAULT_FONT_SCALE;
+  try {
+    const raw = window.localStorage.getItem(getThemeStorageKey("fontscale", username));
+    return raw ? clampFontScale(Number.parseFloat(raw)) : DEFAULT_FONT_SCALE;
+  } catch {
+    return DEFAULT_FONT_SCALE;
+  }
 }
 
 function readStoredColor(username: string): ThemeColor {
@@ -104,6 +131,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [themeUsername, setThemeUsername] = useState(() => readThemeUsername());
   const mode: ThemeMode = "dark";
   const [color, setColorState] = useState<ThemeColor>(() => readStoredColor(readThemeUsername()));
+  const [fontScale, setFontScaleState] = useState<number>(() => readStoredFontScale(readThemeUsername()));
   const [schemes, setSchemes] = useState<ThemeSchemeOption[]>(FALLBACK_SCHEMES);
   const lastSyncedPrefRef = useRef("");
 
@@ -118,6 +146,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       }
       window.sessionStorage.removeItem("flora.loginThemeMode");
       setColorState(nextColor);
+      setFontScaleState(readStoredFontScale(username));
     };
 
     syncThemeScope();
@@ -188,6 +217,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     writeStoredUserTheme(mode, color);
   }, [mode, color, schemes, themeUsername]);
 
+  // Whole-app text size: scale everything (text + layout) uniformly with Chromium
+  // `zoom`, so the layout grows with the text instead of breaking. Persisted per user.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const html = window.document.documentElement as HTMLElement & { style: CSSStyleDeclaration };
+    html.style.zoom = fontScale === DEFAULT_FONT_SCALE ? "" : String(fontScale);
+    try {
+      window.localStorage.setItem(getThemeStorageKey("fontscale", themeUsername), String(fontScale));
+    } catch {
+      // ignore font-scale persistence failures
+    }
+  }, [fontScale, themeUsername]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!themeUsername.trim()) return;
@@ -208,8 +250,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setColorState(isThemeColor(c) && schemes.some(theme => theme.code === c) ? c : DEFAULT_THEME);
   };
 
+  const increaseFont = () => setFontScaleState(current => clampFontScale(current + FONT_SCALE_STEP));
+  const decreaseFont = () => setFontScaleState(current => clampFontScale(current - FONT_SCALE_STEP));
+  const resetFont = () => setFontScaleState(DEFAULT_FONT_SCALE);
+
   return (
-    <ThemeContext.Provider value={{ mode, color, setColor, schemes }}>
+    <ThemeContext.Provider value={{
+      mode, color, setColor, schemes,
+      fontScale, increaseFont, decreaseFont, resetFont,
+      fontScaleMin: FONT_SCALE_MIN, fontScaleMax: FONT_SCALE_MAX,
+    }}>
       {children}
     </ThemeContext.Provider>
   );

@@ -6,7 +6,7 @@ import ClinicalReferenceTooltip from "./common/ClinicalReferenceTooltip";
 type Props = { compact?: boolean; loginScreen?: boolean };
 
 export default function ThemePicker({ compact = false, loginScreen = false }: Props) {
-  const { color, setColor, schemes } = useTheme();
+  const { color, setColor, schemes, fontScale, increaseFont, decreaseFont, resetFont, fontScaleMin, fontScaleMax } = useTheme();
   const [open, setOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, right: 8 });
   const rootRef = useRef<HTMLDivElement>(null);
@@ -83,6 +83,32 @@ export default function ThemePicker({ compact = false, loginScreen = false }: Pr
           className="fixed z-[10000] w-[180px] max-w-[calc(100vw-16px)] rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-[6px] shadow-2xl"
           style={{ top: menuPosition.top, right: menuPosition.right }}
         >
+          <div className="mb-[6px] flex items-center justify-between gap-[6px] rounded-lg border border-[var(--app-border)] bg-[var(--app-control-bg)] px-[9px] py-[6px]">
+            <span className="text-[12px] text-[var(--app-text)]">Text size</span>
+            <div className="flex items-center gap-[4px]">
+              <button
+                type="button"
+                onClick={decreaseFont}
+                disabled={fontScale <= fontScaleMin}
+                aria-label="Smaller text"
+                className="flex h-[22px] w-[22px] items-center justify-center rounded border border-[var(--app-border)] bg-[var(--app-panel-bg)] text-[12px] font-bold text-[var(--app-text)] hover:border-[var(--app-accent)] disabled:opacity-40"
+              >A−</button>
+              <button
+                type="button"
+                onClick={resetFont}
+                aria-label="Reset text size"
+                title="Reset to 100%"
+                className="min-w-[42px] rounded px-[4px] text-center text-[11px] tabular-nums text-[var(--app-muted)] hover:text-[var(--app-text)]"
+              >{Math.round(fontScale * 100)}%</button>
+              <button
+                type="button"
+                onClick={increaseFont}
+                disabled={fontScale >= fontScaleMax}
+                aria-label="Larger text"
+                className="flex h-[22px] w-[22px] items-center justify-center rounded border border-[var(--app-border)] bg-[var(--app-panel-bg)] text-[14px] font-bold text-[var(--app-text)] hover:border-[var(--app-accent)] disabled:opacity-40"
+              >A+</button>
+            </div>
+          </div>
           {schemes.map(option => {
             const selected = option.code === color;
             return (
