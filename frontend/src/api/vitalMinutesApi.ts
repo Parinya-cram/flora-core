@@ -96,8 +96,9 @@ async function maskRequest<T>(path: string, body?: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body ?? {}),
   });
-  const data = await res.json().catch(() => ({})) as { detail?: unknown };
-  if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : `mask request failed ${res.status}`);
+  const data = await res.json().catch(() => ({})) as { detail?: unknown; error?: unknown };
+  const message = typeof data.error === "string" ? data.error : typeof data.detail === "string" ? data.detail : "";
+  if (!res.ok) throw new Error(message || `mask request failed ${res.status}`);
   return data as T;
 }
 
@@ -129,4 +130,27 @@ export async function putTimelineChanges(
   }
 
   return res.json();
+}
+
+/** The signed-in user's latest chart action that Undo would revert. */
+export type ChartUndoInfo =
+  | { available: false }
+  | { available: true; change_set: string; entries: number; created_at: number; label: string };
+
+export async function getChartUndo(caseId: number): Promise<ChartUndoInfo> {
+  const res = await fetch(`${BASE}/${caseId}/undo`);
+  if (!res.ok) return { available: false };
+  return res.json();
+}
+
+export async function undoChartChange(caseId: number, changeSet: string): Promise<{ next: ChartUndoInfo }> {
+  const res = await fetch(`${BASE}/${caseId}/undo`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ change_set: changeSet }),
+  });
+  const data = await res.json().catch(() => ({})) as { detail?: unknown; error?: unknown; next?: ChartUndoInfo };
+  const message = typeof data.error === "string" ? data.error : typeof data.detail === "string" ? data.detail : "";
+  if (!res.ok) throw new Error(message || `Undo failed (${res.status})`);
+  return { next: data.next || { available: false } };
 }

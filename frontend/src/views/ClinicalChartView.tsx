@@ -32,7 +32,8 @@ import {
 } from "../api/caseClinicalApi";
 import type { AuthUser } from "../auth/useAuth";
 import type { TimelineCellProvenance, TimelineChange, TimelineMask, TimelineProvenance } from "../api/vitalMinutesApi";
-import { createTimelineMasks, putTimelineChanges, restoreTimelineMask, revokeTimelineMask } from "../api/vitalMinutesApi";
+import { createTimelineMasks, getChartUndo, putTimelineChanges, revokeTimelineMask, undoChartChange, type ChartUndoInfo } from "../api/vitalMinutesApi";
+import { endChartAction } from "../api/authenticatedFetch";
 import {
   createCaseEvent,
   deleteCaseEvent,
@@ -1003,7 +1004,9 @@ export default function ClinicalChartView({
   } = useVitalMinutes(caseId, caseStatus.status, axis);
   // Invalid device data. Changes show at once (overlay) and settle when the server answers.
   const [maskOverlay, setMaskOverlay] = useState<{ added: Array<Pick<TimelineMask, "param_key" | "from_ts" | "to_ts"> & { key: string }>; removed: number[] }>({ added: [], removed: [] });
-  const [maskUndo, setMaskUndo] = useState<Array<{ kind: "mask" | "unmask"; masks: TimelineMask[] }>>([]);
+  // Undo covers every chart change (vitals, invalid marks, events, fluids/medications): the server
+  // keeps a change log per user action. undoInfo describes the latest action of this user.
+  const [undoInfo, setUndoInfo] = useState<ChartUndoInfo>({ available: false });
   const [maskBusy, setMaskBusy] = useState(false);
   const [maskError, setMaskError] = useState("");
   const activeMasks = useMemo(
@@ -1412,13 +1415,30 @@ export default function ClinicalChartView({
     setEditValues({});
     setOptimisticCellProvenance({});
     setMaskOverlay({ added: [], removed: [] });
-    setMaskUndo([]);
+    setUndoInfo({ available: false });
     setMaskError("");
+  }, [caseId]);
+
+  // Refresh the Undo button after any chart write (the fetch layer announces them).
+  useEffect(() => {
+    if (caseId == null) return;
+    const activeCaseId = caseId;
+    let alive = true;
+    let timer: number | undefined;
+    const refresh = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        void getChartUndo(activeCaseId).then(info => { if (alive) setUndoInfo(info); }).catch(() => undefined);
+      }, 300);
+    };
+    refresh();
+    window.addEventListener("flora:chart-write", refresh);
+    return () => { alive = false; window.clearTimeout(timer); window.removeEventListener("flora:chart-write", refresh); };
   }, [caseId]);
 
   const runMaskChange = async (
     overlay: { added?: Array<Pick<TimelineMask, "param_key" | "from_ts" | "to_ts">>; removed?: number[] },
-    request: () => Promise<{ kind: "mask" | "unmask"; masks: TimelineMask[] } | null>,
+    request: () => Promise<unknown>,
   ) => {
     const key = `pending-${Date.now()}-${Math.random()}`;
     const added = (overlay.added || []).map((mask, index) => ({ ...mask, key: `${key}-${index}` }));
@@ -1427,8 +1447,7 @@ export default function ClinicalChartView({
     setMaskBusy(true);
     setMaskError("");
     try {
-      const done = await request();
-      if (done) setMaskUndo(stack => [...stack.slice(-49), done]);
+      await request();
       await reloadVitals();
     } catch (error) {
       setMaskError(error instanceof Error ? error.message : String(error));
@@ -1446,8 +1465,7 @@ export default function ClinicalChartView({
     const activeCaseId = caseId;
     const mask = { param_key: rowId, from_ts: fromTs, to_ts: toTs };
     void runMaskChange({ added: [mask] }, async () => {
-      const result = await createTimelineMasks(activeCaseId, [mask], "Invalid device data");
-      return { kind: "mask", masks: result.masks };
+      await createTimelineMasks(activeCaseId, [mask], "Invalid device data");
     });
   };
 
@@ -1459,25 +1477,36 @@ export default function ClinicalChartView({
     if (!hits.length) return;
     void runMaskChange({ removed: hits.map(mask => mask.id) }, async () => {
       for (const mask of hits) await revokeTimelineMask(activeCaseId, mask.id);
-      return { kind: "unmask", masks: hits };
     });
   };
 
-  const undoMaskChange = () => {
-    if (caseId == null || maskBusy) return;
-    const last = maskUndo[maskUndo.length - 1];
-    if (!last) return;
+  const undoMaskChange = async () => {
+    if (caseId == null || maskBusy || !undoInfo.available) return;
     const activeCaseId = caseId;
-    setMaskUndo(stack => stack.slice(0, -1));
-    void runMaskChange(
-      last.kind === "mask" ? { removed: last.masks.map(mask => mask.id) } : { added: last.masks },
-      async () => {
-        for (const mask of last.masks) {
-          await (last.kind === "mask" ? revokeTimelineMask : restoreTimelineMask)(activeCaseId, mask.id);
-        }
-        return null;
-      },
-    );
+    setMaskBusy(true);
+    setMaskError("");
+    try {
+      // Vital edits are saved after a short delay; save them first so they are undoable too.
+      if (saveTimerRef.current != null) { window.clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
+      await flushPendingChanges();
+      endChartAction();
+      const latest = await getChartUndo(activeCaseId);
+      if (!latest.available) { setUndoInfo(latest); return; }
+      const result = await undoChartChange(activeCaseId, latest.change_set);
+      endChartAction();
+      setUndoInfo(result.next);
+      await reloadVitals();
+      // The undone values are now on the server; drop local optimistic copies.
+      setEditValues({});
+      setOptimisticCellProvenance({});
+      window.dispatchEvent(new CustomEvent("flora:case-events-changed", { detail: { caseId: activeCaseId } }));
+      window.dispatchEvent(new CustomEvent("flora:case-io-changed", { detail: { caseId: activeCaseId } }));
+    } catch (error) {
+      setMaskError(error instanceof Error ? error.message : String(error));
+      void getChartUndo(activeCaseId).then(setUndoInfo).catch(() => undefined);
+    } finally {
+      setMaskBusy(false);
+    }
   };
   const undoMaskRef = useRef(undoMaskChange);
   useLayoutEffect(() => { undoMaskRef.current = undoMaskChange; });
@@ -2616,7 +2645,7 @@ export default function ClinicalChartView({
         // Grid cells are inputs too; their own text undo is not needed while just selected.
         if (editable && !target?.classList.contains("timegrid-edit-input")) return;
         event.preventDefault();
-        undoMaskRef.current();
+        void undoMaskRef.current();
         return;
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
@@ -5526,9 +5555,9 @@ export default function ClinicalChartView({
           <button
             type="button"
             className="case-kronos__undo inline-flex items-center gap-1 rounded border border-[var(--app-border)] px-2 py-0.5 text-xs font-semibold disabled:opacity-40"
-            disabled={!maskUndo.length || maskBusy}
-            onClick={undoMaskChange}
-            title={maskUndo.length ? `Undo last ${maskUndo[maskUndo.length - 1].kind === "mask" ? "invalid mark" : "valid mark"} (⌘/Ctrl+Z)` : "Nothing to undo"}
+            disabled={!undoInfo.available || maskBusy}
+            onClick={() => void undoMaskChange()}
+            title={undoInfo.available ? `Undo last change: ${undoInfo.label} (⌘/Ctrl+Z)` : "Nothing to undo"}
           >
             <span aria-hidden="true">↶</span> Undo
           </button>

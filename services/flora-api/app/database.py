@@ -1,6 +1,7 @@
 import os
 from collections.abc import Iterator
 
+from fastapi import Request
 from psycopg import Connection
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
@@ -39,6 +40,22 @@ def close_pool() -> None:
         job_pool.close()
 
 
-def connection() -> Iterator[Connection]:
+CHANGE_SET_HEADER = "x-flora-change-set"
+
+
+def connection(request: Request) -> Iterator[Connection]:
+    """A request's connection. Chart writes carry X-Flora-Change-Set: the database logs
+    them under that id (0078-case-change-log.sql) so the chart can undo them."""
+    change_set = request.headers.get(CHANGE_SET_HEADER, "").strip()[:64] if request.method != "GET" else ""
     with pool.connection() as database:
-        yield database
+        if change_set:
+            database.execute("SELECT set_config('flora.change_set', %s, false)", (change_set,))
+        try:
+            yield database
+        finally:
+            if change_set:
+                # Pooled connections are shared; never leak the id (or actor) to the next user.
+                try:
+                    database.execute("SELECT set_config('flora.change_set', '', false), set_config('flora.actor', '', false)")
+                except Exception:
+                    pass

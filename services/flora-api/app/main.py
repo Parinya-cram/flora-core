@@ -30,6 +30,7 @@ from .routes.canopy_inbox import router as canopy_inbox_router
 from .routes.sync_ward import router as sync_ward_router
 from .routes.ward import router as ward_router
 from .routes.dictation import router as dictation_router
+from .routes.chart_undo import router as chart_undo_router
 from .routes.canopy_admissions import router as canopy_admissions_router
 from .routes.hl7_interface import admin_router as hl7_admin_router, webhook_router as hl7_webhook_router
 from .routes.public_api import router as public_api_router
@@ -85,6 +86,7 @@ if API_MODE == "leaf" and os.getenv("FLORA_LEAF_WRITE_API", "false").lower() == 
     app.include_router(canopy_inbox_router)
     app.include_router(ward_router)
     app.include_router(dictation_router)
+    app.include_router(chart_undo_router)
     app.include_router(case_workflow_router)
     app.include_router(cases_lifecycle_router)
     app.include_router(clinical_write_router)

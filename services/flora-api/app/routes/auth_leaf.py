@@ -381,6 +381,9 @@ def current_user(request: Request, database: Connection = Depends(connection)) -
         "UPDATE auth_session SET updated_at=%s, last_seen_at=%s, expires_at=%s WHERE id=%s",
         (current, current, current + SESSION_TTL_MS, row["session_id"]),
     )
+    if request.method != "GET" and request.headers.get("x-flora-change-set"):
+        # The chart change log (case_change_log) records who made the change.
+        database.execute("SELECT set_config('flora.actor', %s, false)", (row["username"],))
     return attach_entitlements(database, row)
 
 
