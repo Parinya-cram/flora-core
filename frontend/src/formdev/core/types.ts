@@ -126,6 +126,8 @@ export type FieldDefinition = {
   cols?: Array<{ id: string; label: string }>;
   cell?: MatrixCell;
   totals?: Array<{ id: string; label: string; of: string[] }>;
+  /** timeline: Flora Leaf's events row, trend chart and parameter table over time (Form Studio). */
+  timeline?: TimelineConfig;
 };
 
 /** A named sub-group between section and field (Phase 2.0); its fields share the section's data scope. */
@@ -147,6 +149,16 @@ export type RepeatBlock = { key: string; min_items?: number; max_items?: number 
 
 export type MatrixCell = { type: "integer" | "number" | "text" | "select"; options?: Array<{ value: string; label: string }>; min?: number; max?: number };
 export type MatrixRow = { id: string; label: string; cell?: MatrixCell };
+export type TimelinePart = "events" | "chart" | "table";
+export type TimelineSeries = "hr" | "pr" | "spo2" | "nibp" | "art" | "cvp" | "temperature" | "et_co2" | "bis";
+export type TimelineConfig = {
+  parts?: TimelinePart[]; rows?: Array<{ id: string; label?: string; unit?: string }>; chart?: TimelineSeries[]; step_min?: number; source?: "leaf" | "manual";
+};
+/** A timeline value: the data shown, stored with the record (prints and syncs without Flora Leaf). Times are ms. */
+export type TimelineValue = {
+  step_min: number; axis: number[]; values: Record<string, Record<string, number | string | null>>;
+  events?: Array<{ ts: number; title: string; code?: string }>; source?: "leaf" | "manual"; case_id?: number | string; captured_at?: number;
+};
 /** matrix values: {row id: {column id: value}}. */
 export type MatrixValue = Record<string, Record<string, string | number | null>>;
 /** Paper layout (Template phase): boxed = bordered cells with "Label: value"; hide_title leaves the title out. */

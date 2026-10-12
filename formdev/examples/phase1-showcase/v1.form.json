@@ -478,6 +478,37 @@
           "layout": {
             "span": 12
           }
+        },
+        {
+          "id": "fld_trends",
+          "key": "trends",
+          "type": "timeline",
+          "label": "Trends",
+          "timeline": {
+            "parts": [
+              "events",
+              "chart",
+              "table"
+            ],
+            "rows": [
+              {
+                "id": "hr"
+              },
+              {
+                "id": "bis",
+                "label": "BIS"
+              }
+            ],
+            "chart": [
+              "nibp",
+              "hr"
+            ],
+            "step_min": 5,
+            "source": "leaf"
+          },
+          "layout": {
+            "span": 12
+          }
         }
       ],
       "sections": [

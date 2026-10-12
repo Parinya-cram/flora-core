@@ -40,6 +40,7 @@ export const PALETTE: PaletteGroup[] = [
     { type: "group", icon: "▣", th: "กลุ่มช่อง", en: "Group", hintTh: "จัดหลายช่องไว้ด้วยกัน", hintEn: "Fields kept together" },
     { type: "repeat", icon: "≡", th: "ตารางเพิ่มแถวได้", en: "Repeating rows", hintTh: "รายการยา, ประวัติ", hintEn: "Medications, history" },
     { type: "matrix", icon: "▤", th: "ตารางคะแนน (แถว × คอลัมน์)", en: "Score table (rows × columns)", hintTh: "Aldrete score, คะแนนตามเวลา", hintEn: "Aldrete score, scores over time" },
+    { type: "timeline", icon: "📈", th: "กราฟ + ตาราง Timeline (Flora Leaf)", en: "Timeline chart + table (Flora Leaf)", hintTh: "สัญญาณชีพตามเวลา, เหตุการณ์", hintEn: "Vitals over time, events" },
   ] },
   { th: "ไฟล์และลายเซ็น", en: "Files and signature", items: [
     { type: "image", icon: "🖼", th: "รูปภาพ", en: "Image", hintTh: "ภาพแผล, ฟิล์ม", hintEn: "Wound photo" },
@@ -213,6 +214,8 @@ export const STARTERS: Starter[] = [
     sections: [{ th: "ข้อมูลผู้ป่วย", en: "Patient", blocks: ["patient"] }, { th: "ที่อยู่และการติดต่อ", en: "Address and contact", blocks: ["thai_address", "contact"] }] },
   { id: "pacu", icon: "🛏", th: "PACU: บันทึกหลังให้ยาระงับความรู้สึก", en: "PACU: Post Anesthetic Record", hintTh: "แบบกระดาษ: หัวผู้ป่วย, Aldrete score, ภาวะแทรกซ้อน, ลายเซ็น",
     hintEn: "Paper layout: patient header, Aldrete score, problems, signatures", sections: [] },
+  { id: "anesthesia", icon: "📈", th: "Anesthesia Report (Timeline จาก Flora Leaf)", en: "Anesthesia Report (Flora Leaf timeline)",
+    hintTh: "หัวผู้ป่วย, กราฟ + ตารางค่าทุก 20 นาที, เหตุการณ์, ลายเซ็น", hintEn: "Patient header, chart + values every 20 min, events, signatures", sections: [] },
 ];
 
 /** A new form from a starting point; every name is unique and every formula / lookup is wired. */

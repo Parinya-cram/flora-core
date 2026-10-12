@@ -107,5 +107,26 @@ export function pacuForm(formId: string, title: string): FormDefinition {
   };
 }
 
+/** Anesthesia Report: patient header, Flora Leaf's trends (events, chart, values every 20 minutes, as on the
+ * printed record) and signatures on every page. */
+export function anesthesiaForm(formId: string, title: string): FormDefinition {
+  return {
+    format: "flora.form/1", form_id: formId, schema_version: 1, title, paper: { size: "A4", orientation: "portrait", margin_mm: { top: 10, right: 10, bottom: 12, left: 10 } },
+    style_id: "style.a4.medical", layout: { type: "grid", columns: 24 },
+    extensions: { "flora.subject_field": "hn" },
+    sections: [
+      perioperativeHeader("Anesthesia Report"),
+      { id: "trends", title: "Trends", hide_title: true, fields: [
+        { id: "trends", type: "timeline", label: "Trends", ...span(24), timeline: {
+          parts: ["events", "chart", "table"], step_min: 20, source: "leaf", chart: ["nibp", "hr", "spo2", "bis"],
+          rows: ["et_co2", "fio2", "fi_n2o", "insp_des", "exp_des", "insp_sev", "exp_sev", "minute_volume_exp", "airway_pressure_peak", "set_peep", "tidal_volume_exp", "rr", "spo2", "cvp", "tof"]
+            .map(id => ({ id })),
+        } },
+      ] },
+      perioperativeFooter(),
+    ],
+  };
+}
+
 /** Complete forms offered as starting points, by starter id. */
-export const PAPER_TEMPLATES: Record<string, (formId: string, title: string) => FormDefinition> = { pacu: pacuForm };
+export const PAPER_TEMPLATES: Record<string, (formId: string, title: string) => FormDefinition> = { pacu: pacuForm, anesthesia: anesthesiaForm };

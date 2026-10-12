@@ -12,7 +12,9 @@
  */
 import { asRepeatField } from "../core/blocks";
 import { containerColumns, fillTemplate, formColumns, placeField, type PrintContext, type ResolvedPaper } from "../core/layout";
-import type { CategoryDefinition, FieldDefinition, FileValue, FormDefinition, JsonValue, MatrixValue, SectionDefinition, SignatureValue } from "../core/types";
+import type { CategoryDefinition, FieldDefinition, FileValue, FormDefinition, JsonValue, MatrixValue, SectionDefinition, SignatureValue, TimelineValue } from "../core/types";
+import { chartShapes, markerPath } from "../leaf/chartGeometry";
+import { asTimeline, cellLabel, eventColumn, rowInfo, SERIES, timeLabel, timelineConfig } from "../leaf/timeline";
 import { fieldKey, matrixCell, matrixTotals, OTHER_KEY } from "../core/validate";
 import { cellText, optionText, printedText } from "./printValues";
 
@@ -21,7 +23,9 @@ export type Measure = (text: string, size: number, bold?: boolean) => number;
 export type Tone = "text" | "muted" | "accent";
 export type Op =
   | { kind: "text"; x: number; y: number; size: number; text: string; tone?: Tone; bold?: boolean }
-  | { kind: "line"; x1: number; y1: number; x2: number; y2: number; dotted?: boolean; width?: number }
+  | { kind: "line"; x1: number; y1: number; x2: number; y2: number; dotted?: boolean; width?: number; color?: string }
+  /** An SVG path in page coordinates (points, y down): chart markers. */
+  | { kind: "path"; d: string; color: string; filled: boolean; width?: number }
   /** fill: a shaded bar (titles, table headers); the border is always drawn. */
   | { kind: "rect"; x: number; y: number; w: number; h: number; fill?: boolean }
   | { kind: "mark"; x: number; y: number; size: number; round: boolean; on: boolean }
@@ -174,6 +178,8 @@ function valueBlock(ctx: Ctx, field: FieldDefinition, value: JsonValue | undefin
     }
     case "matrix":
       return matrixTable(ctx, field, value, width);
+    case "timeline":
+      return stack(timelineBlocks(ctx, field, value, width).map(block => ({ ...block, breakBefore: false })));
     case "checkbox":
     case "switch":
       return markItems(ctx, [{ text: field.label, on: value === true, round: false }], width);
@@ -242,6 +248,13 @@ function fieldRows(ctx: Ctx, fields: FieldDefinition[], data: Record<string, Jso
     if (field.type === "repeat") {
       flush();
       out.push(...repeatTable(ctx, field, Array.isArray(data[key]) ? data[key] as Array<Record<string, JsonValue>> : [], width));
+      if (placement.pageBreak === "after") out.push({ height: 0, breakAfter: true, draw: () => [] });
+      continue;
+    }
+    if (field.type === "timeline") {
+      // Full width, one block per page of columns (each starts a new page).
+      flush();
+      out.push(...timelineBlocks(ctx, field, data[key], width));
       if (placement.pageBreak === "after") out.push({ height: 0, breakAfter: true, draw: () => [] });
       continue;
     }
@@ -368,6 +381,10 @@ function boxedRows(ctx: Ctx, fields: FieldDefinition[], data: Record<string, Jso
     } else if (field.type === "matrix") {
       content = matrixTable(ctx, field, data[key], w);
       frame = false;
+    } else if (field.type === "timeline") {
+      flush();
+      out.push(...timelineBlocks(ctx, field, data[key], width).map(block => ({ ...block, gapAfter: block.gapAfter ?? GAP })));
+      continue;
     } else if ((field.type === "multiselect" || field.type === "radio" || field.type === "select") && field.option_columns && field.options?.length) {
       const chosen = Array.isArray(data[key]) ? data[key] as JsonValue[] : [data[key]];
       const other = (data[OTHER_KEY] as Record<string, JsonValue> | undefined)?.[key] as string | undefined;
@@ -421,6 +438,108 @@ function matrixTable(ctx: Ctx, field: FieldDefinition, value: JsonValue | undefi
     }
   }
   return stack(rows);
+}
+
+// Timeline (Flora Leaf events, trend chart, parameter table) --------------------------------------------
+
+const TL = { label: 38 * MM, col: 9.6 * MM, chart: 58 * MM, row: 5 * MM, size: 7 };
+
+/** A timeline over as many pages as its columns need (about 13 columns on an A4 page, as on the anesthesia record):
+ * each page has the times, the event numbers, the chart (both scales, legend in the label column) and the table.
+ * An event list follows the last page. */
+function timelineBlocks(ctx: Ctx, field: FieldDefinition, value: JsonValue | undefined, width: number): Block[] {
+  const config = timelineConfig(field);
+  const timeline: TimelineValue = asTimeline(value) ?? { step_min: config.step, axis: [], values: {} };
+  const perPage = Math.max(1, Math.floor((width - TL.label - 7 * MM) / TL.col));
+  const pages = Math.max(1, Math.ceil(timeline.axis.length / perPage));
+  const rows = config.rows.map(row => rowInfo(row.id, row));
+  const events = (timeline.events ?? []).map((event, index) => ({ ...event, n: index + 1, column: eventColumn(timeline.axis, event.ts) }));
+  const blocks: Block[] = [];
+  for (let page = 0; page < pages; page += 1) {
+    const from = page * perPage;
+    const axis = timeline.axis.slice(from, from + perPage);
+    const columns = Math.max(axis.length, timeline.axis.length ? 1 : perPage);
+    const gridWidth = columns * TL.col;
+    const parts: Block[] = [];
+    const rowBlock = (label: string, unit: string | undefined, cells: string[], fill = false, height = TL.row): Block => ({
+      height, gapAfter: 0,
+      draw: (x, y) => [
+        { kind: "rect", x, y, w: TL.label, h: height, fill },
+        { kind: "text", x: x + 1.2 * MM, y: y + height / 2 + TL.size / 2.8, size: TL.size, text: label, bold: fill },
+        ...(unit ? [{ kind: "text" as const, x: x + TL.label - 1.2 * MM - ctx.measure(unit, TL.size), y: y + height / 2 + TL.size / 2.8, size: TL.size, text: unit }] : []),
+        ...Array.from({ length: columns }, (_, index) => {
+          const left = x + TL.label + index * TL.col;
+          const text = cells[index] ?? "";
+          return [{ kind: "rect" as const, x: left, y, w: TL.col, h: height, fill },
+            ...(text ? [{ kind: "text" as const, x: left + (TL.col - ctx.measure(text, TL.size, fill)) / 2, y: y + height / 2 + TL.size / 2.8, size: TL.size, text, bold: fill }] : [])];
+        }).flat(),
+      ],
+    });
+    parts.push(rowBlock(page === 0 ? field.label : `${field.label} (${page + 1}/${pages})`, undefined, axis.map(timeLabel), true));
+    if (config.parts.includes("events")) {
+      parts.push(rowBlock("Events", undefined, axis.map((_, index) => events.filter(event => event.column === from + index).map(event => String(event.n)).join(" "))));
+    }
+    if (config.parts.includes("chart")) {
+      const legend = config.chart.map(name => SERIES[name]);
+      parts.push({
+        height: TL.chart, gapAfter: 0,
+        draw: (x, y) => {
+          const ops: Op[] = [{ kind: "rect", x, y, w: TL.label, h: TL.chart }, { kind: "rect", x: x + TL.label, y, w: gridWidth, h: TL.chart }];
+          legend.forEach((style, index) => {
+            const ly = y + 3 * MM + index * 4 * MM;
+            const lx = x + 2.5 * MM;
+            if (style.marker === "range") {
+              for (const [marker, dy] of [["down", -1.2], ["up", 1.2]] as const) {
+                const path = markerPath(marker, lx, ly + dy, 2.2 * MM);
+                ops.push({ kind: "path", d: path.d, color: style.color, filled: true });
+              }
+            } else {
+              const path = markerPath(style.marker, lx, ly, 2.4 * MM);
+              ops.push({ kind: "path", d: path.d, color: style.color, filled: path.filled, width: 0.8 });
+            }
+            ops.push({ kind: "text", x: lx + 3 * MM, y: ly + TL.size / 2.8, size: TL.size, text: style.label });
+          });
+          for (const shape of chartShapes({ ...timeline, axis }, config.chart, { x: x + TL.label, y: y + 2 * MM, width: gridWidth, height: TL.chart - 4 * MM, columns })) {
+            if (shape.kind === "grid") ops.push({ kind: "line", x1: shape.x1, y1: shape.y1, x2: shape.x2, y2: shape.y2, width: shape.strong ? 0.4 : 0.15, color: "#cbd5e1" });
+            else if (shape.kind === "label") ops.push({ kind: "text", x: shape.anchor === "end" ? shape.x - ctx.measure(shape.text, 5) - 0.5 : shape.x + 0.5, y: shape.y + 1.8, size: 5, text: shape.text, tone: "muted" });
+            else if (shape.kind === "bar") ops.push({ kind: "line", x1: shape.x, y1: shape.y1, x2: shape.x, y2: shape.y2, width: 0.6, color: shape.color });
+            else {
+              const path = markerPath(shape.marker, shape.x, shape.y, shape.size);
+              ops.push({ kind: "path", d: path.d, color: shape.color, filled: path.filled, width: 0.7 });
+            }
+          }
+          return ops;
+        },
+      });
+    }
+    if (config.parts.includes("table")) {
+      for (const row of rows) parts.push(rowBlock(row.label, row.unit, axis.map(ts => cellLabel(timeline.values[row.id]?.[String(ts)]))));
+    }
+    blocks.push({ ...stack(parts), breakBefore: page > 0, gapAfter: GAP });
+  }
+  if (config.parts.includes("events") && events.length) {
+    const half = Math.ceil(events.length / 2);
+    const each = width / 2;
+    const lines = events.map(event => `${event.n}.  ${timeLabel(event.ts)}  ${event.title}`);
+    const columnsOf = [lines.slice(0, half), lines.slice(half)].map(part => part.map(text => textLines(ctx, text, TL.size + 0.5, each - 3 * MM)));
+    const heights = Array.from({ length: half }, (_, index) => Math.max(...columnsOf.map(column => column[index]?.height ?? 0)) + 1.6 * MM);
+    blocks.push({
+      height: heights.reduce((sum, h) => sum + h, 0),
+      draw: (x, y) => {
+        const ops: Op[] = [];
+        let top = y;
+        heights.forEach((h, index) => {
+          columnsOf.forEach((column, side) => {
+            ops.push({ kind: "rect", x: x + side * each, y: top, w: each, h });
+            if (column[index]) ops.push(...column[index].draw(x + side * each + 1.5 * MM, top + 0.8 * MM));
+          });
+          top += h;
+        });
+        return ops;
+      },
+    });
+  }
+  return blocks;
 }
 
 function repeatTable(ctx: Ctx, field: FieldDefinition, items: Array<Record<string, JsonValue>>, width: number): Block[] {

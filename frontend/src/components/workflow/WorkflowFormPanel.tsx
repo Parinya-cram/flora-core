@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { patchCaseWorkflowForm, type CaseWorkflowForm } from "../../api/workflowApi";
 import { useLanguage } from "../../context/LanguageContext";
 import type { Issue, JsonValue, RecordData } from "../../formdev/core/types";
 import { validateRecord } from "../../formdev/core/validate";
+import { FormCaseContext } from "../../formdev/leaf/caseContext";
 import FormRenderer from "../../formdev/ui/FormRenderer";
 
 /** One workflow form on a Leaf case: Form Studio's renderer, autosaving changed keys. */
@@ -34,6 +35,7 @@ export default function WorkflowFormPanel({ caseId, formId, form, readOnly = fal
   const [status, setStatus] = useState<"draft" | "completed">(form.record?.status === "completed" ? "completed" : "draft");
   const [save, setSave] = useState<SaveState>({ status: "idle" });
   const [issues, setIssues] = useState<Issue[]>([]);
+  const leafCase = useMemo(() => ({ caseId }), [caseId]);
   const baseline = useRef<RecordData>({ ...(form.record?.data || {}) });
   const latest = useRef(value);
   const timer = useRef<number | null>(null);
@@ -114,6 +116,9 @@ export default function WorkflowFormPanel({ caseId, formId, form, readOnly = fal
         </label>
       </div>
     </div>
-    <FormRenderer definition={form.definition} value={value} issues={issues} readOnly={readOnly} language={language} onChange={onChange} />
+    {/* The case the form is filled for: timeline fields pull this case's Flora Leaf data. */}
+    <FormCaseContext.Provider value={leafCase}>
+      <FormRenderer definition={form.definition} value={value} issues={issues} readOnly={readOnly} language={language} onChange={onChange} />
+    </FormCaseContext.Provider>
   </section>;
 }
