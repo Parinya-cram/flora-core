@@ -125,7 +125,8 @@ render(f"{OUT}/er-5-canopy-gateway.png", "Canopy DB · Gateway configuration, de
         ("gateway_id", "text", "PK"), ("version", "text"), ("site", "jsonb"), ("license", "jsonb"),
         ("config_hash", "text"), ("first_seen_at", "bigint"), ("last_seen_at", "bigint"),
         ("config_changed_at", "bigint"), ("desired_config", "jsonb"), ("desired_version", "bigint"),
-        ("desired_source", "text"), ("applied_version", "bigint"), ("data_api_url", "text")]),
+        ("desired_source", "text"), ("applied_version", "bigint"), ("data_api_url", "text"),
+        ("registry_status", "text"), ("display_name", "text"), ("unit_id", "bigint", "FK")]),
     "leaf": T("leaf_device_source  (Leaf DB)", 4.6, 6.0, "leaf", [
         ("id", "int =1", "PK"), ("gateway_id", "text"), ("data_api_url", "text"),
         ("configured_by", "text"), ("configured_at", "bigint")]),
@@ -190,5 +191,63 @@ render(f"{OUT}/er-7-kafka-messages.png", "Kafka topics · message envelopes", {
     ("obs", "pod", "raw", "pod", "parsed from", True),
     ("cmd", "pod", "raw", "pod", "reply / poll", True),
     ("meas", "device_id", "obs", "device_id", "same reading", True),
+], COLORS)
+
+# 8. Gateway activity -----------------------------------------------------------
+render(f"{OUT}/er-8-gateway-activity.png", "Gateway DB · Device activity and on/off events", {
+    "inst": T("gateway_device_instance  (ref)", 0.3, 0.9, "ref", [
+        ("device_id", "text", "UQ"), ("pod", "text"), ("enabled", "boolean")]),
+    "samp": T("gateway_status_sample  (ref)", 0.3, 3.2, "ref", [
+        ("ts", "bigint"), ("lane", "text"), ("state", "text")]),
+    "obs": T("gateway_observation  (ref)", 0.3, 5.1, "ref", [
+        ("device_id", "text"), ("system_ts", "bigint")]),
+    "hour": T("gateway_activity_hour", 4.6, 0.9, "mon", [
+        ("subject", "text", "PK"), ("device_id", "text", "PK"), ("hour_start", "bigint", "PK"),
+        ("samples_ok", "integer"), ("samples_down", "integer"), ("samples_stopped", "integer"),
+        ("online_seconds", "integer"), ("observations", "integer"), ("first_data_ts", "bigint"),
+        ("last_data_ts", "bigint"), ("power_on", "integer"), ("power_off", "integer"), ("complete", "boolean"),
+        ("checksum", "text"), ("version", "integer"), ("delivered_version", "integer")]),
+    "event": T("gateway_device_event", 9.0, 0.9, "mon", [
+        ("id", "bigserial", "PK"), ("device_id", "text"), ("event_type", "text"), ("basis", "text"),
+        ("occurred_at", "bigint"), ("detail", "text"), ("delivered", "boolean")]),
+}, [
+    ("hour", "device_id", "inst", "device_id", "device_id", True),
+    ("samp", "lane", "hour", "samples_ok", "rolled up", True),
+    ("obs", "device_id", "hour", "observations", "counted", True),
+    ("event", "device_id", "hour", "power_on", "counted", True),
+], COLORS)
+
+# 9. Canopy device registry -------------------------------------------------------
+render(f"{OUT}/er-9-canopy-devices.png", "Canopy DB · Devices: registry, device types, activity", {
+    "loc": T("canopy_location  (ref)", 0.3, 0.9, "ref", [
+        ("id", "bigint", "PK"), ("kind", "text"), ("name", "text")]),
+    "type": T("canopy_device_type", 0.3, 2.6, "canopy", [
+        ("code", "text", "PK"), ("label", "text"), ("category", "text"), ("manufacturer", "text"),
+        ("model", "text"), ("protocol", "text"), ("controller", "text"), ("parser", "text"),
+        ("default_options", "jsonb"), ("connection_defaults", "jsonb"), ("enabled", "boolean"),
+        ("updated_at", "bigint")]),
+    "dev": T("canopy_medical_device", 4.5, 0.9, "canopy", [
+        ("id", "bigint", "PK"), ("display_name", "text"), ("category", "text"), ("device_type", "text"),
+        ("manufacturer", "text"), ("model", "text"), ("serial_number", "text"), ("asset_tag", "text", "UQ"),
+        ("unit_id", "bigint", "FK"), ("location", "text"), ("status", "text"), ("registry_status", "text"),
+        ("gateway_id", "text", "FK"), ("gateway_device_id", "text", "FK"), ("warranty_until", "bigint"),
+        ("last_pm_at", "bigint"), ("next_pm_at", "bigint"), ("last_event_type", "text"),
+        ("last_event_at", "bigint")]),
+    "gd": T("canopy_gateway_device  (ref)", 9.0, 0.9, "ref", [
+        ("gateway_id", "text", "PK"), ("device_id", "text", "PK"), ("device_type", "text"), ("leaf_id", "text")]),
+    "hour": T("canopy_device_activity_hour", 9.0, 3.1, "canopy", [
+        ("gateway_id", "text", "PK"), ("subject", "text", "PK"), ("device_id", "text", "PK"),
+        ("hour_start", "bigint", "PK"), ("samples_ok", "integer"), ("samples_down", "integer"),
+        ("online_seconds", "integer"), ("observations", "integer"), ("power_on", "integer"),
+        ("power_off", "integer"), ("complete", "boolean"), ("version", "integer")]),
+    "event": T("canopy_device_event", 4.5, 7.6, "canopy", [
+        ("gateway_id", "text", "PK"), ("event_id", "bigint", "PK"), ("device_id", "text"),
+        ("event_type", "text"), ("basis", "text"), ("occurred_at", "bigint")]),
+}, [
+    ("dev", "unit_id", "loc", "id", ""),
+    ("dev", "device_type", "type", "code", "type", True),
+    ("dev", "gateway_device_id", "gd", "device_id", "link", True),
+    ("hour", "device_id", "gd", "device_id", "", True),
+    ("event", "device_id", "dev", "gateway_device_id", "", True),
 ], COLORS)
 print("ok")

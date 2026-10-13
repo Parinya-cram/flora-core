@@ -110,7 +110,7 @@ async function picture(s, file, box) {
     ["FaLayerGroup", "Technology stack", "Rust, Python, Kafka, PostgreSQL, Kong, nginx"],
     ["FaDesktop", "Using the console", "Sign-in, roles, devices, streams, alerts"],
     ["FaCloud", "Canopy integration", "Licence, configuration sync, clone, Leaf wizard"],
-    ["FaDatabase", "Data structures", "Relational diagrams for every data store"],
+    ["FaDatabase", "Devices and data", "Registry, device types, activity; relational diagrams"],
     ["FaTools", "Reference", "Ports, settings, security, updates, troubleshooting"],
   ];
   for (let i = 0; i < agenda.length; i++) {
@@ -319,6 +319,73 @@ async function picture(s, file, box) {
   table(s, ["Code", "Device", "Controller", "Parser"], CT.deviceTypes, { x: 0.5, y: 0.98, w: 9.0,
     colW: [2.5, 3.9, 1.1, 1.5], fontSize: 9.5, rowH: 0.245 });
 
+  // Devices at Canopy -------------------------------------------------------------
+  pres.addSection({ title: "Devices at Canopy" });
+  s = pres.addSlide({ masterName: "SECTION", sectionTitle: "Devices at Canopy" });
+  s.addText("Devices at Canopy", { placeholder: "title" });
+  s.addText("Registry by ward · hospital device types · hourly activity and on/off events", { placeholder: "body" });
+
+  s = content("One registry for every device and gateway", "Devices at Canopy");
+  const reg = [
+    ["FaClipboardList", "Master record", "Asset tag, S/N, model, ward, room, status, warranty and PM dates kept at Canopy"],
+    ["FaMagic", "Added automatically", "Unknown gateways and the devices they report appear flagged Review; saving registers them"],
+    ["FaLink", "Matched at check-in", "By existing link, then asset tag, then serial; moved devices re-link; admin fields never overwritten"],
+    ["FaHospital", "Grouped by ward", "Gateway: the ward it is installed in. Device: its own ward. Ward users see their own"],
+  ];
+  for (let i = 0; i < reg.length; i++) {
+    const x = 0.5 + (i % 2) * 4.6, y = 1.1 + Math.floor(i / 2) * 2.0;
+    card(s, x, y, 4.4, 1.8);
+    await iconDot(s, x + 0.22, y + 0.22, reg[i][0], [C.accent1, C.accent2, C.accent3, C.accent5][i]);
+    txt(s, reg[i][1], { x: x + 0.92, y: y + 0.27, w: 3.3, h: 0.4, fontSize: 16, bold: true, valign: "middle" });
+    txt(s, reg[i][2], { x: x + 0.22, y: y + 0.85, w: 3.98, h: 0.88, fontSize: 12 });
+  }
+
+  s = content("Hospital device types reach every gateway", "Devices at Canopy");
+  const flow = [["FaEdit", "Admin adds type", "Devices → Device types"], ["FaCloud", "Canopy answers check-in", "enabled types"],
+    ["FaWarehouse", "Haber adds image + licence", "release parser image"], ["FaMicrochip", "Gateway catalog", "origin: canopy"]];
+  for (let i = 0; i < flow.length; i++) {
+    const x = 0.5 + i * 2.35;
+    await iconDot(s, x + 0.7, 1.15, flow[i][0], i === 3 ? C.accent2 : C.accent1, 0.65);
+    txt(s, flow[i][1], { x, y: 1.9, w: 2.05, h: 0.35, fontSize: 13, bold: true, align: "center" });
+    txt(s, flow[i][2], { x, y: 2.25, w: 2.05, h: 0.3, fontSize: 11, align: "center", color: C.text2 });
+    if (i < flow.length - 1) s.addShape(pres.shapes.RIGHT_ARROW, { x: x + 1.82, y: 1.35, w: 0.4, h: 0.25,
+      fill: { color: C.text2 }, line: { color: C.text2 }, objectName: "flow-arrow" });
+  }
+  txt(s, [
+    "Start from scratch or \"Use as template\" on a Flora Root release type",
+    "Licensed when Root licenses a type with the same parser; Root codes cannot be reused",
+    "Connection defaults checked with the gateway's own rules",
+    "Arrives at the next check-in (≈ 20 s); disable to stop delivery, delete only when unused",
+  ].map((t, i, a) => ({ text: t, options: { bullet: true, breakLine: i < a.length - 1 } })),
+  { x: 0.8, y: 2.9, w: 8.4, h: 2.1, fontSize: 13.5, paraSpaceAfter: 6 });
+
+  s = content("Hourly activity and on/off events", "Devices at Canopy");
+  const ev = [
+    ["FaPowerOff", "Powered on / off", "connection", "The device's own link came up or went down (TCP connection, UDP data, answered polls) on a pod only it uses", C.accent1],
+    ["FaWaveSquare", "Data resumed / stopped", "data", "Data started again or stopped for 2 minutes — the device may be off, unplugged or idle", C.accent2],
+  ];
+  for (let i = 0; i < ev.length; i++) {
+    const y = 1.05 + i * 1.3;
+    card(s, 0.5, y, 5.4, 1.15);
+    await iconDot(s, 0.7, y + 0.3, ev[i][0], ev[i][4]);
+    txt(s, ev[i][1], { x: 1.4, y: y + 0.12, w: 3.2, h: 0.35, fontSize: 15, bold: true });
+    txt(s, ev[i][2], { x: 4.6, y: y + 0.14, w: 1.2, h: 0.3, fontSize: 11, color: C.text2, align: "right" });
+    txt(s, ev[i][3], { x: 1.4, y: y + 0.47, w: 4.35, h: 0.62, fontSize: 11 });
+  }
+  card(s, 6.2, 1.05, 3.3, 2.45);
+  txt(s, "Every hour, per device", { x: 6.4, y: 1.2, w: 3, h: 0.35, fontSize: 14, bold: true, color: C.text2 });
+  txt(s, ["Share of the hour sending data", "Values received", "Power on / off counts", "Rebuilt every 10 min, resent until confirmed"]
+    .map((t, i, a) => ({ text: t, options: { bullet: true, breakLine: i < a.length - 1 } })),
+  { x: 6.4, y: 1.6, w: 3, h: 1.8, fontSize: 12, paraSpaceAfter: 4 });
+  const legend = [["10B981", "≥ 95 %"], ["FBBF24", "50–95 %"], ["F97316", "< 50 %"], ["F43F5E", "no data"], ["CBD5E1", "disabled"]];
+  for (let i = 0; i < legend.length; i++) {
+    const x = 0.5 + i * 1.8;
+    s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x, y: 4.0, w: 0.3, h: 0.3, rectRadius: 0.04, fill: { color: legend[i][0] },
+      line: { color: legend[i][0] }, objectName: "legend-swatch" });
+    txt(s, legend[i][1], { x: x + 0.4, y: 4.0, w: 1.3, h: 0.3, fontSize: 12, valign: "middle" });
+  }
+  txt(s, "Device state: On · Off · Disabled · Unknown (gateway offline) · Not reported · Not connected", { x: 0.5, y: 4.55, w: 9, h: 0.4, fontSize: 12, color: C.text2 });
+
   // Data structures --------------------------------------------------------------
   pres.addSection({ title: "Data structures" });
   s = pres.addSlide({ masterName: "SECTION", sectionTitle: "Data structures" });
@@ -329,7 +396,9 @@ async function picture(s, file, box) {
     ["er-2-license-site-auth.png", "Gateway DB · licence, site, Canopy link, users"],
     ["er-3-observations.png", "Gateway DB · observations (time series)"],
     ["er-4-monitoring-alerts.png", "Gateway DB · monitoring, alerts, operations"],
+    ["er-8-gateway-activity.png", "Gateway DB · device activity and on/off events"],
     ["er-5-canopy-gateway.png", "Canopy DB · gateway configuration and alerts"],
+    ["er-9-canopy-devices.png", "Canopy DB · Devices registry, types, activity"],
     ["er-6-haber.png", "Haber SQLite · gateway registry and releases"],
     ["er-7-kafka-messages.png", "Kafka topics · message envelopes"],
   ];

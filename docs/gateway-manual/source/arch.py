@@ -123,20 +123,23 @@ arrow(ax, (12.15, 6.3), (12.15, 6.95), "Leaf / browser", loff=(0, 0.02))
 fig.savefig(f"{OUT}/arch-2-dataflow.png", dpi=160, facecolor="white"); plt.close(fig)
 
 # 3. Check-in / control loop ----------------------------------------------------
-fig, ax = canvas(13, 6.2, "Control loop: check-in, licence, configuration and reconcile")
+fig, ax = canvas(13, 6.9, "Control loop: check-in, licence, configuration, device types and activity")
 lanes = [("Gateway", 1.4, "#1F6F5C"), ("Haber", 5.0, "#6B4F2A"), ("Canopy", 8.3, "#1E4E79"),
          ("Parser containers", 11.3, "#2C7A7B")]
 for name, x, c in lanes:
     box(ax, x - 0.9, 0.8, 1.8, 0.55, name, fc=c, fs=9.5)
-    ax.plot([x, x], [1.35, 5.9], color="#C8D2CE", lw=1.2, ls="--", zorder=0)
+    ax.plot([x, x], [1.35, 6.5], color="#C8D2CE", lw=1.2, ls="--", zorder=0)
 steps = [
     (1.4, 5.0, 1.75, "1  POST /gateways/{id}/checkin  (devices, site, applied version)"),
     (5.0, 8.3, 2.2, "2  forward config → snapshot if hash changed"),
-    (8.3, 5.0, 2.65, "3  desired_config (clone · location · Leaf wizard)"),
-    (5.0, 1.4, 3.1, "4  licence · device types · parser images · canopy_config"),
+    (8.3, 5.0, 2.65, "3  desired_config (clone · location · wizard) + hospital device types"),
+    (5.0, 1.4, 3.1, "4  licence · Root + hospital device types · parser images · config"),
     (1.4, 1.4, 3.6, ""),
     (1.4, 11.3, 4.25, "6  reconcile: start / stop / upgrade one parser per cycle"),
     (1.4, 5.0, 4.9, "7  POST /gateways/{id}/alerts  →  Canopy alert inbox"),
+    (5.0, 8.3, 4.9, "relay"),
+    (1.4, 5.0, 5.55, "8  POST /gateways/{id}/activity  (hourly + on/off events)"),
+    (5.0, 8.3, 5.55, "→  Canopy Devices"),
 ]
 for x1, x2, y, label in steps:
     if x1 == x2:
@@ -147,7 +150,7 @@ for x1, x2, y, label in steps:
     arrow(ax, (x1, y), (x2, y))
     ax.text((x1 + x2) / 2, y - 0.14, label, fontsize=8, ha="center", va="bottom", color=INK, zorder=4,
             bbox=dict(boxstyle="round,pad=0.1", fc="white", ec="none"))
-ax.text(0.5, 5.6, "Runs every GATEWAY_SYNC_INTERVAL_SEC (20 s). With Canopy offline the gateway keeps the last licence; "
+ax.text(0.5, 6.25, "Runs every GATEWAY_SYNC_INTERVAL_SEC (20 s). With Canopy offline the gateway keeps the last licence; "
         "a revoked or expired licence stops every parser.", fontsize=8.5, color=MUTED)
 fig.savefig(f"{OUT}/arch-3-control-loop.png", dpi=160, facecolor="white"); plt.close(fig)
 print("ok")

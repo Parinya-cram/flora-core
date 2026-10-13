@@ -112,9 +112,9 @@ const LW = 14534;
     bullet([b("Central management: "), new TextRun("configuration is mirrored to Canopy, can be cloned to a new gateway and is protected by status monitoring and alerts.")]),
     h2("1.2 Who should read this manual"),
     table(["Reader", "Most relevant chapters"], [
-      ["Operator (biomedical / ward technician)", "4 Getting started, 5 Console tour, 6 Everyday tasks, 9 Monitoring, 14 Troubleshooting"],
-      ["Gateway administrator", "All of the above plus 7 Canopy integration, 8 Device types, 11 Configuration, 12 Network"],
-      ["Hospital IT / integrator", "2 Overview, 3 Technology stack, 10 Data structures, 11–13 Configuration, network and security"],
+      ["Operator (biomedical / ward technician)", "4 Getting started, 5 Console tour, 6 Everyday tasks, 10 Monitoring, 16 Troubleshooting"],
+      ["Gateway administrator", "All of the above plus 7 Canopy integration, 8 Devices at Canopy, 9 Device types, 12 Configuration, 13 Network"],
+      ["Hospital IT / integrator", "2 Overview, 3 Technology stack, 11 Data structures, 12–14 Configuration, network and security"],
     ], [3, 6], PW),
     h2("1.3 Conventions"),
     bullet([new TextRun("Buttons and menu items are written in "), b("bold"), new TextRun(", e.g. Devices → "), b("Add device"), new TextRun(".")]),
@@ -273,34 +273,81 @@ const LW = 14534;
       "inbox, so the hospital sees all gateways in one place."),
 
     // 8 ---------------------------------------------------------------------
-    h1("8. Device types and supported devices"),
+    h1("8. Devices at Canopy"),
+    p([new TextRun("Canopy → "), b("Devices"), new TextRun(" is the hospital's master registry of medical devices and of the gateways that connect them, grouped by ward. It has two tabs: "),
+      b("Registry"), new TextRun(" and "), b("Device types"), new TextRun(". Gateways send each device's hourly activity and on/off events to it.")]),
+    h2("8.1 Registry and automatic additions"),
+    bullet([b("Canopy is the master record. "), new TextRun("Administrators register devices with name, category, manufacturer, model, serial number, asset tag, ward, room/bed, status (in service, maintenance, out of service, retired), acquisition date, warranty, last and next preventive maintenance, vendor contact and notes.")]),
+    bullet([b("Automatic additions. "), new TextRun("A gateway that checks in without being registered, and any device it reports that is not registered yet, are added automatically and flagged "), b("Review"), new TextRun(". Saving the record registers it. An automatically added device takes its ward from the Leaf it feeds.")]),
+    bullet([b("Matching. "), new TextRun("At each check-in a reported device is matched to the registry by its existing link, then by asset tag, then by serial number. A device that moved to another gateway is re-linked. A check-in only fills empty serial, asset tag and type fields; it never overwrites what an administrator entered.")]),
+    bullet([b("Wards. "), new TextRun("A gateway belongs to the ward it is installed in (Topology → Set location, or the gateway registry form). A device belongs to its own ward. Ward users see the gateways of their ward, plus gateways elsewhere that serve devices in their ward.")]),
+    h2("8.2 Register a device (admin)"),
+    ...steps([
+      [new TextRun("Devices → Registry → "), b("Register device"), new TextRun(".")],
+      "Fill in the registry fields; name is required and the asset tag must be unique.",
+      [new TextRun("Save. To connect it to the device a gateway reports, open the device → Gateway connection → "), b("Link to gateway device…"), new TextRun(". If the gateway had already added that device automatically, the automatic record is merged into yours.")],
+    ]),
+    h2("8.3 Register a gateway in advance (admin)"),
+    ...steps([
+      [new TextRun("Devices → Registry → "), b("Register gateway"), new TextRun(": enter the Gateway ID (FLORA_GATEWAY_ID), name, serial number, asset tag and ward.")],
+      "Install the gateway and connect it to Canopy (7.1). It links to this record at its first check-in; its devices are added for review.",
+      "Set the physical location (floor, room) in Topology → Set location.",
+    ]),
+    h2("8.4 Hospital device types (admin)"),
+    p("Flora Root releases deliver the standard device types. A hospital adds its own types for other models on a supported protocol in Devices → Device types:"),
+    ...steps([
+      [b("Add device type"), new TextRun(", or "), b("Use as template"), new TextRun(" on a release type.")],
+      "Enter code, name, category, manufacturer, model, controller, parser (from the release's parser image), protocol, connection defaults and default parser options.",
+      "Save. Every gateway receives the type at its next check-in (about 20 seconds).",
+    ]),
+    table(["Rule", "Detail"], [
+      ["Delivery", "Canopy returns the enabled hospital types in each check-in answer; Haber adds them to the gateway's catalog with origin \"canopy\" and the release's digest-pinned parser image."],
+      ["Licence", "A hospital type is licensed when the Root bundle licenses a type that uses the same parser."],
+      ["Codes", "Codes used by Root types cannot be reused."],
+      ["Connection defaults", "Checked with the gateway's own rules; per-device addresses (COM port, IP, port) stay on each device."],
+      ["Disable / delete", "Disabling stops delivery (gateways keep their copy). A type in use cannot be deleted."],
+    ], [2, 7.5], PW),
+    gap(),
+    h2("8.5 Hourly activity and on/off events"),
+    p("Every 10 minutes the gateway rebuilds an hourly summary for each device and for itself: status samples that were ok, down or stopped, seconds online, values received, first and last data, and power on/off counts. The running hour is marked incomplete. Summaries and events are sent through Haber and resent until Canopy confirms them, like alerts."),
+    table(["Event", "Basis", "Raised when"], [
+      ["Powered on / off", "connection", "The device's own link comes up or goes down — a TCP connection or UDP data on a socket pod, or answered polls on a feeder pod — on a pod used by that device alone."],
+      ["Data resumed / stopped", "data", "Data starts again, or stops for 2 minutes. Works for every device but cannot tell power-off from an unplugged cable or an idle device."],
+    ], [2.2, 1.3, 6], PW),
+    gap(),
+    bullet("Serial pods do not raise power events: \"port open\" describes the USB adapter, not the device. Disabling a device is a configuration change, not an event."),
+    bullet([new TextRun("Device state on the page: "), b("On"), new TextRun(", "), b("Off"), new TextRun(", "), b("Disabled"), new TextRun(", "), b("Unknown"), new TextRun(" (gateway offline), "), b("Not reported"), new TextRun(" (the gateway no longer reports it), "), b("Not connected"), new TextRun(" (no gateway link).")]),
+    bullet("The 24-hour strip and the heat map colour each hour by the share of time the device sent data: green ≥ 95 %, amber 50–95 %, orange below 50 %, red none, grey disabled."),
+
+    // 9 ---------------------------------------------------------------------
+    h1("9. Device types and supported devices"),
     p("A device type tells the gateway which controller connects the device, which parser decodes it, which parser " +
       "image to run and which default options and connection settings to use. Types normally come from Canopy " +
       "(origin root or canopy). Administrators may add local templates for devices not yet in the catalogue."),
     table(["Code", "Device", "Controller", "Parser"], C.deviceTypes, [2.6, 4.2, 1.3, 1.7], PW),
     gap(),
-    h2("8.1 Serial line settings"),
+    h2("9.1 Serial line settings"),
     table(["Device", "Settings"], C.serialSettings, [3, 6], PW),
     gap(),
-    h2("8.2 Connection defaults per controller"),
+    h2("9.2 Connection defaults per controller"),
     table(["Controller", "Keys"], C.connectionDefaults, [1.5, 8], PW),
     gap(),
-    h2("8.3 Device-specific options"),
+    h2("9.3 Device-specific options"),
     bullet([b("B. Braun BCC: "), code("bed_id"), new TextRun(", "), code("address"), new TextRun(" (default TCP port 4001).")]),
     bullet([b("Dräger M540: "), code("source_ip"), new TextRun(" of the monitor.")]),
     bullet([b("GE DRI: "), new TextRun("optional "), code("pressure_roles"), new TextRun(", "), code("temperature_channel"), new TextRun(" (T1–T4), "), code("respiration_channel"), new TextRun(" (RR_IMP, CO2_RR, FV_RR).")]),
     bullet([b("HL7 monitors: "), code("timezone"), new TextRun(" (default Asia/Bangkok).")]),
-    h2("8.4 Add a local template (admin)"),
+    h2("9.4 Add a local template (admin)"),
     ...steps([
       [new TextRun("System → "), b("Device types"), new TextRun(" → "), b("Add local template"), new TextRun(".")],
       "Enter a code (lowercase), label, manufacturer, model, category, protocol and controller.",
       "Choose a parser image delivered by Canopy and a parser contained in it.",
       "Set connection defaults and default parser options (JSON), then save.",
     ]),
-    note("Note", "A Canopy type with the same code later replaces the local template. Canopy types cannot be deleted on the gateway."),
+    note("Note", "A Canopy type with the same code later replaces the local template. Canopy types cannot be deleted on the gateway. For a type every gateway should have, add a hospital type at Canopy instead (8.4)."),
 
     // 9 ---------------------------------------------------------------------
-    h1("9. Monitoring and alerts"),
+    h1("10. Monitoring and alerts"),
     p("Every 30 seconds the gateway records one status sample per lane: the gateway service, the Canopy connection, " +
       "each controller and each device. Samples are kept for 7 days and drive the Status history panel and alerts."),
     table(["Alert", "Category", "Severity", "Raised when"], C.alerts, [3, 1.4, 1.2, 4], PW),
@@ -308,44 +355,55 @@ const LW = 14534;
     bullet("An alert opens after two consecutive \"down\" samples and resolves on the first OK or stopped sample, or when the device is removed."),
     bullet("Disabled devices and stopped controllers report \"stopped\", not \"down\", so planned work does not raise alerts."),
     bullet([new TextRun("Acknowledge an alert to show the team it is being handled ("), b("Alerts"), new TextRun(" → "), b("Acknowledge"), new TextRun(").")]),
+    bullet("The same samples feed the hourly activity and on/off events sent to Canopy → Devices (8.5)."),
   ];
 
   const erSection = [
-    new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun("10. Data structures")] }),
+    new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun("11. Data structures")] }),
     p("The diagrams below show every data store that holds gateway data. Solid lines are foreign keys; dashed lines " +
       "are logical links (matching values without a database constraint). The crow's foot marks the \"many\" side. " +
       "Grey tables marked (ref) repeat a table from another diagram."),
     table(["Store", "Where", "Contents"], [
-      ["Gateway PostgreSQL (flora_gateway)", "Gateway", "Device registry, licence, site, users, monitoring, alerts, observations"],
-      ["Canopy PostgreSQL", "Canopy", "Mirror of each gateway's configuration, snapshots and alerts"],
+      ["Gateway PostgreSQL (flora_gateway)", "Gateway", "Device registry, licence, site, users, monitoring, alerts, device activity and events, observations"],
+      ["Canopy PostgreSQL", "Canopy", "Mirror of each gateway's configuration, snapshots and alerts; the device registry, hospital device types, hourly activity and on/off events"],
       ["Haber SQLite (haber.db)", "Canopy", "Gateway check-ins, release mirror and approvals, updater nodes"],
       ["Kafka topics", "Gateway", "Transient messages between controllers, parsers and the collector (72 h)"],
     ], [3.2, 1.4, 5.5], LW),
   ];
   const ers = [
-    ["er-1-device-registry.png", "10.1 Device registry",
+    ["er-1-device-registry.png", "Device registry",
       "Manufacturers, device types (catalogue) and installed device instances. A type points to the parser image " +
       "that contains its parser; parser images arrive from Canopy with each release."],
-    ["er-2-license-site-auth.png", "10.2 Licence, site, Canopy link and users",
+    ["er-2-license-site-auth.png", "Licence, site, Canopy link and users",
       "Single-row tables (id = 1) hold the licence, the site/location and the Canopy connection. " +
       "canopy_config_version records the last configuration applied from Canopy. Sessions store only a SHA-256 hash of the cookie."],
-    ["er-3-observations.png", "10.3 Observations (time series)",
+    ["er-3-observations.png", "Observations (time series)",
       "gateway_observation holds normalised values (ivy_param, value, unit); gateway_measurement keeps original Dräger " +
       "fields with their definitions and mapping; gateway_device_seen is the latest state per device. Leaf filtering " +
       "joins on device_id to the instance's leaf_id."],
-    ["er-4-monitoring-alerts.png", "10.4 Monitoring, alerts and operations",
+    ["er-4-monitoring-alerts.png", "Monitoring, alerts and operations",
       "Status samples per lane (gateway, canopy, controller:<name>, device:<id>) feed alerts. version / " +
       "delivered_version track delivery of each alert change to Canopy."],
-    ["er-5-canopy-gateway.png", "10.5 Canopy: gateway configuration, devices and alerts",
+    ["er-8-gateway-activity.png", "Device activity and on/off events (gateway)",
+      "gateway_activity_hour is rebuilt from status samples, observations and events (one row per device per hour, " +
+      "subject 'gateway' for the service itself); gateway_device_event holds power_on/off and data_resumed/stopped. " +
+      "version / delivered_version and delivered track delivery to Canopy."],
+    ["er-5-canopy-gateway.png", "Canopy: gateway configuration, devices and alerts",
       "canopy_gateway_device mirrors the gateway's instances; snapshots keep each distinct configuration for clone and " +
       "restore. desired_config / desired_version carry pending changes; applied_version is what the gateway confirmed. " +
-      "On the Leaf, leaf_device_source stores the gateway chosen in the wizard."],
-    ["er-6-haber.png", "10.6 Haber (inside Canopy)",
+      "registry_status, display_name and unit_id are Canopy's own registry fields. On the Leaf, leaf_device_source " +
+      "stores the gateway chosen in the wizard."],
+    ["er-9-canopy-devices.png", "Canopy: Devices registry, device types and activity",
+      "canopy_medical_device is the master registry, linked to the device a gateway reports (gateway_id, " +
+      "gateway_device_id) and placed in a ward (unit_id). canopy_device_type holds the hospital's own types. " +
+      "Hourly activity and events arrive from gateways through Haber."],
+    ["er-6-haber.png", "Haber (inside Canopy)",
       "Haber records each gateway's last check-in, mirrors releases from Flora Root and tracks which release each " +
       "component is approved to run and what each updater node is running."],
-    ["er-7-kafka-messages.png", "10.7 Kafka message envelopes",
+    ["er-7-kafka-messages.png", "Kafka message envelopes",
       "Message structures on the gateway's internal topics. Observations are keyed by device_id."],
-  ];
+  ].map(([file, title, text], index) => [file, `11.${index + 1} ${title}`, text]);
+
   for (const [file, title, text] of ers) {
     erSection.push(new Paragraph({ heading: HeadingLevel.HEADING_2, pageBreakBefore: true, children: [new TextRun(title)] }));
     erSection.push(p(text));
@@ -357,7 +415,7 @@ const LW = 14534;
       data: fs.readFileSync(C.IMG + file), transformation: { width: w, height: h },
       altText: { title, description: title, name: file } })] }));
   }
-  erSection.push(new Paragraph({ heading: HeadingLevel.HEADING_2, pageBreakBefore: true, children: [new TextRun("10.8 Read API (data-api)")] }));
+  erSection.push(new Paragraph({ heading: HeadingLevel.HEADING_2, pageBreakBefore: true, children: [new TextRun("11.10 Read API (data-api)")] }));
   erSection.push(table(["Endpoint", "Returns"], [
     ["GET /api/observations?from&to[&device_id][&leaf_id]", "Observation rows; window at most 4 h, at most 50,000 rows"],
     ["GET /api/measurements?from&to[&device_id][&leaf_id][&after_id][&limit]", "{rows, next_after_id}; limit at most 10,000"],
@@ -368,12 +426,12 @@ const LW = 14534;
     new TextRun("; Kong adds "), code("leaf_id"), new TextRun(" automatically.")], { spacing: { before: 160 } }));
 
   const tail = [
-    h1n("11. Configuration reference"),
+    h1n("12. Configuration reference"),
     p([new TextRun("Settings live in "), code("flora-gateway/.env"), new TextRun(" (template "), code(".env.example"),
       new TextRun("). Controllers and pods are defined in "), code("config/gateway.toml"), new TextRun("; validate both offline with "), code("python scripts/validate_config.py config/gateway.toml config/instances.json"), new TextRun(".")]),
     table(["Variable", "Default", "Meaning"], C.env, [3.6, 2.6, 4], PW),
     gap(),
-    h2("11.1 gateway.toml defaults"),
+    h2("12.1 gateway.toml defaults"),
     table(["Section", "Defaults"], [
       ["serial", "baud 9600, 8N1, idle_ms 50, max_frame_bytes 64 KiB"],
       ["socket", "framing mllp, auto_ack true, bind 0.0.0.0, connect_timeout_ms 3000, reconnect_ms 3000"],
@@ -384,12 +442,12 @@ const LW = 14534;
       ["publisher target", "batch 200, flush 1000 ms"],
     ], [2, 7], PW),
 
-    h1("12. Network and ports"),
+    h1("13. Network and ports"),
     table(["Port", "Service", "Reachable from"], C.ports, [2.2, 5.5, 1.8], PW),
     gap(),
     note("Firewall", "Open 443 to Leafs and administrators, the device ports to the device network only, and outbound 443 to Canopy. Everything bound to 127.0.0.1 stays local to the gateway host."),
 
-    h1n("13. Security and HTTPS"),
+    h1n("14. Security and HTTPS"),
     bullet("The console and data-api are served over HTTPS by the nginx edge, using a certificate signed by the shared Flora CA."),
     bullet([new TextRun("Issue or renew the certificate with "), code("scripts/tls/make-cert.sh flora-gateway"), new TextRun("; list every host name and IP clients use in TLS_HOSTNAMES. Then recreate the edge container.")]),
     bullet("Outbound calls to Canopy trust the Flora CA through certs/flora-trust.pem (SSL_CERT_FILE)."),
@@ -398,7 +456,7 @@ const LW = 14534;
     bullet("The gateway authenticates to Haber with its gateway key (Bearer token); releases are Ed25519-signed by Flora Root and verified by the updater."),
     bullet("Change the default admin password and the database password before production use."),
 
-    h1n("14. Releases and updates"),
+    h1n("15. Releases and updates"),
     ...steps([
       "Flora Root signs a release (images pinned by sha256 digest).",
       "Haber in Canopy verifies the signature and mirrors the images into the hospital registry.",
@@ -409,10 +467,10 @@ const LW = 14534;
     ]),
     p([new TextRun("Set "), code("FLORA_UPDATER_WINDOW=HH:MM-HH:MM"), new TextRun(" to restrict updates to a maintenance window.")]),
 
-    h1("15. Troubleshooting"),
+    h1("16. Troubleshooting"),
     table(["Symptom", "What to do"], C.troubleshooting, [3.6, 6], PW),
     gap(),
-    h2("15.1 Known limitations"),
+    h2("16.1 Known limitations"),
     bullet("Observations are not pruned automatically; plan a retention job for long-running sites."),
     bullet("The data-api has no authentication of its own; restrict it to the Leaf network."),
     bullet("Dräger M540 and MEDIBUS mappings have not yet been validated on physical hardware."),

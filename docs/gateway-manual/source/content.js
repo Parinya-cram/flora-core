@@ -3,7 +3,7 @@ const IMG = __dirname + "/img/";
 
 module.exports = {
   IMG,
-  version: "Manual 1.0 · gateway release 0.2.4",
+  version: "Manual 1.1 · gateway release 0.2.4 + Devices",
   date: "October 2026",
 
   components: [
@@ -146,6 +146,9 @@ module.exports = {
     ["Dräger M540 silent", "Multicast does not cross subnets or Docker bridges: use tools/iacs-relay/relay.py with udp_relay framing."],
     ["Edits to instances.json have no effect", "It is only a first-start seed. Edit devices in the console."],
     ["Database grows steadily", "Observations are not pruned automatically; schedule a clean-up job."],
+    ["Hospital device type missing on the gateway", "Check at Canopy → Devices → Device types that it is enabled and its parser is licensed (a Root type with the same parser is licensed); then Sync now on the gateway."],
+    ["Devices page shows Unknown", "The gateway has not checked in for over 10 minutes: check its power, network and Canopy connection."],
+    ["Device shows Not reported", "The gateway no longer reports that device (removed or renamed there). Re-link it or retire the record."],
     ["Leaf shows no device data", "Check the device's Leaf workstation field, the Leaf data source URL (wizard) and https://<gateway>/data-api/health."],
   ],
 };
