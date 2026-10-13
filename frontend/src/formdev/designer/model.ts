@@ -124,6 +124,10 @@ export function newField(type: FieldType, used: Set<string>, label: string, defa
     field.fields = [{ id: child, type: "text", label: defaults.child }];
   }
   if (type === "repeat") field.max_items = 20;
+  if (type === "timeline") {
+    field.timeline = { parts: ["events", "chart", "table"], step_min: 5, source: "leaf" };
+    field.layout = { span: 12 };
+  }
   if (type === "matrix") {
     field.cell = { type: "select", options: ["0", "1", "2"].map(value => ({ value, label: value })) };
     field.rows = [1, 2, 3].map(n => ({ id: `row${n}`, label: `${defaults.child} ${n}` }));

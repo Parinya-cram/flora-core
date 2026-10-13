@@ -40,7 +40,8 @@ function toRowId(key: string) {
   return PARAM_KEY_MAP[normalized] || normalized;
 }
 
-function toClinicalTimelineValues(
+/** Device per-minute rows as values[rowId][ts] (device keys mapped to Leaf row ids). Also used by Form Studio timelines. */
+export function toClinicalTimelineValues(
   rows: VitalMinuteRow[],
 ): ClinicalTimelineValues {
   const next: ClinicalTimelineValues = {};

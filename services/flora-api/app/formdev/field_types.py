@@ -35,6 +35,7 @@ FIELD_TYPES: dict[str, dict[str, Any]] = {
     "group": {"value": None, "query": None, "index": None, "props": ["fields", "columns"]},
     "repeat": {"value": "list", "query": "list", "index": None, "props": ["fields", "columns", "min_items", "max_items", "view"]},
     "matrix": {"value": "matrix", "query": None, "index": None, "props": ["rows", "cols", "cell", "totals"]},
+    "timeline": {"value": "timeline", "query": None, "index": None, "props": ["timeline"]},
 }
 
 STYLE_COMPONENTS = ("label", "input", "section", "header", "footer")

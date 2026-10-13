@@ -39,6 +39,11 @@ export type FormPdfInput = {
 
 const TONES: Record<Tone, ReturnType<typeof rgb>> = { text: rgb(0.12, 0.16, 0.22), muted: rgb(0.38, 0.43, 0.5), accent: rgb(0.05, 0.32, 0.45) };
 const LINE_COLOR = rgb(0.45, 0.5, 0.57);
+/** "#rrggbb" as a pdf-lib colour. */
+const hex = (value: string) => {
+  const match = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(value);
+  return match ? rgb(parseInt(match[1], 16) / 255, parseInt(match[2], 16) / 255, parseInt(match[3], 16) / 255) : LINE_COLOR;
+};
 /** Shaded title bars and table headers. */
 const FILL_COLOR = rgb(0.9, 0.91, 0.93);
 /** Characters the bundled fonts lack, written with ones they have. */
@@ -147,9 +152,15 @@ async function draw(pdf: PDFDocument, page: PDFPage, op: Op, fonts: Fonts, image
       return;
     }
     case "line":
-      page.drawLine({ start: { x: op.x1, y: H - op.y1 }, end: { x: op.x2, y: H - op.y2 }, thickness: op.width ?? 0.5, color: LINE_COLOR,
+      page.drawLine({ start: { x: op.x1, y: H - op.y1 }, end: { x: op.x2, y: H - op.y2 }, thickness: op.width ?? 0.5, color: op.color ? hex(op.color) : LINE_COLOR,
         dashArray: op.dotted ? [1, 2] : undefined });
       return;
+    case "path": {
+      // Page coordinates with y down, as SVG: pdf-lib's drawSvgPath takes the page's top-left corner as origin.
+      const color = hex(op.color);
+      page.drawSvgPath(op.d, { x: 0, y: H, ...(op.filled ? { color, borderWidth: 0 } : { borderColor: color, borderWidth: op.width ?? 0.7 }) });
+      return;
+    }
     case "rect":
       page.drawRectangle({ x: op.x, y: H - op.y - op.h, width: op.w, height: op.h, borderWidth: 0.4, borderColor: LINE_COLOR, color: op.fill ? FILL_COLOR : undefined });
       return;

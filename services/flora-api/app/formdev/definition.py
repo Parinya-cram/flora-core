@@ -86,6 +86,14 @@ CATEGORY_KEYS = {"id", "title", "description", "fields", "layout", "style", "vis
 PRINT_STYLES = ("plain", "boxed")
 PAGE_BANDS = ("header", "footer")
 MATRIX_CELL_TYPES = ("integer", "number", "text", "select")
+# timeline (Form Studio): Flora Leaf's events row, trend chart and parameter table over time.
+TIMELINE_PARTS = ("events", "chart", "table")
+TIMELINE_SERIES = ("hr", "pr", "spo2", "nibp", "art", "cvp", "temperature", "et_co2", "bis")
+TIMELINE_SOURCES = ("leaf", "manual")
+TIMELINE_ROW_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+MAX_TIMELINE_COLUMNS = 1500
+MAX_TIMELINE_ROWS = 80
+MAX_TIMELINE_EVENTS = 300
 MATRIX_NUMERIC = ("integer", "number")
 MAX_MATRIX_ITEMS = 60
 PAPER_KEYS = {"size", "orientation", "margin_mm", "header", "footer"}
@@ -994,6 +1002,8 @@ def _validate_field(ctx: _Ctx, field: Any, path: str, scope: _Scope, columns: in
         ctx.add(f"{path}.option_columns", "invalid_columns", "option_columns must be an integer 1-6")
     if field_type == "matrix":
         _validate_matrix(ctx, field, path)
+    if field_type == "timeline" and "timeline" in field:
+        _validate_timeline_config(ctx, field["timeline"], f"{path}.timeline")
     if "derive" in field and "derive" in allowed:
         _validate_derive(ctx, field, path, scope)
 
@@ -1119,6 +1129,43 @@ def matrix_totals(field: dict[str, Any], value: Any) -> dict[str, dict[str, floa
             sums[col["id"]] = sum(numbers) if numbers else None
         out[total["id"]] = sums
     return out
+
+
+def _validate_timeline_config(ctx: _Ctx, config: Any, path: str) -> None:
+    """timeline: which parts show (events row, trend chart, parameter table), the table rows, the chart series, the
+    column step in minutes and where values come from (Flora Leaf, or typed in)."""
+    if not isinstance(config, dict):
+        ctx.add(path, "invalid_type", "timeline must be {parts?, rows?, chart?, step_min?, source?}")
+        return
+    ctx.unknown(config, {"parts", "rows", "chart", "step_min", "source"}, path)
+    parts = config.get("parts")
+    if "parts" in config and (not isinstance(parts, list) or not parts or not all(part in TIMELINE_PARTS for part in parts) or len(set(parts)) != len(parts)):
+        ctx.add(f"{path}.parts", "invalid_layout", f"parts lists some of {', '.join(TIMELINE_PARTS)}")
+    chart = config.get("chart")
+    if "chart" in config and (not isinstance(chart, list) or not all(series in TIMELINE_SERIES for series in chart) or len(set(chart)) != len(chart)):
+        ctx.add(f"{path}.chart", "invalid_layout", f"chart lists some of {', '.join(TIMELINE_SERIES)}")
+    if "step_min" in config and not (is_int(config["step_min"]) and 1 <= config["step_min"] <= 120):
+        ctx.add(f"{path}.step_min", "invalid_type", "step_min must be an integer 1-120")
+    if "source" in config and config["source"] not in TIMELINE_SOURCES:
+        ctx.add(f"{path}.source", "invalid_layout", "source is leaf or manual")
+    if "rows" in config:
+        rows = config["rows"]
+        if not isinstance(rows, list) or len(rows) > MAX_TIMELINE_ROWS:
+            ctx.add(f"{path}.rows", "invalid_type", f"rows must be a list of at most {MAX_TIMELINE_ROWS} {{id, label?, unit?}}")
+            return
+        seen: set[str] = set()
+        for index, row in enumerate(rows):
+            row_path = f"{path}.rows[{index}]"
+            if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not TIMELINE_ROW_ID.match(row["id"]):
+                ctx.add(f"{row_path}.id", "invalid_field_id", "Row id is a lowercase parameter key (e.g. hr, nibp_sys, et_co2)")
+                continue
+            ctx.unknown(row, {"id", "label", "unit"}, row_path)
+            if row["id"] in seen:
+                ctx.add(f"{row_path}.id", "duplicate_field_id", f"Duplicate row '{row['id']}'")
+            seen.add(row["id"])
+            for name in ("label", "unit"):
+                if name in row and (not isinstance(row[name], str) or len(row[name]) > 60):
+                    ctx.add(f"{row_path}.{name}", "invalid_type", f"{name} is text (at most 60 characters)")
 
 
 def _validate_calculated(ctx: _Ctx, field: dict[str, Any], path: str) -> None:
@@ -1590,11 +1637,61 @@ def _value_matrix(field: dict[str, Any], value: Any, path: str) -> list[Issue]:
     return issues
 
 
+def _value_timeline(field: dict[str, Any], value: Any, path: str) -> list[Issue]:
+    """A timeline snapshot: {step_min, axis: [ms], values: {row: {ms: number | text}}, events?, source?, case_id?,
+    captured_at?}. Stored with the record so the form prints and syncs without Flora Leaf."""
+    if not isinstance(value, dict):
+        return [Issue(path, "invalid_type", "Expected a timeline snapshot {step_min, axis, values}")]
+    issues: list[Issue] = []
+    for key in sorted(set(value) - {"step_min", "axis", "values", "events", "source", "case_id", "captured_at"}):
+        issues.append(Issue(f"{path}.{key}", "unknown_field", f"'{key}' is not part of a timeline snapshot"))
+    if not (is_int(value.get("step_min")) and 1 <= value["step_min"] <= 120):
+        issues.append(Issue(f"{path}.step_min", "invalid_type", "step_min must be an integer 1-120"))
+    axis = value.get("axis")
+    if not isinstance(axis, list) or len(axis) > MAX_TIMELINE_COLUMNS or not all(is_int(ts) and ts >= 0 for ts in axis) \
+            or any(b <= a for a, b in zip(axis, axis[1:])):
+        issues.append(Issue(f"{path}.axis", "invalid_type", f"axis lists at most {MAX_TIMELINE_COLUMNS} increasing times (ms)"))
+        axis = []
+    columns = {str(ts) for ts in axis}
+    values = value.get("values")
+    if not isinstance(values, dict) or len(values) > MAX_TIMELINE_ROWS:
+        issues.append(Issue(f"{path}.values", "invalid_type", f"values maps at most {MAX_TIMELINE_ROWS} rows to {{time: value}}"))
+    else:
+        for row_id in sorted(values):
+            cells = values[row_id]
+            if not TIMELINE_ROW_ID.match(row_id) or not isinstance(cells, dict):
+                issues.append(Issue(f"{path}.values.{row_id}", "invalid_type", "Each row maps times to values"))
+                continue
+            for ts in sorted(cells):
+                cell = cells[ts]
+                if ts not in columns:
+                    issues.append(Issue(f"{path}.values.{row_id}.{ts}", "unknown_field", "Not a time of this timeline's axis"))
+                elif not (cell is None or is_number(cell) or (isinstance(cell, str) and len(cell) <= 40)):
+                    issues.append(Issue(f"{path}.values.{row_id}.{ts}", "invalid_type", "A value is a number or short text"))
+    events = value.get("events", [])
+    if not isinstance(events, list) or len(events) > MAX_TIMELINE_EVENTS:
+        issues.append(Issue(f"{path}.events", "invalid_type", f"events lists at most {MAX_TIMELINE_EVENTS} {{ts, title, code?}}"))
+    else:
+        for index, event in enumerate(events):
+            if not isinstance(event, dict) or not is_int(event.get("ts")) or not isinstance(event.get("title"), str) or len(event["title"]) > 200 \
+                    or set(event) - {"ts", "title", "code"} or ("code" in event and not (isinstance(event["code"], str) and len(event["code"]) <= 40)):
+                issues.append(Issue(f"{path}.events[{index}]", "invalid_type", "An event is {ts, title, code?}"))
+    if "source" in value and value["source"] not in TIMELINE_SOURCES:
+        issues.append(Issue(f"{path}.source", "invalid_type", "source is leaf or manual"))
+    for name in ("captured_at",):
+        if name in value and not is_int(value[name]):
+            issues.append(Issue(f"{path}.{name}", "invalid_type", f"{name} is a time in ms"))
+    if "case_id" in value and not (is_int(value["case_id"]) or (isinstance(value["case_id"], str) and len(value["case_id"]) <= 64)):
+        issues.append(Issue(f"{path}.case_id", "invalid_type", "case_id is an id"))
+    return issues
+
+
 VALUE_VALIDATORS: dict[str, Callable[[dict[str, Any], Any, str], list[Issue]]] = {
     "text": _value_text, "number": _value_number, "integer": _value_number, "decimal": _value_number,
     "date": _value_temporal, "datetime": _value_temporal, "time": _value_temporal,
     "option": _value_option, "options": _value_options, "boolean": _value_boolean,
     "file": _value_file, "signature": _value_signature, "list": _value_list, "matrix": _value_matrix,
+    "timeline": _value_timeline,
 }
 
 

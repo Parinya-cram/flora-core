@@ -4,7 +4,7 @@
  * Adding a field type means a row here, a value validator in validate.ts and an input in the renderer.
  */
 
-export type ValueKind = "text" | "number" | "integer" | "decimal" | "date" | "datetime" | "time" | "option" | "options" | "boolean" | "file" | "signature" | "list" | "matrix";
+export type ValueKind = "text" | "number" | "integer" | "decimal" | "date" | "datetime" | "time" | "option" | "options" | "boolean" | "file" | "signature" | "list" | "matrix" | "timeline";
 export type FieldTypeSpec = { value: ValueKind | null; query: string | null; index: "text" | "num" | "datetime" | null; props: readonly string[] };
 
 export const COMMON_PROPS = ["id", "key", "type", "label", "description", "required", "readonly", "hidden", "visible", "display", "layout", "style",
@@ -33,6 +33,7 @@ export const FIELD_TYPE_SPECS = {
   group: { value: null, query: null, index: null, props: ["fields", "columns"] },
   repeat: { value: "list", query: "list", index: null, props: ["fields", "columns", "min_items", "max_items", "view"] },
   matrix: { value: "matrix", query: null, index: null, props: ["rows", "cols", "cell", "totals"] },
+  timeline: { value: "timeline", query: null, index: null, props: ["timeline"] },
 } as const satisfies Record<string, FieldTypeSpec>;
 
 export type FieldType = keyof typeof FIELD_TYPE_SPECS;

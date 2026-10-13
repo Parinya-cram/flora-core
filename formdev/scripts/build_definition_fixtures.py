@@ -102,6 +102,10 @@ DEFINITION_CASES: list[tuple[str, dict[str, Any], list[str]]] = [
     ("matrix total of a text row", with_fields(field(id="m", type="matrix", label="M", cell={"type": "text"}, rows=[{"id": "a", "label": "A"}], cols=[{"id": "x", "label": "X"}], totals=[{"id": "t", "label": "T", "of": ["a"]}])), ["unknown_field_reference"]),
     ("matrix total of score choices", with_fields(field(id="m", type="matrix", label="M", cell={"type": "select", "options": [{"value": "0", "label": "0"}, {"value": "2", "label": "2"}]}, rows=[{"id": "a", "label": "A"}], cols=[{"id": "x", "label": "X"}], totals=[{"id": "t", "label": "T", "of": ["a"]}])), []),
     ("matrix total of a non-numeric choice", with_fields(field(id="m", type="matrix", label="M", cell={"type": "select", "options": [{"value": "1", "label": "1"}, {"value": "s", "label": "S"}]}, rows=[{"id": "a", "label": "A"}], cols=[{"id": "x", "label": "X"}], totals=[{"id": "t", "label": "T", "of": ["a"]}])), ["unknown_field_reference"]),
+    ("timeline defaults", with_fields(field(id="tl", type="timeline", label="T")), []),
+    ("timeline settings", with_fields(field(id="tl", type="timeline", label="T", timeline={"parts": ["chart", "table"], "rows": [{"id": "hr"}, {"id": "bis", "label": "BIS", "unit": ""}], "chart": ["nibp", "hr"], "step_min": 20, "source": "manual"})), []),
+    ("timeline settings are checked", with_fields(field(id="tl", type="timeline", label="T", timeline={"parts": ["graph"], "chart": ["ecg"], "step_min": 0, "source": "monitor", "extra": 1})), ["invalid_layout", "invalid_layout", "invalid_layout", "invalid_type", "unknown_property"]),
+    ("timeline rows", with_fields(field(id="tl", type="timeline", label="T", timeline={"rows": [{"id": "HR"}, {"id": "hr"}, {"id": "hr"}]})), ["invalid_field_id", "duplicate_field_id"]),
     ("option columns", with_fields(field(id="c", type="multiselect", label="C", option_columns=4, options=[{"value": "a", "label": "A"}])), []),
     ("option columns range", with_fields(field(id="c", type="radio", label="C", option_columns=9, options=[{"value": "a", "label": "A"}])), ["invalid_columns"]),
     ("option columns only on choices", with_fields(field(id="t", type="text", label="T", option_columns=2)), ["property_not_supported"]),
@@ -316,6 +320,10 @@ RECORD_CASES: list[tuple[str, str, dict[str, Any], list[str]]] = [
     ("matrix integer and option cells", "draft", data(aldrete={"activity": {"admit": 1.5}, "sedation": {"admit": "3"}}), ["invalid_type", "invalid_option"]),
     ("matrix unknown row and column", "draft", data(aldrete={"total": {"admit": 4}, "spo2": {"m30": 2}}), ["unknown_field", "unknown_field"]),
     ("matrix shape", "draft", data(aldrete=[1, 2]), ["invalid_type"]),
+    ("timeline snapshot", "draft", data(trends={"step_min": 5, "axis": [1790000000000, 1790000300000], "values": {"hr": {"1790000000000": 72, "1790000300000": 75}, "bis": {"1790000300000": "45"}}, "events": [{"ts": 1790000000000, "title": "Induction"}], "source": "leaf", "case_id": 12, "captured_at": 1790000300000}), []),
+    ("timeline cells belong to the axis", "draft", data(trends={"step_min": 5, "axis": [1790000000000], "values": {"hr": {"1790000300000": 70, "1790000000000": [1]}}}), ["unknown_field", "invalid_type"]),
+    ("timeline axis increases", "draft", data(trends={"step_min": 5, "axis": [1790000300000, 1790000000000], "values": {}}), ["invalid_type"]),
+    ("timeline shape", "draft", data(trends={"step_min": 0, "axis": [], "values": {}, "events": [{"ts": "x"}], "note": 1}), ["invalid_type", "invalid_type", "unknown_field"]),
 ]
 
 DESCRIBE_PATHS = [

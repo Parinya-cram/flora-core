@@ -2335,6 +2335,185 @@
   ]
  },
  {
+  "name": "p1: timeline defaults",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "tl",
+       "type": "timeline",
+       "label": "T"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: timeline settings",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "tl",
+       "type": "timeline",
+       "label": "T",
+       "timeline": {
+        "parts": [
+         "chart",
+         "table"
+        ],
+        "rows": [
+         {
+          "id": "hr"
+         },
+         {
+          "id": "bis",
+          "label": "BIS",
+          "unit": ""
+         }
+        ],
+        "chart": [
+         "nibp",
+         "hr"
+        ],
+        "step_min": 20,
+        "source": "manual"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: timeline settings are checked",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "tl",
+       "type": "timeline",
+       "label": "T",
+       "timeline": {
+        "parts": [
+         "graph"
+        ],
+        "chart": [
+         "ecg"
+        ],
+        "step_min": 0,
+        "source": "monitor",
+        "extra": 1
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_layout",
+   "invalid_layout",
+   "invalid_layout",
+   "invalid_type",
+   "unknown_property"
+  ]
+ },
+ {
+  "name": "p1: timeline rows",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "tl",
+       "type": "timeline",
+       "label": "T",
+       "timeline": {
+        "rows": [
+         {
+          "id": "HR"
+         },
+         {
+          "id": "hr"
+         },
+         {
+          "id": "hr"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "duplicate_field_id",
+   "invalid_field_id"
+  ]
+ },
+ {
   "name": "p1: option columns",
   "definition": {
    "format": "flora.form/1",

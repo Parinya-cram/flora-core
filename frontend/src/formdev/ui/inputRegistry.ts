@@ -8,10 +8,11 @@ import {
   CalculatedOutput, CheckboxInput, FileInput, MatrixInput, MultiSelectInput, NumberInput, RadioInput, SelectInput, SignatureInput, SwitchInput, TemporalInput, TextArea, TextInput,
   type InputProps,
 } from "./fieldInputs";
+import { TimelineInput } from "./TimelineInput";
 
 export const FIELD_INPUTS: Partial<Record<FieldDefinition["type"], (props: InputProps) => ReactElement>> = {
   text: TextInput, textarea: TextArea, number: NumberInput, decimal: NumberInput, integer: NumberInput,
   date: TemporalInput, datetime: TemporalInput, time: TemporalInput,
   select: SelectInput, radio: RadioInput, multiselect: MultiSelectInput, checkbox: CheckboxInput, switch: SwitchInput,
-  file: FileInput, image: FileInput, signature: SignatureInput, calculated: CalculatedOutput, matrix: MatrixInput,
+  file: FileInput, image: FileInput, signature: SignatureInput, calculated: CalculatedOutput, matrix: MatrixInput, timeline: TimelineInput,
 };

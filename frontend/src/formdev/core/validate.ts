@@ -69,6 +69,14 @@ const PAGE_BANDS = ["header", "footer"];
 const MATRIX_CELL_TYPES = ["integer", "number", "text", "select"];
 const MATRIX_NUMERIC = ["integer", "number"];
 const MAX_MATRIX_ITEMS = 60;
+// timeline (Form Studio): Flora Leaf's events row, trend chart and parameter table over time.
+export const TIMELINE_PARTS = ["events", "chart", "table"] as const;
+export const TIMELINE_SERIES = ["hr", "pr", "spo2", "nibp", "art", "cvp", "temperature", "et_co2", "bis"] as const;
+const TIMELINE_SOURCES = ["leaf", "manual"];
+const TIMELINE_ROW_ID = /^[a-z][a-z0-9_]{0,63}$/;
+const MAX_TIMELINE_COLUMNS = 1500;
+const MAX_TIMELINE_ROWS = 80;
+const MAX_TIMELINE_EVENTS = 300;
 const PAPER_KEYS = new Set(["size", "orientation", "margin_mm", "header", "footer"]);
 const BAND_KEYS = new Set(["left", "center", "right", "height_mm", "first_page"]);
 const MARGIN_KEYS = ["top", "right", "bottom", "left"];
@@ -869,6 +877,7 @@ function validateField(ctx: Ctx, field: unknown, path: string, scope: Scope, col
     ctx.add(`${path}.option_columns`, "invalid_columns", "option_columns must be an integer 1-6");
   }
   if (field.type === "matrix") validateMatrix(ctx, field, path);
+  if (field.type === "timeline" && "timeline" in field) validateTimelineConfig(ctx, field.timeline, `${path}.timeline`);
   if ("derive" in field && allowed.has("derive")) validateDerive(ctx, field, path, scope);
 
   if (field.indexed === true && allowed.has("indexed")) {
@@ -982,6 +991,44 @@ export function matrixTotals(field: FieldDefinition, value: unknown): Record<str
     out[total.id] = sums;
   }
   return out;
+}
+
+/** timeline: which parts show, the table rows, the chart series, the column step (minutes) and the value source. */
+function validateTimelineConfig(ctx: Ctx, config: unknown, path: string) {
+  if (!isObject(config)) {
+    ctx.add(path, "invalid_type", "timeline must be {parts?, rows?, chart?, step_min?, source?}");
+    return;
+  }
+  ctx.unknown(config, new Set(["parts", "rows", "chart", "step_min", "source"]), path);
+  const parts = config.parts;
+  if ("parts" in config && (!Array.isArray(parts) || !parts.length || !parts.every(part => (TIMELINE_PARTS as readonly unknown[]).includes(part)) || new Set(parts).size !== parts.length)) {
+    ctx.add(`${path}.parts`, "invalid_layout", `parts lists some of ${TIMELINE_PARTS.join(", ")}`);
+  }
+  const chart = config.chart;
+  if ("chart" in config && (!Array.isArray(chart) || !chart.every(series => (TIMELINE_SERIES as readonly unknown[]).includes(series)) || new Set(chart).size !== chart.length)) {
+    ctx.add(`${path}.chart`, "invalid_layout", `chart lists some of ${TIMELINE_SERIES.join(", ")}`);
+  }
+  if ("step_min" in config && !(isInt(config.step_min) && config.step_min >= 1 && config.step_min <= 120)) ctx.add(`${path}.step_min`, "invalid_type", "step_min must be an integer 1-120");
+  if ("source" in config && !TIMELINE_SOURCES.includes(config.source as string)) ctx.add(`${path}.source`, "invalid_layout", "source is leaf or manual");
+  if ("rows" in config) {
+    const rows = config.rows;
+    if (!Array.isArray(rows) || rows.length > MAX_TIMELINE_ROWS) {
+      ctx.add(`${path}.rows`, "invalid_type", `rows must be a list of at most ${MAX_TIMELINE_ROWS} {id, label?, unit?}`);
+      return;
+    }
+    const seen = new Set<string>();
+    rows.forEach((row, index) => {
+      const rowPath = `${path}.rows[${index}]`;
+      if (!isObject(row) || !isText(row.id) || !TIMELINE_ROW_ID.test(row.id)) {
+        ctx.add(`${rowPath}.id`, "invalid_field_id", "Row id is a lowercase parameter key (e.g. hr, nibp_sys, et_co2)");
+        return;
+      }
+      ctx.unknown(row, new Set(["id", "label", "unit"]), rowPath);
+      if (seen.has(row.id)) ctx.add(`${rowPath}.id`, "duplicate_field_id", `Duplicate row '${row.id}'`);
+      seen.add(row.id);
+      for (const name of ["label", "unit"]) if (name in row && (!isText(row[name]) || textLength(row[name] as string) > 60)) ctx.add(`${rowPath}.${name}`, "invalid_type", `${name} is text (at most 60 characters)`);
+    });
+  }
 }
 
 function validateCalculated(ctx: Ctx, field: Obj, path: string) {
@@ -1444,11 +1491,57 @@ const valueMatrix: ValueValidator = (field, value, path) => {
   return issues;
 };
 
+/** A timeline snapshot: {step_min, axis: [ms], values: {row: {ms: number | text}}, events?, source?, case_id?, captured_at?}. */
+const valueTimeline: ValueValidator = (_field, value, path) => {
+  if (!isObject(value)) return [issue(path, "invalid_type", "Expected a timeline snapshot {step_min, axis, values}")];
+  const issues: Issue[] = [];
+  const known = new Set(["step_min", "axis", "values", "events", "source", "case_id", "captured_at"]);
+  for (const key of Object.keys(value).filter(item => !known.has(item)).sort()) issues.push(issue(`${path}.${key}`, "unknown_field", `'${key}' is not part of a timeline snapshot`));
+  if (!(isInt(value.step_min) && value.step_min >= 1 && value.step_min <= 120)) issues.push(issue(`${path}.step_min`, "invalid_type", "step_min must be an integer 1-120"));
+  let axis = value.axis;
+  if (!Array.isArray(axis) || axis.length > MAX_TIMELINE_COLUMNS || !axis.every(ts => isInt(ts) && ts >= 0) || axis.some((ts, index) => index > 0 && ts <= (axis as number[])[index - 1])) {
+    issues.push(issue(`${path}.axis`, "invalid_type", `axis lists at most ${MAX_TIMELINE_COLUMNS} increasing times (ms)`));
+    axis = [];
+  }
+  const columns = new Set((axis as number[]).map(String));
+  const values = value.values;
+  if (!isObject(values) || Object.keys(values).length > MAX_TIMELINE_ROWS) {
+    issues.push(issue(`${path}.values`, "invalid_type", `values maps at most ${MAX_TIMELINE_ROWS} rows to {time: value}`));
+  } else {
+    for (const rowId of Object.keys(values).sort()) {
+      const cells = values[rowId];
+      if (!TIMELINE_ROW_ID.test(rowId) || !isObject(cells)) {
+        issues.push(issue(`${path}.values.${rowId}`, "invalid_type", "Each row maps times to values"));
+        continue;
+      }
+      for (const ts of Object.keys(cells).sort()) {
+        const cell = cells[ts];
+        if (!columns.has(ts)) issues.push(issue(`${path}.values.${rowId}.${ts}`, "unknown_field", "Not a time of this timeline's axis"));
+        else if (!(cell === null || isNumber(cell) || (isText(cell) && textLength(cell) <= 40))) issues.push(issue(`${path}.values.${rowId}.${ts}`, "invalid_type", "A value is a number or short text"));
+      }
+    }
+  }
+  const events = "events" in value ? value.events : [];
+  if (!Array.isArray(events) || events.length > MAX_TIMELINE_EVENTS) {
+    issues.push(issue(`${path}.events`, "invalid_type", `events lists at most ${MAX_TIMELINE_EVENTS} {ts, title, code?}`));
+  } else {
+    events.forEach((event, index) => {
+      const ok = isObject(event) && isInt(event.ts) && isText(event.title) && textLength(event.title) <= 200 && Object.keys(event).every(key => ["ts", "title", "code"].includes(key))
+        && (!("code" in event) || (isText(event.code) && textLength(event.code) <= 40));
+      if (!ok) issues.push(issue(`${path}.events[${index}]`, "invalid_type", "An event is {ts, title, code?}"));
+    });
+  }
+  if ("source" in value && !TIMELINE_SOURCES.includes(value.source as string)) issues.push(issue(`${path}.source`, "invalid_type", "source is leaf or manual"));
+  if ("captured_at" in value && !isInt(value.captured_at)) issues.push(issue(`${path}.captured_at`, "invalid_type", "captured_at is a time in ms"));
+  if ("case_id" in value && !(isInt(value.case_id) || (isText(value.case_id) && textLength(value.case_id) <= 64))) issues.push(issue(`${path}.case_id`, "invalid_type", "case_id is an id"));
+  return issues;
+};
+
 const VALUE_VALIDATORS: Record<ValueKind, ValueValidator> = {
   text: valueText, number: valueNumber, integer: valueNumber, decimal: valueNumber,
   date: valueTemporal, datetime: valueTemporal, time: valueTemporal,
   option: valueOption, options: valueOptions, boolean: valueBoolean,
-  file: valueFile, signature: valueSignature, list: valueList, matrix: valueMatrix,
+  file: valueFile, signature: valueSignature, list: valueList, matrix: valueMatrix, timeline: valueTimeline,
 };
 
 export function validateValue(field: FieldDefinition, value: unknown, path: string): Issue[] {

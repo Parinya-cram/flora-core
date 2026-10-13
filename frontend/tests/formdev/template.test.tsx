@@ -20,6 +20,15 @@ const RECORD = {
   post_anesthetic_problems: ["no_complication"], discharge_status: "other", _other: { discharge_status: "Room air" }, continuing_care: ["airway", "vs"],
 };
 
+describe("paper templates: Anesthesia Report", () => {
+  it("is a valid definition with a Flora Leaf timeline every 20 minutes", () => {
+    const definition = starterForm(STARTERS.find(item => item.id === "anesthesia")!, "anes_x", "Anesthesia Report", "en");
+    expect(validateDefinition(definition, STYLES, FONTS)).toEqual([]);
+    const trends = definition.sections.flatMap(section => section.fields).find(field => field.type === "timeline")!;
+    expect(trends.timeline).toMatchObject({ step_min: 20, source: "leaf" });
+  });
+});
+
 describe("paper templates: PACU", () => {
   const definition = pacuForm("pacu_record", "PACU");
 
