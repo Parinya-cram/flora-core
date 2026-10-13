@@ -17,6 +17,8 @@ from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from starlette.responses import JSONResponse
 
+import phi_mask
+
 API_URL = os.getenv("FLORA_API_URL", "http://canopy-api:8000").rstrip("/")
 READ_ONLY = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
 
@@ -28,7 +30,9 @@ server = MCPServer(
         "minute-by-minute vital signs, events, medications/fluids and clinical forms (pre-op, checklist, PACU). "
         "Wards group Leafs; your API key may be limited to some wards. Start with search_cases or list_wards, "
         "then use the case_id with get_case, get_vitals, get_case_events, get_medications or get_case_forms. "
-        "Times are epoch milliseconds unless stated. This is patient data: use only what the task needs."
+        "Times are epoch milliseconds unless stated. Patient names, HN/AN, national ID, date of birth and contact details "
+        "are always masked (first three characters, then --------); never try to reconstruct them. "
+        "This is patient data: use only what the task needs."
     ),
 )
 
@@ -51,7 +55,8 @@ async def _get(ctx: Context, tool: str, path: str, params: dict[str, Any] | None
     if response.status_code >= 400:
         # ToolError reaches the agent with its message (e.g. "case not found", missing scope).
         raise ToolError(body.get("error") or body.get("detail") or f"Canopy API returned {response.status_code}")
-    return body
+    # Patient identifiers are masked by the API already; mask again so no tool result can carry them.
+    return phi_mask.mask(body)
 
 
 @server.tool(annotations=READ_ONLY)

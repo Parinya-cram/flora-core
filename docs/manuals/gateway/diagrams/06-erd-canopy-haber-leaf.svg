@@ -1,0 +1,490 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2260" height="1202" viewBox="0 0 2260 1202"><rect width="2260" height="1202" fill="#FFFFFF"/>
+<text x="40" y="52" font-family="Helvetica, Arial, sans-serif" font-size="30" font-weight="700" fill="#1B2A33">Gateway data in Canopy, Haber and Leaf</text>
+<text x="40" y="82" font-family="Helvetica, Arial, sans-serif" font-size="17" fill="#4A5A66">What the hospital (Canopy / Haber) keeps about each gateway, and how a Leaf records the device data it pulls.</text>
+<rect x="18" y="104" width="374" height="968" rx="18" fill="#FDF6EA" stroke="#B9802A" stroke-width="1.5" stroke-dasharray="6 5"/>
+<text x="36" y="132" font-family="Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#B9802A">Haber (SQLite, in Canopy)</text>
+<rect x="458" y="104" width="1254" height="892" rx="18" fill="#EEF6F6" stroke="#0F6E74" stroke-width="1.5" stroke-dasharray="6 5"/>
+<text x="476" y="132" font-family="Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#0F6E74">Canopy (PostgreSQL)</text>
+<rect x="1778" y="104" width="374" height="968" rx="18" fill="#EEF2F8" stroke="#3D5A80" stroke-width="1.5" stroke-dasharray="6 5"/>
+<text x="1796" y="132" font-family="Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#3D5A80">Leaf (PostgreSQL, per workstation)</text>
+<path d="M480 203.5 H425 V203.5 H370" fill="none" stroke="#7A8A94" stroke-width="2" stroke-dasharray="7 5"/>
+<path d="M454 203.5 L480 195.5 M454 203.5 L480 211.5 M454 203.5 L480 203.5" stroke="#7A8A94" stroke-width="2" fill="none"/>
+<line x1="450" y1="195.5" x2="450" y2="211.5" stroke="#7A8A94" stroke-width="2"/>
+<line x1="382" y1="195.5" x2="382" y2="211.5" stroke="#7A8A94" stroke-width="2"/>
+<line x1="388" y1="195.5" x2="388" y2="211.5" stroke="#7A8A94" stroke-width="2"/>
+<path d="M370 494.5 H410 V716.5 H370" fill="none" stroke="#7A8A94" stroke-width="2" stroke-dasharray="7 5"/>
+<path d="M396 494.5 L370 486.5 M396 494.5 L370 502.5 M396 494.5 L370 494.5" stroke="#7A8A94" stroke-width="2" fill="none"/>
+<line x1="400" y1="486.5" x2="400" y2="502.5" stroke="#7A8A94" stroke-width="2"/>
+<line x1="382" y1="708.5" x2="382" y2="724.5" stroke="#7A8A94" stroke-width="2"/>
+<line x1="388" y1="708.5" x2="388" y2="724.5" stroke="#7A8A94" stroke-width="2"/>
+<path d="M370 984.5 H424 V716.5 H370" fill="none" stroke="#7A8A94" stroke-width="2" stroke-dasharray="7 5"/>
+<path d="M396 984.5 L370 976.5 M396 984.5 L370 992.5 M396 984.5 L370 984.5" stroke="#7A8A94" stroke-width="2" fill="none"/>
+<line x1="400" y1="976.5" x2="400" y2="992.5" stroke="#7A8A94" stroke-width="2"/>
+<line x1="382" y1="708.5" x2="382" y2="724.5" stroke="#7A8A94" stroke-width="2"/>
+<line x1="388" y1="708.5" x2="388" y2="724.5" stroke="#7A8A94" stroke-width="2"/>
+<path d="M810 609.5 H850 V203.5 H810" fill="none" stroke="#3F5E66" stroke-width="2"/>
+<path d="M836 609.5 L810 601.5 M836 609.5 L810 617.5 M836 609.5 L810 609.5" stroke="#3F5E66" stroke-width="2" fill="none"/>
+<line x1="840" y1="601.5" x2="840" y2="617.5" stroke="#3F5E66" stroke-width="2"/>
+<line x1="822" y1="195.5" x2="822" y2="211.5" stroke="#3F5E66" stroke-width="2"/>
+<line x1="828" y1="195.5" x2="828" y2="211.5" stroke="#3F5E66" stroke-width="2"/>
+<path d="M920 203.5 H865 V203.5 H810" fill="none" stroke="#3F5E66" stroke-width="2"/>
+<path d="M894 203.5 L920 195.5 M894 203.5 L920 211.5 M894 203.5 L920 203.5" stroke="#3F5E66" stroke-width="2" fill="none"/>
+<line x1="890" y1="195.5" x2="890" y2="211.5" stroke="#3F5E66" stroke-width="2"/>
+<line x1="822" y1="195.5" x2="822" y2="211.5" stroke="#3F5E66" stroke-width="2"/>
+<line x1="828" y1="195.5" x2="828" y2="211.5" stroke="#3F5E66" stroke-width="2"/>
+<path d="M920 655.5 H879 V203.5 H810" fill="none" stroke="#7A8A94" stroke-width="2" stroke-dasharray="7 5"/>
+<path d="M894 655.5 L920 647.5 M894 655.5 L920 663.5 M894 655.5 L920 655.5" stroke="#7A8A94" stroke-width="2" fill="none"/>
+<line x1="890" y1="647.5" x2="890" y2="663.5" stroke="#7A8A94" stroke-width="2"/>
+<line x1="822" y1="195.5" x2="822" y2="211.5" stroke="#7A8A94" stroke-width="2"/>
+<line x1="828" y1="195.5" x2="828" y2="211.5" stroke="#7A8A94" stroke-width="2"/>
+<path d="M1250 249.5 H1305 V203.5 H1360" fill="none" stroke="#7A8A94" stroke-width="2" stroke-dasharray="7 5"/>
+<path d="M1276 249.5 L1250 241.5 M1276 249.5 L1250 257.5 M1276 249.5 L1250 249.5" stroke="#7A8A94" stroke-width="2" fill="none"/>
+<line x1="1280" y1="241.5" x2="1280" y2="257.5" stroke="#7A8A94" stroke-width="2"/>
+<line x1="1348" y1="195.5" x2="1348" y2="211.5" stroke="#7A8A94" stroke-width="2"/>
+<line x1="1342" y1="195.5" x2="1342" y2="211.5" stroke="#7A8A94" stroke-width="2"/>
+<path d="M1690 471.5 H1730 V203.5 H1690" fill="none" stroke="#3F5E66" stroke-width="2"/>
+<path d="M1716 471.5 L1690 463.5 M1716 471.5 L1690 479.5 M1716 471.5 L1690 471.5" stroke="#3F5E66" stroke-width="2" fill="none"/>
+<line x1="1720" y1="463.5" x2="1720" y2="479.5" stroke="#3F5E66" stroke-width="2"/>
+<line x1="1702" y1="195.5" x2="1702" y2="211.5" stroke="#3F5E66" stroke-width="2"/>
+<line x1="1708" y1="195.5" x2="1708" y2="211.5" stroke="#3F5E66" stroke-width="2"/>
+<path d="M1690 494.5 H1730 V716.5 H1690" fill="none" stroke="#3F5E66" stroke-width="2"/>
+<path d="M1716 494.5 L1690 486.5 M1716 494.5 L1690 502.5 M1716 494.5 L1690 494.5" stroke="#3F5E66" stroke-width="2" fill="none"/>
+<line x1="1720" y1="486.5" x2="1720" y2="502.5" stroke="#3F5E66" stroke-width="2"/>
+<line x1="1702" y1="708.5" x2="1702" y2="724.5" stroke="#3F5E66" stroke-width="2"/>
+<line x1="1708" y1="708.5" x2="1708" y2="724.5" stroke="#3F5E66" stroke-width="2"/>
+<path d="M2130 647.5 H2170 V402.5 H2130" fill="none" stroke="#3F5E66" stroke-width="2"/>
+<path d="M2156 647.5 L2130 639.5 M2156 647.5 L2130 655.5 M2156 647.5 L2130 647.5" stroke="#3F5E66" stroke-width="2" fill="none"/>
+<line x1="2160" y1="639.5" x2="2160" y2="655.5" stroke="#3F5E66" stroke-width="2"/>
+<line x1="2142" y1="394.5" x2="2142" y2="410.5" stroke="#3F5E66" stroke-width="2"/>
+<line x1="2148" y1="394.5" x2="2148" y2="410.5" stroke="#3F5E66" stroke-width="2"/>
+<path d="M2130 869.5 H2184 V402.5 H2130" fill="none" stroke="#3F5E66" stroke-width="2"/>
+<path d="M2156 869.5 L2130 861.5 M2156 869.5 L2130 877.5 M2156 869.5 L2130 869.5" stroke="#3F5E66" stroke-width="2" fill="none"/>
+<line x1="2160" y1="861.5" x2="2160" y2="877.5" stroke="#3F5E66" stroke-width="2"/>
+<line x1="2142" y1="394.5" x2="2142" y2="410.5" stroke="#3F5E66" stroke-width="2"/>
+<line x1="2148" y1="394.5" x2="2148" y2="410.5" stroke="#3F5E66" stroke-width="2"/>
+<rect x="43" y="154" width="330" height="188" rx="10" fill="#000" opacity="0.06"/>
+<rect x="40" y="150" width="330" height="188" rx="10" fill="#fff" stroke="#C9D5D8" stroke-width="1.5"/>
+<path d="M40 160 a10 10 0 0 1 10 -10 h310 a10 10 0 0 1 10 10 v30 h-330 z" fill="#B9802A"/>
+<text x="54" y="176" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#fff">gateway (Haber)</text>
+<text x="358" y="176" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#fff" opacity="0.85">check-ins</text>
+<rect x="48" y="194" width="34" height="15" rx="4" fill="#FBEBD0" stroke="#E8A33D" stroke-width="1"/>
+<text x="65" y="205.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">PK</text>
+<text x="90" y="206" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1B2A33">gateway_id</text>
+<text x="358" y="206" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="41" y="213" width="328" height="23" fill="#F4F7F8"/>
+<text x="90" y="229" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">first_seen</text>
+<text x="358" y="229" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">int</text>
+<text x="90" y="252" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">last_seen</text>
+<text x="358" y="252" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">int</text>
+<rect x="41" y="259" width="328" height="23" fill="#F4F7F8"/>
+<text x="90" y="275" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">version</text>
+<text x="358" y="275" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="90" y="298" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">devices</text>
+<text x="358" y="298" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">JSON text</text>
+<rect x="41" y="305" width="328" height="23" fill="#F4F7F8"/>
+<text x="90" y="321" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">site</text>
+<text x="358" y="321" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">JSON text</text>
+<rect x="43" y="376" width="330" height="257" rx="10" fill="#000" opacity="0.06"/>
+<rect x="40" y="372" width="330" height="257" rx="10" fill="#fff" stroke="#C9D5D8" stroke-width="1.5"/>
+<path d="M40 382 a10 10 0 0 1 10 -10 h310 a10 10 0 0 1 10 10 v30 h-330 z" fill="#B9802A"/>
+<text x="54" y="398" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#fff">node</text>
+<text x="358" y="398" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#fff" opacity="0.85">updaters</text>
+<rect x="48" y="416" width="34" height="15" rx="4" fill="#FBEBD0" stroke="#E8A33D" stroke-width="1"/>
+<text x="65" y="427.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">PK</text>
+<text x="90" y="428" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1B2A33">node_id</text>
+<text x="358" y="428" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="41" y="435" width="328" height="23" fill="#F4F7F8"/>
+<text x="90" y="451" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">component</text>
+<text x="358" y="451" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="90" y="474" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">project</text>
+<text x="358" y="474" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="41" y="481" width="328" height="23" fill="#F4F7F8"/>
+<rect x="48" y="485" width="34" height="15" rx="4" fill="#EEF0F2" stroke="#7A8A94" stroke-width="1"/>
+<text x="65" y="496.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">ref</text>
+<text x="90" y="497" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">release_id</text>
+<text x="358" y="497" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="90" y="520" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">target</text>
+<text x="358" y="520" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="41" y="527" width="328" height="23" fill="#F4F7F8"/>
+<text x="90" y="543" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">state</text>
+<text x="358" y="543" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="90" y="566" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">detail</text>
+<text x="358" y="566" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="41" y="573" width="328" height="23" fill="#F4F7F8"/>
+<text x="90" y="589" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">images</text>
+<text x="358" y="589" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">JSON</text>
+<text x="90" y="612" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">last_seen</text>
+<text x="358" y="612" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">int</text>
+<rect x="43" y="667" width="330" height="211" rx="10" fill="#000" opacity="0.06"/>
+<rect x="40" y="663" width="330" height="211" rx="10" fill="#fff" stroke="#C9D5D8" stroke-width="1.5"/>
+<path d="M40 673 a10 10 0 0 1 10 -10 h310 a10 10 0 0 1 10 10 v30 h-330 z" fill="#B9802A"/>
+<text x="54" y="689" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#fff">release_mirror</text>
+<rect x="48" y="707" width="34" height="15" rx="4" fill="#FBEBD0" stroke="#E8A33D" stroke-width="1"/>
+<text x="65" y="718.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">PK</text>
+<text x="90" y="719" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1B2A33">release_id</text>
+<text x="358" y="719" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="41" y="726" width="328" height="23" fill="#F4F7F8"/>
+<text x="90" y="742" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">component</text>
+<text x="358" y="742" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="90" y="765" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">version</text>
+<text x="358" y="765" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="41" y="772" width="328" height="23" fill="#F4F7F8"/>
+<text x="90" y="788" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">status</text>
+<text x="358" y="788" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="90" y="811" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">error</text>
+<text x="358" y="811" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="41" y="818" width="328" height="23" fill="#F4F7F8"/>
+<text x="90" y="834" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">bytes</text>
+<text x="358" y="834" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">int</text>
+<text x="90" y="857" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">updated_at</text>
+<text x="358" y="857" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">int</text>
+<rect x="43" y="912" width="330" height="142" rx="10" fill="#000" opacity="0.06"/>
+<rect x="40" y="908" width="330" height="142" rx="10" fill="#fff" stroke="#C9D5D8" stroke-width="1.5"/>
+<path d="M40 918 a10 10 0 0 1 10 -10 h310 a10 10 0 0 1 10 10 v30 h-330 z" fill="#B9802A"/>
+<text x="54" y="934" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#fff">release_approval</text>
+<rect x="48" y="952" width="34" height="15" rx="4" fill="#FBEBD0" stroke="#E8A33D" stroke-width="1"/>
+<text x="65" y="963.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">PK</text>
+<text x="90" y="964" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1B2A33">component</text>
+<text x="358" y="964" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="41" y="971" width="328" height="23" fill="#F4F7F8"/>
+<rect x="48" y="975" width="34" height="15" rx="4" fill="#EEF0F2" stroke="#7A8A94" stroke-width="1"/>
+<text x="65" y="986.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">ref</text>
+<text x="90" y="987" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">release_id</text>
+<text x="358" y="987" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="90" y="1010" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">approved_at</text>
+<text x="358" y="1010" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">int</text>
+<rect x="41" y="1017" width="328" height="23" fill="#F4F7F8"/>
+<text x="90" y="1033" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">approved_by</text>
+<text x="358" y="1033" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="483" y="154" width="330" height="349" rx="10" fill="#000" opacity="0.06"/>
+<rect x="480" y="150" width="330" height="349" rx="10" fill="#fff" stroke="#C9D5D8" stroke-width="1.5"/>
+<path d="M480 160 a10 10 0 0 1 10 -10 h310 a10 10 0 0 1 10 10 v30 h-330 z" fill="#0F6E74"/>
+<text x="494" y="176" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#fff">canopy_gateway</text>
+<rect x="488" y="194" width="34" height="15" rx="4" fill="#FBEBD0" stroke="#E8A33D" stroke-width="1"/>
+<text x="505" y="205.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">PK</text>
+<text x="530" y="206" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1B2A33">gateway_id</text>
+<text x="798" y="206" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="481" y="213" width="328" height="23" fill="#F4F7F8"/>
+<text x="530" y="229" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">version</text>
+<text x="798" y="229" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="530" y="252" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">site</text>
+<text x="798" y="252" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">jsonb</text>
+<rect x="481" y="259" width="328" height="23" fill="#F4F7F8"/>
+<text x="530" y="275" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">license</text>
+<text x="798" y="275" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">jsonb</text>
+<text x="530" y="298" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">config_hash</text>
+<text x="798" y="298" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="481" y="305" width="328" height="23" fill="#F4F7F8"/>
+<text x="530" y="321" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">first_seen_at</text>
+<text x="798" y="321" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<text x="530" y="344" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">last_seen_at</text>
+<text x="798" y="344" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<rect x="481" y="351" width="328" height="23" fill="#F4F7F8"/>
+<text x="530" y="367" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">config_changed_at</text>
+<text x="798" y="367" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<text x="530" y="390" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">desired_config</text>
+<text x="798" y="390" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">jsonb</text>
+<rect x="481" y="397" width="328" height="23" fill="#F4F7F8"/>
+<text x="530" y="413" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">desired_version</text>
+<text x="798" y="413" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<text x="530" y="436" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">desired_source</text>
+<text x="798" y="436" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="481" y="443" width="328" height="23" fill="#F4F7F8"/>
+<text x="530" y="459" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">applied_version</text>
+<text x="798" y="459" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<text x="530" y="482" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">data_api_url</text>
+<text x="798" y="482" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="483" y="537" width="330" height="165" rx="10" fill="#000" opacity="0.06"/>
+<rect x="480" y="533" width="330" height="165" rx="10" fill="#fff" stroke="#C9D5D8" stroke-width="1.5"/>
+<path d="M480 543 a10 10 0 0 1 10 -10 h310 a10 10 0 0 1 10 10 v30 h-330 z" fill="#0F6E74"/>
+<text x="494" y="559" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#fff">canopy_gateway_config_snapshot</text>
+<rect x="488" y="577" width="34" height="15" rx="4" fill="#FBEBD0" stroke="#E8A33D" stroke-width="1"/>
+<text x="505" y="588.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">PK</text>
+<text x="530" y="589" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1B2A33">id</text>
+<text x="798" y="589" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<rect x="481" y="596" width="328" height="23" fill="#F4F7F8"/>
+<rect x="488" y="600" width="34" height="15" rx="4" fill="#D7ECEC" stroke="#0F6E74" stroke-width="1"/>
+<text x="505" y="611.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">FK</text>
+<text x="530" y="612" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">gateway_id</text>
+<text x="798" y="612" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="530" y="635" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">config_hash</text>
+<text x="798" y="635" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="481" y="642" width="328" height="23" fill="#F4F7F8"/>
+<text x="530" y="658" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">config</text>
+<text x="798" y="658" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">jsonb</text>
+<text x="530" y="681" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">captured_at</text>
+<text x="798" y="681" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<rect x="923" y="154" width="330" height="418" rx="10" fill="#000" opacity="0.06"/>
+<rect x="920" y="150" width="330" height="418" rx="10" fill="#fff" stroke="#C9D5D8" stroke-width="1.5"/>
+<path d="M920 160 a10 10 0 0 1 10 -10 h310 a10 10 0 0 1 10 10 v30 h-330 z" fill="#0F6E74"/>
+<text x="934" y="176" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#fff">canopy_gateway_device</text>
+<rect x="928" y="194" width="34" height="15" rx="4" fill="#FBEBD0" stroke="#E8A33D" stroke-width="1"/>
+<text x="945" y="205.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">PK,FK</text>
+<text x="970" y="206" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1B2A33">gateway_id</text>
+<text x="1238" y="206" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="921" y="213" width="328" height="23" fill="#F4F7F8"/>
+<rect x="928" y="217" width="34" height="15" rx="4" fill="#FBEBD0" stroke="#E8A33D" stroke-width="1"/>
+<text x="945" y="228.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">PK</text>
+<text x="970" y="229" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1B2A33">device_id</text>
+<text x="1238" y="229" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="928" y="240" width="34" height="15" rx="4" fill="#EEF0F2" stroke="#7A8A94" stroke-width="1"/>
+<text x="945" y="251.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">ref</text>
+<text x="970" y="252" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">leaf_id</text>
+<text x="1238" y="252" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="921" y="259" width="328" height="23" fill="#F4F7F8"/>
+<text x="970" y="275" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">device_type</text>
+<text x="1238" y="275" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="970" y="298" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">pod</text>
+<text x="1238" y="298" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="921" y="305" width="328" height="23" fill="#F4F7F8"/>
+<text x="970" y="321" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">label</text>
+<text x="1238" y="321" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="970" y="344" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">enabled</text>
+<text x="1238" y="344" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">boolean</text>
+<rect x="921" y="351" width="328" height="23" fill="#F4F7F8"/>
+<text x="970" y="367" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">options</text>
+<text x="1238" y="367" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">jsonb</text>
+<text x="970" y="390" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">serial_number</text>
+<text x="1238" y="390" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="921" y="397" width="328" height="23" fill="#F4F7F8"/>
+<text x="970" y="413" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">asset_tag</text>
+<text x="1238" y="413" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="970" y="436" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">station</text>
+<text x="1238" y="436" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="921" y="443" width="328" height="23" fill="#F4F7F8"/>
+<text x="970" y="459" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">location</text>
+<text x="1238" y="459" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="970" y="482" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">installed_at</text>
+<text x="1238" y="482" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<rect x="921" y="489" width="328" height="23" fill="#F4F7F8"/>
+<text x="970" y="505" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">notes</text>
+<text x="1238" y="505" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="970" y="528" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">parser_status</text>
+<text x="1238" y="528" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="921" y="535" width="328" height="23" fill="#F4F7F8"/>
+<text x="970" y="551" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">updated_at</text>
+<text x="1238" y="551" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<rect x="923" y="606" width="330" height="372" rx="10" fill="#000" opacity="0.06"/>
+<rect x="920" y="602" width="330" height="372" rx="10" fill="#fff" stroke="#C9D5D8" stroke-width="1.5"/>
+<path d="M920 612 a10 10 0 0 1 10 -10 h310 a10 10 0 0 1 10 10 v30 h-330 z" fill="#B5525C"/>
+<text x="934" y="628" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#fff">canopy_gateway_alert</text>
+<rect x="928" y="646" width="34" height="15" rx="4" fill="#FBEBD0" stroke="#E8A33D" stroke-width="1"/>
+<text x="945" y="657.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">PK</text>
+<text x="970" y="658" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1B2A33">gateway_id</text>
+<text x="1238" y="658" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="921" y="665" width="328" height="23" fill="#F4F7F8"/>
+<rect x="928" y="669" width="34" height="15" rx="4" fill="#FBEBD0" stroke="#E8A33D" stroke-width="1"/>
+<text x="945" y="680.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">PK</text>
+<text x="970" y="681" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1B2A33">alert_id</text>
+<text x="1238" y="681" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<text x="970" y="704" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">alert_key</text>
+<text x="1238" y="704" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="921" y="711" width="328" height="23" fill="#F4F7F8"/>
+<text x="970" y="727" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">category</text>
+<text x="1238" y="727" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="970" y="750" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">severity</text>
+<text x="1238" y="750" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="921" y="757" width="328" height="23" fill="#F4F7F8"/>
+<text x="970" y="773" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">title</text>
+<text x="1238" y="773" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="970" y="796" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">detail</text>
+<text x="1238" y="796" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="921" y="803" width="328" height="23" fill="#F4F7F8"/>
+<text x="970" y="819" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">opened_at</text>
+<text x="1238" y="819" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<text x="970" y="842" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">last_seen_at</text>
+<text x="1238" y="842" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<rect x="921" y="849" width="328" height="23" fill="#F4F7F8"/>
+<text x="970" y="865" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">resolved_at</text>
+<text x="1238" y="865" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<text x="970" y="888" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">acknowledged_at</text>
+<text x="1238" y="888" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<rect x="921" y="895" width="328" height="23" fill="#F4F7F8"/>
+<text x="970" y="911" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">acknowledged_by</text>
+<text x="1238" y="911" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="970" y="934" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">version</text>
+<text x="1238" y="934" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">int</text>
+<rect x="921" y="941" width="328" height="23" fill="#F4F7F8"/>
+<text x="970" y="957" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">received_at</text>
+<text x="1238" y="957" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<rect x="1363" y="154" width="330" height="234" rx="10" fill="#000" opacity="0.06"/>
+<rect x="1360" y="150" width="330" height="234" rx="10" fill="#fff" stroke="#C9D5D8" stroke-width="1.5"/>
+<path d="M1360 160 a10 10 0 0 1 10 -10 h310 a10 10 0 0 1 10 10 v30 h-330 z" fill="#0F6E74"/>
+<text x="1374" y="176" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#fff">sync_leaf_node</text>
+<rect x="1368" y="194" width="34" height="15" rx="4" fill="#FBEBD0" stroke="#E8A33D" stroke-width="1"/>
+<text x="1385" y="205.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">PK</text>
+<text x="1410" y="206" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1B2A33">leaf_id</text>
+<text x="1678" y="206" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="1361" y="213" width="328" height="23" fill="#F4F7F8"/>
+<text x="1410" y="229" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">hospital_id</text>
+<text x="1678" y="229" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="1410" y="252" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">display_name</text>
+<text x="1678" y="252" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="1361" y="259" width="328" height="23" fill="#F4F7F8"/>
+<text x="1410" y="275" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">software_version</text>
+<text x="1678" y="275" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="1410" y="298" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">last_seen_at</text>
+<text x="1678" y="298" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">timestamptz</text>
+<rect x="1361" y="305" width="328" height="23" fill="#F4F7F8"/>
+<text x="1410" y="321" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">registered_at</text>
+<text x="1678" y="321" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">timestamptz</text>
+<text x="1410" y="344" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">metadata</text>
+<text x="1678" y="344" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">jsonb</text>
+<rect x="1361" y="351" width="328" height="23" fill="#F4F7F8"/>
+<text x="1410" y="367" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">canopy_display_name</text>
+<text x="1678" y="367" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="1363" y="422" width="330" height="211" rx="10" fill="#000" opacity="0.06"/>
+<rect x="1360" y="418" width="330" height="211" rx="10" fill="#fff" stroke="#C9D5D8" stroke-width="1.5"/>
+<path d="M1360 428 a10 10 0 0 1 10 -10 h310 a10 10 0 0 1 10 10 v30 h-330 z" fill="#0F6E74"/>
+<text x="1374" y="444" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#fff">canopy_leaf_assignment</text>
+<rect x="1368" y="462" width="34" height="15" rx="4" fill="#FBEBD0" stroke="#E8A33D" stroke-width="1"/>
+<text x="1385" y="473.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">PK,FK</text>
+<text x="1410" y="474" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1B2A33">leaf_id</text>
+<text x="1678" y="474" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="1361" y="481" width="328" height="23" fill="#F4F7F8"/>
+<rect x="1368" y="485" width="34" height="15" rx="4" fill="#D7ECEC" stroke="#0F6E74" stroke-width="1"/>
+<text x="1385" y="496.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">FK</text>
+<text x="1410" y="497" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">bed_location_id</text>
+<text x="1678" y="497" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<text x="1410" y="520" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">desired_config</text>
+<text x="1678" y="520" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">jsonb</text>
+<rect x="1361" y="527" width="328" height="23" fill="#F4F7F8"/>
+<text x="1410" y="543" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">desired_version</text>
+<text x="1678" y="543" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<text x="1410" y="566" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">applied_version</text>
+<text x="1678" y="566" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<rect x="1361" y="573" width="328" height="23" fill="#F4F7F8"/>
+<text x="1410" y="589" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">assigned_at</text>
+<text x="1678" y="589" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<text x="1410" y="612" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">updated_at</text>
+<text x="1678" y="612" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<rect x="1363" y="667" width="330" height="211" rx="10" fill="#000" opacity="0.06"/>
+<rect x="1360" y="663" width="330" height="211" rx="10" fill="#fff" stroke="#C9D5D8" stroke-width="1.5"/>
+<path d="M1360 673 a10 10 0 0 1 10 -10 h310 a10 10 0 0 1 10 10 v30 h-330 z" fill="#0F6E74"/>
+<text x="1374" y="689" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#fff">canopy_location</text>
+<rect x="1368" y="707" width="34" height="15" rx="4" fill="#FBEBD0" stroke="#E8A33D" stroke-width="1"/>
+<text x="1385" y="718.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">PK</text>
+<text x="1410" y="719" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1B2A33">id</text>
+<text x="1678" y="719" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<rect x="1361" y="726" width="328" height="23" fill="#F4F7F8"/>
+<rect x="1368" y="730" width="34" height="15" rx="4" fill="#D7ECEC" stroke="#0F6E74" stroke-width="1"/>
+<text x="1385" y="741.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">FK</text>
+<text x="1410" y="742" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">parent_id</text>
+<text x="1678" y="742" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<text x="1410" y="765" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">kind</text>
+<text x="1678" y="765" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="1361" y="772" width="328" height="23" fill="#F4F7F8"/>
+<text x="1410" y="788" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">code</text>
+<text x="1678" y="788" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="1410" y="811" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">name</text>
+<text x="1678" y="811" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="1361" y="818" width="328" height="23" fill="#F4F7F8"/>
+<text x="1410" y="834" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">is_active</text>
+<text x="1678" y="834" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">boolean</text>
+<text x="1410" y="857" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">sort_order</text>
+<text x="1678" y="857" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">int</text>
+<rect x="1803" y="154" width="330" height="165" rx="10" fill="#000" opacity="0.06"/>
+<rect x="1800" y="150" width="330" height="165" rx="10" fill="#fff" stroke="#C9D5D8" stroke-width="1.5"/>
+<path d="M1800 160 a10 10 0 0 1 10 -10 h310 a10 10 0 0 1 10 10 v30 h-330 z" fill="#3D5A80"/>
+<text x="1814" y="176" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#fff">leaf_device_source</text>
+<text x="2118" y="176" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#fff" opacity="0.85">singleton</text>
+<rect x="1808" y="194" width="34" height="15" rx="4" fill="#FBEBD0" stroke="#E8A33D" stroke-width="1"/>
+<text x="1825" y="205.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">PK</text>
+<text x="1850" y="206" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1B2A33">id</text>
+<text x="2118" y="206" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">int = 1</text>
+<rect x="1801" y="213" width="328" height="23" fill="#F4F7F8"/>
+<rect x="1808" y="217" width="34" height="15" rx="4" fill="#EEF0F2" stroke="#7A8A94" stroke-width="1"/>
+<text x="1825" y="228.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">ref</text>
+<text x="1850" y="229" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">gateway_id</text>
+<text x="2118" y="229" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="1850" y="252" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">data_api_url</text>
+<text x="2118" y="252" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="1801" y="259" width="328" height="23" fill="#F4F7F8"/>
+<text x="1850" y="275" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">configured_by</text>
+<text x="2118" y="275" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="1850" y="298" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">configured_at</text>
+<text x="2118" y="298" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<rect x="1803" y="353" width="330" height="188" rx="10" fill="#000" opacity="0.06"/>
+<rect x="1800" y="349" width="330" height="188" rx="10" fill="#fff" stroke="#C9D5D8" stroke-width="1.5"/>
+<path d="M1800 359 a10 10 0 0 1 10 -10 h310 a10 10 0 0 1 10 10 v30 h-330 z" fill="#3D5A80"/>
+<text x="1814" y="375" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#fff">cases</text>
+<text x="2118" y="375" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#fff" opacity="0.85">excerpt</text>
+<rect x="1808" y="393" width="34" height="15" rx="4" fill="#FBEBD0" stroke="#E8A33D" stroke-width="1"/>
+<text x="1825" y="404.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">PK</text>
+<text x="1850" y="405" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1B2A33">id</text>
+<text x="2118" y="405" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<rect x="1801" y="412" width="328" height="23" fill="#F4F7F8"/>
+<text x="1850" y="428" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">case_code</text>
+<text x="2118" y="428" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<text x="1850" y="451" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">hn</text>
+<text x="2118" y="451" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="1801" y="458" width="328" height="23" fill="#F4F7F8"/>
+<text x="1850" y="474" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">start_time</text>
+<text x="2118" y="474" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<text x="1850" y="497" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">device_capture_start_time</text>
+<text x="2118" y="497" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<rect x="1801" y="504" width="328" height="23" fill="#F4F7F8"/>
+<text x="1850" y="520" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">status</text>
+<text x="2118" y="520" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="1803" y="575" width="330" height="188" rx="10" fill="#000" opacity="0.06"/>
+<rect x="1800" y="571" width="330" height="188" rx="10" fill="#fff" stroke="#C9D5D8" stroke-width="1.5"/>
+<path d="M1800 581 a10 10 0 0 1 10 -10 h310 a10 10 0 0 1 10 10 v30 h-330 z" fill="#3D5A80"/>
+<text x="1814" y="597" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#fff">vital_minutes</text>
+<rect x="1808" y="615" width="34" height="15" rx="4" fill="#FBEBD0" stroke="#E8A33D" stroke-width="1"/>
+<text x="1825" y="626.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">PK</text>
+<text x="1850" y="627" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1B2A33">id</text>
+<text x="2118" y="627" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<rect x="1801" y="634" width="328" height="23" fill="#F4F7F8"/>
+<rect x="1808" y="638" width="34" height="15" rx="4" fill="#D7ECEC" stroke="#0F6E74" stroke-width="1"/>
+<text x="1825" y="649.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">FK</text>
+<text x="1850" y="650" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">case_id</text>
+<text x="2118" y="650" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<text x="1850" y="673" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">ivy_source</text>
+<text x="2118" y="673" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="1801" y="680" width="328" height="23" fill="#F4F7F8"/>
+<text x="1850" y="696" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">ts_minute</text>
+<text x="2118" y="696" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<text x="1850" y="719" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">payload</text>
+<text x="2118" y="719" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">JSON text</text>
+<rect x="1801" y="726" width="328" height="23" fill="#F4F7F8"/>
+<text x="1850" y="742" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">created_at</text>
+<text x="2118" y="742" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<rect x="1803" y="797" width="330" height="257" rx="10" fill="#000" opacity="0.06"/>
+<rect x="1800" y="793" width="330" height="257" rx="10" fill="#fff" stroke="#C9D5D8" stroke-width="1.5"/>
+<path d="M1800 803 a10 10 0 0 1 10 -10 h310 a10 10 0 0 1 10 10 v30 h-330 z" fill="#3D5A80"/>
+<text x="1814" y="819" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#fff">case_device_ingest_audit</text>
+<rect x="1808" y="837" width="34" height="15" rx="4" fill="#FBEBD0" stroke="#E8A33D" stroke-width="1"/>
+<text x="1825" y="848.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">PK</text>
+<text x="1850" y="849" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#1B2A33">id</text>
+<text x="2118" y="849" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<rect x="1801" y="856" width="328" height="23" fill="#F4F7F8"/>
+<rect x="1808" y="860" width="34" height="15" rx="4" fill="#D7ECEC" stroke="#0F6E74" stroke-width="1"/>
+<text x="1825" y="871.5" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#1B2A33">FK</text>
+<text x="1850" y="872" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">case_id</text>
+<text x="2118" y="872" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<text x="1850" y="895" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">source_endpoint</text>
+<text x="2118" y="895" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">text</text>
+<rect x="1801" y="902" width="328" height="23" fill="#F4F7F8"/>
+<text x="1850" y="918" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">fetch_mode</text>
+<text x="2118" y="918" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">minute | bulk</text>
+<text x="1850" y="941" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">minute_ts</text>
+<text x="2118" y="941" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<rect x="1801" y="948" width="328" height="23" fill="#F4F7F8"/>
+<text x="1850" y="964" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">raw_row_count</text>
+<text x="2118" y="964" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<text x="1850" y="987" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">written_row_count</text>
+<text x="2118" y="987" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<rect x="1801" y="994" width="328" height="23" fill="#F4F7F8"/>
+<text x="1850" y="1010" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">status</text>
+<text x="2118" y="1010" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">ok|empty|failed</text>
+<text x="1850" y="1033" font-family="Helvetica, Arial, sans-serif" font-size="14"  fill="#1B2A33">created_at</text>
+<text x="2118" y="1033" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" fill="#7A8A94">bigint</text>
+<text x="40" y="1106" font-family="Helvetica, Arial, sans-serif" font-size="15" fill="#4A5A66">Cross-system links (dashed): Haber's gateway row and canopy_gateway share gateway_id (Haber relays each check-in to Canopy); canopy_gateway_device.leaf_id names the Leaf the device is assigned to.</text>
+<text x="40" y="1132" font-family="Helvetica, Arial, sans-serif" font-size="15" fill="#4A5A66">On the Leaf, leaf_device_source.gateway_id and data_api_url record the gateway chosen in the Set up gateway wizard; the device writer then fills vital_minutes for each active case.</text>
+<g font-family="Helvetica, Arial, sans-serif" font-size="14" fill="#4A5A66">
+    <rect x="40" y="1160" width="34" height="15" rx="4" fill="#FBEBD0" stroke="#E8A33D"/><text x="57" y="1171" text-anchor="middle" font-size="10" font-weight="700" fill="#1B2A33">PK</text><text x="82" y="1172">primary key</text>
+    <rect x="190" y="1160" width="34" height="15" rx="4" fill="#D7ECEC" stroke="#0F6E74"/><text x="207" y="1171" text-anchor="middle" font-size="10" font-weight="700" fill="#1B2A33">FK</text><text x="232" y="1172">foreign key (enforced)</text>
+    <rect x="410" y="1160" width="34" height="15" rx="4" fill="#EEF0F2" stroke="#7A8A94"/><text x="427" y="1171" text-anchor="middle" font-size="10" font-weight="700" fill="#1B2A33">ref</text><text x="452" y="1172">logical reference (not enforced)</text>
+    <line x1="680" y1="1167" x2="740" y2="1167" stroke="#3F5E66" stroke-width="2"/><text x="750" y="1172">enforced relation</text>
+    <line x1="900" y1="1167" x2="960" y2="1167" stroke="#7A8A94" stroke-width="2" stroke-dasharray="7 5"/><text x="970" y="1172">logical / cross-system relation (crow's foot = many)</text>
+  </g></svg>

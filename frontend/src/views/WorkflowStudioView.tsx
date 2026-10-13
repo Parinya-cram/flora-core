@@ -8,6 +8,7 @@ import {
   exportWorkflow,
   getWorkflowOptions,
   importWorkflow,
+  listBillingTemplates,
   listWorkflows,
   publishWorkflow,
   setWorkflowWards,
@@ -20,7 +21,9 @@ import {
   type WorkflowPhase,
   type WorkflowReportMode,
   type WorkflowRow,
+  type BillingTemplateRow,
 } from "../api/workflowApi";
+import BillingTemplateStudio from "../components/workflow/BillingTemplateStudio";
 
 /** Canopy → Workflow Studio: what a case records and prints (docs/workflow-studio.md). */
 
@@ -56,6 +59,7 @@ function normalizeDefinition(definition: WorkflowDefinition): WorkflowDefinition
     anesthesia_record: { ...base.anesthesia_record, ...(definition.anesthesia_record || {}) },
     forms: Array.isArray(definition.forms) ? definition.forms : [],
     packet: Array.isArray(definition.packet) ? definition.packet : [],
+    billing: { template_id: definition.billing?.template_id ?? null },
   };
 }
 
@@ -102,16 +106,20 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
   const [editing, setEditing] = useState<Editing | null>(null);
   const [importResult, setImportResult] = useState<WorkflowImportResult | null>(null);
   const [addFormId, setAddFormId] = useState("");
+  const [mode, setMode] = useState<"workflows" | "templates">("workflows");
+  const [templates, setTemplates] = useState<BillingTemplateRow[]>([]);
   const fileInput = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async (selectId?: string) => {
     setLoading(true);
     setError("");
     try {
-      const [nextRows, nextOptions] = await Promise.all([
+      const [nextRows, nextOptions, nextTemplates] = await Promise.all([
         listWorkflows(),
         getWorkflowOptions().catch(() => ({ sections: [], forms: [], wards: [] }) as WorkflowOptions),
+        listBillingTemplates().catch(() => [] as BillingTemplateRow[]),
       ]);
+      setTemplates(nextTemplates);
       setRows(nextRows);
       setOptions({ sections: nextOptions.sections || [], forms: nextOptions.forms || [], wards: nextOptions.wards || [] });
       if (selectId) {
@@ -302,8 +310,14 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
         <p className="mt-1 text-sm text-[var(--app-muted)]">Choose which record sections and Form Studio forms a case uses, the order of its case packet, and which wards offer it.</p>
       </div>
       <div className="flex flex-wrap gap-2">
-        <button type="button" className={secondary} disabled={loading} onClick={() => void load(editing?.originalId || undefined)}>{loading ? "Refreshing…" : "Refresh"}</button>
-        {isAdmin ? <>
+        <div className="inline-flex overflow-hidden rounded-xl border border-[var(--app-border)]" role="tablist" aria-label="Workflow Studio">
+          {([["workflows", "Workflows"], ["templates", "Itemize templates"]] as const).map(([key, label]) => (
+            <button key={key} type="button" role="tab" aria-selected={mode === key} onClick={() => { setMode(key); if (key === "workflows") void load(editing?.originalId || undefined); }}
+              className={`px-3 py-2 text-sm font-semibold ${mode === key ? "bg-[var(--app-accent)] text-[var(--app-accent-contrast)]" : "bg-[var(--app-control-bg)]"}`}>{label}</button>
+          ))}
+        </div>
+        {mode === "workflows" ? <button type="button" className={secondary} disabled={loading} onClick={() => void load(editing?.originalId || undefined)}>{loading ? "Refreshing…" : "Refresh"}</button> : null}
+        {isAdmin && mode === "workflows" ? <>
           <button type="button" className={secondary} disabled={busy} onClick={() => fileInput.current?.click()}>Import file</button>
           <input ref={fileInput} type="file" accept=".json,application/json" className="hidden" onChange={event => void onImportFile(event.target.files?.[0])} />
           <button type="button" className={primary} disabled={busy} onClick={startNew}>+ New workflow</button>
@@ -318,7 +332,7 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
       {importResult.warnings.length ? <ul className="mt-1 list-disc pl-5 text-amber-600 dark:text-amber-300">{importResult.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul> : null}
     </div> : null}
 
-    <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
+    {mode === "templates" ? <BillingTemplateStudio isAdmin={isAdmin} /> : <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
       <section className={`${card} h-fit space-y-2`}>
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-bold">Workflows <span className="text-[var(--app-muted)]">{visibleRows.length}</span></h2>
@@ -451,11 +465,26 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
           {editing.wards.some(pick => !options.wards.some(ward => ward.key === pick.unitKey)) ? <p className="text-xs text-[var(--app-muted)]">Also assigned: {editing.wards.filter(pick => !options.wards.some(ward => ward.key === pick.unitKey)).map(pick => pick.unitKey).join(", ")}</p> : null}
         </div>
 
+        <div className={`${card} space-y-3`}>
+          <div><h3 className="font-bold">Billing</h3><p className="text-xs text-[var(--app-muted)]">Itemize template shown on the Leaf Billing screen (groups, order and preselected items). One template can serve many workflows; manage them under Itemize templates.</p></div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select className={`${inputClass} max-w-md`} disabled={readOnly} value={def.billing?.template_id || ""}
+              onChange={event => patchDef(current => ({ ...current, billing: { template_id: event.target.value || null } }))} aria-label="Itemize template">
+              <option value="">No template (the whole billing master)</option>
+              {templates.filter(t => t.status !== "archived" || t.id === def.billing?.template_id).map(t =>
+                <option key={t.id} value={t.id}>{t.name || t.id} · {t.itemCount} items{t.status !== "published" ? ` (${t.status})` : ""}</option>)}
+            </select>
+            <button type="button" className={secondary} onClick={() => setMode("templates")}>Manage templates</button>
+          </div>
+          {def.billing?.template_id && templates.find(t => t.id === def.billing?.template_id)?.status !== "published"
+            ? <p className="text-xs text-amber-600 dark:text-amber-300">Publish this template before publishing the workflow.</p> : null}
+        </div>
+
         <details className={card}>
           <summary className="cursor-pointer text-sm font-bold">Workflow JSON</summary>
           <pre className="mt-3 max-h-[480px] overflow-auto whitespace-pre-wrap break-words rounded-xl bg-[var(--app-control-bg)] p-3 font-mono text-xs">{JSON.stringify(def, null, 2)}</pre>
         </details>
       </section>}
-    </div>
+    </div>}
   </div>;
 }

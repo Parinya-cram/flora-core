@@ -11,6 +11,7 @@ import CanopyHomeView from "../views/CanopyHomeView";
 import CanopyInfrastructureView from "../views/CanopyInfrastructureView";
 import CanopyTopologyView from "../views/CanopyTopologyView";
 import CanopyGatewayAlertsView from "../views/CanopyGatewayAlertsView";
+import CanopyDeviceManagementView from "../views/CanopyDeviceManagementView";
 import IdleCaseLanding from "../views/IdleCaseLanding";
 import AccountView from "../views/AccountView";
 import CanopyReportsView from "../views/CanopyReportsView";
@@ -27,6 +28,8 @@ const WardView = lazy(() => import("../views/WardView"));
 const DiagnosisView = lazy(() => import("../views/DiagnosisView"));
 const ReportView = lazy(() => import("../views/ReportView"));
 const PatientView = lazy(() => import("../views/PatientView"));
+const BillingView = lazy(() => import("../views/BillingView"));
+const CanopyBillingView = lazy(() => import("../views/CanopyBillingView"));
 
 interface Props {
   caseStatus: CaseStatus;
@@ -48,11 +51,13 @@ interface Props {
     | "infrastructure"
     | "topology"
     | "gateway-alerts"
+    | "devices"
     | "formdev"
     | "workflows"
     | "report-studio"
     | "ai-studio"
-    | "history";
+    | "history"
+    | "billing";
   sessionUser: AuthUser | null;
   onCaseDischargeTimeUpdated?: (caseId: number, dischargeTime: number) => void;
   onCaseArchived?: (caseId: number) => void;
@@ -150,6 +155,10 @@ export default function MainArea({
         <ManageView caseStatus={caseStatus} sessionUser={sessionUser} />
       ) : activeView === "account" ? (
         <AccountView sessionUser={sessionUser} />
+      ) : activeView === "billing" ? (
+        surface.clinicalWriteEnabled
+          ? <BillingView key={caseScopedKey} caseStatus={caseStatus} />
+          : <CanopyBillingView sessionUser={sessionUser} />
       ) : activeView === "patient" ? (
         <PatientView key={caseScopedKey} caseStatus={caseStatus} />
       ) : activeView === "report" ? (
@@ -169,6 +178,8 @@ export default function MainArea({
         <CanopyFleetView />
       ) : activeView === "topology" ? (
         <CanopyTopologyView sessionUser={sessionUser} />
+      ) : activeView === "devices" ? (
+        <CanopyDeviceManagementView sessionUser={sessionUser} />
       ) : activeView === "gateway-alerts" ? (
         <CanopyGatewayAlertsView />
       ) : activeView === "infrastructure" ? (

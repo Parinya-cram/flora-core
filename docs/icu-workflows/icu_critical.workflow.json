@@ -1,0 +1,2082 @@
+{
+  "format": "flora-workflow/1",
+  "id": "icu_critical",
+  "name": "Critical Care ICU",
+  "description": "Medical / surgical critical care: shock, sepsis and respiratory failure – daily SOFA, sepsis hour-1 bundle, lung-protective ventilation with VAP bundle, daily rounds, devices, discharge.",
+  "anesthesia_record": {
+    "enabled": true,
+    "sections": [
+      "caseInfo",
+      "outcome"
+    ],
+    "optional_sections": [
+      "line",
+      "comorbid",
+      "pain"
+    ]
+  },
+  "forms": [
+    {
+      "form_id": "icu_admission",
+      "version": 1,
+      "title": "ICU Admission Assessment",
+      "phase": "preop",
+      "required": true
+    },
+    {
+      "form_id": "critical_icu_sofa",
+      "version": 1,
+      "title": "SOFA Score – Daily",
+      "phase": "intraop",
+      "required": true
+    },
+    {
+      "form_id": "critical_icu_sepsis_bundle",
+      "version": 1,
+      "title": "Sepsis Hour-1 Bundle",
+      "phase": "preop",
+      "required": false
+    },
+    {
+      "form_id": "critical_icu_ventilator",
+      "version": 1,
+      "title": "Ventilator & VAP Bundle",
+      "phase": "intraop",
+      "required": false
+    },
+    {
+      "form_id": "icu_daily_round",
+      "version": 1,
+      "title": "ICU Daily Round (FAST HUGS BID)",
+      "phase": "intraop",
+      "required": true
+    },
+    {
+      "form_id": "icu_lines_devices",
+      "version": 1,
+      "title": "ICU Lines & Devices",
+      "phase": "intraop",
+      "required": false
+    },
+    {
+      "form_id": "icu_discharge",
+      "version": 1,
+      "title": "ICU Discharge / Transfer Summary",
+      "phase": "postop",
+      "required": true
+    }
+  ],
+  "packet": [
+    {
+      "kind": "anesthesia_report",
+      "mode": "standard"
+    },
+    {
+      "kind": "form",
+      "form_id": "icu_admission"
+    },
+    {
+      "kind": "form",
+      "form_id": "critical_icu_sofa"
+    },
+    {
+      "kind": "form",
+      "form_id": "critical_icu_sepsis_bundle"
+    },
+    {
+      "kind": "form",
+      "form_id": "critical_icu_ventilator"
+    },
+    {
+      "kind": "form",
+      "form_id": "icu_daily_round"
+    },
+    {
+      "kind": "form",
+      "form_id": "icu_lines_devices"
+    },
+    {
+      "kind": "form",
+      "form_id": "icu_discharge"
+    }
+  ],
+  "bundled_forms": {
+    "icu_admission": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "icu_admission",
+        "schema_version": 1,
+        "title": "ICU Admission Assessment",
+        "description": "แบบประเมินแรกรับผู้ป่วย ICU – used by every ICU workflow",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "admission",
+            "title": "Admission · ข้อมูลการรับเข้า",
+            "fields": [
+              {
+                "id": "admit_at",
+                "type": "datetime",
+                "label": "Admitted to ICU",
+                "required": true,
+                "indexed": true
+              },
+              {
+                "id": "icu_type",
+                "type": "radio",
+                "label": "ICU",
+                "options": [
+                  {
+                    "value": "neuro",
+                    "label": "Neuro ICU"
+                  },
+                  {
+                    "value": "critical",
+                    "label": "Medical / Surgical critical care"
+                  },
+                  {
+                    "value": "other",
+                    "label": "Other"
+                  }
+                ],
+                "required": true,
+                "indexed": true,
+                "option_columns": 3
+              },
+              {
+                "id": "admit_source",
+                "type": "radio",
+                "label": "Admitted from",
+                "options": [
+                  {
+                    "value": "er",
+                    "label": "Emergency"
+                  },
+                  {
+                    "value": "or",
+                    "label": "Operating room"
+                  },
+                  {
+                    "value": "ward",
+                    "label": "Ward"
+                  },
+                  {
+                    "value": "transfer",
+                    "label": "Other hospital"
+                  },
+                  {
+                    "value": "other",
+                    "label": "Other"
+                  }
+                ],
+                "option_columns": 5,
+                "indexed": true
+              },
+              {
+                "id": "admit_type",
+                "type": "radio",
+                "label": "Admission type",
+                "options": [
+                  {
+                    "value": "emergency",
+                    "label": "Emergency"
+                  },
+                  {
+                    "value": "elective",
+                    "label": "Elective / planned post-op"
+                  },
+                  {
+                    "value": "readmit",
+                    "label": "ICU readmission < 48 h"
+                  }
+                ],
+                "option_columns": 3
+              },
+              {
+                "id": "admitting_diagnosis",
+                "type": "textarea",
+                "label": "Admitting diagnosis",
+                "max_length": 1000,
+                "required": true
+              },
+              {
+                "id": "icu_reason",
+                "type": "multiselect",
+                "label": "Main reason for ICU",
+                "options": [
+                  {
+                    "value": "resp_failure",
+                    "label": "Respiratory failure"
+                  },
+                  {
+                    "value": "shock",
+                    "label": "Shock"
+                  },
+                  {
+                    "value": "sepsis",
+                    "label": "Sepsis"
+                  },
+                  {
+                    "value": "neuro",
+                    "label": "Neurological"
+                  },
+                  {
+                    "value": "post_op",
+                    "label": "Post-operative monitoring"
+                  },
+                  {
+                    "value": "cardiac",
+                    "label": "Cardiac"
+                  },
+                  {
+                    "value": "metabolic",
+                    "label": "Metabolic / renal"
+                  },
+                  {
+                    "value": "trauma",
+                    "label": "Trauma"
+                  },
+                  {
+                    "value": "other",
+                    "label": "Other"
+                  }
+                ],
+                "option_columns": 3
+              },
+              {
+                "id": "attending",
+                "type": "text",
+                "label": "Attending intensivist",
+                "max_length": 200
+              },
+              {
+                "id": "code_status",
+                "type": "radio",
+                "label": "Code status",
+                "options": [
+                  {
+                    "value": "full",
+                    "label": "Full code"
+                  },
+                  {
+                    "value": "dnr",
+                    "label": "DNR"
+                  },
+                  {
+                    "value": "limited",
+                    "label": "Limited treatment"
+                  },
+                  {
+                    "value": "palliative",
+                    "label": "Palliative"
+                  }
+                ],
+                "option_columns": 4,
+                "indexed": true
+              }
+            ]
+          },
+          {
+            "id": "background",
+            "title": "History · ประวัติ",
+            "fields": [
+              {
+                "id": "sex",
+                "type": "radio",
+                "label": "Sex",
+                "options": [
+                  {
+                    "value": "male",
+                    "label": "Male"
+                  },
+                  {
+                    "value": "female",
+                    "label": "Female"
+                  }
+                ],
+                "option_columns": 2
+              },
+              {
+                "id": "weight_kg",
+                "type": "decimal",
+                "label": "Weight",
+                "unit": "kg",
+                "min": 1,
+                "max": 400,
+                "decimals": 1
+              },
+              {
+                "id": "height_cm",
+                "type": "number",
+                "label": "Height",
+                "unit": "cm",
+                "min": 40,
+                "max": 250
+              },
+              {
+                "id": "bmi",
+                "type": "calculated",
+                "label": "BMI",
+                "formula": "weight_kg / ((height_cm / 100) ^ 2)",
+                "decimals": 1,
+                "unit": "kg/m²"
+              },
+              {
+                "id": "pbw_kg",
+                "type": "calculated",
+                "label": "Predicted body weight",
+                "formula": "IF(sex='male', 50, IF(sex='female', 45.5, NULL)) + 0.91 * (height_cm - 152.4)",
+                "decimals": 1,
+                "description": "For lung-protective ventilation (6–8 mL/kg PBW)",
+                "unit": "kg"
+              },
+              {
+                "id": "comorbid",
+                "type": "multiselect",
+                "label": "Comorbidities",
+                "options": [
+                  {
+                    "value": "htn",
+                    "label": "Hypertension"
+                  },
+                  {
+                    "value": "dm",
+                    "label": "Diabetes"
+                  },
+                  {
+                    "value": "cad",
+                    "label": "Coronary disease"
+                  },
+                  {
+                    "value": "chf",
+                    "label": "Heart failure"
+                  },
+                  {
+                    "value": "ckd",
+                    "label": "CKD"
+                  },
+                  {
+                    "value": "esrd",
+                    "label": "ESRD on dialysis"
+                  },
+                  {
+                    "value": "copd",
+                    "label": "COPD / asthma"
+                  },
+                  {
+                    "value": "cirrhosis",
+                    "label": "Cirrhosis"
+                  },
+                  {
+                    "value": "stroke",
+                    "label": "Previous stroke"
+                  },
+                  {
+                    "value": "malignancy",
+                    "label": "Malignancy"
+                  },
+                  {
+                    "value": "immuno",
+                    "label": "Immunosuppressed"
+                  }
+                ],
+                "option_columns": 3
+              },
+              {
+                "id": "allergies",
+                "type": "textarea",
+                "label": "Allergies",
+                "max_length": 1000
+              },
+              {
+                "id": "home_meds",
+                "type": "textarea",
+                "label": "Home medications (anticoagulants / antiplatelets first)",
+                "max_length": 2000
+              }
+            ]
+          },
+          {
+            "id": "initial",
+            "title": "Initial status · สภาวะแรกรับ",
+            "fields": [
+              {
+                "id": "airway",
+                "type": "radio",
+                "label": "Airway",
+                "options": [
+                  {
+                    "value": "natural",
+                    "label": "Natural"
+                  },
+                  {
+                    "value": "ett",
+                    "label": "Endotracheal tube"
+                  },
+                  {
+                    "value": "trach",
+                    "label": "Tracheostomy"
+                  },
+                  {
+                    "value": "niv",
+                    "label": "NIV / HFNC"
+                  }
+                ],
+                "option_columns": 4
+              },
+              {
+                "id": "gcs_admit",
+                "type": "integer",
+                "label": "GCS on admission",
+                "min": 3,
+                "max": 15
+              },
+              {
+                "id": "map_admit",
+                "type": "number",
+                "label": "MAP",
+                "unit": "mmHg",
+                "min": 0,
+                "max": 250
+              },
+              {
+                "id": "vasopressor_admit",
+                "type": "checkbox",
+                "label": "On vasopressor"
+              },
+              {
+                "id": "lactate_admit",
+                "type": "decimal",
+                "label": "Lactate",
+                "unit": "mmol/L",
+                "min": 0,
+                "max": 30,
+                "decimals": 1
+              },
+              {
+                "id": "apache_ii",
+                "type": "integer",
+                "label": "APACHE II (first 24 h)",
+                "indexed": true,
+                "min": 0,
+                "max": 71
+              },
+              {
+                "id": "sofa_admit",
+                "type": "integer",
+                "label": "SOFA on admission",
+                "indexed": true,
+                "min": 0,
+                "max": 24
+              }
+            ],
+            "layout": {
+              "type": "grid",
+              "columns": 2
+            }
+          },
+          {
+            "id": "goals",
+            "title": "Goals of care · เป้าหมายการรักษา",
+            "fields": [
+              {
+                "id": "family_informed",
+                "type": "checkbox",
+                "label": "Family informed of ICU admission"
+              },
+              {
+                "id": "goals_of_care",
+                "type": "textarea",
+                "label": "Goals of care / family meeting notes",
+                "max_length": 2000
+              },
+              {
+                "id": "assessed_by",
+                "type": "text",
+                "label": "Assessed by",
+                "max_length": 200,
+                "required": true
+              },
+              {
+                "id": "assessor_sign",
+                "type": "signature",
+                "label": "Signature"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "critical_icu_sofa": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "critical_icu_sofa",
+        "schema_version": 1,
+        "title": "SOFA Score – Daily",
+        "description": "คะแนน SOFA รายวัน คำนวณจากค่าแลบ",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "sofa",
+            "title": "Daily SOFA · คะแนน SOFA",
+            "fields": [
+              {
+                "id": "days",
+                "type": "repeat",
+                "label": "Day",
+                "view": "cards",
+                "min_items": 1,
+                "fields": [
+                  {
+                    "id": "sofa_date",
+                    "type": "date",
+                    "label": "Date",
+                    "required": true
+                  },
+                  {
+                    "id": "pao2",
+                    "type": "number",
+                    "label": "PaO₂",
+                    "unit": "mmHg",
+                    "min": 20,
+                    "max": 700
+                  },
+                  {
+                    "id": "fio2",
+                    "type": "integer",
+                    "label": "FiO₂",
+                    "unit": "%",
+                    "min": 21,
+                    "max": 100
+                  },
+                  {
+                    "id": "resp_support",
+                    "type": "checkbox",
+                    "label": "Mechanical respiratory support"
+                  },
+                  {
+                    "id": "pf",
+                    "type": "calculated",
+                    "label": "P/F ratio",
+                    "formula": "pao2 / (fio2 / 100)",
+                    "decimals": 0
+                  },
+                  {
+                    "id": "s_resp",
+                    "type": "calculated",
+                    "label": "Respiration",
+                    "formula": "IF(pf < 100 AND resp_support, 4, IF(pf < 200 AND resp_support, 3, IF(pf < 300, 2, IF(pf < 400, 1, IF(pf >= 400, 0, NULL)))))",
+                    "decimals": 0
+                  },
+                  {
+                    "id": "platelets",
+                    "type": "integer",
+                    "label": "Platelets",
+                    "unit": "×10³/µL",
+                    "min": 0,
+                    "max": 2000
+                  },
+                  {
+                    "id": "s_coag",
+                    "type": "calculated",
+                    "label": "Coagulation",
+                    "formula": "IF(platelets < 20, 4, IF(platelets < 50, 3, IF(platelets < 100, 2, IF(platelets < 150, 1, IF(platelets >= 150, 0, NULL)))))",
+                    "decimals": 0
+                  },
+                  {
+                    "id": "bilirubin",
+                    "type": "decimal",
+                    "label": "Bilirubin",
+                    "unit": "mg/dL",
+                    "min": 0,
+                    "max": 60,
+                    "decimals": 1
+                  },
+                  {
+                    "id": "s_liver",
+                    "type": "calculated",
+                    "label": "Liver",
+                    "formula": "IF(bilirubin >= 12, 4, IF(bilirubin >= 6, 3, IF(bilirubin >= 2, 2, IF(bilirubin >= 1.2, 1, IF(bilirubin >= 0, 0, NULL)))))",
+                    "decimals": 0
+                  },
+                  {
+                    "id": "cv",
+                    "type": "select",
+                    "label": "Cardiovascular",
+                    "options": [
+                      {
+                        "value": "0",
+                        "label": "0 – MAP ≥ 70"
+                      },
+                      {
+                        "value": "1",
+                        "label": "1 – MAP < 70"
+                      },
+                      {
+                        "value": "2",
+                        "label": "2 – Dopamine ≤ 5 or dobutamine"
+                      },
+                      {
+                        "value": "3",
+                        "label": "3 – Dopamine > 5 or NE / Epi ≤ 0.1"
+                      },
+                      {
+                        "value": "4",
+                        "label": "4 – Dopamine > 15 or NE / Epi > 0.1"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "s_cv",
+                    "type": "calculated",
+                    "label": "Cardiovascular score",
+                    "formula": "IF(cv='0', 0, IF(cv='1', 1, IF(cv='2', 2, IF(cv='3', 3, IF(cv='4', 4, NULL)))))",
+                    "decimals": 0
+                  },
+                  {
+                    "id": "gcs",
+                    "type": "integer",
+                    "label": "GCS",
+                    "min": 3,
+                    "max": 15
+                  },
+                  {
+                    "id": "s_cns",
+                    "type": "calculated",
+                    "label": "CNS",
+                    "formula": "IF(gcs < 6, 4, IF(gcs < 10, 3, IF(gcs < 13, 2, IF(gcs < 15, 1, IF(gcs = 15, 0, NULL)))))",
+                    "decimals": 0
+                  },
+                  {
+                    "id": "creatinine",
+                    "type": "decimal",
+                    "label": "Creatinine",
+                    "unit": "mg/dL",
+                    "min": 0,
+                    "max": 30,
+                    "decimals": 1
+                  },
+                  {
+                    "id": "urine_24h",
+                    "type": "integer",
+                    "label": "Urine output 24 h",
+                    "unit": "mL",
+                    "min": 0,
+                    "max": 20000
+                  },
+                  {
+                    "id": "s_renal",
+                    "type": "calculated",
+                    "label": "Renal",
+                    "formula": "MAX(IF(creatinine >= 5, 4, IF(creatinine >= 3.5, 3, IF(creatinine >= 2, 2, IF(creatinine >= 1.2, 1, 0)))), IF(urine_24h < 200, 4, IF(urine_24h < 500, 3, 0)))",
+                    "decimals": 0
+                  },
+                  {
+                    "id": "sofa_total",
+                    "type": "calculated",
+                    "label": "SOFA total",
+                    "formula": "s_resp + s_coag + s_liver + s_cv + s_cns + s_renal",
+                    "decimals": 0
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "critical_icu_sepsis_bundle": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "critical_icu_sepsis_bundle",
+        "schema_version": 1,
+        "title": "Sepsis Hour-1 Bundle",
+        "description": "Surviving Sepsis Campaign hour-1 bundle",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "recognition",
+            "title": "Recognition · การคัดกรอง",
+            "fields": [
+              {
+                "id": "time_zero",
+                "type": "datetime",
+                "label": "Time zero (sepsis recognised)",
+                "required": true,
+                "indexed": true
+              },
+              {
+                "id": "suspected_source",
+                "type": "text",
+                "label": "Suspected source",
+                "max_length": 200
+              },
+              {
+                "id": "qsofa_rr",
+                "type": "checkbox",
+                "label": "qSOFA – RR ≥ 22"
+              },
+              {
+                "id": "qsofa_mental",
+                "type": "checkbox",
+                "label": "qSOFA – altered mentation"
+              },
+              {
+                "id": "qsofa_sbp",
+                "type": "checkbox",
+                "label": "qSOFA – SBP ≤ 100"
+              },
+              {
+                "id": "qsofa",
+                "type": "calculated",
+                "label": "qSOFA",
+                "formula": "IF(qsofa_rr, 1, 0) + IF(qsofa_mental, 1, 0) + IF(qsofa_sbp, 1, 0)",
+                "decimals": 0
+              },
+              {
+                "id": "shock",
+                "type": "radio",
+                "label": "Septic shock (vasopressor for MAP ≥ 65 and lactate > 2)",
+                "options": [
+                  {
+                    "value": "yes",
+                    "label": "Yes"
+                  },
+                  {
+                    "value": "no",
+                    "label": "No"
+                  }
+                ],
+                "option_columns": 2,
+                "indexed": true
+              }
+            ]
+          },
+          {
+            "id": "bundle",
+            "title": "Hour-1 bundle · ภายใน 1 ชั่วโมง",
+            "fields": [
+              {
+                "id": "lactate_1",
+                "type": "decimal",
+                "label": "Lactate",
+                "unit": "mmol/L",
+                "min": 0,
+                "max": 30,
+                "decimals": 1
+              },
+              {
+                "id": "lactate_1_at",
+                "type": "datetime",
+                "label": "Lactate measured"
+              },
+              {
+                "id": "lactate_2",
+                "type": "decimal",
+                "label": "Repeat lactate (if initial > 2)",
+                "visibility": {
+                  "when": {
+                    "field": "lactate_1",
+                    "operator": "gt",
+                    "value": 2
+                  }
+                },
+                "unit": "mmol/L",
+                "min": 0,
+                "max": 30,
+                "decimals": 1
+              },
+              {
+                "id": "cultures_before_abx",
+                "type": "checkbox",
+                "label": "Blood cultures taken before antibiotics"
+              },
+              {
+                "id": "abx_at",
+                "type": "datetime",
+                "label": "Broad-spectrum antibiotics given"
+              },
+              {
+                "id": "abx_given",
+                "type": "textarea",
+                "label": "Antibiotics",
+                "max_length": 500
+              },
+              {
+                "id": "weight_kg",
+                "type": "decimal",
+                "label": "Weight",
+                "unit": "kg",
+                "min": 1,
+                "max": 400,
+                "decimals": 1
+              },
+              {
+                "id": "fluid_target_ml",
+                "type": "calculated",
+                "label": "Crystalloid 30 mL/kg target",
+                "formula": "weight_kg * 30",
+                "decimals": 0,
+                "unit": "mL"
+              },
+              {
+                "id": "fluid_given_ml",
+                "type": "integer",
+                "label": "Crystalloid given (first 3 h)",
+                "unit": "mL",
+                "min": 0,
+                "max": 20000
+              },
+              {
+                "id": "vaso_at",
+                "type": "datetime",
+                "label": "Vasopressor started"
+              },
+              {
+                "id": "map_target",
+                "type": "integer",
+                "label": "MAP target",
+                "unit": "mmHg",
+                "min": 55,
+                "max": 90
+              },
+              {
+                "id": "source_control",
+                "type": "checkbox",
+                "label": "Source control planned / done"
+              }
+            ]
+          },
+          {
+            "id": "review",
+            "title": "Reassessment · ประเมินซ้ำ",
+            "fields": [
+              {
+                "id": "reassessment",
+                "type": "textarea",
+                "label": "Volume status / perfusion reassessment",
+                "max_length": 2000
+              },
+              {
+                "id": "by",
+                "type": "text",
+                "label": "Completed by",
+                "max_length": 200,
+                "required": true
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "critical_icu_ventilator": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "critical_icu_ventilator",
+        "schema_version": 1,
+        "title": "Ventilator & VAP Bundle",
+        "description": "การตั้งเครื่องช่วยหายใจ lung-protective และ VAP bundle",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "airway",
+            "title": "Airway · ทางเดินหายใจ",
+            "fields": [
+              {
+                "id": "intubated_at",
+                "type": "datetime",
+                "label": "Intubated",
+                "indexed": true
+              },
+              {
+                "id": "ett_size",
+                "type": "decimal",
+                "label": "ETT size",
+                "unit": "mm",
+                "min": 2,
+                "max": 10,
+                "decimals": 1
+              },
+              {
+                "id": "ett_mark",
+                "type": "integer",
+                "label": "ETT mark at lip",
+                "unit": "cm",
+                "min": 5,
+                "max": 35
+              },
+              {
+                "id": "sex",
+                "type": "radio",
+                "label": "Sex",
+                "options": [
+                  {
+                    "value": "male",
+                    "label": "Male"
+                  },
+                  {
+                    "value": "female",
+                    "label": "Female"
+                  }
+                ],
+                "option_columns": 2
+              },
+              {
+                "id": "height_cm",
+                "type": "number",
+                "label": "Height",
+                "unit": "cm",
+                "min": 40,
+                "max": 250
+              },
+              {
+                "id": "pbw_kg",
+                "type": "calculated",
+                "label": "Predicted body weight",
+                "formula": "IF(sex='male', 50, IF(sex='female', 45.5, NULL)) + 0.91 * (height_cm - 152.4)",
+                "decimals": 1,
+                "unit": "kg"
+              }
+            ]
+          },
+          {
+            "id": "settings",
+            "title": "Ventilator settings · การตั้งเครื่อง",
+            "fields": [
+              {
+                "id": "settings",
+                "type": "repeat",
+                "label": "Setting",
+                "view": "table",
+                "fields": [
+                  {
+                    "id": "at",
+                    "type": "datetime",
+                    "label": "Time",
+                    "required": true
+                  },
+                  {
+                    "id": "mode",
+                    "type": "select",
+                    "label": "Mode",
+                    "options": [
+                      {
+                        "value": "vc_ac",
+                        "label": "VC-AC"
+                      },
+                      {
+                        "value": "pc_ac",
+                        "label": "PC-AC"
+                      },
+                      {
+                        "value": "simv",
+                        "label": "SIMV"
+                      },
+                      {
+                        "value": "psv",
+                        "label": "PSV"
+                      },
+                      {
+                        "value": "prvc",
+                        "label": "PRVC"
+                      },
+                      {
+                        "value": "aprv",
+                        "label": "APRV"
+                      },
+                      {
+                        "value": "cpap",
+                        "label": "CPAP"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "vt",
+                    "type": "integer",
+                    "label": "Vt",
+                    "unit": "mL",
+                    "min": 0,
+                    "max": 2000
+                  },
+                  {
+                    "id": "vt_kg",
+                    "type": "calculated",
+                    "label": "Vt/PBW",
+                    "formula": "vt / pbw_kg",
+                    "decimals": 1,
+                    "unit": "mL/kg"
+                  },
+                  {
+                    "id": "rr",
+                    "type": "integer",
+                    "label": "RR",
+                    "unit": "/min",
+                    "min": 0,
+                    "max": 60
+                  },
+                  {
+                    "id": "peep",
+                    "type": "integer",
+                    "label": "PEEP",
+                    "unit": "cmH₂O",
+                    "min": 0,
+                    "max": 30
+                  },
+                  {
+                    "id": "fio2",
+                    "type": "integer",
+                    "label": "FiO₂",
+                    "unit": "%",
+                    "min": 21,
+                    "max": 100
+                  },
+                  {
+                    "id": "pplat",
+                    "type": "integer",
+                    "label": "Pplat",
+                    "unit": "cmH₂O",
+                    "min": 0,
+                    "max": 60
+                  },
+                  {
+                    "id": "dp",
+                    "type": "calculated",
+                    "label": "Driving P",
+                    "formula": "pplat - peep",
+                    "decimals": 0,
+                    "unit": "cmH₂O"
+                  },
+                  {
+                    "id": "pao2",
+                    "type": "integer",
+                    "label": "PaO₂",
+                    "unit": "mmHg",
+                    "min": 0,
+                    "max": 700
+                  },
+                  {
+                    "id": "pf",
+                    "type": "calculated",
+                    "label": "P/F",
+                    "formula": "pao2 / (fio2 / 100)",
+                    "decimals": 0
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "ards",
+            "title": "ARDS management",
+            "fields": [
+              {
+                "id": "ards",
+                "type": "radio",
+                "label": "ARDS (Berlin)",
+                "options": [
+                  {
+                    "value": "none",
+                    "label": "No ARDS"
+                  },
+                  {
+                    "value": "mild",
+                    "label": "Mild P/F 200–300"
+                  },
+                  {
+                    "value": "moderate",
+                    "label": "Moderate 100–200"
+                  },
+                  {
+                    "value": "severe",
+                    "label": "Severe < 100"
+                  }
+                ],
+                "option_columns": 4
+              },
+              {
+                "id": "prone",
+                "type": "checkbox",
+                "label": "Prone positioning"
+              },
+              {
+                "id": "nmb",
+                "type": "checkbox",
+                "label": "Neuromuscular blockade"
+              },
+              {
+                "id": "conservative_fluid",
+                "type": "checkbox",
+                "label": "Conservative fluid strategy"
+              }
+            ]
+          },
+          {
+            "id": "vap",
+            "title": "VAP bundle · bundle ป้องกัน VAP (every shift)",
+            "fields": [
+              {
+                "id": "vap_checks",
+                "type": "repeat",
+                "label": "Shift",
+                "view": "table",
+                "fields": [
+                  {
+                    "id": "date",
+                    "type": "date",
+                    "label": "Date",
+                    "required": true
+                  },
+                  {
+                    "id": "shift",
+                    "type": "select",
+                    "label": "Shift",
+                    "options": [
+                      {
+                        "value": "day",
+                        "label": "Day"
+                      },
+                      {
+                        "value": "evening",
+                        "label": "Evening"
+                      },
+                      {
+                        "value": "night",
+                        "label": "Night"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "hob",
+                    "type": "checkbox",
+                    "label": "HOB 30–45°"
+                  },
+                  {
+                    "id": "oral_care",
+                    "type": "checkbox",
+                    "label": "Oral care"
+                  },
+                  {
+                    "id": "cuff",
+                    "type": "checkbox",
+                    "label": "Cuff 20–30 cmH₂O"
+                  },
+                  {
+                    "id": "subglottic",
+                    "type": "checkbox",
+                    "label": "Subglottic suction"
+                  },
+                  {
+                    "id": "sat_sbt",
+                    "type": "checkbox",
+                    "label": "SAT / SBT assessed"
+                  },
+                  {
+                    "id": "by",
+                    "type": "text",
+                    "label": "Nurse",
+                    "max_length": 30
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "weaning",
+            "title": "Weaning and extubation · การหย่าเครื่อง",
+            "fields": [
+              {
+                "id": "sbt_at",
+                "type": "datetime",
+                "label": "SBT"
+              },
+              {
+                "id": "sbt_result",
+                "type": "radio",
+                "label": "SBT result",
+                "options": [
+                  {
+                    "value": "pass",
+                    "label": "Pass"
+                  },
+                  {
+                    "value": "fail",
+                    "label": "Fail"
+                  }
+                ],
+                "option_columns": 2
+              },
+              {
+                "id": "rsbi",
+                "type": "integer",
+                "label": "RSBI",
+                "unit": "br/min/L",
+                "min": 0,
+                "max": 500
+              },
+              {
+                "id": "extubated_at",
+                "type": "datetime",
+                "label": "Extubated",
+                "indexed": true
+              },
+              {
+                "id": "extubation_type",
+                "type": "radio",
+                "label": "Extubation",
+                "options": [
+                  {
+                    "value": "planned",
+                    "label": "Planned"
+                  },
+                  {
+                    "value": "unplanned",
+                    "label": "Unplanned / self"
+                  }
+                ],
+                "option_columns": 2
+              },
+              {
+                "id": "reintubated_48h",
+                "type": "checkbox",
+                "label": "Re-intubated within 48 h"
+              },
+              {
+                "id": "mv_days",
+                "type": "integer",
+                "label": "Ventilator days",
+                "unit": "d",
+                "min": 0,
+                "max": 365
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "icu_daily_round": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "icu_daily_round",
+        "schema_version": 1,
+        "title": "ICU Daily Round (FAST HUGS BID)",
+        "description": "แบบบันทึก round ประจำวัน – one card per ICU day",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "days",
+            "title": "Daily rounds · บันทึกรายวัน",
+            "fields": [
+              {
+                "id": "rounds",
+                "type": "repeat",
+                "label": "ICU day",
+                "min_items": 1,
+                "view": "cards",
+                "fields": [
+                  {
+                    "id": "round_date",
+                    "type": "date",
+                    "label": "Date",
+                    "required": true
+                  },
+                  {
+                    "id": "icu_day",
+                    "type": "integer",
+                    "label": "ICU day",
+                    "min": 1,
+                    "max": 365
+                  },
+                  {
+                    "id": "rass",
+                    "type": "radio",
+                    "label": "RASS",
+                    "options": [
+                      {
+                        "value": "4",
+                        "label": "+4 Combative"
+                      },
+                      {
+                        "value": "3",
+                        "label": "+3 Very agitated"
+                      },
+                      {
+                        "value": "2",
+                        "label": "+2 Agitated"
+                      },
+                      {
+                        "value": "1",
+                        "label": "+1 Restless"
+                      },
+                      {
+                        "value": "0",
+                        "label": "0 Alert and calm"
+                      },
+                      {
+                        "value": "-1",
+                        "label": "−1 Drowsy"
+                      },
+                      {
+                        "value": "-2",
+                        "label": "−2 Light sedation"
+                      },
+                      {
+                        "value": "-3",
+                        "label": "−3 Moderate sedation"
+                      },
+                      {
+                        "value": "-4",
+                        "label": "−4 Deep sedation"
+                      },
+                      {
+                        "value": "-5",
+                        "label": "−5 Unarousable"
+                      }
+                    ],
+                    "option_columns": 5
+                  },
+                  {
+                    "id": "rass_target",
+                    "type": "radio",
+                    "label": "RASS target",
+                    "options": [
+                      {
+                        "value": "0",
+                        "label": "0"
+                      },
+                      {
+                        "value": "-1",
+                        "label": "−1"
+                      },
+                      {
+                        "value": "-2",
+                        "label": "−2"
+                      },
+                      {
+                        "value": "-3",
+                        "label": "−3 or deeper"
+                      }
+                    ],
+                    "option_columns": 4
+                  },
+                  {
+                    "id": "cam_icu",
+                    "type": "radio",
+                    "label": "CAM-ICU (delirium)",
+                    "options": [
+                      {
+                        "value": "negative",
+                        "label": "Negative"
+                      },
+                      {
+                        "value": "positive",
+                        "label": "Positive"
+                      },
+                      {
+                        "value": "unable",
+                        "label": "Unable to assess (RASS −4/−5)"
+                      }
+                    ],
+                    "option_columns": 3
+                  },
+                  {
+                    "id": "cpot",
+                    "type": "integer",
+                    "label": "Pain – CPOT",
+                    "min": 0,
+                    "max": 8
+                  },
+                  {
+                    "id": "feeding",
+                    "type": "radio",
+                    "label": "F – Feeding",
+                    "options": [
+                      {
+                        "value": "enteral",
+                        "label": "Enteral"
+                      },
+                      {
+                        "value": "oral",
+                        "label": "Oral"
+                      },
+                      {
+                        "value": "parenteral",
+                        "label": "Parenteral"
+                      },
+                      {
+                        "value": "npo",
+                        "label": "NPO"
+                      }
+                    ],
+                    "option_columns": 4
+                  },
+                  {
+                    "id": "analgesia_ok",
+                    "type": "checkbox",
+                    "label": "A – Analgesia adequate"
+                  },
+                  {
+                    "id": "sat_done",
+                    "type": "radio",
+                    "label": "S – Sedation interruption (SAT)",
+                    "options": [
+                      {
+                        "value": "yes",
+                        "label": "Yes"
+                      },
+                      {
+                        "value": "no",
+                        "label": "No"
+                      },
+                      {
+                        "value": "na",
+                        "label": "N/A"
+                      }
+                    ],
+                    "option_columns": 3
+                  },
+                  {
+                    "id": "dvt",
+                    "type": "radio",
+                    "label": "T – Thromboprophylaxis",
+                    "options": [
+                      {
+                        "value": "lmwh",
+                        "label": "LMWH"
+                      },
+                      {
+                        "value": "ufh",
+                        "label": "UFH"
+                      },
+                      {
+                        "value": "mechanical",
+                        "label": "Mechanical only"
+                      },
+                      {
+                        "value": "therapeutic",
+                        "label": "Therapeutic anticoagulation"
+                      },
+                      {
+                        "value": "none",
+                        "label": "Contraindicated"
+                      }
+                    ],
+                    "option_columns": 3
+                  },
+                  {
+                    "id": "hob_30",
+                    "type": "checkbox",
+                    "label": "H – Head of bed ≥ 30°"
+                  },
+                  {
+                    "id": "ulcer_ppx",
+                    "type": "checkbox",
+                    "label": "U – Stress-ulcer prophylaxis indicated and given"
+                  },
+                  {
+                    "id": "glucose_ok",
+                    "type": "checkbox",
+                    "label": "G – Glucose 140–180 mg/dL"
+                  },
+                  {
+                    "id": "sbt_done",
+                    "type": "radio",
+                    "label": "S – Spontaneous breathing trial",
+                    "options": [
+                      {
+                        "value": "yes",
+                        "label": "Yes"
+                      },
+                      {
+                        "value": "no",
+                        "label": "No"
+                      },
+                      {
+                        "value": "na",
+                        "label": "N/A"
+                      }
+                    ],
+                    "option_columns": 3
+                  },
+                  {
+                    "id": "bowel_ok",
+                    "type": "checkbox",
+                    "label": "B – Bowels open / regimen"
+                  },
+                  {
+                    "id": "lines_reviewed",
+                    "type": "checkbox",
+                    "label": "I – Indwelling lines and catheters reviewed"
+                  },
+                  {
+                    "id": "abx_reviewed",
+                    "type": "checkbox",
+                    "label": "D – De-escalation / antibiotic day reviewed"
+                  },
+                  {
+                    "id": "mobility",
+                    "type": "radio",
+                    "label": "Mobility level",
+                    "options": [
+                      {
+                        "value": "0",
+                        "label": "0 Bed rest"
+                      },
+                      {
+                        "value": "1",
+                        "label": "1 Passive ROM"
+                      },
+                      {
+                        "value": "2",
+                        "label": "2 Sit edge of bed"
+                      },
+                      {
+                        "value": "3",
+                        "label": "3 Stand / chair"
+                      },
+                      {
+                        "value": "4",
+                        "label": "4 Walk"
+                      }
+                    ],
+                    "option_columns": 5
+                  },
+                  {
+                    "id": "skin_ok",
+                    "type": "checkbox",
+                    "label": "Skin intact – no new pressure injury"
+                  },
+                  {
+                    "id": "plan",
+                    "type": "textarea",
+                    "label": "Problems and plan",
+                    "max_length": 3000
+                  },
+                  {
+                    "id": "family_updated",
+                    "type": "checkbox",
+                    "label": "Family updated today"
+                  },
+                  {
+                    "id": "round_by",
+                    "type": "text",
+                    "label": "Physician",
+                    "max_length": 200
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "icu_lines_devices": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "icu_lines_devices",
+        "schema_version": 1,
+        "title": "ICU Lines & Devices",
+        "description": "ติดตามสายและอุปกรณ์ (CLABSI / CAUTI / VAP prevention)",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "devices",
+            "title": "Invasive devices · สายและอุปกรณ์",
+            "fields": [
+              {
+                "id": "items",
+                "type": "repeat",
+                "label": "Device",
+                "view": "table",
+                "fields": [
+                  {
+                    "id": "device",
+                    "type": "select",
+                    "label": "Device",
+                    "options": [
+                      {
+                        "value": "cvc",
+                        "label": "Central venous catheter"
+                      },
+                      {
+                        "value": "picc",
+                        "label": "PICC"
+                      },
+                      {
+                        "value": "art",
+                        "label": "Arterial line"
+                      },
+                      {
+                        "value": "hd",
+                        "label": "Dialysis catheter"
+                      },
+                      {
+                        "value": "foley",
+                        "label": "Urinary catheter"
+                      },
+                      {
+                        "value": "ett",
+                        "label": "ETT"
+                      },
+                      {
+                        "value": "trach",
+                        "label": "Tracheostomy"
+                      },
+                      {
+                        "value": "evd",
+                        "label": "EVD"
+                      },
+                      {
+                        "value": "icp",
+                        "label": "ICP bolt"
+                      },
+                      {
+                        "value": "icd",
+                        "label": "Chest drain"
+                      },
+                      {
+                        "value": "ngt",
+                        "label": "NG / OG tube"
+                      },
+                      {
+                        "value": "other",
+                        "label": "Other"
+                      }
+                    ],
+                    "required": true
+                  },
+                  {
+                    "id": "site",
+                    "type": "text",
+                    "label": "Site",
+                    "max_length": 60
+                  },
+                  {
+                    "id": "inserted_on",
+                    "type": "date",
+                    "label": "Inserted",
+                    "required": true
+                  },
+                  {
+                    "id": "inserted_by",
+                    "type": "text",
+                    "label": "By",
+                    "max_length": 60
+                  },
+                  {
+                    "id": "removed_on",
+                    "type": "date",
+                    "label": "Removed"
+                  },
+                  {
+                    "id": "days",
+                    "type": "calculated",
+                    "label": "Days",
+                    "formula": "DAYS(inserted_on, COALESCE(removed_on, TODAY()))",
+                    "decimals": 0,
+                    "unit": "d"
+                  },
+                  {
+                    "id": "still_needed",
+                    "type": "checkbox",
+                    "label": "Needed today"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "bundles",
+            "title": "Prevention bundles · bundle ป้องกันการติดเชื้อ",
+            "fields": [
+              {
+                "id": "clabsi_hand",
+                "type": "checkbox",
+                "label": "CLABSI – hand hygiene and maximal barrier at insertion"
+              },
+              {
+                "id": "clabsi_chg",
+                "type": "checkbox",
+                "label": "CLABSI – chlorhexidine skin prep, dressing clean and dated"
+              },
+              {
+                "id": "cauti_closed",
+                "type": "checkbox",
+                "label": "CAUTI – closed drainage, bag below bladder"
+              },
+              {
+                "id": "cauti_review",
+                "type": "checkbox",
+                "label": "CAUTI – daily removal review"
+              },
+              {
+                "id": "bundle_notes",
+                "type": "textarea",
+                "label": "Notes",
+                "max_length": 1000
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "icu_discharge": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "icu_discharge",
+        "schema_version": 1,
+        "title": "ICU Discharge / Transfer Summary",
+        "description": "สรุปการจำหน่าย/ย้ายออกจาก ICU",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "discharge",
+            "title": "Discharge · การจำหน่าย",
+            "fields": [
+              {
+                "id": "discharge_at",
+                "type": "datetime",
+                "label": "Left ICU",
+                "required": true,
+                "indexed": true
+              },
+              {
+                "id": "icu_admit_date",
+                "type": "date",
+                "label": "ICU admission date",
+                "required": true
+              },
+              {
+                "id": "icu_los",
+                "type": "calculated",
+                "label": "ICU length of stay",
+                "formula": "DAYS(icu_admit_date, discharge_at)",
+                "decimals": 0,
+                "unit": "days"
+              },
+              {
+                "id": "destination",
+                "type": "radio",
+                "label": "Destination",
+                "options": [
+                  {
+                    "value": "ward",
+                    "label": "Ward"
+                  },
+                  {
+                    "value": "step_down",
+                    "label": "Step-down / HDU"
+                  },
+                  {
+                    "value": "home",
+                    "label": "Home"
+                  },
+                  {
+                    "value": "transfer",
+                    "label": "Other hospital"
+                  },
+                  {
+                    "value": "death",
+                    "label": "Died in ICU"
+                  }
+                ],
+                "required": true,
+                "indexed": true,
+                "option_columns": 5
+              },
+              {
+                "id": "icu_type",
+                "type": "radio",
+                "label": "ICU",
+                "options": [
+                  {
+                    "value": "neuro",
+                    "label": "Neuro ICU"
+                  },
+                  {
+                    "value": "critical",
+                    "label": "Critical care"
+                  }
+                ],
+                "option_columns": 2
+              },
+              {
+                "id": "final_diagnosis",
+                "type": "textarea",
+                "label": "Final diagnoses",
+                "max_length": 2000,
+                "required": true
+              },
+              {
+                "id": "procedures",
+                "type": "multiselect",
+                "label": "ICU procedures",
+                "options": [
+                  {
+                    "value": "mv",
+                    "label": "Mechanical ventilation"
+                  },
+                  {
+                    "value": "niv",
+                    "label": "NIV / HFNC"
+                  },
+                  {
+                    "value": "cvc",
+                    "label": "Central line"
+                  },
+                  {
+                    "value": "art",
+                    "label": "Arterial line"
+                  },
+                  {
+                    "value": "rrt",
+                    "label": "Renal replacement therapy"
+                  },
+                  {
+                    "value": "vaso",
+                    "label": "Vasopressors"
+                  },
+                  {
+                    "value": "trach",
+                    "label": "Tracheostomy"
+                  },
+                  {
+                    "value": "evd",
+                    "label": "EVD / ICP monitoring"
+                  },
+                  {
+                    "value": "craniotomy",
+                    "label": "Neurosurgery"
+                  },
+                  {
+                    "value": "transfusion",
+                    "label": "Transfusion"
+                  },
+                  {
+                    "value": "prone",
+                    "label": "Prone positioning"
+                  }
+                ],
+                "option_columns": 3
+              },
+              {
+                "id": "mv_days",
+                "type": "integer",
+                "label": "Ventilator days",
+                "unit": "d",
+                "min": 0,
+                "max": 365
+              },
+              {
+                "id": "complications",
+                "type": "multiselect",
+                "label": "ICU complications",
+                "options": [
+                  {
+                    "value": "vap",
+                    "label": "VAP"
+                  },
+                  {
+                    "value": "clabsi",
+                    "label": "CLABSI"
+                  },
+                  {
+                    "value": "cauti",
+                    "label": "CAUTI"
+                  },
+                  {
+                    "value": "pressure",
+                    "label": "Pressure injury"
+                  },
+                  {
+                    "value": "delirium",
+                    "label": "Delirium"
+                  },
+                  {
+                    "value": "unplanned_extub",
+                    "label": "Unplanned extubation"
+                  },
+                  {
+                    "value": "reintubation",
+                    "label": "Re-intubation < 48 h"
+                  },
+                  {
+                    "value": "dvt_pe",
+                    "label": "DVT / PE"
+                  },
+                  {
+                    "value": "aki",
+                    "label": "New AKI"
+                  }
+                ],
+                "option_columns": 3
+              }
+            ]
+          },
+          {
+            "id": "neuro_outcome",
+            "title": "Neurological outcome · ผลลัพธ์ทางระบบประสาท",
+            "fields": [
+              {
+                "id": "gcs_discharge",
+                "type": "integer",
+                "label": "GCS at discharge",
+                "min": 3,
+                "max": 15
+              },
+              {
+                "id": "mrs",
+                "type": "radio",
+                "label": "Modified Rankin Scale",
+                "options": [
+                  {
+                    "value": "0",
+                    "label": "0 No symptoms"
+                  },
+                  {
+                    "value": "1",
+                    "label": "1 No significant disability"
+                  },
+                  {
+                    "value": "2",
+                    "label": "2 Slight disability"
+                  },
+                  {
+                    "value": "3",
+                    "label": "3 Moderate disability"
+                  },
+                  {
+                    "value": "4",
+                    "label": "4 Moderately severe"
+                  },
+                  {
+                    "value": "5",
+                    "label": "5 Severe disability"
+                  },
+                  {
+                    "value": "6",
+                    "label": "6 Dead"
+                  }
+                ],
+                "option_columns": 4
+              }
+            ],
+            "visibility": {
+              "when": {
+                "field": "icu_type",
+                "operator": "equals",
+                "value": "neuro"
+              }
+            }
+          },
+          {
+            "id": "handover",
+            "title": "Handover · ส่งต่อ",
+            "fields": [
+              {
+                "id": "handover",
+                "type": "textarea",
+                "label": "Handover to receiving team (ISBAR)",
+                "max_length": 4000
+              },
+              {
+                "id": "pending",
+                "type": "textarea",
+                "label": "Pending results / follow-up",
+                "max_length": 2000
+              },
+              {
+                "id": "discharged_by",
+                "type": "text",
+                "label": "Discharged by",
+                "max_length": 200,
+                "required": true
+              },
+              {
+                "id": "discharge_sign",
+                "type": "signature",
+                "label": "Signature"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

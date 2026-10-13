@@ -67,3 +67,20 @@ export const updateKept = (id: string, patch: { title?: string; shared?: boolean
 export const copyKept = (id: string) => request<KeptArtifact>(`/artifacts/${id}/copy`, send("POST"));
 export const deleteKept = (id: string) => request<{ deleted: boolean }>(`/artifacts/${id}`, send("DELETE"));
 export const runKept = (id: string, params: Period) => request<RenderResult>(`/artifacts/${id}/run`, send("POST", { params }));
+
+export type WidgetType = "snippet" | "html" | "image" | "text" | "system_status" | "active_cases" | "gateway_alerts" | "case_counts" | "clock";
+export type Widget = { id: string; type: WidgetType; x: number; y: number; w: number; h: number; title: string; config: Record<string, unknown> };
+export type DashboardSummary = {
+  id: string; title: string; cols: number; rows: number; row_height: number; shared: boolean; mine: boolean;
+  owner_name: string; created_at: number; updated_at: number; widget_count?: number;
+};
+export type Dashboard = DashboardSummary & { widgets: Widget[] };
+export type DashboardInput = { title: string; cols: number; rows: number; row_height: number; widgets: Widget[] };
+
+export const listDashboards = () => request<{ rows: DashboardSummary[] }>("/dashboards").then(result => result.rows);
+export const getDashboard = (id: string) => request<Dashboard>(`/dashboards/${id}`);
+export const createDashboard = (input: DashboardInput) => request<Dashboard>("/dashboards", send("POST", input));
+export const saveDashboard = (id: string, input: DashboardInput) => request<Dashboard>(`/dashboards/${id}`, send("PUT", input));
+export const shareDashboard = (id: string, shared: boolean) => request<Dashboard & { snippetsShared: number }>(`/dashboards/${id}/share`, send("PATCH", { shared }));
+export const copyDashboard = (id: string) => request<Dashboard>(`/dashboards/${id}/copy`, send("POST"));
+export const deleteDashboard = (id: string) => request<{ deleted: boolean }>(`/dashboards/${id}`, send("DELETE"));

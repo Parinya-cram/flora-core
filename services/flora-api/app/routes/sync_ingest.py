@@ -1,4 +1,5 @@
 import hashlib
+import time
 import hmac
 import os
 import uuid
@@ -10,7 +11,7 @@ from pydantic import BaseModel, Field
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 
-from .. import ai_service, central_auth, directory, form_sync, io_catalog, ldap_auth, workflows
+from .. import ai_service, billing, central_auth, device_registry, device_types, directory, form_sync, io_catalog, ldap_auth, workflows
 from ..database import connection, pool
 
 
@@ -181,6 +182,11 @@ def ingest_batch(batch: SyncBatch, database: Connection = Depends(connection)) -
                     now,
                 ),
             )
+            if "billing" in message.payload:
+                # Structured copy of the case's billing order for billing staff.
+                with database.transaction():
+                    billing.project_snapshot(database, global_case_id, batch.leaf_id, message.entity_id,
+                                             message.payload, message.revision, int(time.time() * 1000))
             if message.payload.get("workflow_forms"):
                 workflow_forms.append({"global_case_id": str(global_case_id), "hn": case.get("hn"),
                                        "workflow_forms": message.payload["workflow_forms"]})
@@ -352,6 +358,11 @@ def exchange_directory(payload: DirectoryExchange, database: Connection = Depend
         result["io_catalog"] = io_catalog.load(database)
     except Exception:  # never block the directory over the catalogue
         result["io_catalog"] = None
+    # OR billing checklist master (groups + items); applied on the Leaf when newer.
+    try:
+        result["billing_catalog"] = billing.load_catalog(database)
+    except Exception:
+        result["billing_catalog"] = None
     # Only acknowledge pushes that Canopy now holds (applied, or superseded by a newer central edit).
     result["acknowledged"] = [item for item in acknowledged if item["status"] in {"applied", "stale"}]
     result["failed"] = [item for item in acknowledged if item["status"] == "failed"]
@@ -428,6 +439,8 @@ def store_gateway_config(gateway_id: str, payload: GatewayConfig, database: Conn
                  device.get("serial_number"), device.get("asset_tag"), device.get("station"), device.get("location"),
                  device.get("installed_at"), device.get("notes"), device.get("parser_status"), device.get("updated_at")),
             )
+        # Device Management: keep every reported device linked to (or added to) the registry.
+        device_registry.reconcile_reported(database, gateway_id, devices, current)
         if changed:
             database.execute(
                 """INSERT INTO canopy_gateway_config_snapshot(gateway_id,config_hash,config,captured_at)
@@ -442,6 +455,8 @@ def store_gateway_config(gateway_id: str, payload: GatewayConfig, database: Conn
     return {
         "ok": True, "changed": changed, "config_hash": config_hash,
         "desired_config": {**desired["desired_config"], "version": desired["desired_version"]} if pending else None,
+        # The hospital's own device types; Haber adds them to the gateway's catalog.
+        "device_types": device_types.for_gateways(database),
     }
 
 

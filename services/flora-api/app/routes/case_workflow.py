@@ -28,6 +28,15 @@ def workflow_state(database: Connection) -> dict[str, Any]:
             "synced_at": (row or {}).get("synced_at")}
 
 
+def cached_billing_template(database: Connection, template_id: str | None) -> dict[str, Any] | None:
+    """The newest published itemize template this Leaf holds (works offline)."""
+    if not template_id:
+        return None
+    templates = workflow_state(database)["payload"].get("billing_templates") or {}
+    template = templates.get(template_id)
+    return template if isinstance(template, dict) else None
+
+
 def cached_items(database: Connection) -> tuple[list[dict[str, Any]], dict[str, Any], int | None]:
     state = workflow_state(database)
     payload = state["payload"]
@@ -48,6 +57,10 @@ def find_workflow(database: Connection, workflow_id: str) -> dict[str, Any] | No
                 for entry in definition.get("forms") or []
                 if isinstance(entry, dict) and f"{entry.get('form_id')}@{entry.get('version')}" in forms
             }
+            template_id = (definition.get("billing") or {}).get("template_id") if isinstance(definition.get("billing"), dict) else None
+            template = cached_billing_template(database, template_id)
+            if template is not None:
+                snapshot["bundled_billing_template"] = template
             return snapshot
     return None
 

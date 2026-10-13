@@ -4,22 +4,46 @@ Authenticate with an API key (Authorization: Bearer flk_…, or X-API-Key). Each
 has scopes and may be limited to some wards; demo wards are excluded unless the key
 allows them or the request names the ward. Every request is written to the access
 log together with the case ids it returned. The MCP server is a client of this API.
+
+Patient identifiers (name, HN/MRN/AN, national ID, date of birth, contact details) are
+masked in every response by MaskedRoute; no key or scope can turn this off.
 """
+import json
 import uuid
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi.routing import APIRoute
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
-from .. import api_keys, directory
+from .. import api_keys, directory, phi_mask
 from ..database import connection
 from .canopy_admissions import AdmissionInput, _public as admission_public, _target_check
 from .fleet_read import _chart_summary, _compact_vitals, _number, _patient_name, _record, _rows
 
-router = APIRouter(prefix="/api/v1", tags=["public api v1"])
+
+
+class MaskedRoute(APIRoute):
+    """Mask patient identifiers in every JSON response of this router, whatever the endpoint returns."""
+
+    def get_route_handler(self):
+        handler = super().get_route_handler()
+
+        async def masked(request: Request) -> Response:
+            response = await handler(request)
+            if not (response.headers.get("content-type") or "").startswith("application/json"):
+                return response
+            body = json.dumps(phi_mask.mask(json.loads(response.body)), ensure_ascii=False).encode()
+            headers = {k: v for k, v in response.headers.items() if k.lower() != "content-length"}
+            return Response(body, status_code=response.status_code, headers=headers, media_type="application/json")
+
+        return masked
+
+
+router = APIRouter(prefix="/api/v1", tags=["public api v1"], route_class=MaskedRoute)
 
 SCOPE_SQL = """(%(wards)s::text[] IS NULL OR scope_unit.unit_key = ANY(%(wards)s))
                AND (%(demo)s OR scope_unit.is_demo IS NOT TRUE)"""

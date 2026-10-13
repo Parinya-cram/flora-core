@@ -28,6 +28,23 @@ docker compose up -d --build      # http://localhost:7100
 | `POST /api/v1/releases`, `POST .../withdraw`, `PUT /api/v1/tenants/{id}/channel` | Root CI / admin |
 | `POST /api/v1/tenants`, `PUT .../license`, `POST .../license/revoke`, `PUT /api/v1/global-config/{key}` | Root admin (`x-root-key` when `ROOT_ADMIN_KEY` is set) |
 | `GET /api/v1/overview` | Root admin page |
+| `GET /api/v1/device-types`, `GET /api/v1/device-types/{id}`, `GET /api/v1/device-reference/{kind}` | Any signed-in operator: device type catalog |
+
+## Device type catalog
+
+`device_type` holds every known medical device model or family: what it speaks
+(HL7 v2/FHIR/IEEE 11073, Wi-Fi, LAN, serial), the Flora protocol lane and edge adapter,
+and the gateway catalog codes (`gateway_device_types`) whose parser covers it.
+`status` is `driver_in_code`, `to_validate` or `reference_only` until a model is
+`integration_tested` or `validated` (see `../docs/DEVICE-COMPATIBILITY-CATALOG.md`).
+Supporting tables: `device_manufacturer`, `device_protocol`, `device_connection_type`,
+`device_protocol_lane`, `device_type_source`.
+
+The original files sit in `reference/` (patient monitor spreadsheet, protocol
+compatibility map). `scripts/build_device_type_seed.py` turns them into
+`api/app/reference/device_types.json`, which Root upserts on start whenever a source's
+sha256 changes. Filters: `?manufacturer=ge&category=…&status=…&protocol=…&gateway_type=…&q=…`;
+`device-reference` kinds: `manufacturers`, `protocols`, `connection-types`, `lanes`, `sources`, `summary`.
 
 ## Operator sign-in
 

@@ -77,6 +77,7 @@ def build_snapshot(client: httpx.Client, case: dict[str, Any]) -> dict[str, Any]
         "io_summary": f"/api/case/{case_id}/io/summary?from={from_ms}&to={end_ms}&bucket=1",
         "workflow": f"/api/case/{case_id}/workflow-snapshot",
         "workflow_forms": f"/api/case/{case_id}/workflow-forms",
+        "billing": f"/api/case/{case_id}/billing",
     }
     snapshot: dict[str, Any] = {"case": case, "window": {"from": from_ms, "to": end_ms}}
     for key, path in paths.items():

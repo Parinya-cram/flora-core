@@ -1,0 +1,2438 @@
+{
+  "format": "flora-workflow/1",
+  "id": "icu_neuro",
+  "name": "Neuro ICU",
+  "description": "TBI, SAH, ICH, stroke, post-craniotomy and status epilepticus: neuro exam with disease scales, hourly neuro observation chart with ICP/CPP, brain protection bundle, daily rounds, devices, discharge.",
+  "anesthesia_record": {
+    "enabled": true,
+    "sections": [
+      "caseInfo",
+      "outcome"
+    ],
+    "optional_sections": [
+      "line",
+      "comorbid",
+      "pain"
+    ]
+  },
+  "forms": [
+    {
+      "form_id": "icu_admission",
+      "version": 1,
+      "title": "ICU Admission Assessment",
+      "phase": "preop",
+      "required": true
+    },
+    {
+      "form_id": "neuro_icu_assessment",
+      "version": 1,
+      "title": "Neuro ICU Assessment",
+      "phase": "preop",
+      "required": true
+    },
+    {
+      "form_id": "neuro_icu_obs_chart",
+      "version": 1,
+      "title": "Neuro Observation Chart",
+      "phase": "intraop",
+      "required": true
+    },
+    {
+      "form_id": "neuro_icu_brain_bundle",
+      "version": 1,
+      "title": "Brain Protection Bundle",
+      "phase": "intraop",
+      "required": false
+    },
+    {
+      "form_id": "icu_daily_round",
+      "version": 1,
+      "title": "ICU Daily Round (FAST HUGS BID)",
+      "phase": "intraop",
+      "required": true
+    },
+    {
+      "form_id": "icu_lines_devices",
+      "version": 1,
+      "title": "ICU Lines & Devices",
+      "phase": "intraop",
+      "required": false
+    },
+    {
+      "form_id": "icu_discharge",
+      "version": 1,
+      "title": "ICU Discharge / Transfer Summary",
+      "phase": "postop",
+      "required": true
+    }
+  ],
+  "packet": [
+    {
+      "kind": "anesthesia_report",
+      "mode": "standard"
+    },
+    {
+      "kind": "form",
+      "form_id": "icu_admission"
+    },
+    {
+      "kind": "form",
+      "form_id": "neuro_icu_assessment"
+    },
+    {
+      "kind": "form",
+      "form_id": "neuro_icu_obs_chart"
+    },
+    {
+      "kind": "form",
+      "form_id": "neuro_icu_brain_bundle"
+    },
+    {
+      "kind": "form",
+      "form_id": "icu_daily_round"
+    },
+    {
+      "kind": "form",
+      "form_id": "icu_lines_devices"
+    },
+    {
+      "kind": "form",
+      "form_id": "icu_discharge"
+    }
+  ],
+  "bundled_forms": {
+    "icu_admission": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "icu_admission",
+        "schema_version": 1,
+        "title": "ICU Admission Assessment",
+        "description": "แบบประเมินแรกรับผู้ป่วย ICU – used by every ICU workflow",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "admission",
+            "title": "Admission · ข้อมูลการรับเข้า",
+            "fields": [
+              {
+                "id": "admit_at",
+                "type": "datetime",
+                "label": "Admitted to ICU",
+                "required": true,
+                "indexed": true
+              },
+              {
+                "id": "icu_type",
+                "type": "radio",
+                "label": "ICU",
+                "options": [
+                  {
+                    "value": "neuro",
+                    "label": "Neuro ICU"
+                  },
+                  {
+                    "value": "critical",
+                    "label": "Medical / Surgical critical care"
+                  },
+                  {
+                    "value": "other",
+                    "label": "Other"
+                  }
+                ],
+                "required": true,
+                "indexed": true,
+                "option_columns": 3
+              },
+              {
+                "id": "admit_source",
+                "type": "radio",
+                "label": "Admitted from",
+                "options": [
+                  {
+                    "value": "er",
+                    "label": "Emergency"
+                  },
+                  {
+                    "value": "or",
+                    "label": "Operating room"
+                  },
+                  {
+                    "value": "ward",
+                    "label": "Ward"
+                  },
+                  {
+                    "value": "transfer",
+                    "label": "Other hospital"
+                  },
+                  {
+                    "value": "other",
+                    "label": "Other"
+                  }
+                ],
+                "option_columns": 5,
+                "indexed": true
+              },
+              {
+                "id": "admit_type",
+                "type": "radio",
+                "label": "Admission type",
+                "options": [
+                  {
+                    "value": "emergency",
+                    "label": "Emergency"
+                  },
+                  {
+                    "value": "elective",
+                    "label": "Elective / planned post-op"
+                  },
+                  {
+                    "value": "readmit",
+                    "label": "ICU readmission < 48 h"
+                  }
+                ],
+                "option_columns": 3
+              },
+              {
+                "id": "admitting_diagnosis",
+                "type": "textarea",
+                "label": "Admitting diagnosis",
+                "max_length": 1000,
+                "required": true
+              },
+              {
+                "id": "icu_reason",
+                "type": "multiselect",
+                "label": "Main reason for ICU",
+                "options": [
+                  {
+                    "value": "resp_failure",
+                    "label": "Respiratory failure"
+                  },
+                  {
+                    "value": "shock",
+                    "label": "Shock"
+                  },
+                  {
+                    "value": "sepsis",
+                    "label": "Sepsis"
+                  },
+                  {
+                    "value": "neuro",
+                    "label": "Neurological"
+                  },
+                  {
+                    "value": "post_op",
+                    "label": "Post-operative monitoring"
+                  },
+                  {
+                    "value": "cardiac",
+                    "label": "Cardiac"
+                  },
+                  {
+                    "value": "metabolic",
+                    "label": "Metabolic / renal"
+                  },
+                  {
+                    "value": "trauma",
+                    "label": "Trauma"
+                  },
+                  {
+                    "value": "other",
+                    "label": "Other"
+                  }
+                ],
+                "option_columns": 3
+              },
+              {
+                "id": "attending",
+                "type": "text",
+                "label": "Attending intensivist",
+                "max_length": 200
+              },
+              {
+                "id": "code_status",
+                "type": "radio",
+                "label": "Code status",
+                "options": [
+                  {
+                    "value": "full",
+                    "label": "Full code"
+                  },
+                  {
+                    "value": "dnr",
+                    "label": "DNR"
+                  },
+                  {
+                    "value": "limited",
+                    "label": "Limited treatment"
+                  },
+                  {
+                    "value": "palliative",
+                    "label": "Palliative"
+                  }
+                ],
+                "option_columns": 4,
+                "indexed": true
+              }
+            ]
+          },
+          {
+            "id": "background",
+            "title": "History · ประวัติ",
+            "fields": [
+              {
+                "id": "sex",
+                "type": "radio",
+                "label": "Sex",
+                "options": [
+                  {
+                    "value": "male",
+                    "label": "Male"
+                  },
+                  {
+                    "value": "female",
+                    "label": "Female"
+                  }
+                ],
+                "option_columns": 2
+              },
+              {
+                "id": "weight_kg",
+                "type": "decimal",
+                "label": "Weight",
+                "unit": "kg",
+                "min": 1,
+                "max": 400,
+                "decimals": 1
+              },
+              {
+                "id": "height_cm",
+                "type": "number",
+                "label": "Height",
+                "unit": "cm",
+                "min": 40,
+                "max": 250
+              },
+              {
+                "id": "bmi",
+                "type": "calculated",
+                "label": "BMI",
+                "formula": "weight_kg / ((height_cm / 100) ^ 2)",
+                "decimals": 1,
+                "unit": "kg/m²"
+              },
+              {
+                "id": "pbw_kg",
+                "type": "calculated",
+                "label": "Predicted body weight",
+                "formula": "IF(sex='male', 50, IF(sex='female', 45.5, NULL)) + 0.91 * (height_cm - 152.4)",
+                "decimals": 1,
+                "description": "For lung-protective ventilation (6–8 mL/kg PBW)",
+                "unit": "kg"
+              },
+              {
+                "id": "comorbid",
+                "type": "multiselect",
+                "label": "Comorbidities",
+                "options": [
+                  {
+                    "value": "htn",
+                    "label": "Hypertension"
+                  },
+                  {
+                    "value": "dm",
+                    "label": "Diabetes"
+                  },
+                  {
+                    "value": "cad",
+                    "label": "Coronary disease"
+                  },
+                  {
+                    "value": "chf",
+                    "label": "Heart failure"
+                  },
+                  {
+                    "value": "ckd",
+                    "label": "CKD"
+                  },
+                  {
+                    "value": "esrd",
+                    "label": "ESRD on dialysis"
+                  },
+                  {
+                    "value": "copd",
+                    "label": "COPD / asthma"
+                  },
+                  {
+                    "value": "cirrhosis",
+                    "label": "Cirrhosis"
+                  },
+                  {
+                    "value": "stroke",
+                    "label": "Previous stroke"
+                  },
+                  {
+                    "value": "malignancy",
+                    "label": "Malignancy"
+                  },
+                  {
+                    "value": "immuno",
+                    "label": "Immunosuppressed"
+                  }
+                ],
+                "option_columns": 3
+              },
+              {
+                "id": "allergies",
+                "type": "textarea",
+                "label": "Allergies",
+                "max_length": 1000
+              },
+              {
+                "id": "home_meds",
+                "type": "textarea",
+                "label": "Home medications (anticoagulants / antiplatelets first)",
+                "max_length": 2000
+              }
+            ]
+          },
+          {
+            "id": "initial",
+            "title": "Initial status · สภาวะแรกรับ",
+            "fields": [
+              {
+                "id": "airway",
+                "type": "radio",
+                "label": "Airway",
+                "options": [
+                  {
+                    "value": "natural",
+                    "label": "Natural"
+                  },
+                  {
+                    "value": "ett",
+                    "label": "Endotracheal tube"
+                  },
+                  {
+                    "value": "trach",
+                    "label": "Tracheostomy"
+                  },
+                  {
+                    "value": "niv",
+                    "label": "NIV / HFNC"
+                  }
+                ],
+                "option_columns": 4
+              },
+              {
+                "id": "gcs_admit",
+                "type": "integer",
+                "label": "GCS on admission",
+                "min": 3,
+                "max": 15
+              },
+              {
+                "id": "map_admit",
+                "type": "number",
+                "label": "MAP",
+                "unit": "mmHg",
+                "min": 0,
+                "max": 250
+              },
+              {
+                "id": "vasopressor_admit",
+                "type": "checkbox",
+                "label": "On vasopressor"
+              },
+              {
+                "id": "lactate_admit",
+                "type": "decimal",
+                "label": "Lactate",
+                "unit": "mmol/L",
+                "min": 0,
+                "max": 30,
+                "decimals": 1
+              },
+              {
+                "id": "apache_ii",
+                "type": "integer",
+                "label": "APACHE II (first 24 h)",
+                "indexed": true,
+                "min": 0,
+                "max": 71
+              },
+              {
+                "id": "sofa_admit",
+                "type": "integer",
+                "label": "SOFA on admission",
+                "indexed": true,
+                "min": 0,
+                "max": 24
+              }
+            ],
+            "layout": {
+              "type": "grid",
+              "columns": 2
+            }
+          },
+          {
+            "id": "goals",
+            "title": "Goals of care · เป้าหมายการรักษา",
+            "fields": [
+              {
+                "id": "family_informed",
+                "type": "checkbox",
+                "label": "Family informed of ICU admission"
+              },
+              {
+                "id": "goals_of_care",
+                "type": "textarea",
+                "label": "Goals of care / family meeting notes",
+                "max_length": 2000
+              },
+              {
+                "id": "assessed_by",
+                "type": "text",
+                "label": "Assessed by",
+                "max_length": 200,
+                "required": true
+              },
+              {
+                "id": "assessor_sign",
+                "type": "signature",
+                "label": "Signature"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "neuro_icu_assessment": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "neuro_icu_assessment",
+        "schema_version": 1,
+        "title": "Neuro ICU Assessment",
+        "description": "แบบประเมินทางระบบประสาทแรกรับ Neuro ICU พร้อม scale ตามโรค",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "diagnosis",
+            "title": "Neurological diagnosis · การวินิจฉัย",
+            "fields": [
+              {
+                "id": "neuro_dx",
+                "type": "radio",
+                "label": "Primary neurological diagnosis",
+                "options": [
+                  {
+                    "value": "tbi",
+                    "label": "Traumatic brain injury"
+                  },
+                  {
+                    "value": "sah",
+                    "label": "Subarachnoid haemorrhage"
+                  },
+                  {
+                    "value": "ich",
+                    "label": "Intracerebral haemorrhage"
+                  },
+                  {
+                    "value": "stroke",
+                    "label": "Acute ischaemic stroke"
+                  },
+                  {
+                    "value": "post_crani",
+                    "label": "Post-craniotomy / tumour"
+                  },
+                  {
+                    "value": "status",
+                    "label": "Status epilepticus"
+                  },
+                  {
+                    "value": "cns_inf",
+                    "label": "CNS infection"
+                  },
+                  {
+                    "value": "sci",
+                    "label": "Spinal cord injury"
+                  },
+                  {
+                    "value": "other",
+                    "label": "Other"
+                  }
+                ],
+                "required": true,
+                "indexed": true,
+                "option_columns": 3
+              },
+              {
+                "id": "ictus_at",
+                "type": "datetime",
+                "label": "Onset / injury time"
+              },
+              {
+                "id": "neurosurgeon",
+                "type": "text",
+                "label": "Neurosurgeon / neurologist",
+                "max_length": 200
+              }
+            ]
+          },
+          {
+            "id": "baseline",
+            "title": "Baseline neuro exam · ตรวจร่างกายแรกรับ",
+            "fields": [
+              {
+                "id": "gcs_e",
+                "type": "radio",
+                "label": "Eye opening (E)",
+                "options": [
+                  {
+                    "value": "4",
+                    "label": "4 – Spontaneous"
+                  },
+                  {
+                    "value": "3",
+                    "label": "3 – To voice"
+                  },
+                  {
+                    "value": "2",
+                    "label": "2 – To pain"
+                  },
+                  {
+                    "value": "1",
+                    "label": "1 – None"
+                  }
+                ],
+                "option_columns": 4
+              },
+              {
+                "id": "gcs_v",
+                "type": "radio",
+                "label": "Verbal (V)",
+                "options": [
+                  {
+                    "value": "5",
+                    "label": "5 – Oriented"
+                  },
+                  {
+                    "value": "4",
+                    "label": "4 – Confused"
+                  },
+                  {
+                    "value": "3",
+                    "label": "3 – Words"
+                  },
+                  {
+                    "value": "2",
+                    "label": "2 – Sounds"
+                  },
+                  {
+                    "value": "1",
+                    "label": "1 – None"
+                  },
+                  {
+                    "value": "t",
+                    "label": "T – Intubated"
+                  }
+                ],
+                "option_columns": 3
+              },
+              {
+                "id": "gcs_m",
+                "type": "radio",
+                "label": "Motor (M)",
+                "options": [
+                  {
+                    "value": "6",
+                    "label": "6 – Obeys"
+                  },
+                  {
+                    "value": "5",
+                    "label": "5 – Localises"
+                  },
+                  {
+                    "value": "4",
+                    "label": "4 – Withdraws"
+                  },
+                  {
+                    "value": "3",
+                    "label": "3 – Abnormal flexion"
+                  },
+                  {
+                    "value": "2",
+                    "label": "2 – Extension"
+                  },
+                  {
+                    "value": "1",
+                    "label": "1 – None"
+                  }
+                ],
+                "option_columns": 3
+              },
+              {
+                "id": "gcs_total",
+                "type": "calculated",
+                "label": "GCS total",
+                "formula": "IF(gcs_e='4', 4, IF(gcs_e='3', 3, IF(gcs_e='2', 2, IF(gcs_e='1', 1, NULL)))) + IF(gcs_v='5', 5, IF(gcs_v='4', 4, IF(gcs_v='3', 3, IF(gcs_v='2', 2, IF(gcs_v='1', 1, IF(gcs_v='t', 1, NULL)))))) + IF(gcs_m='6', 6, IF(gcs_m='5', 5, IF(gcs_m='4', 4, IF(gcs_m='3', 3, IF(gcs_m='2', 2, IF(gcs_m='1', 1, NULL))))))",
+                "decimals": 0,
+                "indexed": true
+              },
+              {
+                "id": "pupil_l_mm",
+                "type": "decimal",
+                "label": "Left pupil size",
+                "unit": "mm",
+                "min": 1,
+                "max": 9,
+                "decimals": 1
+              },
+              {
+                "id": "pupil_l_react",
+                "type": "select",
+                "label": "Left pupil reaction",
+                "options": [
+                  {
+                    "value": "brisk",
+                    "label": "Brisk"
+                  },
+                  {
+                    "value": "sluggish",
+                    "label": "Sluggish"
+                  },
+                  {
+                    "value": "fixed",
+                    "label": "Fixed"
+                  },
+                  {
+                    "value": "closed",
+                    "label": "Closed / unable"
+                  }
+                ]
+              },
+              {
+                "id": "pupil_r_mm",
+                "type": "decimal",
+                "label": "Right pupil size",
+                "unit": "mm",
+                "min": 1,
+                "max": 9,
+                "decimals": 1
+              },
+              {
+                "id": "pupil_r_react",
+                "type": "select",
+                "label": "Right pupil reaction",
+                "options": [
+                  {
+                    "value": "brisk",
+                    "label": "Brisk"
+                  },
+                  {
+                    "value": "sluggish",
+                    "label": "Sluggish"
+                  },
+                  {
+                    "value": "fixed",
+                    "label": "Fixed"
+                  },
+                  {
+                    "value": "closed",
+                    "label": "Closed / unable"
+                  }
+                ]
+              },
+              {
+                "id": "motor_power",
+                "type": "matrix",
+                "label": "Motor power (MRC 0–5)",
+                "rows": [
+                  {
+                    "id": "rue",
+                    "label": "Right arm"
+                  },
+                  {
+                    "id": "lue",
+                    "label": "Left arm"
+                  },
+                  {
+                    "id": "rle",
+                    "label": "Right leg"
+                  },
+                  {
+                    "id": "lle",
+                    "label": "Left leg"
+                  }
+                ],
+                "cols": [
+                  {
+                    "id": "prox",
+                    "label": "Proximal"
+                  },
+                  {
+                    "id": "dist",
+                    "label": "Distal"
+                  }
+                ],
+                "cell": {
+                  "type": "integer",
+                  "min": 0,
+                  "max": 5
+                }
+              },
+              {
+                "id": "brainstem",
+                "type": "multiselect",
+                "label": "Brainstem reflexes present",
+                "options": [
+                  {
+                    "value": "corneal",
+                    "label": "Corneal"
+                  },
+                  {
+                    "value": "cough",
+                    "label": "Cough"
+                  },
+                  {
+                    "value": "gag",
+                    "label": "Gag"
+                  },
+                  {
+                    "value": "oculo",
+                    "label": "Oculocephalic"
+                  }
+                ],
+                "option_columns": 4
+              }
+            ]
+          },
+          {
+            "id": "tbi",
+            "title": "TBI",
+            "fields": [
+              {
+                "id": "tbi_severity",
+                "type": "radio",
+                "label": "Severity (by GCS)",
+                "options": [
+                  {
+                    "value": "mild",
+                    "label": "Mild 13–15"
+                  },
+                  {
+                    "value": "moderate",
+                    "label": "Moderate 9–12"
+                  },
+                  {
+                    "value": "severe",
+                    "label": "Severe 3–8"
+                  }
+                ],
+                "option_columns": 3
+              },
+              {
+                "id": "marshall_ct",
+                "type": "integer",
+                "label": "Marshall CT class",
+                "min": 1,
+                "max": 6
+              },
+              {
+                "id": "polytrauma",
+                "type": "checkbox",
+                "label": "Polytrauma"
+              }
+            ],
+            "visibility": {
+              "when": {
+                "field": "neuro_dx",
+                "operator": "equals",
+                "value": "tbi"
+              }
+            }
+          },
+          {
+            "id": "sah",
+            "title": "Subarachnoid haemorrhage",
+            "fields": [
+              {
+                "id": "hunt_hess",
+                "type": "radio",
+                "label": "Hunt & Hess",
+                "options": [
+                  {
+                    "value": "1",
+                    "label": "I"
+                  },
+                  {
+                    "value": "2",
+                    "label": "II"
+                  },
+                  {
+                    "value": "3",
+                    "label": "III"
+                  },
+                  {
+                    "value": "4",
+                    "label": "IV"
+                  },
+                  {
+                    "value": "5",
+                    "label": "V"
+                  }
+                ],
+                "option_columns": 5,
+                "indexed": true
+              },
+              {
+                "id": "wfns",
+                "type": "radio",
+                "label": "WFNS grade",
+                "options": [
+                  {
+                    "value": "1",
+                    "label": "I"
+                  },
+                  {
+                    "value": "2",
+                    "label": "II"
+                  },
+                  {
+                    "value": "3",
+                    "label": "III"
+                  },
+                  {
+                    "value": "4",
+                    "label": "IV"
+                  },
+                  {
+                    "value": "5",
+                    "label": "V"
+                  }
+                ],
+                "option_columns": 5
+              },
+              {
+                "id": "mfisher",
+                "type": "radio",
+                "label": "Modified Fisher",
+                "options": [
+                  {
+                    "value": "0",
+                    "label": "0"
+                  },
+                  {
+                    "value": "1",
+                    "label": "1"
+                  },
+                  {
+                    "value": "2",
+                    "label": "2"
+                  },
+                  {
+                    "value": "3",
+                    "label": "3"
+                  },
+                  {
+                    "value": "4",
+                    "label": "4"
+                  }
+                ],
+                "option_columns": 5
+              },
+              {
+                "id": "aneurysm_tx",
+                "type": "radio",
+                "label": "Aneurysm treatment",
+                "options": [
+                  {
+                    "value": "coil",
+                    "label": "Coiling"
+                  },
+                  {
+                    "value": "clip",
+                    "label": "Clipping"
+                  },
+                  {
+                    "value": "pending",
+                    "label": "Pending"
+                  },
+                  {
+                    "value": "none",
+                    "label": "Not treated"
+                  }
+                ],
+                "option_columns": 4
+              },
+              {
+                "id": "nimodipine",
+                "type": "checkbox",
+                "label": "Nimodipine started"
+              }
+            ],
+            "visibility": {
+              "when": {
+                "field": "neuro_dx",
+                "operator": "equals",
+                "value": "sah"
+              }
+            }
+          },
+          {
+            "id": "ich",
+            "title": "Intracerebral haemorrhage – ICH score",
+            "fields": [
+              {
+                "id": "ich_volume_ml",
+                "type": "integer",
+                "label": "Haematoma volume (ABC/2)",
+                "unit": "mL",
+                "min": 0,
+                "max": 300
+              },
+              {
+                "id": "ich_ivh",
+                "type": "checkbox",
+                "label": "Intraventricular extension"
+              },
+              {
+                "id": "ich_infratentorial",
+                "type": "checkbox",
+                "label": "Infratentorial origin"
+              },
+              {
+                "id": "ich_age",
+                "type": "integer",
+                "label": "Age",
+                "unit": "y",
+                "min": 0,
+                "max": 120
+              },
+              {
+                "id": "ich_score",
+                "type": "calculated",
+                "label": "ICH score (0–6)",
+                "formula": "IF(gcs_total <= 4, 2, IF(gcs_total <= 12, 1, 0)) + IF(ich_volume_ml >= 30, 1, 0) + IF(ich_ivh, 1, 0) + IF(ich_infratentorial, 1, 0) + IF(ich_age >= 80, 1, 0)",
+                "decimals": 0,
+                "indexed": true
+              },
+              {
+                "id": "anticoag_reversal",
+                "type": "checkbox",
+                "label": "Anticoagulant reversal given"
+              },
+              {
+                "id": "sbp_target",
+                "type": "integer",
+                "label": "SBP target",
+                "unit": "mmHg",
+                "min": 100,
+                "max": 220
+              }
+            ],
+            "visibility": {
+              "when": {
+                "field": "neuro_dx",
+                "operator": "equals",
+                "value": "ich"
+              }
+            }
+          },
+          {
+            "id": "stroke",
+            "title": "Acute ischaemic stroke",
+            "fields": [
+              {
+                "id": "nihss",
+                "type": "integer",
+                "label": "NIHSS",
+                "indexed": true,
+                "min": 0,
+                "max": 42
+              },
+              {
+                "id": "reperfusion",
+                "type": "radio",
+                "label": "Reperfusion",
+                "options": [
+                  {
+                    "value": "ivt",
+                    "label": "IV thrombolysis"
+                  },
+                  {
+                    "value": "evt",
+                    "label": "Thrombectomy"
+                  },
+                  {
+                    "value": "both",
+                    "label": "Both"
+                  },
+                  {
+                    "value": "none",
+                    "label": "None"
+                  }
+                ],
+                "option_columns": 4
+              },
+              {
+                "id": "reperfusion_at",
+                "type": "datetime",
+                "label": "Needle / groin puncture time"
+              },
+              {
+                "id": "dysphagia_screen",
+                "type": "checkbox",
+                "label": "Dysphagia screen before oral intake"
+              }
+            ],
+            "visibility": {
+              "when": {
+                "field": "neuro_dx",
+                "operator": "equals",
+                "value": "stroke"
+              }
+            }
+          },
+          {
+            "id": "status_epi",
+            "title": "Seizures",
+            "fields": [
+              {
+                "id": "eeg",
+                "type": "radio",
+                "label": "EEG monitoring",
+                "options": [
+                  {
+                    "value": "none",
+                    "label": "None"
+                  },
+                  {
+                    "value": "routine",
+                    "label": "Routine"
+                  },
+                  {
+                    "value": "continuous",
+                    "label": "Continuous cEEG"
+                  }
+                ],
+                "option_columns": 3
+              },
+              {
+                "id": "aed",
+                "type": "textarea",
+                "label": "Antiseizure medication",
+                "max_length": 1000
+              }
+            ],
+            "visibility": {
+              "when": {
+                "or": [
+                  {
+                    "field": "neuro_dx",
+                    "operator": "equals",
+                    "value": "status"
+                  },
+                  {
+                    "field": "neuro_dx",
+                    "operator": "equals",
+                    "value": "tbi"
+                  },
+                  {
+                    "field": "neuro_dx",
+                    "operator": "equals",
+                    "value": "sah"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "icp",
+            "title": "ICP monitoring and targets · เป้าหมาย ICP/CPP",
+            "fields": [
+              {
+                "id": "icp_device",
+                "type": "radio",
+                "label": "ICP device",
+                "options": [
+                  {
+                    "value": "none",
+                    "label": "None"
+                  },
+                  {
+                    "value": "evd",
+                    "label": "EVD"
+                  },
+                  {
+                    "value": "parenchymal",
+                    "label": "Parenchymal bolt"
+                  }
+                ],
+                "option_columns": 3
+              },
+              {
+                "id": "evd_level",
+                "type": "integer",
+                "label": "EVD level above tragus",
+                "visibility": {
+                  "when": {
+                    "field": "icp_device",
+                    "operator": "equals",
+                    "value": "evd"
+                  }
+                },
+                "unit": "cmH₂O",
+                "min": 0,
+                "max": 30
+              },
+              {
+                "id": "icp_target",
+                "type": "integer",
+                "label": "ICP threshold",
+                "unit": "mmHg",
+                "min": 10,
+                "max": 30
+              },
+              {
+                "id": "cpp_target_low",
+                "type": "integer",
+                "label": "CPP target – lower",
+                "unit": "mmHg",
+                "min": 40,
+                "max": 90
+              },
+              {
+                "id": "cpp_target_high",
+                "type": "integer",
+                "label": "CPP target – upper",
+                "unit": "mmHg",
+                "min": 50,
+                "max": 110
+              },
+              {
+                "id": "assessed_by",
+                "type": "text",
+                "label": "Assessed by",
+                "max_length": 200,
+                "required": true
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "neuro_icu_obs_chart": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "neuro_icu_obs_chart",
+        "schema_version": 1,
+        "title": "Neuro Observation Chart",
+        "description": "บันทึก neuro sign รายชั่วโมง (GCS, pupils, ICP/CPP)",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "obs",
+            "title": "Neuro observations · neuro sign",
+            "fields": [
+              {
+                "id": "entries",
+                "type": "repeat",
+                "label": "Observation",
+                "view": "table",
+                "fields": [
+                  {
+                    "id": "at",
+                    "type": "time",
+                    "label": "Time",
+                    "required": true
+                  },
+                  {
+                    "id": "e",
+                    "type": "select",
+                    "label": "E",
+                    "options": [
+                      {
+                        "value": "4",
+                        "label": "4 – Spontaneous"
+                      },
+                      {
+                        "value": "3",
+                        "label": "3 – To voice"
+                      },
+                      {
+                        "value": "2",
+                        "label": "2 – To pain"
+                      },
+                      {
+                        "value": "1",
+                        "label": "1 – None"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "v",
+                    "type": "select",
+                    "label": "V",
+                    "options": [
+                      {
+                        "value": "5",
+                        "label": "5 – Oriented"
+                      },
+                      {
+                        "value": "4",
+                        "label": "4 – Confused"
+                      },
+                      {
+                        "value": "3",
+                        "label": "3 – Words"
+                      },
+                      {
+                        "value": "2",
+                        "label": "2 – Sounds"
+                      },
+                      {
+                        "value": "1",
+                        "label": "1 – None"
+                      },
+                      {
+                        "value": "t",
+                        "label": "T – Intubated"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "m",
+                    "type": "select",
+                    "label": "M",
+                    "options": [
+                      {
+                        "value": "6",
+                        "label": "6 – Obeys"
+                      },
+                      {
+                        "value": "5",
+                        "label": "5 – Localises"
+                      },
+                      {
+                        "value": "4",
+                        "label": "4 – Withdraws"
+                      },
+                      {
+                        "value": "3",
+                        "label": "3 – Abnormal flexion"
+                      },
+                      {
+                        "value": "2",
+                        "label": "2 – Extension"
+                      },
+                      {
+                        "value": "1",
+                        "label": "1 – None"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "gcs",
+                    "type": "calculated",
+                    "label": "GCS",
+                    "formula": "IF(e='4', 4, IF(e='3', 3, IF(e='2', 2, IF(e='1', 1, NULL)))) + IF(v='5', 5, IF(v='4', 4, IF(v='3', 3, IF(v='2', 2, IF(v='1', 1, IF(v='t', 1, NULL)))))) + IF(m='6', 6, IF(m='5', 5, IF(m='4', 4, IF(m='3', 3, IF(m='2', 2, IF(m='1', 1, NULL))))))",
+                    "decimals": 0
+                  },
+                  {
+                    "id": "pl",
+                    "type": "decimal",
+                    "label": "L pupil",
+                    "unit": "mm",
+                    "min": 1,
+                    "max": 9,
+                    "decimals": 1
+                  },
+                  {
+                    "id": "plr",
+                    "type": "select",
+                    "label": "L react",
+                    "options": [
+                      {
+                        "value": "brisk",
+                        "label": "Brisk"
+                      },
+                      {
+                        "value": "sluggish",
+                        "label": "Sluggish"
+                      },
+                      {
+                        "value": "fixed",
+                        "label": "Fixed"
+                      },
+                      {
+                        "value": "closed",
+                        "label": "Closed / unable"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "pr",
+                    "type": "decimal",
+                    "label": "R pupil",
+                    "unit": "mm",
+                    "min": 1,
+                    "max": 9,
+                    "decimals": 1
+                  },
+                  {
+                    "id": "prr",
+                    "type": "select",
+                    "label": "R react",
+                    "options": [
+                      {
+                        "value": "brisk",
+                        "label": "Brisk"
+                      },
+                      {
+                        "value": "sluggish",
+                        "label": "Sluggish"
+                      },
+                      {
+                        "value": "fixed",
+                        "label": "Fixed"
+                      },
+                      {
+                        "value": "closed",
+                        "label": "Closed / unable"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "icp",
+                    "type": "integer",
+                    "label": "ICP",
+                    "unit": "mmHg",
+                    "min": -10,
+                    "max": 100
+                  },
+                  {
+                    "id": "map",
+                    "type": "integer",
+                    "label": "MAP",
+                    "unit": "mmHg",
+                    "min": 0,
+                    "max": 250
+                  },
+                  {
+                    "id": "cpp",
+                    "type": "calculated",
+                    "label": "CPP",
+                    "formula": "map - icp",
+                    "decimals": 0,
+                    "unit": "mmHg"
+                  },
+                  {
+                    "id": "evd_out",
+                    "type": "integer",
+                    "label": "EVD out",
+                    "unit": "mL",
+                    "min": 0,
+                    "max": 200
+                  },
+                  {
+                    "id": "seizure",
+                    "type": "checkbox",
+                    "label": "Seizure"
+                  },
+                  {
+                    "id": "by",
+                    "type": "text",
+                    "label": "Nurse",
+                    "max_length": 30
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "escalation",
+            "title": "Escalation · การรายงานแพทย์",
+            "fields": [
+              {
+                "id": "escalation_notes",
+                "type": "textarea",
+                "label": "Drop in GCS ≥ 2, new pupil asymmetry, ICP > threshold > 5 min, CPP below target: time reported and action taken",
+                "max_length": 3000
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "neuro_icu_brain_bundle": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "neuro_icu_brain_bundle",
+        "schema_version": 1,
+        "title": "Brain Protection Bundle",
+        "description": "ป้องกัน secondary brain injury – checked every shift",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "shifts",
+            "title": "Shift checks · ตรวจทุกเวร",
+            "fields": [
+              {
+                "id": "checks",
+                "type": "repeat",
+                "label": "Shift",
+                "view": "cards",
+                "fields": [
+                  {
+                    "id": "shift_date",
+                    "type": "date",
+                    "label": "Date",
+                    "required": true
+                  },
+                  {
+                    "id": "shift",
+                    "type": "radio",
+                    "label": "Shift",
+                    "options": [
+                      {
+                        "value": "day",
+                        "label": "Day"
+                      },
+                      {
+                        "value": "evening",
+                        "label": "Evening"
+                      },
+                      {
+                        "value": "night",
+                        "label": "Night"
+                      }
+                    ],
+                    "option_columns": 3
+                  },
+                  {
+                    "id": "hob",
+                    "type": "checkbox",
+                    "label": "Head of bed 30°, head neutral, collar / ETT ties not tight"
+                  },
+                  {
+                    "id": "spo2_ok",
+                    "type": "checkbox",
+                    "label": "SpO₂ ≥ 94 %"
+                  },
+                  {
+                    "id": "paco2_ok",
+                    "type": "checkbox",
+                    "label": "PaCO₂ / EtCO₂ 35–40 mmHg (no prophylactic hyperventilation)"
+                  },
+                  {
+                    "id": "cpp_ok",
+                    "type": "checkbox",
+                    "label": "MAP / CPP within targets"
+                  },
+                  {
+                    "id": "na_ok",
+                    "type": "checkbox",
+                    "label": "Sodium within target (avoid hyponatraemia)"
+                  },
+                  {
+                    "id": "na",
+                    "type": "number",
+                    "label": "Sodium",
+                    "unit": "mmol/L",
+                    "min": 100,
+                    "max": 180
+                  },
+                  {
+                    "id": "glucose_ok",
+                    "type": "checkbox",
+                    "label": "Glucose 140–180 mg/dL"
+                  },
+                  {
+                    "id": "normothermia",
+                    "type": "checkbox",
+                    "label": "Temperature ≤ 37.5 °C"
+                  },
+                  {
+                    "id": "sedation_ok",
+                    "type": "checkbox",
+                    "label": "Sedation / analgesia at target, daily neuro-check window"
+                  },
+                  {
+                    "id": "seizure_ppx",
+                    "type": "checkbox",
+                    "label": "Seizure prophylaxis / treatment given as ordered"
+                  },
+                  {
+                    "id": "dvt_ok",
+                    "type": "checkbox",
+                    "label": "DVT prophylaxis (mechanical; drug when neurosurgery clears)"
+                  },
+                  {
+                    "id": "icp_tier",
+                    "type": "multiselect",
+                    "label": "ICP therapy used this shift",
+                    "options": [
+                      {
+                        "value": "tier0",
+                        "label": "Tier 0 – basic measures"
+                      },
+                      {
+                        "value": "tier1_csf",
+                        "label": "Tier 1 – CSF drainage"
+                      },
+                      {
+                        "value": "tier1_osm",
+                        "label": "Tier 1 – mannitol / hypertonic saline"
+                      },
+                      {
+                        "value": "tier2",
+                        "label": "Tier 2 – deeper sedation / mild hypocapnia"
+                      },
+                      {
+                        "value": "tier3",
+                        "label": "Tier 3 – barbiturate / decompression"
+                      }
+                    ],
+                    "option_columns": 2
+                  },
+                  {
+                    "id": "by",
+                    "type": "text",
+                    "label": "Nurse",
+                    "max_length": 60
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "icu_daily_round": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "icu_daily_round",
+        "schema_version": 1,
+        "title": "ICU Daily Round (FAST HUGS BID)",
+        "description": "แบบบันทึก round ประจำวัน – one card per ICU day",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "days",
+            "title": "Daily rounds · บันทึกรายวัน",
+            "fields": [
+              {
+                "id": "rounds",
+                "type": "repeat",
+                "label": "ICU day",
+                "min_items": 1,
+                "view": "cards",
+                "fields": [
+                  {
+                    "id": "round_date",
+                    "type": "date",
+                    "label": "Date",
+                    "required": true
+                  },
+                  {
+                    "id": "icu_day",
+                    "type": "integer",
+                    "label": "ICU day",
+                    "min": 1,
+                    "max": 365
+                  },
+                  {
+                    "id": "rass",
+                    "type": "radio",
+                    "label": "RASS",
+                    "options": [
+                      {
+                        "value": "4",
+                        "label": "+4 Combative"
+                      },
+                      {
+                        "value": "3",
+                        "label": "+3 Very agitated"
+                      },
+                      {
+                        "value": "2",
+                        "label": "+2 Agitated"
+                      },
+                      {
+                        "value": "1",
+                        "label": "+1 Restless"
+                      },
+                      {
+                        "value": "0",
+                        "label": "0 Alert and calm"
+                      },
+                      {
+                        "value": "-1",
+                        "label": "−1 Drowsy"
+                      },
+                      {
+                        "value": "-2",
+                        "label": "−2 Light sedation"
+                      },
+                      {
+                        "value": "-3",
+                        "label": "−3 Moderate sedation"
+                      },
+                      {
+                        "value": "-4",
+                        "label": "−4 Deep sedation"
+                      },
+                      {
+                        "value": "-5",
+                        "label": "−5 Unarousable"
+                      }
+                    ],
+                    "option_columns": 5
+                  },
+                  {
+                    "id": "rass_target",
+                    "type": "radio",
+                    "label": "RASS target",
+                    "options": [
+                      {
+                        "value": "0",
+                        "label": "0"
+                      },
+                      {
+                        "value": "-1",
+                        "label": "−1"
+                      },
+                      {
+                        "value": "-2",
+                        "label": "−2"
+                      },
+                      {
+                        "value": "-3",
+                        "label": "−3 or deeper"
+                      }
+                    ],
+                    "option_columns": 4
+                  },
+                  {
+                    "id": "cam_icu",
+                    "type": "radio",
+                    "label": "CAM-ICU (delirium)",
+                    "options": [
+                      {
+                        "value": "negative",
+                        "label": "Negative"
+                      },
+                      {
+                        "value": "positive",
+                        "label": "Positive"
+                      },
+                      {
+                        "value": "unable",
+                        "label": "Unable to assess (RASS −4/−5)"
+                      }
+                    ],
+                    "option_columns": 3
+                  },
+                  {
+                    "id": "cpot",
+                    "type": "integer",
+                    "label": "Pain – CPOT",
+                    "min": 0,
+                    "max": 8
+                  },
+                  {
+                    "id": "feeding",
+                    "type": "radio",
+                    "label": "F – Feeding",
+                    "options": [
+                      {
+                        "value": "enteral",
+                        "label": "Enteral"
+                      },
+                      {
+                        "value": "oral",
+                        "label": "Oral"
+                      },
+                      {
+                        "value": "parenteral",
+                        "label": "Parenteral"
+                      },
+                      {
+                        "value": "npo",
+                        "label": "NPO"
+                      }
+                    ],
+                    "option_columns": 4
+                  },
+                  {
+                    "id": "analgesia_ok",
+                    "type": "checkbox",
+                    "label": "A – Analgesia adequate"
+                  },
+                  {
+                    "id": "sat_done",
+                    "type": "radio",
+                    "label": "S – Sedation interruption (SAT)",
+                    "options": [
+                      {
+                        "value": "yes",
+                        "label": "Yes"
+                      },
+                      {
+                        "value": "no",
+                        "label": "No"
+                      },
+                      {
+                        "value": "na",
+                        "label": "N/A"
+                      }
+                    ],
+                    "option_columns": 3
+                  },
+                  {
+                    "id": "dvt",
+                    "type": "radio",
+                    "label": "T – Thromboprophylaxis",
+                    "options": [
+                      {
+                        "value": "lmwh",
+                        "label": "LMWH"
+                      },
+                      {
+                        "value": "ufh",
+                        "label": "UFH"
+                      },
+                      {
+                        "value": "mechanical",
+                        "label": "Mechanical only"
+                      },
+                      {
+                        "value": "therapeutic",
+                        "label": "Therapeutic anticoagulation"
+                      },
+                      {
+                        "value": "none",
+                        "label": "Contraindicated"
+                      }
+                    ],
+                    "option_columns": 3
+                  },
+                  {
+                    "id": "hob_30",
+                    "type": "checkbox",
+                    "label": "H – Head of bed ≥ 30°"
+                  },
+                  {
+                    "id": "ulcer_ppx",
+                    "type": "checkbox",
+                    "label": "U – Stress-ulcer prophylaxis indicated and given"
+                  },
+                  {
+                    "id": "glucose_ok",
+                    "type": "checkbox",
+                    "label": "G – Glucose 140–180 mg/dL"
+                  },
+                  {
+                    "id": "sbt_done",
+                    "type": "radio",
+                    "label": "S – Spontaneous breathing trial",
+                    "options": [
+                      {
+                        "value": "yes",
+                        "label": "Yes"
+                      },
+                      {
+                        "value": "no",
+                        "label": "No"
+                      },
+                      {
+                        "value": "na",
+                        "label": "N/A"
+                      }
+                    ],
+                    "option_columns": 3
+                  },
+                  {
+                    "id": "bowel_ok",
+                    "type": "checkbox",
+                    "label": "B – Bowels open / regimen"
+                  },
+                  {
+                    "id": "lines_reviewed",
+                    "type": "checkbox",
+                    "label": "I – Indwelling lines and catheters reviewed"
+                  },
+                  {
+                    "id": "abx_reviewed",
+                    "type": "checkbox",
+                    "label": "D – De-escalation / antibiotic day reviewed"
+                  },
+                  {
+                    "id": "mobility",
+                    "type": "radio",
+                    "label": "Mobility level",
+                    "options": [
+                      {
+                        "value": "0",
+                        "label": "0 Bed rest"
+                      },
+                      {
+                        "value": "1",
+                        "label": "1 Passive ROM"
+                      },
+                      {
+                        "value": "2",
+                        "label": "2 Sit edge of bed"
+                      },
+                      {
+                        "value": "3",
+                        "label": "3 Stand / chair"
+                      },
+                      {
+                        "value": "4",
+                        "label": "4 Walk"
+                      }
+                    ],
+                    "option_columns": 5
+                  },
+                  {
+                    "id": "skin_ok",
+                    "type": "checkbox",
+                    "label": "Skin intact – no new pressure injury"
+                  },
+                  {
+                    "id": "plan",
+                    "type": "textarea",
+                    "label": "Problems and plan",
+                    "max_length": 3000
+                  },
+                  {
+                    "id": "family_updated",
+                    "type": "checkbox",
+                    "label": "Family updated today"
+                  },
+                  {
+                    "id": "round_by",
+                    "type": "text",
+                    "label": "Physician",
+                    "max_length": 200
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "icu_lines_devices": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "icu_lines_devices",
+        "schema_version": 1,
+        "title": "ICU Lines & Devices",
+        "description": "ติดตามสายและอุปกรณ์ (CLABSI / CAUTI / VAP prevention)",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "devices",
+            "title": "Invasive devices · สายและอุปกรณ์",
+            "fields": [
+              {
+                "id": "items",
+                "type": "repeat",
+                "label": "Device",
+                "view": "table",
+                "fields": [
+                  {
+                    "id": "device",
+                    "type": "select",
+                    "label": "Device",
+                    "options": [
+                      {
+                        "value": "cvc",
+                        "label": "Central venous catheter"
+                      },
+                      {
+                        "value": "picc",
+                        "label": "PICC"
+                      },
+                      {
+                        "value": "art",
+                        "label": "Arterial line"
+                      },
+                      {
+                        "value": "hd",
+                        "label": "Dialysis catheter"
+                      },
+                      {
+                        "value": "foley",
+                        "label": "Urinary catheter"
+                      },
+                      {
+                        "value": "ett",
+                        "label": "ETT"
+                      },
+                      {
+                        "value": "trach",
+                        "label": "Tracheostomy"
+                      },
+                      {
+                        "value": "evd",
+                        "label": "EVD"
+                      },
+                      {
+                        "value": "icp",
+                        "label": "ICP bolt"
+                      },
+                      {
+                        "value": "icd",
+                        "label": "Chest drain"
+                      },
+                      {
+                        "value": "ngt",
+                        "label": "NG / OG tube"
+                      },
+                      {
+                        "value": "other",
+                        "label": "Other"
+                      }
+                    ],
+                    "required": true
+                  },
+                  {
+                    "id": "site",
+                    "type": "text",
+                    "label": "Site",
+                    "max_length": 60
+                  },
+                  {
+                    "id": "inserted_on",
+                    "type": "date",
+                    "label": "Inserted",
+                    "required": true
+                  },
+                  {
+                    "id": "inserted_by",
+                    "type": "text",
+                    "label": "By",
+                    "max_length": 60
+                  },
+                  {
+                    "id": "removed_on",
+                    "type": "date",
+                    "label": "Removed"
+                  },
+                  {
+                    "id": "days",
+                    "type": "calculated",
+                    "label": "Days",
+                    "formula": "DAYS(inserted_on, COALESCE(removed_on, TODAY()))",
+                    "decimals": 0,
+                    "unit": "d"
+                  },
+                  {
+                    "id": "still_needed",
+                    "type": "checkbox",
+                    "label": "Needed today"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "bundles",
+            "title": "Prevention bundles · bundle ป้องกันการติดเชื้อ",
+            "fields": [
+              {
+                "id": "clabsi_hand",
+                "type": "checkbox",
+                "label": "CLABSI – hand hygiene and maximal barrier at insertion"
+              },
+              {
+                "id": "clabsi_chg",
+                "type": "checkbox",
+                "label": "CLABSI – chlorhexidine skin prep, dressing clean and dated"
+              },
+              {
+                "id": "cauti_closed",
+                "type": "checkbox",
+                "label": "CAUTI – closed drainage, bag below bladder"
+              },
+              {
+                "id": "cauti_review",
+                "type": "checkbox",
+                "label": "CAUTI – daily removal review"
+              },
+              {
+                "id": "bundle_notes",
+                "type": "textarea",
+                "label": "Notes",
+                "max_length": 1000
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "icu_discharge": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "icu_discharge",
+        "schema_version": 1,
+        "title": "ICU Discharge / Transfer Summary",
+        "description": "สรุปการจำหน่าย/ย้ายออกจาก ICU",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "discharge",
+            "title": "Discharge · การจำหน่าย",
+            "fields": [
+              {
+                "id": "discharge_at",
+                "type": "datetime",
+                "label": "Left ICU",
+                "required": true,
+                "indexed": true
+              },
+              {
+                "id": "icu_admit_date",
+                "type": "date",
+                "label": "ICU admission date",
+                "required": true
+              },
+              {
+                "id": "icu_los",
+                "type": "calculated",
+                "label": "ICU length of stay",
+                "formula": "DAYS(icu_admit_date, discharge_at)",
+                "decimals": 0,
+                "unit": "days"
+              },
+              {
+                "id": "destination",
+                "type": "radio",
+                "label": "Destination",
+                "options": [
+                  {
+                    "value": "ward",
+                    "label": "Ward"
+                  },
+                  {
+                    "value": "step_down",
+                    "label": "Step-down / HDU"
+                  },
+                  {
+                    "value": "home",
+                    "label": "Home"
+                  },
+                  {
+                    "value": "transfer",
+                    "label": "Other hospital"
+                  },
+                  {
+                    "value": "death",
+                    "label": "Died in ICU"
+                  }
+                ],
+                "required": true,
+                "indexed": true,
+                "option_columns": 5
+              },
+              {
+                "id": "icu_type",
+                "type": "radio",
+                "label": "ICU",
+                "options": [
+                  {
+                    "value": "neuro",
+                    "label": "Neuro ICU"
+                  },
+                  {
+                    "value": "critical",
+                    "label": "Critical care"
+                  }
+                ],
+                "option_columns": 2
+              },
+              {
+                "id": "final_diagnosis",
+                "type": "textarea",
+                "label": "Final diagnoses",
+                "max_length": 2000,
+                "required": true
+              },
+              {
+                "id": "procedures",
+                "type": "multiselect",
+                "label": "ICU procedures",
+                "options": [
+                  {
+                    "value": "mv",
+                    "label": "Mechanical ventilation"
+                  },
+                  {
+                    "value": "niv",
+                    "label": "NIV / HFNC"
+                  },
+                  {
+                    "value": "cvc",
+                    "label": "Central line"
+                  },
+                  {
+                    "value": "art",
+                    "label": "Arterial line"
+                  },
+                  {
+                    "value": "rrt",
+                    "label": "Renal replacement therapy"
+                  },
+                  {
+                    "value": "vaso",
+                    "label": "Vasopressors"
+                  },
+                  {
+                    "value": "trach",
+                    "label": "Tracheostomy"
+                  },
+                  {
+                    "value": "evd",
+                    "label": "EVD / ICP monitoring"
+                  },
+                  {
+                    "value": "craniotomy",
+                    "label": "Neurosurgery"
+                  },
+                  {
+                    "value": "transfusion",
+                    "label": "Transfusion"
+                  },
+                  {
+                    "value": "prone",
+                    "label": "Prone positioning"
+                  }
+                ],
+                "option_columns": 3
+              },
+              {
+                "id": "mv_days",
+                "type": "integer",
+                "label": "Ventilator days",
+                "unit": "d",
+                "min": 0,
+                "max": 365
+              },
+              {
+                "id": "complications",
+                "type": "multiselect",
+                "label": "ICU complications",
+                "options": [
+                  {
+                    "value": "vap",
+                    "label": "VAP"
+                  },
+                  {
+                    "value": "clabsi",
+                    "label": "CLABSI"
+                  },
+                  {
+                    "value": "cauti",
+                    "label": "CAUTI"
+                  },
+                  {
+                    "value": "pressure",
+                    "label": "Pressure injury"
+                  },
+                  {
+                    "value": "delirium",
+                    "label": "Delirium"
+                  },
+                  {
+                    "value": "unplanned_extub",
+                    "label": "Unplanned extubation"
+                  },
+                  {
+                    "value": "reintubation",
+                    "label": "Re-intubation < 48 h"
+                  },
+                  {
+                    "value": "dvt_pe",
+                    "label": "DVT / PE"
+                  },
+                  {
+                    "value": "aki",
+                    "label": "New AKI"
+                  }
+                ],
+                "option_columns": 3
+              }
+            ]
+          },
+          {
+            "id": "neuro_outcome",
+            "title": "Neurological outcome · ผลลัพธ์ทางระบบประสาท",
+            "fields": [
+              {
+                "id": "gcs_discharge",
+                "type": "integer",
+                "label": "GCS at discharge",
+                "min": 3,
+                "max": 15
+              },
+              {
+                "id": "mrs",
+                "type": "radio",
+                "label": "Modified Rankin Scale",
+                "options": [
+                  {
+                    "value": "0",
+                    "label": "0 No symptoms"
+                  },
+                  {
+                    "value": "1",
+                    "label": "1 No significant disability"
+                  },
+                  {
+                    "value": "2",
+                    "label": "2 Slight disability"
+                  },
+                  {
+                    "value": "3",
+                    "label": "3 Moderate disability"
+                  },
+                  {
+                    "value": "4",
+                    "label": "4 Moderately severe"
+                  },
+                  {
+                    "value": "5",
+                    "label": "5 Severe disability"
+                  },
+                  {
+                    "value": "6",
+                    "label": "6 Dead"
+                  }
+                ],
+                "option_columns": 4
+              }
+            ],
+            "visibility": {
+              "when": {
+                "field": "icu_type",
+                "operator": "equals",
+                "value": "neuro"
+              }
+            }
+          },
+          {
+            "id": "handover",
+            "title": "Handover · ส่งต่อ",
+            "fields": [
+              {
+                "id": "handover",
+                "type": "textarea",
+                "label": "Handover to receiving team (ISBAR)",
+                "max_length": 4000
+              },
+              {
+                "id": "pending",
+                "type": "textarea",
+                "label": "Pending results / follow-up",
+                "max_length": 2000
+              },
+              {
+                "id": "discharged_by",
+                "type": "text",
+                "label": "Discharged by",
+                "max_length": 200,
+                "required": true
+              },
+              {
+                "id": "discharge_sign",
+                "type": "signature",
+                "label": "Signature"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

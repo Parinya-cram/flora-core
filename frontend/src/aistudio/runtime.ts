@@ -29,6 +29,7 @@ const scriptJson = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u0
 const RUNTIME = String.raw`
 (function () {
   var D = window.__FLORA_DATA__ || {}, P = window.__FLORA_PARAMS__ || {}, T = window.__FLORA_THEME__ || {};
+  var fillHeight = 0; // fit mode: default chart height chosen to match the cell
   var PALETTE = [T.accent || "#8a6a4a", "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#14b8a6", "#ec4899", "#64748b", "#84cc16"];
   function post(message) { try { parent.postMessage(Object.assign({ flora: true, frame: window.__FLORA_FRAME__ }, message), "*"); } catch (e) {} }
   window.addEventListener("error", function (event) { post({ type: "error", message: String(event.message || event.error || "Script error") }); });
@@ -75,7 +76,9 @@ const RUNTIME = String.raw`
     return out;
   }
   function axisX(labels, w, h, m, step) {
-    var rotate = labels.length > 8 || labels.some(function (l) { return String(l).length > 10; }), out = "";
+    // Tilt the labels when the longest one does not fit its column.
+    var longest = Math.max.apply(null, labels.map(function (l) { return String(l).length; }).concat([1]));
+    var rotate = labels.length > 8 || longest * 6 + 8 > step, out = "";
     var every = Math.max(1, Math.ceil(labels.length / Math.max(1, Math.floor((w - m.l - m.r) / 28))));
     labels.forEach(function (l, i) {
       if (i % every) return;
@@ -86,7 +89,7 @@ const RUNTIME = String.raw`
     return { svg: out, extra: rotate ? 46 : 0 };
   }
   function bar(t, o) {
-    var node = target(t), labels = o.labels || [], ss = o.series || [], h = o.height || 300, w = Math.max(280, node.clientWidth || 600);
+    var node = target(t), labels = o.labels || [], ss = o.series || [], h = o.height || fillHeight || 300, w = Math.max(280, node.clientWidth || 600);
     if (o.horizontal) return hbar(node, labels, ss, o, w);
     var stacked = !!o.stacked && ss.length > 1, m = { l: 52, r: 12, t: 12, b: 28 };
     var probe = axisX(labels, w, h, m, (w - m.l - m.r) / Math.max(1, labels.length)); m.b += probe.extra; h += probe.extra;
@@ -124,7 +127,7 @@ const RUNTIME = String.raw`
     node.innerHTML = '<svg width="' + w + '" height="' + h + '" class="fc">' + svg + "</svg>" + legend(ss.map(function (x) { return x.name; }));
   }
   function line(t, o) {
-    var node = target(t), labels = o.labels || [], ss = o.series || [], h = o.height || 300, w = Math.max(280, node.clientWidth || 600), m = { l: 52, r: 16, t: 12, b: 28 };
+    var node = target(t), labels = o.labels || [], ss = o.series || [], h = o.height || fillHeight || 300, w = Math.max(280, node.clientWidth || 600), m = { l: 52, r: 16, t: 12, b: 28 };
     var probe = axisX(labels, w, h, m, (w - m.l - m.r) / Math.max(1, labels.length)); m.b += probe.extra; h += probe.extra;
     var max = 0; ss.forEach(function (x) { x.values.forEach(function (v) { max = Math.max(max, Number(v) || 0); }); }); max = niceMax(max);
     var step = (w - m.l - m.r) / Math.max(1, labels.length), inner = h - m.t - m.b, svg = axisY(max, w, h, m);
@@ -138,7 +141,7 @@ const RUNTIME = String.raw`
   }
   function pie(t, o) {
     var node = target(t), labels = o.labels || [], values = o.values || (o.series && o.series[0] ? o.series[0].values : []);
-    var size = Math.min(o.height || 260, Math.max(180, (node.clientWidth || 400) - 220)), r = size / 2 - 4, cx = size / 2, cy = size / 2;
+    var size = Math.min(o.height || fillHeight || 260, Math.max(180, (node.clientWidth || 400) - 220)), r = size / 2 - 4, cx = size / 2, cy = size / 2;
     var total = values.reduce(function (s, v) { return s + (Number(v) || 0); }, 0) || 1, angle = -Math.PI / 2, svg = "";
     values.forEach(function (v, i) {
       var share = (Number(v) || 0) / total, next = angle + share * Math.PI * 2, large = share > 0.5 ? 1 : 0, colour = PALETTE[i % PALETTE.length];
@@ -160,11 +163,73 @@ const RUNTIME = String.raw`
   function kpi(t, items) {
     target(t).innerHTML = '<div class="fc-kpis">' + (items || []).map(function (k) { return '<div class="fc-kpi"><div class="fc-kpi-v">' + esc(fmt(k.value)) + '</div><div class="fc-kpi-l">' + esc(k.label) + "</div>" + (k.note ? '<div class="fc-kpi-n">' + esc(k.note) + "</div>" : "") + "</div>"; }).join("") + "</div>";
   }
-  window.FloraChart = { bar: bar, line: line, pie: pie, table: table, kpi: kpi, palette: PALETTE };
+  // Every chart call is remembered (one per target) so fit mode can redraw at a new size.
+  var drawn = [], redrawing = false;
+  function track(fn) {
+    return function (t, o) {
+      if (!redrawing) { drawn = drawn.filter(function (d) { return d[1] !== t; }); drawn.push([fn, t, o]); }
+      return fn(t, o);
+    };
+  }
+  function redraw() { redrawing = true; try { drawn.forEach(function (d) { try { d[0](d[1], d[2]); } catch (e) {} }); } finally { redrawing = false; } }
+  window.FloraChart = { bar: track(bar), line: track(line), pie: track(pie), table: track(table), kpi: track(kpi), palette: PALETTE };
   function report() { post({ type: "height", height: Math.ceil(document.documentElement.scrollHeight) }); }
   if (window.ResizeObserver) new ResizeObserver(report).observe(document.documentElement);
   window.addEventListener("load", report);
   setTimeout(report, 50);
+
+  // Fit mode (dashboard cells): resize the charts to the cell height, then scale everything down with
+  // CSS zoom until it fits; charts are redrawn at each scale so they keep filling the width. Below
+  // MIN_SCALE text gets unreadable, so the content scrolls instead.
+  var MIN_SCALE = 0.4, SCROLL_SCALE = 0.75, fitting = false;
+  function fit() {
+    if (!window.__FLORA_FIT__ || fitting || !document.body) return;
+    fitting = true;
+    var root = document.documentElement, body = document.body, scale = 1;
+    try {
+      root.style.overflow = "hidden";
+      body.style.zoom = "1";
+      fillHeight = 0;
+      redraw();
+      var charts = drawn.filter(function (d) { return (d[0] === bar || d[0] === line || d[0] === pie) && !(d[2] && (d[2].height || d[2].horizontal)); });
+      // Give the cell's spare height to the charts, or take the missing height from them (down to 120px)
+      // before zooming, so text stays as large as possible.
+      var slack = root.clientHeight - root.scrollHeight;
+      if (charts.length && Math.abs(slack) > 8) { fillHeight = Math.max(120, 300 + slack / charts.length - 4); redraw(); }
+      for (var i = 0; i < 5; i++) {
+        var ratio = Math.min(root.clientHeight / Math.max(1, root.scrollHeight), root.clientWidth / Math.max(1, root.scrollWidth));
+        var next = Math.max(MIN_SCALE, Math.min(1, scale * ratio));
+        if (Math.abs(next - scale) < 0.01) break;
+        scale = next;
+        body.style.zoom = String(scale);
+        redraw();
+      }
+      if (root.scrollHeight > root.clientHeight + 1 || root.scrollWidth > root.clientWidth + 1) {
+        // Too much to fit legibly (e.g. a long table): keep charts at their normal height and scroll at a
+        // readable scale instead of squeezing everything.
+        fillHeight = 0;
+        body.style.zoom = String(SCROLL_SCALE);
+        redraw();
+        root.style.overflow = "auto";
+      }
+    } finally { fitting = false; }
+  }
+  if (window.__FLORA_FIT__) {
+    // Re-fit when the frame itself changes size (the widget was resized), not when fitting changes the content.
+    var fitTimer = 0, frameSize = "";
+    var refit = function () {
+      var size = window.innerWidth + "x" + window.innerHeight;
+      if (size === frameSize) return;
+      frameSize = size;
+      clearTimeout(fitTimer);
+      fitTimer = setTimeout(fit, 80);
+    };
+    window.addEventListener("load", fit);
+    window.addEventListener("resize", refit);
+    if (window.ResizeObserver) new ResizeObserver(refit).observe(document.documentElement);
+    setTimeout(fit, 60);
+    setTimeout(fit, 400);
+  }
 })();
 `;
 
@@ -172,6 +237,7 @@ const BASE_CSS = `
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--text);font:13px/1.45 Inter,"Noto Sans Thai",system-ui,sans-serif}
 body{padding:12px}
+html.fit body{padding:8px}
 h1,h2,h3{margin:0 0 8px;font-weight:600} h1{font-size:18px} h2{font-size:15px} h3{font-size:13px}
 .fc{display:block;overflow:visible}.fc-grid{stroke:var(--border);stroke-width:1}.fc-tick{fill:var(--muted);font-size:10px}
 .fc-total{fill:var(--text);font-size:18px;font-weight:700}
@@ -190,13 +256,14 @@ h1,h2,h3{margin:0 0 8px;font-weight:600} h1{font-size:18px} h2{font-size:15px} h
 .fc-kpi-v{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}.fc-kpi-l{color:var(--muted);font-size:12px}.fc-kpi-n{color:var(--muted);font-size:11px;margin-top:2px}
 `;
 
-export function buildSrcDoc(html: string, data: Record<string, DataResult>, params: Period, theme: FrameTheme, frameId: string): string {
+/** options.fit: scale the visual to its frame (dashboard cells) instead of growing the frame to the visual. */
+export function buildSrcDoc(html: string, data: Record<string, DataResult>, params: Period, theme: FrameTheme, frameId: string, options: { fit?: boolean } = {}): string {
   const vars = `:root{--bg:${theme.bg};--panel:${theme.panel};--text:${theme.text};--muted:${theme.muted};--border:${theme.border};--accent:${theme.accent}}`;
   return `<!doctype html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="${CSP}">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>${vars}${BASE_CSS}</style>
-<script>window.__FLORA_FRAME__=${scriptJson(frameId)};window.__FLORA_DATA__=${scriptJson(data)};window.__FLORA_PARAMS__=${scriptJson(params)};window.__FLORA_THEME__=${scriptJson(theme)};</script>
+<script>${options.fit ? "window.__FLORA_FIT__=true;document.documentElement.className=\"fit\";" : ""}window.__FLORA_FRAME__=${scriptJson(frameId)};window.__FLORA_DATA__=${scriptJson(data)};window.__FLORA_PARAMS__=${scriptJson(params)};window.__FLORA_THEME__=${scriptJson(theme)};</script>
 <script>${RUNTIME}</script>
 </head><body>${html}</body></html>`;
 }

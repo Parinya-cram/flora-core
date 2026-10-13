@@ -18,6 +18,7 @@ CASE_TABLES = (
     "case_his_patient", "case_his_allergy", "case_allergy", "case_his_lab", "patient_snapshot",
     "case_diagnosis", "case_procedure", "case_staff", "case_detail", "vital_minutes",
     "case_event_note", "case_timeline_value", "case_timeline_mask", "case_io_run", "case_io_event",
+    "case_billing_order", "case_billing_order_item",
 )
 CASE_COLUMNS_SKIP = {"id", "status", "case_code", "archive_time", "handover_from_leaf_id", "handover_from_case_id",
                      "handover_global_case_id", "handover_to_leaf_id", "handover_at", "canopy_admission_id"}
@@ -97,7 +98,7 @@ def import_case(database: Connection, export: dict[str, Any], *, from_leaf_id: s
         found = database.execute("SELECT id FROM clinical_concept WHERE domain=%s AND local_id=%s",
                                  (domain, local_id)).fetchone()
         concepts[old_id] = found["id"] if found else None
-    counts, skipped, run_ids = {}, [], {}
+    counts, skipped, run_ids, billing_ids = {}, [], {}, {}
     tables = export["tables"]
     for table in CASE_TABLES:
         columns = _columns(database, table)
@@ -111,11 +112,17 @@ def import_case(database: Connection, export: dict[str, Any], *, from_leaf_id: s
                     skipped.append(f"{table}#{item['id']}: I/O item {export['items'].get(str(item['item_id']))} unknown here")
                     continue
                 item["item_id"] = mapped
+            if table == "case_billing_order_item":
+                if item.get("order_id") not in billing_ids:
+                    continue
+                item["order_id"] = billing_ids[item["order_id"]]
             if "concept_id" in item and item["concept_id"] is not None:
                 item["concept_id"] = concepts.get(str(item["concept_id"]))
             new_id = _insert(database, table, columns, item)
             if table == "case_io_run":
                 run_ids[item["id"]] = new_id
+            if table == "case_billing_order":
+                billing_ids[item["id"]] = new_id
             counts[table] = counts.get(table, 0) + 1
     segment_columns = _columns(database, "case_io_segment")
     for segment in tables.get("case_io_segment") or []:

@@ -16,7 +16,7 @@ import {
   problems, removeItem, shelvesFor, specOf, switchView, tr, type DragItem, type Lang, type Shelf, type Slot,
 } from "./model";
 import ResultView from "./ResultView";
-import { input, panel, primary, secondary, small } from "./styles";
+import { inlineInput, input, panel, primary, secondary, small } from "./styles";
 
 type Props = { language?: string };
 type Draft = { id: string | null; meta: ReportMeta; spec: StudioSpec };
@@ -270,9 +270,9 @@ export default function ReportStudio({ language = "en" }: Props) {
           <div className="flex flex-wrap items-center gap-2">
             <div className="text-sm font-semibold text-[var(--app-text)]">{t("ตัวอย่างผลลัพธ์", "Preview")}</div>
             <label className="flex items-center gap-1 text-xs text-[var(--app-muted)]">{t("ตั้งแต่", "From")}
-              <input type="date" className={`${input} w-auto py-1`} value={period.from} onChange={event => setPeriod(current => ({ ...current, from: event.target.value }))} /></label>
+              <input type="date" className={inlineInput} value={period.from} onChange={event => setPeriod(current => ({ ...current, from: event.target.value }))} /></label>
             <label className="flex items-center gap-1 text-xs text-[var(--app-muted)]">{t("ถึง", "To")}
-              <input type="date" className={`${input} w-auto py-1`} value={period.to} onChange={event => setPeriod(current => ({ ...current, to: event.target.value }))} /></label>
+              <input type="date" className={inlineInput} value={period.to} onChange={event => setPeriod(current => ({ ...current, to: event.target.value }))} /></label>
             {result?.summary ? <span className="text-xs text-[var(--app-muted)]">
               {Number(result.summary.cases ?? 0).toLocaleString()} {t("เคส", "cases")} · {Number(result.summary.patients ?? 0).toLocaleString()} {t("ผู้ป่วย", "patients")}
             </span> : null}

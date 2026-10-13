@@ -31,6 +31,9 @@ from .routes.sync_ward import router as sync_ward_router
 from .routes.ward import router as ward_router
 from .routes.dictation import router as dictation_router
 from .routes.chart_undo import router as chart_undo_router
+from .routes.billing_leaf import router as billing_leaf_router
+from .routes.billing_canopy import router as billing_canopy_router
+from .routes.billing_templates import router as billing_templates_router
 from .routes.canopy_admissions import router as canopy_admissions_router
 from .routes.hl7_interface import admin_router as hl7_admin_router, webhook_router as hl7_webhook_router
 from .routes.public_api import router as public_api_router
@@ -40,6 +43,8 @@ import time
 from .routes.ai_settings import build_router as build_ai_settings_router
 from .routes.sync_ingest import router as sync_ingest_router
 from .routes.gateway_alerts import fleet_router as gateway_alerts_fleet_router, sync_router as gateway_alerts_sync_router
+from .routes.device_management import (control_router as device_control_router, fleet_router as device_fleet_router,
+                                       sync_router as device_sync_router)
 from .routes.workstation import router as workstation_router
 from .routes.terminology import router as terminology_router
 from .routes.formdev import router as formdev_router
@@ -87,6 +92,7 @@ if API_MODE == "leaf" and os.getenv("FLORA_LEAF_WRITE_API", "false").lower() == 
     app.include_router(ward_router)
     app.include_router(dictation_router)
     app.include_router(chart_undo_router)
+    app.include_router(billing_leaf_router)
     app.include_router(case_workflow_router)
     app.include_router(cases_lifecycle_router)
     app.include_router(clinical_write_router)
@@ -109,17 +115,22 @@ if API_MODE == "canopy":
     app.include_router(api_keys_admin_router)
     app.include_router(fleet_read_router)
     app.include_router(gateway_alerts_fleet_router)
+    app.include_router(device_fleet_router)
+    app.include_router(device_control_router)
     app.include_router(fleet_control_router)
     app.include_router(legacy_archive_router)
     app.include_router(canopy_reports_router)
     app.include_router(ai_studio_router)
     app.include_router(formdev_router)
     app.include_router(formdev_query_router)
+    app.include_router(billing_templates_router)  # before workflows: /billing-templates is not a workflow id
     app.include_router(workflows_router)
+    app.include_router(billing_canopy_router)
 if API_MODE == "sync":
     app.include_router(sync_ingest_router)
     app.include_router(sync_ward_router)
     app.include_router(gateway_alerts_sync_router)
+    app.include_router(device_sync_router)
 
 
 @app.middleware("http")

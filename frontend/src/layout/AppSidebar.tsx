@@ -25,7 +25,7 @@ import canopyMonitoringIcon from "../assets/canopy-menu-monitoring.png";
 import canopyFormDevIcon from "../assets/canopy-menu-formdev.png";
 import { canAuthorStudio, canUseAiStudio } from "../auth/studioAccess";
 
-export type AppView = "ward" | "case" | "form" | "diagnosis" | "staff" | "io" | "patient" | "report" | "master" | "account" | "dashboard" | "admissions" | "monitoring" | "fleet" | "infrastructure" | "topology" | "gateway-alerts" | "formdev" | "workflows" | "report-studio" | "ai-studio" | "history";
+export type AppView = "ward" | "case" | "form" | "diagnosis" | "staff" | "io" | "patient" | "report" | "master" | "account" | "dashboard" | "admissions" | "monitoring" | "fleet" | "infrastructure" | "topology" | "gateway-alerts" | "devices" | "formdev" | "workflows" | "report-studio" | "ai-studio" | "history" | "billing";
 
 type Props = {
   activeView: AppView;
@@ -201,7 +201,9 @@ function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, colla
         { view: "monitoring", label: "Central Charting", icon: "canopy-monitoring" },
         { view: "fleet", label: "Case List", icon: "canopy-charts" },
         { view: "report", label: "Reports", icon: "canopy-reports" },
+        { view: "billing", label: "Billing", icon: "canopy-reports" },
         { view: "topology", label: "Topology", icon: "canopy-monitoring" },
+        { view: "devices", label: "Devices", icon: "canopy-infrastructure" },
         { view: "gateway-alerts", label: "Gateway Alerts", icon: "canopy-infrastructure" },
         { view: "infrastructure", label: "Infrastructure", icon: "canopy-infrastructure" },
         ...(canConfigureCanopy || canAuthor ? [{ view: "formdev" as AppView, label: t("topbar.formdev"), icon: "canopy-formdev" as NavIconName }] : []),
@@ -221,6 +223,7 @@ function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, colla
           { view: "io", label: "I/O", icon: "io" },
           { view: "diagnosis", label: "Diag/Ops", icon: "clinical" },
           { view: "form", label: "Forms", icon: "form" },
+          { view: "billing", label: "Billing", icon: "report" },
           { view: "staff", label: "Staff", icon: "staff" },
           { view: "patient", label: "Patient", icon: "patient" },
           ...(canReport ? [{ view: "report" as AppView, label: "Reports", icon: "report" as NavIconName }] : []),

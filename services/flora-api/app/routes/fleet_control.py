@@ -471,6 +471,8 @@ def set_gateway_site(
             "UPDATE canopy_gateway SET desired_config=%s,desired_version=%s,desired_source=%s WHERE gateway_id=%s",
             (Jsonb(config), version, source, gateway_id),
         )
+        # The ward is Canopy's own record (the gateway's site does not keep canopy_unit_id).
+        database.execute("UPDATE canopy_gateway SET unit_id=%s WHERE gateway_id=%s", (payload.unit_id, gateway_id))
     return {"ok": True, "gateway_id": gateway_id, "desired_version": version, "site": site}
 
 

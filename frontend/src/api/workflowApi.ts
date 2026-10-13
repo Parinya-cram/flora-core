@@ -32,6 +32,8 @@ export type WorkflowDefinition = {
   };
   forms: WorkflowFormRef[];
   packet: WorkflowPacketEntry[];
+  /** Itemize (billing) template for the Leaf Billing screen; one template may serve many workflows. */
+  billing?: { template_id: string | null };
   bundled_forms?: Record<string, { version: number; definition: unknown }>;
 };
 
@@ -69,6 +71,7 @@ export function emptyWorkflow(): WorkflowDefinition {
     anesthesia_record: { enabled: true, sections: ["caseInfo", "preop", "checklist", "pacu", "outcome"], optional_sections: [] },
     forms: [],
     packet: [{ kind: "anesthesia_report", mode: "standard" }],
+    billing: { template_id: null },
   };
 }
 
@@ -80,8 +83,12 @@ function canopyHeaders(json: boolean): Record<string, string> {
 }
 
 function errorMessage(data: unknown, status: number): string {
-  const body = (data && typeof data === "object" ? data : {}) as { detail?: unknown; error?: unknown; errors?: unknown };
+  const body = (data && typeof data === "object" ? data : {}) as { detail?: unknown; error?: unknown; errors?: unknown; issues?: unknown };
   if (Array.isArray(body.errors) && body.errors.length) return body.errors.map(String).join("\n");
+  if (Array.isArray(body.issues) && body.issues.length) {
+    const lines = body.issues.map(item => (item && typeof item === "object" && "message" in item ? String((item as { message: unknown }).message) : String(item)));
+    return [typeof body.error === "string" ? body.error : "", ...lines].filter(Boolean).join("\n");
+  }
   if (Array.isArray(body.detail)) return body.detail.map(item => (item && typeof item === "object" && "msg" in item ? String((item as { msg: unknown }).msg) : String(item))).join("\n");
   if (typeof body.detail === "string" && body.detail) return body.detail;
   if (typeof body.error === "string" && body.error) return body.error;
@@ -149,3 +156,42 @@ export const patchCaseWorkflowForm = (caseId: number, formId: string, patch: Rec
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ patch, ...(status ? { status } : {}) }),
   });
+
+// ---------------------------------------------------------------- itemize (billing) templates
+
+export type BillingTemplateItem = { code: string; qty?: number | null; preselect?: boolean };
+export type BillingTemplateGroup = { key: string; name: string; items: BillingTemplateItem[] };
+export type BillingTemplateDefinition = {
+  format: "flora-billing-template/1";
+  id: string;
+  name: string;
+  description?: string;
+  groups: BillingTemplateGroup[];
+  allow_other_items: boolean;
+};
+export type BillingTemplateRow = {
+  id: string; name: string; description?: string | null; status: WorkflowStatus; version: number;
+  updatedAt?: number | null; updatedBy?: string | null; publishedAt?: number | null;
+  definition: BillingTemplateDefinition; itemCount: number;
+  usedBy: Array<{ id: string; name: string; status: WorkflowStatus }>;
+};
+export type BillingTemplateIssue = { path: string; message: string };
+
+export function emptyBillingTemplate(): BillingTemplateDefinition {
+  return { format: "flora-billing-template/1", id: "", name: "", description: "", groups: [], allow_other_items: true };
+}
+
+const bt = (id: string) => `/api/fleet/workflows/billing-templates/${encodeURIComponent(id)}`;
+export const listBillingTemplates = () =>
+  canopyJson<{ rows: BillingTemplateRow[] }>("/api/fleet/workflows/billing-templates").then(data => data.rows || []);
+export const getBillingTemplateOptions = () =>
+  canopyJson<import("./billingApi").BillingCatalog>("/api/fleet/workflows/billing-templates/options");
+export const createBillingTemplate = (definition: BillingTemplateDefinition) =>
+  canopyJson<BillingTemplateRow>("/api/fleet/workflows/billing-templates", "POST", { definition });
+export const saveBillingTemplate = (id: string, definition: BillingTemplateDefinition) => canopyJson<BillingTemplateRow>(bt(id), "PUT", { definition });
+export const publishBillingTemplate = (id: string) => canopyJson<BillingTemplateRow>(`${bt(id)}/publish`, "POST", {});
+export const archiveBillingTemplate = (id: string) => canopyJson<BillingTemplateRow>(`${bt(id)}/archive`, "POST", {});
+export const duplicateBillingTemplate = (id: string, newId: string, name: string) =>
+  canopyJson<BillingTemplateRow>(`${bt(id)}/duplicate`, "POST", { id: newId, name });
+export const validateBillingTemplate = (definition: BillingTemplateDefinition) =>
+  canopyJson<{ issues: BillingTemplateIssue[] }>("/api/fleet/workflows/billing-templates/validate", "POST", { definition });

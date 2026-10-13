@@ -313,7 +313,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Flora Canopy Haber", lifespan=lifespan)
 basic_auth.install(app, "Canopy Haber", "HABER", [
-    r"/health", r"/api/haber/v1/gateways/[^/]+/(checkin|alerts)",  # gateways, token auth
+    r"/health", r"/api/haber/v1/gateways/[^/]+/(checkin|alerts|activity)",  # gateways, token auth
     r"/api/haber/v1/root-keys", r"/api/haber/v1/nodes/[^/]+/(desired|report)",  # flora-updater, token auth
 ])
 
@@ -351,13 +351,22 @@ def gateway_checkin(gateway_id: str, body: Checkin, request: Request):
     licensed = "gateway" in entitlements["modules"]
     max_devices = max(0, entitlements["max_gateway_devices"] - others) if licensed else 0
     allowed = set(entitlements.get("device_types") or [])
-    release = approved_release("gateway")
-    if release and release["device_types"]:
-        # Parser images come from the approved gateway release, pinned by digest in haber-registry.
-        catalog = [{**item, "image": image_ref(release["services"][item["image"]]), "version": release["version"]}
-                   for item in release["device_types"]]
-    else:
-        catalog = CATALOG["device_types"]
+    catalog, release = gateway_catalog()
+    canopy = forward_to_canopy(gateway_id, body, {
+        "max_devices": max_devices, "allowed_types": sorted(allowed), "expires_at": bundle["expires_at"],
+        "bundle_id": bundle["bundle_id"], "revoked": bool(bundle.get("revoked")), "issued_by": "flora-root"})
+    # The hospital's own device types (Canopy → Devices → Device types) run the release's parsers.
+    # They are licensed when the Root bundle licenses a type using the same parser.
+    allowed_parsers = {item["parser"] for item in catalog if not allowed or item["code"] in allowed}
+    root_codes = {item["code"] for item in catalog}
+    parser_image = (image_ref(release["services"]["parser"]) if release and "parser" in release.get("services", {})
+                    else CATALOG["images"][0]["image"])
+    for item in canopy.get("device_types") or []:
+        if item.get("code") in root_codes or item.get("parser") not in allowed_parsers:
+            continue
+        catalog = [*catalog, {**item, "image": parser_image, "origin": "canopy"}]
+        if allowed:
+            allowed.add(item["code"])
     license_grant = {
         "max_devices": max_devices,
         "allowed_types": sorted(allowed),
@@ -370,7 +379,7 @@ def gateway_checkin(gateway_id: str, body: Checkin, request: Request):
         "gateway_id": gateway_id,
         "tenant_id": bundle["tenant"]["tenant_id"],
         "license": license_grant,
-        "canopy_config": forward_to_canopy(gateway_id, body, license_grant),
+        "canopy_config": canopy.get("desired_config"),
         "device_types": [item for item in catalog if not allowed or item["code"] in allowed],
         "images": CATALOG["images"],
         "release_id": release["release_id"] if release else None,
@@ -378,10 +387,21 @@ def gateway_checkin(gateway_id: str, body: Checkin, request: Request):
     }
 
 
-def forward_to_canopy(gateway_id: str, body: Checkin, license_grant: dict[str, Any]) -> dict[str, Any] | None:
-    """Store this check-in in Canopy; return a configuration Canopy wants applied, if any."""
+def gateway_catalog() -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    """Device types gateways receive from Root: the approved gateway release's, else the built-in catalog."""
+    release = approved_release("gateway")
+    if release and release["device_types"]:
+        # Parser images come from the approved gateway release, pinned by digest in haber-registry.
+        return [{**item, "image": image_ref(release["services"][item["image"]]), "version": release["version"]}
+                for item in release["device_types"]], release
+    return CATALOG["device_types"], None
+
+
+def forward_to_canopy(gateway_id: str, body: Checkin, license_grant: dict[str, Any]) -> dict[str, Any]:
+    """Store this check-in in Canopy. Canopy answers with a configuration it wants applied
+    (`desired_config`) and the hospital's own device types (`device_types`)."""
     if not CANOPY_SYNC_URL or not SYNC_SECRET:
-        return None
+        return {}
     try:
         response = httpx.post(
             f"{CANOPY_SYNC_URL}/api/sync/v1/gateways/{gateway_id}/config",
@@ -390,10 +410,10 @@ def forward_to_canopy(gateway_id: str, body: Checkin, license_grant: dict[str, A
                   "applied_config_version": body.applied_config_version, "data_api_url": body.data_api_url},
         )
         response.raise_for_status()
-        return response.json().get("desired_config")
+        return response.json()
     except Exception as error:  # Canopy down must not block device licensing
         log.warning("canopy gateway sync failed for %s: %s", gateway_id, error)
-        return None
+        return {}
 
 
 class GatewayAlerts(BaseModel):
@@ -417,6 +437,32 @@ def gateway_alerts(gateway_id: str, body: GatewayAlerts, request: Request):
         response.raise_for_status()
     except Exception as error:
         log.warning("canopy alert relay failed for %s: %s", gateway_id, error)
+        raise HTTPException(502, f"Canopy unreachable: {error}") from None
+    return response.json()
+
+
+class GatewayActivity(BaseModel):
+    gateway_id: str
+    hours: list[dict[str, Any]] = []
+    events: list[dict[str, Any]] = []
+
+
+@app.post("/api/haber/v1/gateways/{gateway_id}/activity")
+def gateway_activity(gateway_id: str, body: GatewayActivity, request: Request):
+    """Relays a gateway's hourly device activity and on/off events to Canopy's Device Management.
+    Canopy's answer lists what it stored; the gateway resends anything not listed."""
+    supplied = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    if not GATEWAY_TOKEN or not hmac.compare_digest(supplied, GATEWAY_TOKEN):
+        raise HTTPException(401, "invalid gateway token")
+    if not CANOPY_SYNC_URL or not SYNC_SECRET:
+        raise HTTPException(503, "Canopy sync is not configured; activity stays queued on the gateway")
+    try:
+        response = httpx.post(f"{CANOPY_SYNC_URL}/api/sync/v1/gateways/{gateway_id}/activity",
+                              headers={"authorization": f"Bearer {SYNC_SECRET}"}, timeout=10,
+                              json={"hours": body.hours, "events": body.events})
+        response.raise_for_status()
+    except Exception as error:
+        log.warning("canopy activity relay failed for %s: %s", gateway_id, error)
         raise HTTPException(502, f"Canopy unreachable: {error}") from None
     return response.json()
 
@@ -540,6 +586,7 @@ def overview():
         "leaves": canopy_leaves(),
         "gateways": gateways(),
         "catalog": CATALOG,
+        "gateway_catalog": gateway_catalog()[0],
         "releases": release_overview(),
         "nodes": nodes(),
     }

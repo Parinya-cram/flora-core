@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import AfterValidator, BaseModel, BeforeValidator, Field
 from psycopg.types.json import Jsonb
 
-from . import alerts, auth, connection, db, docker_ops, settings
+from . import activity, alerts, auth, connection, db, docker_ops, settings
 from .streams import WINDOW_SEC, monitor
 
 log = logging.getLogger("gateway-service")
@@ -81,6 +81,10 @@ async def background_loop() -> None:
             STATE["alerts_push"] = {**await alerts.push(), "at": db.now_ms(), "error": None}
         except Exception as error:  # Canopy unreachable: alerts stay queued and are resent next round
             STATE["alerts_push"] = {"sent": 0, "at": db.now_ms(), "error": str(error)}
+        try:
+            STATE["activity_push"] = {**await activity.push(), "at": db.now_ms(), "error": None}
+        except Exception as error:  # kept and resent next round
+            STATE["activity_push"] = {"sent": 0, "at": db.now_ms(), "error": str(error)}
         await asyncio.sleep(settings.SYNC_INTERVAL_SEC)
 
 
@@ -104,7 +108,10 @@ async def sample_status() -> list[tuple[str, str, str | None]]:
         rows.append(("canopy", "ok", None))
     else:
         rows.append(("canopy", "down", haber.get("error") or f"no check-in since {haber.get('last_sync') or 'start'}"))
+    pods: dict[str, bool] = {}
     for name, result in (await controllers()).items():
+        if result.get("reachable") and name in settings.INGRESS:
+            pods |= {pod["pod"]: bool(pod.get("connected")) for pod in result.get("pods") or [] if pod.get("pod")}
         status = result.get("container_status")
         if status and status != "running":
             rows.append((f"controller:{name}", "stopped", f"container {status}"))
@@ -122,6 +129,7 @@ async def sample_status() -> list[tuple[str, str, str | None]]:
         else:
             rows.append((f"device:{instance['device_id']}", "down",
                          f"no data for {round((now - last) / 60000)} min" if last else "no data yet"))
+    STATE["pods"] = pods
     return rows
 
 
@@ -143,6 +151,11 @@ async def status_sampler() -> None:
                 alerts.observe(now, rows, labels)
             except Exception as error:
                 log.warning("alert update failed: %s", error)
+            try:
+                activity.track(now, rows, STATE.get("pods") or {})
+                await asyncio.to_thread(activity.rollup, now)
+            except Exception as error:
+                log.warning("device activity update failed: %s", error)
             with db.pool.connection() as connection:
                 connection.cursor().executemany(
                     "INSERT INTO gateway_status_sample (ts, lane, state, detail) VALUES (%s,%s,%s,%s)",

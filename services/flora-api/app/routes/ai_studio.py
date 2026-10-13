@@ -135,6 +135,8 @@ Runtime available in the view:
   FloraChart.pie(el, {{labels, values, donut?}}), FloraChart.table(el, name), FloraChart.kpi(el, [{{label, value, note?}}])
   (el = CSS selector or element; FloraChart.pie can take FLORA.series(...) output too)
 - CSS variables: --bg --panel --text --muted --border --accent. Keep visuals clean, readable in light and dark.
+- Visuals are also shown scaled into dashboard cells of any size: let FloraChart pick heights (omit height), avoid fixed
+  pixel widths/heights in your own CSS, and keep one visual focused (a long table makes it scroll in small cells).
 Patient-level "list" specs are allowed in visuals (they render only in the user's browser).
 Prefer one focused artifact per answer; explain briefly in text what it shows."""
 
@@ -477,3 +479,160 @@ def run_artifact(artifact_id: str, payload: RenderInput, request: Request):
         if row["mine"]:
             database.execute("UPDATE ai_studio_artifact SET last_run_at=%s WHERE id=%s", (_now(), row["id"]))
     return _render(request, row["data"] or {}, payload.params)
+
+
+# Dashboards ----------------------------------------------------------------------------------
+WIDGET_TYPES = {"snippet", "html", "image", "text", "system_status", "active_cases", "gateway_alerts", "case_counts", "clock"}
+MAX_GRID = 6
+MAX_IMAGE_BYTES = 1_500_000
+MAX_BOARD_BYTES = 6_000_000
+
+
+class DashboardInput(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+    cols: int = Field(default=3, ge=1, le=MAX_GRID)
+    rows: int = Field(default=3, ge=1, le=MAX_GRID)
+    row_height: int = Field(default=220, ge=120, le=480)
+    widgets: list[dict[str, Any]] = Field(default_factory=list, max_length=MAX_GRID * MAX_GRID)
+
+
+class ShareInput(BaseModel):
+    shared: bool
+
+
+def _clean_widgets(payload: DashboardInput) -> list[dict[str, Any]]:
+    """Every widget inside the grid, no two overlapping, known types, bounded config."""
+    taken: dict[tuple[int, int], str] = {}
+    out = []
+    for raw in payload.widgets:
+        kind = str(raw.get("type") or "")
+        if kind not in WIDGET_TYPES:
+            raise HTTPException(status_code=422, detail=f"Unknown widget type: {kind}")
+        try:
+            x, y, w, h = (int(raw.get(key)) for key in ("x", "y", "w", "h"))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="Widget position and size must be whole numbers") from None
+        if w < 1 or h < 1 or x < 0 or y < 0 or x + w > payload.cols or y + h > payload.rows:
+            raise HTTPException(status_code=422, detail=f"A {kind} widget does not fit in a {payload.cols}x{payload.rows} grid")
+        widget_id = str(raw.get("id") or uuid.uuid4())[:64]
+        for cell in ((cx, cy) for cx in range(x, x + w) for cy in range(y, y + h)):
+            if cell in taken:
+                raise HTTPException(status_code=422, detail="Two widgets overlap")
+            taken[cell] = widget_id
+        config = raw.get("config") if isinstance(raw.get("config"), dict) else {}
+        if kind == "snippet" and not str(config.get("artifactId") or ""):
+            config = {**config, "artifactId": ""}
+        if kind == "image":
+            src = str(config.get("src") or "")
+            if src and not re.match(r"^(https?://|data:image/(png|jpeg|gif|webp|svg\+xml);base64,)", src):
+                raise HTTPException(status_code=422, detail="Images must be an http(s) address or an uploaded picture")
+            if len(src) > MAX_IMAGE_BYTES:
+                raise HTTPException(status_code=422, detail="Uploaded pictures must be under about 1 MB")
+        if kind == "html" and len(str(config.get("html") or "")) > 200_000:
+            raise HTTPException(status_code=422, detail="HTML widgets are limited to 200 KB")
+        out.append({"id": widget_id, "type": kind, "x": x, "y": y, "w": w, "h": h,
+                    "title": str(raw.get("title") or "")[:160], "config": config})
+    if len(json.dumps(out)) > MAX_BOARD_BYTES:
+        raise HTTPException(status_code=422, detail="This dashboard is too large; use smaller pictures")
+    return out
+
+
+DASHBOARD_COLUMNS = """d.id,d.title,d.cols,d.rows,d.row_height,d.shared,d.created_at,d.updated_at,d.owner_user_id,
+  coalesce(u.name,u.username) AS owner_name"""
+
+
+def _visible_dashboard(database, dashboard_id: str, user: dict[str, Any], *, widgets: bool = True) -> dict[str, Any]:
+    row = database.execute(
+        f"SELECT {DASHBOARD_COLUMNS}{',d.widgets' if widgets else ''} FROM ai_studio_dashboard d JOIN auth_user u ON u.id=d.owner_user_id "
+        "WHERE d.id::text=%s AND (d.owner_user_id=%s OR d.shared)", (dashboard_id, user["id"])
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Dashboard not found")
+    return {**row, "mine": row["owner_user_id"] == user["id"]}
+
+
+def _owned_dashboard(database, dashboard_id: str, user: dict[str, Any]) -> dict[str, Any]:
+    row = _visible_dashboard(database, dashboard_id, user)
+    if not row["mine"]:
+        raise HTTPException(status_code=403, detail="Only the owner can change this dashboard; copy it to make your own")
+    return row
+
+
+@router.get("/dashboards")
+def list_dashboards(request: Request):
+    user = _user(request)
+    with pool.connection() as database:
+        rows = database.execute(
+            f"""SELECT {DASHBOARD_COLUMNS},jsonb_array_length(d.widgets) AS widget_count FROM ai_studio_dashboard d
+                JOIN auth_user u ON u.id=d.owner_user_id WHERE d.owner_user_id=%s OR d.shared ORDER BY d.updated_at DESC LIMIT 200""",
+            (user["id"],),
+        ).fetchall()
+    return {"rows": [{**row, "mine": row["owner_user_id"] == user["id"]} for row in rows]}
+
+
+@router.get("/dashboards/{dashboard_id}")
+def get_dashboard(dashboard_id: str, request: Request):
+    user = _user(request)
+    with pool.connection() as database:
+        return _visible_dashboard(database, dashboard_id, user)
+
+
+@router.post("/dashboards")
+def create_dashboard(payload: DashboardInput, request: Request):
+    user = _user(request)
+    widgets, now, dashboard_id = _clean_widgets(payload), _now(), uuid.uuid4()
+    with pool.connection() as database:
+        database.execute(
+            """INSERT INTO ai_studio_dashboard(id,owner_user_id,title,cols,rows,row_height,widgets,created_at,updated_at)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (dashboard_id, user["id"], payload.title.strip(), payload.cols, payload.rows, payload.row_height, Jsonb(widgets), now, now),
+        )
+        return _visible_dashboard(database, str(dashboard_id), user)
+
+
+@router.put("/dashboards/{dashboard_id}")
+def save_dashboard(dashboard_id: str, payload: DashboardInput, request: Request):
+    user = _user(request)
+    widgets = _clean_widgets(payload)
+    with pool.connection() as database:
+        row = _owned_dashboard(database, dashboard_id, user)
+        database.execute(
+            "UPDATE ai_studio_dashboard SET title=%s,cols=%s,rows=%s,row_height=%s,widgets=%s,updated_at=%s WHERE id=%s",
+            (payload.title.strip(), payload.cols, payload.rows, payload.row_height, Jsonb(widgets), _now(), row["id"]),
+        )
+        return _visible_dashboard(database, dashboard_id, user)
+
+
+@router.patch("/dashboards/{dashboard_id}/share")
+def share_dashboard(dashboard_id: str, payload: ShareInput, request: Request):
+    """Sharing a dashboard also shares the owner's snippets placed on it, so viewers can run them."""
+    user = _user(request)
+    with pool.connection() as database:
+        row = _owned_dashboard(database, dashboard_id, user)
+        database.execute("UPDATE ai_studio_dashboard SET shared=%s,updated_at=%s WHERE id=%s", (payload.shared, _now(), row["id"]))
+        snippet_ids = [str(w["config"].get("artifactId")) for w in row["widgets"] if w.get("type") == "snippet" and (w.get("config") or {}).get("artifactId")]
+        newly_shared = 0
+        if payload.shared and snippet_ids:
+            newly_shared = database.execute(
+                """UPDATE ai_studio_artifact SET shared=true,updated_at=%s
+                   WHERE id::text=ANY(%s) AND owner_user_id=%s AND NOT shared""", (_now(), snippet_ids, user["id"])
+            ).rowcount
+        return {**_visible_dashboard(database, dashboard_id, user), "snippetsShared": newly_shared}
+
+
+@router.post("/dashboards/{dashboard_id}/copy")
+def copy_dashboard(dashboard_id: str, request: Request):
+    user = _user(request)
+    with pool.connection() as database:
+        row = _visible_dashboard(database, dashboard_id, user)
+    copy = DashboardInput(title=f"{row['title']} (copy)"[:160], cols=row["cols"], rows=row["rows"], row_height=row["row_height"], widgets=row["widgets"])
+    return create_dashboard(copy, request)
+
+
+@router.delete("/dashboards/{dashboard_id}")
+def delete_dashboard(dashboard_id: str, request: Request):
+    user = _user(request)
+    with pool.connection() as database:
+        row = _owned_dashboard(database, dashboard_id, user)
+        database.execute("DELETE FROM ai_studio_dashboard WHERE id=%s", (row["id"],))
+    return {"id": dashboard_id, "deleted": True}

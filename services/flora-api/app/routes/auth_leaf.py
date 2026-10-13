@@ -14,7 +14,7 @@ from psycopg import Connection
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel
 
-from .. import ai_service, directory, io_catalog, ldap_auth
+from .. import ai_service, billing, directory, io_catalog, ldap_auth
 from ..database import connection
 from ..account_config_sync import (
     apply_account_config, authenticate_with_canopy, pull_account_config, push_personal_theme,
@@ -1174,6 +1174,10 @@ def directory_apply(
     if isinstance(central_catalog, dict):
         held = database.execute("SELECT io_catalog_version FROM auth_directory_state WHERE id=1").fetchone()
         io_catalog.apply(database, central_catalog, int((held or {}).get("io_catalog_version") or 0))
+    billing_catalog = payload.get("billing_catalog")
+    if isinstance(billing_catalog, dict):
+        held = database.execute("SELECT billing_catalog_version FROM auth_directory_state WHERE id=1").fetchone()
+        billing.apply_catalog(database, billing_catalog, int((held or {}).get("billing_catalog_version") or 0))
     central_ai = payload.get("ai_service")
     if isinstance(central_ai, dict) and int(central_ai.get("version") or 0) > int(ai_service.load(database).get("version") or 0):
         ai_service.save(database, api_format=str(central_ai.get("api_format") or "anthropic"),

@@ -7,14 +7,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   copyKept, createChat, deleteChat, deleteKept, getChat, keepArtifact, listChats, listKept, renameChat, sendMessage, updateKept,
   type ChatMessage, type ChatSession, type ChatSummary, type KeptArtifact,
+  getDashboard, listDashboards, type Dashboard, type DashboardSummary,
 } from "../api/aiStudioApi";
 import { langOf, tr } from "../reportstudio/model";
 import { danger, input, panel, primary, small } from "../reportstudio/styles";
 import ArtifactFrame from "./ArtifactFrame";
+import DashboardBoard from "./dashboard/DashboardBoard";
 import Markdown from "./Markdown";
 
 type Props = { language?: string };
-type Side = "chats" | "snippets";
+type Side = "chats" | "snippets" | "dashboards";
+/** The open dashboard: an existing one (loaded), or a new unsaved one. */
+type OpenBoard = { key: string; dashboard: Dashboard | null };
 
 const SUGGESTIONS: Array<[string, string]> = [
   ["จำนวนเคสรายเดือน แยกตาม ASA เป็นกราฟแท่งซ้อน", "Cases per month by ASA status as a stacked bar chart"],
@@ -31,6 +35,8 @@ export default function AiStudio({ language = "en" }: Props) {
   const [snippets, setSnippets] = useState<KeptArtifact[]>([]);
   const [chat, setChat] = useState<ChatSession | null>(null);
   const [snippet, setSnippet] = useState<KeptArtifact | null>(null);
+  const [dashboards, setDashboards] = useState<DashboardSummary[]>([]);
+  const [board, setBoard] = useState<OpenBoard | null>(null);
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -42,15 +48,21 @@ export default function AiStudio({ language = "en" }: Props) {
   const fail = (caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught));
   const loadChats = useCallback(() => listChats().then(setChats).catch(fail), []);
   const loadSnippets = useCallback(() => listKept().then(setSnippets).catch(fail), []);
-  useEffect(() => { void loadChats(); void loadSnippets(); }, [loadChats, loadSnippets]);
+  const loadDashboards = useCallback(() => listDashboards().then(setDashboards).catch(fail), []);
+  useEffect(() => { void loadChats(); void loadSnippets(); void loadDashboards(); }, [loadChats, loadSnippets, loadDashboards]);
+  const openBoard = async (id: string) => {
+    setError("");
+    try { const dashboard = await getDashboard(id); setBoard({ key: id, dashboard }); setChat(null); setSnippet(null); } catch (caught) { fail(caught); }
+  };
   useEffect(() => { bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [chat?.messages.length, pending]);
 
   const openChat = async (id: string) => {
     setError("");
     setSnippet(null);
+    setBoard(null);
     try { setChat(await getChat(id)); } catch (caught) { fail(caught); }
   };
-  const newChat = () => { setChat(null); setSnippet(null); setDraft(""); setError(""); };
+  const newChat = () => { setChat(null); setSnippet(null); setBoard(null); setDraft(""); setError(""); };
 
   const send = async (text = draft) => {
     const content = text.trim();
@@ -126,7 +138,7 @@ export default function AiStudio({ language = "en" }: Props) {
   return <div className="grid gap-3 lg:grid-cols-[270px_minmax(0,1fr)]">
     <aside className={`${panel} flex max-h-[calc(100vh-150px)] flex-col p-2 lg:sticky lg:top-2`}>
       <div className="mb-2 flex rounded-lg border border-[var(--app-border)] p-0.5">
-        {([["chats", t("แชท", "Chats")], ["snippets", t("Snippets", "Snippets")]] as Array<[Side, string]>).map(([id, text]) =>
+        {([["chats", t("แชท", "Chats")], ["snippets", t("Snippets", "Snippets")], ["dashboards", t("แดชบอร์ด", "Dashboards")]] as Array<[Side, string]>).map(([id, text]) =>
           <button key={id} type="button" onClick={() => setSide(id)} className={`flex-1 rounded-md px-2 py-1 text-xs font-bold ${side === id ? "bg-[var(--app-accent)] text-[var(--app-accent-contrast)]" : "text-[var(--app-muted)]"}`}>{text}</button>)}
       </div>
       {side === "chats" ? <>
@@ -150,9 +162,9 @@ export default function AiStudio({ language = "en" }: Props) {
               </div>)}
           {!chats.length ? <div className="px-2 py-6 text-center text-xs text-[var(--app-muted)]">{t("ยังไม่มีแชท", "No chats yet.")}</div> : null}
         </div>
-      </> : <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
+      </> : side === "snippets" ? <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
         <p className="mb-1 px-1 text-[10px] text-[var(--app-muted)]">{t("ภาพที่เก็บไว้ รันใหม่ได้ด้วยข้อมูลล่าสุด และแชร์ได้", "Kept visuals re-run on current data and can be shared.")}</p>
-        {snippets.map(item => <button key={item.id} type="button" onClick={() => { setSnippet(item); setChat(null); }}
+        {snippets.map(item => <button key={item.id} type="button" onClick={() => { setSnippet(item); setChat(null); setBoard(null); }}
           className={`${listItem} ${snippet?.id === item.id ? "border-[var(--app-accent)] bg-[var(--app-hover-bg)]" : "border-transparent hover:bg-[var(--app-control-bg)]"}`}>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-semibold text-[var(--app-text)]">{item.title}</span>
@@ -161,7 +173,21 @@ export default function AiStudio({ language = "en" }: Props) {
           {item.shared ? <span className="rounded-full bg-emerald-500/15 px-1.5 text-[9px] font-bold text-emerald-700 dark:text-emerald-300">{t("แชร์", "SHARED")}</span> : null}
         </button>)}
         {!snippets.length ? <div className="px-2 py-6 text-center text-xs text-[var(--app-muted)]">{t("ยังไม่มี snippet — กด Keep ใต้ภาพในแชท", "No snippets yet. Use Keep on a visual in a chat.")}</div> : null}
-      </div>}
+      </div> : <>
+        <button type="button" className={`${primary} mb-2 w-full`} onClick={() => { setBoard({ key: `new-${Date.now()}`, dashboard: null }); setChat(null); setSnippet(null); }}>+ {t("แดชบอร์ดใหม่", "New dashboard")}</button>
+        <p className="mb-1 px-1 text-[10px] text-[var(--app-muted)]">{t("จัดวางวิดเจ็ตบนกริด แชร์ได้", "Widgets on a grid; can be shared.")}</p>
+        <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
+          {dashboards.map(item => <button key={item.id} type="button" onClick={() => void openBoard(item.id)}
+            className={`${listItem} ${board?.dashboard?.id === item.id ? "border-[var(--app-accent)] bg-[var(--app-hover-bg)]" : "border-transparent hover:bg-[var(--app-control-bg)]"}`}>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold text-[var(--app-text)]">{item.title}</span>
+              <span className="block truncate text-[10px] text-[var(--app-muted)]">{item.cols}×{item.rows} · {item.widget_count ?? 0} {t("วิดเจ็ต", "widgets")} · {item.mine ? t("ของฉัน", "Mine") : item.owner_name}</span>
+            </span>
+            {item.shared ? <span className="rounded-full bg-emerald-500/15 px-1.5 text-[9px] font-bold text-emerald-700 dark:text-emerald-300">{t("แชร์", "SHARED")}</span> : null}
+          </button>)}
+          {!dashboards.length ? <div className="px-2 py-6 text-center text-xs text-[var(--app-muted)]">{t("ยังไม่มีแดชบอร์ด", "No dashboards yet.")}</div> : null}
+        </div>
+      </>}
     </aside>
 
     <section className="min-w-0 space-y-3">
@@ -176,7 +202,10 @@ export default function AiStudio({ language = "en" }: Props) {
       {error ? <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-600 dark:text-rose-300">{error}<button type="button" className="ml-2 text-xs underline" onClick={() => setError("")}>{t("ปิด", "dismiss")}</button></div> : null}
       {notice ? <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">{notice}<button type="button" className="ml-2 text-xs underline" onClick={() => setNotice("")}>{t("ปิด", "dismiss")}</button></div> : null}
 
-      {snippet ? <div className="space-y-2">
+      {board ? <DashboardBoard key={board.key} lang={lang} dashboard={board.dashboard} snippets={snippets}
+        onSaved={saved => { setBoard({ key: saved.id, dashboard: saved }); void loadDashboards(); void loadSnippets(); }}
+        onDeleted={() => { setBoard(null); void loadDashboards(); }} />
+      : snippet ? <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--app-muted)]">
           {snippet.mine ? t("สร้างโดยคุณ", "Yours") : t(`แชร์โดย ${snippet.owner_name}`, `Shared by ${snippet.owner_name}`)}
           {" · "}{t("ข้อมูลจะถูกดึงใหม่ตามสิทธิ์วอร์ดของผู้เปิด", "Data is fetched fresh with the viewer's ward access.")}

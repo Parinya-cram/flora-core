@@ -112,7 +112,39 @@ def bootstrap() -> None:
             if lic is not None and not set(DEMO_DEVICE_TYPES).issubset(set(lic["device_types"] or [])):
                 issue_license(connection, DEMO_TENANT["tenant_id"], LicenseIn(device_types=DEMO_DEVICE_TYPES))
                 log.info("re-issued demo license for %s with updated device types", DEMO_TENANT["tenant_id"])
+    load_device_types()
     auth.ensure_bootstrap_admin()
+
+
+# Table -> primary key for each list in reference/device_types.json.
+DEVICE_SEED_TABLES = {
+    "sources": ("device_type_source", "source_id"),
+    "manufacturers": ("device_manufacturer", "manufacturer_code"),
+    "protocols": ("device_protocol", "protocol"),
+    "connection_types": ("device_connection_type", "connection_type"),
+    "lanes": ("device_protocol_lane", "lane_no"),
+    "device_types": ("device_type", "device_type_id"),
+}
+
+
+def load_device_types() -> None:
+    """Upsert the device type catalog seed when its source files changed (sha256 per source)."""
+    seed = json.loads((Path(__file__).parent / "reference" / "device_types.json").read_text())
+    with pool.connection() as connection, connection.transaction():
+        stored = {row["source_id"]: row["sha256"] for row in connection.execute("SELECT source_id, sha256 FROM device_type_source")}
+        if all(stored.get(source["source_id"]) == source["sha256"] for source in seed["sources"]):
+            return
+        current = now_ms()
+        for key, (table, primary) in DEVICE_SEED_TABLES.items():
+            for row in seed[key]:
+                row = {**row, **({"imported_at": current} if key == "sources" else {}),
+                       **({"updated_at": current} if key == "device_types" else {})}
+                columns = list(row)
+                updates = ", ".join(f"{column}=excluded.{column}" for column in columns if column != primary)
+                connection.execute(
+                    f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({', '.join(['%s'] * len(columns))}) "
+                    f"ON CONFLICT ({primary}) DO UPDATE SET {updates}", [row[column] for column in columns])
+    log.info("loaded device type catalog: %s", {key: len(seed[key]) for key in DEVICE_SEED_TABLES})
 
 
 @asynccontextmanager
@@ -409,6 +441,62 @@ def overview():
             "notes, created_at, withdrawn_at FROM root_release ORDER BY created_at DESC LIMIT 30").fetchall()
     return {"server_ts": now_ms(), "tenants": tenants, "global_config": config, "signing_keys": keys,
             "registry": REGISTRY_URL, "releases": releases}
+
+
+# ------------------------------------------------------------------ device type catalog
+
+@app.get("/api/v1/device-types")
+def list_device_types(manufacturer: str | None = None, category: str | None = None, status: str | None = None,
+                      protocol: str | None = None, gateway_type: str | None = None, q: str | None = None):
+    """Every known device model or family; any signed-in operator. Filters combine with AND."""
+    where, params = [], []
+    for column, value in (("manufacturer_code", manufacturer), ("category", category), ("status", status)):
+        if value is not None:
+            where.append(f"{column}=%s")
+            params.append(value)
+    if protocol:
+        where.append("flora_protocol ILIKE %s")
+        params.append(f"%{protocol}%")
+    if gateway_type:
+        where.append("%s = ANY(gateway_device_types)")
+        params.append(gateway_type)
+    if q:
+        where.append("(model ILIKE %s OR series ILIKE %s OR manufacturer ILIKE %s OR integration_method ILIKE %s)")
+        params.extend([f"%{q}%"] * 4)
+    sql = "SELECT * FROM device_type" + (" WHERE " + " AND ".join(where) if where else "") + \
+          " ORDER BY manufacturer_code, series NULLS LAST, model"
+    with pool.connection() as connection:
+        rows = connection.execute(sql, params).fetchall()
+    return {"count": len(rows), "rows": rows}
+
+
+@app.get("/api/v1/device-types/{device_type_id}")
+def get_device_type(device_type_id: str):
+    with pool.connection() as connection:
+        row = connection.execute("SELECT * FROM device_type WHERE device_type_id=%s", (device_type_id,)).fetchone()
+    if row is None:
+        raise HTTPException(404, "device type not found")
+    return row
+
+
+DEVICE_REFERENCE = {
+    "manufacturers": "SELECT * FROM device_manufacturer ORDER BY name",
+    "protocols": "SELECT * FROM device_protocol ORDER BY protocol",
+    "connection-types": "SELECT * FROM device_connection_type ORDER BY connection_type",
+    "lanes": "SELECT * FROM device_protocol_lane ORDER BY lane_no",
+    "sources": "SELECT * FROM device_type_source ORDER BY source_id",
+    "summary": """SELECT manufacturer_code, status, count(*)::int AS models FROM device_type
+                  GROUP BY manufacturer_code, status ORDER BY manufacturer_code, status""",
+}
+
+
+@app.get("/api/v1/device-reference/{kind}")
+def device_reference(kind: str):
+    if kind not in DEVICE_REFERENCE:
+        raise HTTPException(404, f"kind must be one of {sorted(DEVICE_REFERENCE)}")
+    with pool.connection() as connection:
+        rows = connection.execute(DEVICE_REFERENCE[kind]).fetchall()
+    return {"kind": kind, "rows": rows}
 
 
 @app.get("/api/auth/status")

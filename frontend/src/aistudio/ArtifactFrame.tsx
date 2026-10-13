@@ -3,7 +3,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { renderData, runKept, type Artifact, type KeptArtifact, type Period, type RenderResult } from "../api/aiStudioApi";
 import { buildSrcDoc, readTheme } from "./runtime";
 import { tr, type Lang } from "../reportstudio/model";
-import { input, small } from "../reportstudio/styles";
+import { inlineInput, small } from "../reportstudio/styles";
 
 type Props = {
   lang: Lang;
@@ -12,9 +12,13 @@ type Props = {
   keptId?: string;
   actions?: React.ReactNode;
   tall?: boolean;
+  /** Dashboard cell: no toolbar, fills its cell, period and refresh come from the board. */
+  compact?: boolean;
+  boardPeriod?: Period;
+  refreshKey?: number;
 };
 
-export default function ArtifactFrame({ lang, artifact, keptId, actions, tall }: Props) {
+export default function ArtifactFrame({ lang, artifact, keptId, actions, tall, compact, boardPeriod, refreshKey }: Props) {
   const t = (th: string, en: string) => tr(lang, th, en);
   const frameId = useId();
   const frame = useRef<HTMLIFrameElement>(null);
@@ -40,7 +44,12 @@ export default function ArtifactFrame({ lang, artifact, keptId, actions, tall }:
     }
   }, [keptId, specKey]);
 
-  useEffect(() => { if (!artifact.error) void run({}); }, [run, artifact.error]);
+  const boardKey = compact ? `${boardPeriod?.from ?? ""}|${boardPeriod?.to ?? ""}|${refreshKey ?? 0}` : "";
+  useEffect(() => {
+    if (artifact.error) return;
+    const [from, to] = boardKey.split("|");
+    void run(boardKey ? { from: from || undefined, to: to || undefined } : {});
+  }, [run, artifact.error, boardKey]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -54,8 +63,17 @@ export default function ArtifactFrame({ lang, artifact, keptId, actions, tall }:
     return () => window.removeEventListener("message", onMessage);
   }, []);
 
-  const srcDoc = useMemo(() => (result ? buildSrcDoc(artifact.html, result.data, result.params, readTheme(), frameId) : ""), [artifact.html, result, frameId]);
+  const srcDoc = useMemo(() => (result ? buildSrcDoc(artifact.html, result.data, result.params, readTheme(), frameId, { fit: compact }) : ""), [artifact.html, result, frameId, compact]);
   const dataErrors = result ? Object.entries(result.data).filter(([, value]) => value.error).map(([name, value]) => `${name}: ${value.error}`) : [];
+
+  if (compact) {
+    const problem = artifact.error || error || [...dataErrors, scriptError].filter(Boolean).join(" · ");
+    return <div className="relative h-full w-full">
+      {srcDoc ? <iframe ref={frame} title={artifact.title} sandbox="allow-scripts" srcDoc={srcDoc} className={`block h-full w-full border-0 ${running ? "opacity-50" : ""}`} /> : null}
+      {!srcDoc && running ? <div className="grid h-full place-items-center text-xs text-[var(--app-muted)]">{t("กำลังดึงข้อมูล…", "Loading data…")}</div> : null}
+      {problem ? <div className="absolute inset-x-1 bottom-1 truncate rounded bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-700 dark:text-amber-300" title={problem}>{problem}</div> : null}
+    </div>;
+  }
 
   return <div className="overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[var(--app-panel-bg)]">
     <div className="flex flex-wrap items-center gap-2 border-b border-[var(--app-border)] px-3 py-2">
@@ -66,9 +84,9 @@ export default function ArtifactFrame({ lang, artifact, keptId, actions, tall }:
           {result?.params.from || result?.params.to ? ` · ${result.params.from ?? "…"} → ${result.params.to ?? "…"}` : ""}
         </div>
       </div>
-      <input type="date" aria-label={t("ตั้งแต่", "From")} className={`${input} w-auto py-1 text-xs`} value={period.from ?? ""} onChange={event => setPeriod(current => ({ ...current, from: event.target.value || undefined }))} />
+      <input type="date" aria-label={t("ตั้งแต่", "From")} className={inlineInput} value={period.from ?? ""} onChange={event => setPeriod(current => ({ ...current, from: event.target.value || undefined }))} />
       <span className="text-xs text-[var(--app-muted)]">→</span>
-      <input type="date" aria-label={t("ถึง", "To")} className={`${input} w-auto py-1 text-xs`} value={period.to ?? ""} onChange={event => setPeriod(current => ({ ...current, to: event.target.value || undefined }))} />
+      <input type="date" aria-label={t("ถึง", "To")} className={inlineInput} value={period.to ?? ""} onChange={event => setPeriod(current => ({ ...current, to: event.target.value || undefined }))} />
       <button type="button" className={small} disabled={running || Boolean(artifact.error)} onClick={() => void run(period)} title={t("รันใหม่ด้วยข้อมูลล่าสุด", "Run again on current data")}>↻ {t("รันใหม่", "Re-run")}</button>
       <button type="button" className={small} onClick={() => setShowCode(value => !value)}>{showCode ? t("ซ่อนโค้ด", "Hide code") : "</>"}</button>
       {actions}

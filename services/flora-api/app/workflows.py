@@ -73,6 +73,9 @@ def normalize(definition: dict[str, Any]) -> dict[str, Any]:
         },
         "forms": forms,
         "packet": list(definition.get("packet") or []),
+        # Itemize (billing) template shown on the Leaf Billing screen; shared by any number of workflows.
+        "billing": {"template_id": (str((definition.get("billing") or {}).get("template_id") or "").strip() or None)
+                    if isinstance(definition.get("billing"), dict) else None},
     }
 
 
@@ -159,6 +162,12 @@ def validate(database: Connection, definition: Any) -> list[dict[str, str]]:
             issues.append({"path": f"{path}.kind", "message": "kind must be anesthesia_report or form"})
     if reports > 1:
         issues.append({"path": "$.packet", "message": "at most one anesthesia_report"})
+    template_id = workflow["billing"]["template_id"]
+    if template_id:
+        from . import billing_templates
+        if template_id not in billing_templates.published(database, [template_id]):
+            issues.append({"path": "$.billing.template_id",
+                           "message": f"itemize template '{template_id}' is not published"})
     return issues
 
 
@@ -199,11 +208,15 @@ def _leaf_delivery(database: Connection, unit_key: str | None) -> dict[str, Any]
                 definition = form_definition(database, item.get("form_id"), int(item.get("version") or 0))
                 if definition is not None:
                     forms[key] = definition
+    from . import billing_templates
+    templates = billing_templates.published(
+        database, sorted({tid for row in rows if (tid := billing_templates.template_id_of(row["definition"]))}))
     return {
-        "version": max((int(row["updated_at"]) for row in rows), default=0),
+        "version": max([int(row["updated_at"]) for row in rows] + [t["updated_at"] for t in templates.values()], default=0),
         "items": [{"definition": row["definition"], "isDefault": bool(row["is_default"]),
                    "sortOrder": int(row["sort_order"])} for row in rows],
         "forms": forms,
+        "billing_templates": {tid: t["definition"] for tid, t in templates.items()},
     }
 
 
