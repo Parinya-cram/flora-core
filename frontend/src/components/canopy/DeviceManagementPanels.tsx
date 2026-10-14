@@ -6,6 +6,7 @@ import {
   type GatewayRegistryInput, type HourCell, type LinkOption, type MedicalDevice, type RegistryFields, type WardInfo,
 } from "../../api/deviceManagementApi";
 
+import { getPhysicalTopology } from "../../api/fleetApi";
 import {
   CATEGORIES, CONNECTION_DOT, EVENT_LABEL, HOUR_MS, STATE_STYLE, STATUS_LABEL, ago, cellClass, emptyRegistry, percent,
 } from "./deviceManagementFormat";
@@ -127,8 +128,10 @@ function Field({ label, children, wide = false }: { label: string; children: Rea
   );
 }
 
-export function RegistryForm({ value, wards, editable, onChange }: {
-  value: RegistryFields; wards: WardInfo[]; editable: boolean; onChange: (next: RegistryFields) => void;
+export type BedOption = { id: number; unitKey: string; label: string };
+
+export function RegistryForm({ value, wards, beds = [], editable, onChange }: {
+  value: RegistryFields; wards: WardInfo[]; beds?: BedOption[]; editable: boolean; onChange: (next: RegistryFields) => void;
 }) {
   const set = <K extends keyof RegistryFields>(key: K, next: RegistryFields[K]) => onChange({ ...value, [key]: next });
   const text = (key: keyof RegistryFields) => (
@@ -157,12 +160,27 @@ export function RegistryForm({ value, wards, editable, onChange }: {
       <Field label="Asset tag">{text("asset_tag")}</Field>
       <Field label="Ward">
         <select className={input} disabled={!editable} value={value.unit_id ?? ""}
-          onChange={event => set("unit_id", event.target.value ? Number(event.target.value) : null)}>
+          onChange={event => {
+            const unit = event.target.value ? Number(event.target.value) : null;
+            const keep = beds.some(option => option.id === value.bed_id && option.unitKey === String(unit));
+            onChange({ ...value, unit_id: unit, bed_id: keep ? value.bed_id : null });
+          }}>
           <option value="">Unassigned</option>
           {wards.map(ward => <option key={ward.key} value={ward.key}>{ward.name}{ward.building_name ? ` · ${ward.building_name}` : ""}</option>)}
         </select>
       </Field>
-      <Field label="Room / bed / station">{text("location")}</Field>
+      <Field label="Fixed at bed">
+        <select className={input} disabled={!editable} value={value.bed_id ?? ""}
+          onChange={event => {
+            const bed = beds.find(option => option.id === Number(event.target.value));
+            onChange({ ...value, bed_id: bed ? bed.id : null, unit_id: bed ? Number(bed.unitKey) : value.unit_id });
+          }}>
+          <option value="">Not fixed — mobile / shared (shown through its gateway)</option>
+          {beds.filter(option => value.unit_id == null || option.unitKey === String(value.unit_id))
+            .map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+        </select>
+      </Field>
+      <Field label="Room / bed / station (note)">{text("location")}</Field>
       <Field label="Status">
         <select className={input} disabled={!editable} value={value.status} onChange={event => set("status", event.target.value as RegistryFields["status"])}>
           {Object.entries(STATUS_LABEL).map(([code, label]) => <option key={code} value={code}>{label}</option>)}
@@ -218,7 +236,7 @@ function Section({ title, children, action }: { title: string; children: React.R
 const registryOf = (device: MedicalDevice): RegistryFields => ({
   display_name: device.display_name, category: device.category, device_type: device.device_type,
   manufacturer: device.manufacturer, model: device.model, serial_number: device.serial_number, asset_tag: device.asset_tag,
-  unit_id: device.unit_id, location: device.location, status: device.status, acquired_at: device.acquired_at,
+  unit_id: device.unit_id, bed_id: device.bed_id ?? null, location: device.location, status: device.status, acquired_at: device.acquired_at,
   warranty_until: device.warranty_until, last_pm_at: device.last_pm_at, next_pm_at: device.next_pm_at,
   vendor_contact: device.vendor_contact, notes: device.notes,
 });
@@ -234,6 +252,18 @@ export function DeviceDrawer({ deviceId, wards, isAdmin, onClose, onChanged }: {
   const [busy, setBusy] = useState(false);
   const [options, setOptions] = useState<LinkOption[] | null>(null);
   const [linkChoice, setLinkChoice] = useState("");
+  const [beds, setBeds] = useState<BedOption[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getPhysicalTopology().then(data => {
+      if (cancelled) return;
+      setBeds(data.units.flatMap(unit => unit.rooms.flatMap(room => room.beds.map(bed => ({
+        id: bed.id, unitKey: unit.key, label: `${room.name}${room.zone ? ` (${room.zone})` : ""} · ${bed.name}`,
+      })))));
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (deviceId === "new") return;
@@ -350,7 +380,7 @@ export function DeviceDrawer({ deviceId, wards, isAdmin, onClose, onChanged }: {
         </>
       )}
       <Section title="Registry">
-        <RegistryForm value={form} wards={wards} editable={isAdmin} onChange={setForm} />
+        <RegistryForm value={form} wards={wards} beds={beds} editable={isAdmin} onChange={setForm} />
         {device && <p className="mt-2 text-xs text-[var(--app-muted)]">Updated {new Date(device.updated_at).toLocaleString()} by {device.updated_by || "—"}</p>}
         {isAdmin && (
           <div className="mt-3 flex flex-wrap gap-2">

@@ -1,8 +1,8 @@
 import { ECG_CLEAR_VALUE, ECG_OPTIONS, ecgValueToCode } from "./ecgOptions";
 import { COL_WIDTH, LABEL_COL_WIDTH } from "./layout";
-import type { ClinicalTimelineRow, ClinicalTimelineValues } from "./types";
+import type { ClinicalTimelineRow, ClinicalTimelineScoreCell, ClinicalTimelineValues } from "./types";
 import type { TimelineCellProvenance, TimelineProvenance } from "../../api/vitalMinutesApi";
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { useVirtualColumns } from "../../hooks/useVirtualColumns";
 import { useWorkstationSettings } from "../../hooks/useWorkstationSettings";
@@ -78,7 +78,17 @@ interface Props {
   onMaskRange?: (rowId: string, fromTs: number, toTs: number) => void;
   /** Make masked readings in [fromTs, toTs] of one row count again. */
   onUnmaskRange?: (rowId: string, fromTs: number, toTs: number) => void;
+  /** Results of score rows (row type "score"), by row id, sorted by time. */
+  scoreCells?: Record<string, ClinicalTimelineScoreCell[]>;
+  /** A score cell was clicked: column start time and the result shown there, if any. */
+  onScoreCellClick?: (rowId: string, ts: number, cell: ClinicalTimelineScoreCell | null) => void;
 }
+
+const SCORE_TONE: Record<string, string> = {
+  info: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  warning: "bg-amber-400/25 text-amber-800 dark:text-amber-200",
+  critical: "bg-rose-500/25 text-rose-700 dark:text-rose-200",
+};
 
 /** The selected vital cell and, after a second ⊘ press, the start of a range. */
 type MaskSelection = { rowId: string; rowLabel: string; columnIndex: number; element: HTMLElement; armed: boolean };
@@ -398,6 +408,8 @@ export default function ClinicalTimelineGrid({
   maskedValues,
   onMaskRange,
   onUnmaskRange,
+  scoreCells,
+  onScoreCellClick,
 }: Props) {
   const workstation = useWorkstationSettings();
   const { color: themeCode, schemes } = useTheme();
@@ -465,6 +477,26 @@ export default function ClinicalTimelineGrid({
     colWidth,
     columns.length
   );
+
+  // Each score result sits in the column whose time span contains it (the latest one wins).
+  const scoreByColumn = useMemo(() => {
+    const result = new Map<string, Map<number, ClinicalTimelineScoreCell>>();
+    for (const [rowId, cells] of Object.entries(scoreCells || {})) {
+      const byColumn = new Map<number, ClinicalTimelineScoreCell>();
+      for (const cell of cells) {
+        let low = 0;
+        let high = columns.length - 1;
+        if (high < 0 || cell.ts < columns[0]) continue;
+        while (low < high) {
+          const middle = Math.ceil((low + high) / 2);
+          if (columns[middle] <= cell.ts) low = middle; else high = middle - 1;
+        }
+        byColumn.set(low, cell);
+      }
+      result.set(rowId, byColumn);
+    }
+    return result;
+  }, [scoreCells, columns]);
 
   if (columns.length === 0) return null;
 
@@ -642,6 +674,7 @@ export default function ClinicalTimelineGrid({
   };
 
   const markerForRowType = (row: ClinicalTimelineRow) => {
+    if (row.type === "score") return { label: "Σ", className: "badge-event" };
     if (row.type !== "vital") return null;
     if (row.id.startsWith("set_")) {
       return {
@@ -1002,6 +1035,29 @@ export default function ClinicalTimelineGrid({
                         ) : null}
                       </div>
                     ) : null}
+                  </td>
+                );
+              }
+
+              if (row.type === "score") {
+                const cell = scoreByColumn.get(row.id)?.get(actualIndex) || null;
+                const tone = cell?.level ? SCORE_TONE[cell.level] : "";
+                const text = cell ? `${cell.total ?? "—"}${cell.partial ? "*" : ""}` : "";
+                const tooltip = cell
+                  ? [`${row.label} ${cell.total ?? "—"}${cell.band ? ` · ${cell.band}` : ""} at ${formatHHMM(cell.ts)}${cell.source === "manual" ? " (recorded)" : ""}`,
+                     cell.detail].filter(Boolean).join("\n")
+                  : `${row.label} at ${formatHHMM(ts)}`;
+                return (
+                  <td key={ts} style={{ width: colWidth, minWidth: colWidth }} className={`app-tooltip ${cellClass}`} data-tooltip={tooltip}>
+                    <button
+                      type="button"
+                      disabled={!onScoreCellClick}
+                      onClick={() => onScoreCellClick?.(row.id, ts, cell)}
+                      className={`block h-full w-full px-1 text-center text-[10px] font-bold leading-[var(--timegrid-row-height)] ${tone} ${cell?.source === "manual" ? "underline decoration-2 underline-offset-2" : ""} disabled:cursor-default`}
+                      aria-label={tooltip.split("\n")[0]}
+                    >
+                      {text}
+                    </button>
                   </td>
                 );
               }

@@ -29,6 +29,8 @@ export type ControlPlaneLocation = {
   name: string;
   is_active: boolean;
   sort_order: number;
+  /** Rooms only: the hospital's own functional area (zone) of the care unit. */
+  zone?: string | null;
 };
 
 export type ControlPlaneGroup = {
@@ -357,6 +359,55 @@ export type BulkLocationInput = {
   code_from_name?: boolean;
   beds_per_room?: number;
   bed_prefix?: string;
+  zone?: string | null;
 };
 export const bulkCreateLocations = (input: BulkLocationInput) =>
   sendJson<{ created: ControlPlaneLocation[]; skipped: string[]; beds_created: number }>("/api/fleet/control/locations/bulk", "POST", input);
+
+// ------------------------------------------------------------------ physical topology (Care unit → Room → Bed)
+
+export type PhysicalDevice = {
+  key: string;
+  label: string;
+  device_type: string | null;
+  category: string | null;
+  /** gateway = connected only (mobile / shared); bed = fixed at the bed, not connected; both = fixed and connected */
+  source: "gateway" | "bed" | "both";
+  registry_id: number | null;
+  asset_tag: string | null;
+  bed_id: number | null;
+  gateway_id: string | null;
+  gateway_device_id: string | null;
+  state: "online" | "offline" | "disabled" | "not_connected";
+  status: string | null;
+  last_event_type: string | null;
+};
+export type PhysicalBed = { id: number; name: string; leaf_id: string | null; devices: PhysicalDevice[] };
+export type PhysicalRoom = { id: number; name: string; zone: string | null; beds: PhysicalBed[] };
+export type PhysicalUnit = { key: string; name: string; building_name: string | null; rooms: PhysicalRoom[] };
+export type PhysicalLeaf = {
+  leaf_id: string;
+  display_name: string;
+  software_version: string | null;
+  connection_status: "online" | "delayed" | "offline";
+  active_cases: number;
+  primary_bed_id: number;
+  bed_ids: number[];
+  gateways: string[];
+  /** Devices connected through a gateway but not fixed at a bed. */
+  devices: PhysicalDevice[];
+};
+export type PhysicalTopology = {
+  units: PhysicalUnit[];
+  leaves: Record<string, PhysicalLeaf>;
+  gateways: Record<string, { gateway_id: string; name: string; connection_status: "online" | "delayed" | "offline" | "pending" }>;
+};
+export const getPhysicalTopology = () => getJson<PhysicalTopology>("/api/fleet/topology/physical");
+export async function setLeafBeds(leafId: string, bedIds: number[]): Promise<{ ok: boolean; bed_ids: number[] }> {
+  const response = await fetch(`${BACKEND_BASE}/api/fleet/control/leaves/${encodeURIComponent(leafId)}/beds`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bed_ids: bedIds }),
+  });
+  const data = await response.json().catch(() => ({})) as { detail?: string; ok?: boolean; bed_ids?: number[] };
+  if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : `Saving beds failed (${response.status})`);
+  return data as { ok: boolean; bed_ids: number[] };
+}

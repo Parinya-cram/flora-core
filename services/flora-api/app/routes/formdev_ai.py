@@ -137,20 +137,22 @@ def ai_generate(user: dict = Depends(ai_author), body: dict = Depends(upload_bod
     files = _inspected(body)
     config = _ai_config()
     validate = _validator()
-    only_forms = all(source.definition is not None for source in files)
+    # A file added twice is reported in the inspection but read and sent once.
+    usable = [source for source in files if not source.duplicate]
+    only_forms = all(source.definition is not None for source in usable)
     if not only_forms or instructions.strip():
-        _check_for_ai(files, config)
+        _check_for_ai(usable, config)
     inspection = documents.summary(files)
     if not inspection["ok"]:
         raise FormDevError("invalid_documents", "Some documents cannot be used; see the report", 422, inspection)
-    if only_forms and len(files) == 1 and not instructions.strip():
+    if only_forms and len(usable) == 1 and not instructions.strip():
         # A flora.form/1 file: checked and kept as is, no AI needed.
-        definition = ai_builder.normalize(files[0].definition, form_id, title)
+        definition = ai_builder.normalize(usable[0].definition, form_id, title)
         result = {"definition": definition, "report": None, "issues": validate(definition), "attempts": 0, "usage": None, "model": None}
         origin = "import"
     else:
         try:
-            result = ai_builder.build(config, files, instructions=instructions, form_id=form_id, title=title, validate=validate)
+            result = ai_builder.build(config, usable, instructions=instructions, form_id=form_id, title=title, validate=validate)
         except ai_builder.BuildError as error:
             raise FormDevError("ai_failed", str(error), 502, inspection) from None
         origin = "ai"

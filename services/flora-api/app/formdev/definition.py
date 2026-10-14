@@ -1178,13 +1178,38 @@ def _validate_printed_element(ctx: _Ctx, field: dict[str, Any], path: str, scope
         ctx.add(f"{path}.show_text", "invalid_type", "show_text must be a boolean")
 
 
+HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}\Z")
+
+
+def _validate_timeline_colors(ctx: _Ctx, colors: Any, path: str) -> None:
+    """timeline.colors: {mode?: series | mono, mono?: "#rrggbb", series?: {hr: "#rrggbb", ...}}."""
+    if not isinstance(colors, dict):
+        ctx.add(path, "invalid_type", "colors must be {mode?, mono?, series?}")
+        return
+    ctx.unknown(colors, {"mode", "mono", "series"}, path)
+    if "mode" in colors and colors["mode"] not in ("series", "mono"):
+        ctx.add(f"{path}.mode", "invalid_layout", "mode is series or mono")
+    if "mono" in colors and not (isinstance(colors["mono"], str) and HEX_COLOR.match(colors["mono"])):
+        ctx.add(f"{path}.mono", "invalid_type", "mono is a colour like #1f2937")
+    if "series" in colors:
+        series = colors["series"]
+        if not isinstance(series, dict):
+            ctx.add(f"{path}.series", "invalid_type", "series maps a chart series to a colour like #dc2626")
+            return
+        for name, color in series.items():
+            if name not in TIMELINE_SERIES:
+                ctx.add(f"{path}.series.{name}", "invalid_layout", f"series is one of {', '.join(TIMELINE_SERIES)}")
+            elif not (isinstance(color, str) and HEX_COLOR.match(color)):
+                ctx.add(f"{path}.series.{name}", "invalid_type", "colour like #dc2626")
+
+
 def _validate_timeline_config(ctx: _Ctx, config: Any, path: str) -> None:
     """timeline: which parts show (events row, trend chart, parameter table), the table rows, the chart series, the
     column step in minutes and where values come from (Flora Leaf, or typed in)."""
     if not isinstance(config, dict):
-        ctx.add(path, "invalid_type", "timeline must be {parts?, rows?, chart?, step_min?, source?, print_columns?, hide_empty_rows?}")
+        ctx.add(path, "invalid_type", "timeline must be {parts?, rows?, chart?, step_min?, source?, colors?, print_columns?, hide_empty_rows?}")
         return
-    ctx.unknown(config, {"parts", "rows", "chart", "step_min", "source", "print_columns", "hide_empty_rows"}, path)
+    ctx.unknown(config, {"parts", "rows", "chart", "step_min", "source", "colors", "print_columns", "hide_empty_rows"}, path)
     if "print_columns" in config and not (is_int(config["print_columns"]) and TIMELINE_PRINT_COLUMNS[0] <= config["print_columns"] <= TIMELINE_PRINT_COLUMNS[1]):
         ctx.add(f"{path}.print_columns", "invalid_type", f"print_columns must be an integer {TIMELINE_PRINT_COLUMNS[0]}-{TIMELINE_PRINT_COLUMNS[1]}")
     if "hide_empty_rows" in config and not isinstance(config["hide_empty_rows"], bool):
@@ -1199,6 +1224,8 @@ def _validate_timeline_config(ctx: _Ctx, config: Any, path: str) -> None:
         ctx.add(f"{path}.step_min", "invalid_type", "step_min must be an integer 1-120")
     if "source" in config and config["source"] not in TIMELINE_SOURCES:
         ctx.add(f"{path}.source", "invalid_layout", "source is leaf or manual")
+    if "colors" in config:
+        _validate_timeline_colors(ctx, config["colors"], f"{path}.colors")
     if "rows" in config:
         rows = config["rows"]
         if not isinstance(rows, list) or len(rows) > MAX_TIMELINE_ROWS:

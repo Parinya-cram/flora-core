@@ -67,6 +67,51 @@ class Inspection(unittest.TestCase):
         parts = ai_builder._openai_content([pdf], "go")
         self.assertTrue(parts[1]["image_url"]["url"].startswith("data:image/jpeg;base64,"), "an OpenAI-compatible host gets the scanned page")
 
+    def test_archives_are_read_within_a_size_limit(self):
+        """A small upload that expands to a huge part (zip bomb) is refused before it is read in full."""
+        bomb = io.BytesIO()
+        with zipfile.ZipFile(bomb, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("word/document.xml", b"<w:document>" + b"a" * 2_000_000 + b"</w:document>")
+        saved = documents.MAX_PART_BYTES
+        documents.MAX_PART_BYTES = 1_000_000
+        try:
+            (word,) = inspect(("bomb.docx", bomb.getvalue()))
+        finally:
+            documents.MAX_PART_BYTES = saved
+        self.assertLess(len(bomb.getvalue()), 50_000)
+        self.assertEqual(word.status, "error")
+        self.assertIn("expands", word.notes[0])
+
+    def test_xml_entity_declarations_are_refused(self):
+        laughs = io.BytesIO()
+        with zipfile.ZipFile(laughs, "w") as archive:
+            archive.writestr("word/document.xml", '<?xml version="1.0"?><!DOCTYPE d [<!ENTITY a "aaaaaaaa"><!ENTITY b "&a;&a;&a;&a;">]><d>&b;</d>')
+        (word,) = inspect(("laughs.docx", laughs.getvalue()))
+        self.assertEqual(word.status, "error")
+
+    def test_excel_sheets_follow_their_relationships_and_wide_rows_are_clipped(self):
+        ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+        book = io.BytesIO()
+        with zipfile.ZipFile(book, "w") as archive:
+            archive.writestr("xl/workbook.xml", f'<workbook {ns}><sheets><sheet name="Vitals" sheetId="1" r:id="rId9"/><sheet name="Notes" sheetId="2" r:id="rId3"/></sheets></workbook>')
+            archive.writestr("xl/_rels/workbook.xml.rels", '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                             '<Relationship Id="rId9" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Target="/xl/worksheets/sheet1.xml"/></Relationships>')
+            archive.writestr("xl/worksheets/sheet1.xml", f'<worksheet {ns}><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>note</t></is></c></row></sheetData></worksheet>')
+            archive.writestr("xl/worksheets/sheet2.xml", f'<worksheet {ns}><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>HR</t></is></c>'
+                             '<c r="XFD1" t="inlineStr"><is><t>far</t></is></c></row></sheetData></worksheet>')
+        (sheet,) = inspect(("vitals.xlsx", book.getvalue()))
+        self.assertEqual(sheet.text.splitlines(), ["[sheet Vitals]", "HR", "[sheet Notes]", "note"])
+        self.assertEqual(sheet.status, "warning")
+
+    def test_a_scan_without_end_marker_is_skipped(self):
+        cut = b"%PDF-1.3\n1 0 obj<</Type /Page>>endobj\n2 0 obj\n<< /Subtype /Image /Filter /DCTDecode >>\nstream\n\xff\xd8" + b"\x01" * 20_000
+        self.assertEqual(documents.scan_jpegs(cut), [])
+
+    def test_a_file_added_twice_is_read_once(self):
+        first, second = inspect(("a.txt", b"HN ____"), ("b.txt", b"HN ____"))
+        self.assertEqual((first.duplicate, second.duplicate), (False, True))
+        self.assertEqual((first.text, second.text), ("HN ____", ""))
+
     def test_word_paragraphs_and_tables_are_read(self):
         (word,) = inspect(("pacu.docx", docx(["PACU Record", "HN ______"], [["Criteria", "Admit", "D/C"], ["Activity", "", ""]])))
         self.assertEqual(word.kind, "docx")
@@ -155,6 +200,14 @@ class Build(unittest.TestCase):
         self.assertEqual(result["definition"]["extensions"][ai_builder.PLACEMENT_KEY], {"phase": "postop", "after_section": "pacu"})
         self.assertEqual(result["report"]["missing"], 2, "the uncaptured item and the unknown field")
         self.assertEqual(result["report"]["unknown_fields"], ["bed_no"])
+
+    def test_the_placement_is_reported_when_extensions_is_not_an_object(self):
+        odd = example(1)
+        odd["extensions"] = "nope"
+        self.script(answer(odd, {"placement": {"phase": "postop"}}), answer(odd, {}), answer(odd, {}))
+        result = self.build()
+        self.assertTrue(result["report"]["placement_not_stored"])
+        self.assertEqual(result["definition"]["extensions"], "nope")
 
     def test_unparseable_answers_are_retried_then_give_up(self):
         self.script("no json here", "<form_json>{broken</form_json>", "still nothing")

@@ -435,9 +435,12 @@ def build(config: dict[str, Any], files: list[SourceFile], *, instructions: str 
         raise BuildError("The AI service did not return a usable form definition; try again or add instructions.")
     report_clean = clean_report(report, definition)
     placement = {key: report_clean["placement"][key] for key in ("phase", "after_section")}
-    definition.setdefault("extensions", {})
-    if isinstance(definition["extensions"], dict):
-        definition["extensions"][PLACEMENT_KEY] = placement
-        issues = validate(definition)
+    extensions = definition.setdefault("extensions", {})
+    if isinstance(extensions, dict):
+        # A key of its own under extensions: it cannot add a problem, so the issues found above still hold.
+        extensions[PLACEMENT_KEY] = placement
+    else:
+        # extensions is already reported invalid; the suggestion is kept in the report, not lost silently.
+        report_clean["placement_not_stored"] = True
     return {"definition": definition, "report": report_clean, "issues": issues, "attempts": attempts,
             "usage": {**conversation.usage, "seconds": round(time.monotonic() - started, 1)}, "model": config.get("model")}

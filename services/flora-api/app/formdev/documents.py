@@ -25,6 +25,12 @@ MAX_TOTAL_BYTES = 30 * 1024 * 1024
 MAX_PDF_PAGES = 100
 MAX_TEXT_CHARS = 200_000
 MAX_PAGE_IMAGES = 40
+# Word / Excel are zip archives of XML: what is read is limited after decompression (a 20 MB upload can expand to
+# gigabytes), and XML with a DOCTYPE is refused (entity expansion, "billion laughs"; Office files never declare one).
+MAX_UNZIPPED_BYTES = 60 * 1024 * 1024
+MAX_PART_BYTES = 40 * 1024 * 1024
+MAX_SHEET_COLUMNS = 200
+MAX_SHEET_ROWS = 20_000
 MAX_NAME = 200
 
 IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
@@ -51,6 +57,7 @@ class SourceFile:
     has_text_layer: bool | None = None
     definition: dict[str, Any] | None = None  # a flora.form/1 file
     page_images: list[bytes] = field(default_factory=list)  # PNG renderings of PDF pages (OpenAI-compatible hosts)
+    duplicate: bool = False  # the same bytes as an earlier file: reported, not read or sent again
     scan_images: list[bytes] = field(default_factory=list)  # JPEG pages embedded in a scanned PDF
 
     @property
@@ -65,7 +72,7 @@ class SourceFile:
     def report(self) -> dict[str, Any]:
         return {"name": self.name, "kind": self.kind, "media_type": self.media_type, "size": len(self.content), "sha256": self.sha256,
                 "status": self.status, "notes": self.notes, "pages": self.pages, "text_chars": len(self.text),
-                "has_text_layer": self.has_text_layer, "page_images": len(self.page_images),
+                "has_text_layer": self.has_text_layer, "page_images": len(self.page_images), "duplicate": self.duplicate,
                 "scan_images": len(self.scan_images)}
 
 
@@ -175,16 +182,54 @@ def scan_jpegs(content: bytes) -> list[bytes]:
         length = re.search(rb"/Length\s+(\d+)(?!\s+\d+\s+R)", match.group(0))
         start = match.end()
         end = start + int(length.group(1)) if length else content.find(b"endstream", start)
+        if end <= start or end > len(content):
+            continue  # no length and no endstream: a cut-short file, not a picture
         data = content[start:end].rstrip(b"\r\n")
         if data.startswith(b"\xff\xd8") and len(data) >= MIN_SCAN_IMAGE_BYTES:
             images.append(data)
     return images
 
 
+class ArchiveTooLarge(ValueError):
+    pass
+
+
+class _Archive:
+    """A zip archive whose parts are read within MAX_PART_BYTES each and MAX_UNZIPPED_BYTES in total, as XML without
+    a DOCTYPE (sizes come from the zip directory and are enforced again while reading)."""
+
+    def __init__(self, content: bytes):
+        self.zip = zipfile.ZipFile(io.BytesIO(content))
+        self.read_total = 0
+
+    def names(self) -> list[str]:
+        return self.zip.namelist()
+
+    def read(self, name: str) -> bytes:
+        info = self.zip.getinfo(name)
+        if info.file_size > MAX_PART_BYTES or self.read_total + info.file_size > MAX_UNZIPPED_BYTES:
+            raise ArchiveTooLarge(name)
+        with self.zip.open(info) as part:
+            data = part.read(MAX_PART_BYTES + 1)
+        self.read_total += len(data)
+        if len(data) > MAX_PART_BYTES or self.read_total > MAX_UNZIPPED_BYTES:
+            raise ArchiveTooLarge(name)
+        return data
+
+    def xml(self, name: str) -> ElementTree.Element:
+        data = self.read(name)
+        if b"<!DOCTYPE" in data[:4096].upper() or b"<!ENTITY" in data.upper():
+            raise ElementTree.ParseError("DOCTYPE / ENTITY declarations are not read")
+        return ElementTree.fromstring(data)
+
+
 def _docx(source: SourceFile) -> None:
     try:
-        archive = zipfile.ZipFile(io.BytesIO(source.content))
-        root = ElementTree.fromstring(archive.read("word/document.xml"))
+        archive = _Archive(source.content)
+        root = archive.xml("word/document.xml")
+    except ArchiveTooLarge:
+        source.note("error", f"The Word file expands to more than {MAX_UNZIPPED_BYTES // (1024 * 1024)} MB of text; split it or save it as PDF")
+        return
     except (zipfile.BadZipFile, KeyError, ElementTree.ParseError):
         source.note("error", "The Word file is damaged and cannot be read")
         return
@@ -202,7 +247,7 @@ def _docx(source: SourceFile) -> None:
                 lines.append(" | ".join(cells))
             lines.append("[/table]")
     # Check boxes drawn as symbols (☐ ☑ ■ □) are kept in the text; images inside the document are not read.
-    if any(name.startswith("word/media/") for name in archive.namelist()):
+    if any(name.startswith("word/media/") for name in archive.names()):
         source.note("warning", "The Word file contains pictures; only its text and tables are read")
     source.text = "\n".join(lines)
 
@@ -215,23 +260,49 @@ def _column_index(ref: str) -> int:
     return max(0, number - 1)
 
 
+REL_NS = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+PACKAGE_REL_NS = "{http://schemas.openxmlformats.org/package/2006/relationships}"
+
+
+def _sheet_parts(archive: _Archive) -> list[tuple[str, str]]:
+    """(sheet name, part path) in workbook order: each <sheet r:id> resolved through xl/_rels/workbook.xml.rels."""
+    workbook = archive.xml("xl/workbook.xml")
+    targets: dict[str, str] = {}
+    if "xl/_rels/workbook.xml.rels" in archive.names():
+        for rel in archive.xml("xl/_rels/workbook.xml.rels").iter(f"{PACKAGE_REL_NS}Relationship"):
+            target = (rel.get("Target") or "").lstrip("/")
+            targets[rel.get("Id") or ""] = target if target.startswith("xl/") else f"xl/{target}"
+    out: list[tuple[str, str]] = []
+    for index, sheet in enumerate(workbook.iter(f"{SHEET_NS}sheet")):
+        path = targets.get(sheet.get(f"{REL_NS}id") or "") or f"xl/worksheets/sheet{index + 1}.xml"
+        if path in archive.names():
+            out.append((sheet.get("name") or f"Sheet{index + 1}", path))
+    return out
+
+
 def _xlsx(source: SourceFile) -> None:
+    clipped = False
     try:
-        archive = zipfile.ZipFile(io.BytesIO(source.content))
+        archive = _Archive(source.content)
         shared: list[str] = []
-        if "xl/sharedStrings.xml" in archive.namelist():
-            for item in ElementTree.fromstring(archive.read("xl/sharedStrings.xml")).iter(f"{SHEET_NS}si"):
+        if "xl/sharedStrings.xml" in archive.names():
+            for item in archive.xml("xl/sharedStrings.xml").iter(f"{SHEET_NS}si"):
                 shared.append("".join(node.text or "" for node in item.iter(f"{SHEET_NS}t")))
-        workbook = ElementTree.fromstring(archive.read("xl/workbook.xml"))
-        names = [sheet.get("name") or f"Sheet{index + 1}" for index, sheet in enumerate(workbook.iter(f"{SHEET_NS}sheet"))]
-        sheets = sorted((name for name in archive.namelist() if re.fullmatch(r"xl/worksheets/sheet\d+\.xml", name)),
-                        key=lambda name: int(re.findall(r"\d+", name)[-1]))
         lines: list[str] = []
-        for index, path in enumerate(sheets):
-            lines.append(f"[sheet {names[index] if index < len(names) else index + 1}]")
-            for row in ElementTree.fromstring(archive.read(path)).iter(f"{SHEET_NS}row"):
+        rows_read = 0
+        for name, path in _sheet_parts(archive):
+            lines.append(f"[sheet {name}]")
+            for row in archive.xml(path).iter(f"{SHEET_NS}row"):
+                rows_read += 1
+                if rows_read > MAX_SHEET_ROWS:
+                    clipped = True
+                    break
                 cells: dict[int, str] = {}
                 for cell in row.iter(f"{SHEET_NS}c"):
+                    column = _column_index(cell.get("r", ""))
+                    if column >= MAX_SHEET_COLUMNS:
+                        clipped = True
+                        continue
                     value = cell.find(f"{SHEET_NS}v")
                     inline = cell.find(f"{SHEET_NS}is")
                     if cell.get("t") == "s" and value is not None and (value.text or "").isdigit():
@@ -241,12 +312,19 @@ def _xlsx(source: SourceFile) -> None:
                     else:
                         text = value.text if value is not None and value.text else ""
                     if text.strip():
-                        cells[_column_index(cell.get("r", ""))] = text.strip()
+                        cells[column] = text.strip()
                 if cells:
                     lines.append(" | ".join(cells.get(column, "") for column in range(max(cells) + 1)))
+            if rows_read > MAX_SHEET_ROWS:
+                break
+    except ArchiveTooLarge:
+        source.note("error", f"The Excel file expands to more than {MAX_UNZIPPED_BYTES // (1024 * 1024)} MB; split it or save the form as PDF")
+        return
     except (zipfile.BadZipFile, KeyError, ElementTree.ParseError, ValueError):
         source.note("error", "The Excel file is damaged and cannot be read")
         return
+    if clipped:
+        source.note("warning", f"Only the first {MAX_SHEET_COLUMNS} columns and {MAX_SHEET_ROWS:,} rows are read")
     source.text = "\n".join(lines)
 
 
@@ -281,7 +359,9 @@ def inspect(files: list[SourceFile]) -> list[SourceFile]:
             source.note("error", f"Larger than {MAX_FILE_BYTES // (1024 * 1024)} MB")
             continue
         if source.sha256 in seen:
+            source.duplicate = True
             source.note("warning", "The same file was added twice; it is read once")
+            continue
         seen.add(source.sha256)
         if source.kind == "pdf":
             _pdf(source)

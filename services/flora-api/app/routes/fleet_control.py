@@ -40,6 +40,11 @@ class LocationInput(BaseModel):
     code: str | None = Field(default=None, max_length=80)
     sort_order: int = 0
     is_active: bool = True
+    zone: str | None = Field(default=None, max_length=80)  # rooms only: the hospital's functional area
+
+
+def room_zone(payload: "LocationInput") -> str | None:
+    return text(payload.zone) if payload.kind == "room" else None
 
 
 class GroupInput(BaseModel):
@@ -220,10 +225,10 @@ def create_location(payload: LocationInput, database: Connection = Depends(conne
     current = now_ms()
     with database.transaction():
         row = database.execute(
-            """INSERT INTO canopy_location(parent_id,kind,code,name,is_active,sort_order,created_at,updated_at)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
+            """INSERT INTO canopy_location(parent_id,kind,code,name,is_active,sort_order,created_at,updated_at,zone)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
             (payload.parent_id, payload.kind, text(payload.code), payload.name.strip(), payload.is_active,
-             payload.sort_order, current, current),
+             payload.sort_order, current, current, room_zone(payload)),
         ).fetchone()
     return row
 
@@ -235,9 +240,9 @@ def update_location(location_id: int, payload: LocationInput, database: Connecti
     with database.transaction():
         row = database.execute(
             """UPDATE canopy_location SET parent_id=%s,kind=%s,code=%s,name=%s,is_active=%s,
-               sort_order=%s,updated_at=%s WHERE id=%s RETURNING *""",
+               sort_order=%s,updated_at=%s,zone=%s WHERE id=%s RETURNING *""",
             (payload.parent_id, payload.kind, text(payload.code), payload.name.strip(), payload.is_active,
-             payload.sort_order, current, location_id),
+             payload.sort_order, current, room_zone(payload), location_id),
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Location not found")
@@ -311,11 +316,59 @@ def update_group_members(group_id: int, payload: GroupMembersInput, database: Co
 @router.put("/leaves/{leaf_id}/assignment", dependencies=[Depends(require_admin)])
 def assign_leaf(leaf_id: str, payload: AssignmentInput, database: Connection = Depends(connection)) -> dict[str, Any]:
     with database.transaction():
-        return write_assignment(database, leaf_id, payload.bed_location_id, {
+        # A primary bed is served by this Leaf only; extra beds stay only while they are in the same ward.
+        database.execute("DELETE FROM canopy_leaf_bed WHERE bed_location_id=%s", (payload.bed_location_id,))
+        result = write_assignment(database, leaf_id, payload.bed_location_id, {
             "timezone": payload.timezone,
             "date_format": payload.date_format,
             "time_format": payload.time_format,
         })
+        database.execute(
+            """DELETE FROM canopy_leaf_bed extra USING canopy_location bed, canopy_location room
+               WHERE extra.leaf_id=%s AND bed.id=extra.bed_location_id AND room.id=bed.parent_id
+                 AND room.parent_id IS DISTINCT FROM (SELECT r.parent_id FROM canopy_location b
+                                                      JOIN canopy_location r ON r.id=b.parent_id WHERE b.id=%s)""",
+            (leaf_id, payload.bed_location_id))
+        return result
+
+
+class LeafBedsInput(BaseModel):
+    bed_ids: list[int] = Field(default_factory=list, max_length=200)
+
+
+@router.put("/leaves/{leaf_id}/beds", dependencies=[Depends(require_admin)])
+def set_leaf_beds(leaf_id: str, payload: LeafBedsInput, database: Connection = Depends(connection)) -> dict[str, Any]:
+    """Further beds one Leaf serves besides its primary (assigned) bed, e.g. a workstation for a whole zone.
+    They must be in the same care unit as the primary bed and not served by another Leaf."""
+    bed_ids = list(dict.fromkeys(payload.bed_ids))
+    with database.transaction():
+        primary = database.execute(
+            """SELECT a.bed_location_id, room.parent_id AS unit_id FROM canopy_leaf_assignment a
+               JOIN canopy_location bed ON bed.id=a.bed_location_id JOIN canopy_location room ON room.id=bed.parent_id
+               WHERE a.leaf_id=%s""", (leaf_id,)).fetchone()
+        if not primary:
+            raise HTTPException(status_code=409, detail="Assign the Leaf to its primary bed first")
+        bed_ids = [bed for bed in bed_ids if bed != primary["bed_location_id"]]
+        if bed_ids:
+            rows = database.execute(
+                """SELECT bed.id, room.parent_id AS unit_id FROM canopy_location bed JOIN canopy_location room ON room.id=bed.parent_id
+                   WHERE bed.id=ANY(%s) AND bed.kind='bed'""", (bed_ids,)).fetchall()
+            if len(rows) != len(bed_ids):
+                raise HTTPException(status_code=400, detail="One or more beds do not exist")
+            if any(row["unit_id"] != primary["unit_id"] for row in rows):
+                raise HTTPException(status_code=400, detail="Extra beds must be in the same ward as the primary bed")
+            taken = database.execute(
+                """SELECT bed_location_id FROM canopy_leaf_assignment WHERE bed_location_id=ANY(%s) AND leaf_id<>%s
+                   UNION SELECT bed_location_id FROM canopy_leaf_bed WHERE bed_location_id=ANY(%s) AND leaf_id<>%s""",
+                (bed_ids, leaf_id, bed_ids, leaf_id)).fetchall()
+            if taken:
+                raise HTTPException(status_code=409, detail="Some beds are already served by another Leaf")
+        database.execute("DELETE FROM canopy_leaf_bed WHERE leaf_id=%s", (leaf_id,))
+        current = now_ms()
+        for bed in bed_ids:
+            database.execute("INSERT INTO canopy_leaf_bed(leaf_id,bed_location_id,created_at) VALUES (%s,%s,%s)",
+                             (leaf_id, bed, current))
+    return {"ok": True, "leaf_id": leaf_id, "primary_bed_id": primary["bed_location_id"], "bed_ids": bed_ids}
 
 
 @router.post("/leaves/{leaf_id}/adopt-observed", dependencies=[Depends(require_admin)])
@@ -529,6 +582,7 @@ class BulkLocationInput(BaseModel):
     code_from_name: bool = True
     beds_per_room: int = Field(default=0, ge=0, le=20)
     bed_prefix: str = Field(default="Bed ", max_length=40)
+    zone: str | None = Field(default=None, max_length=80)  # rooms only
 
 
 @router.post("/locations/bulk", dependencies=[Depends(require_admin)])
@@ -557,9 +611,10 @@ def bulk_create_locations(payload: BulkLocationInput, database: Connection = Dep
                 continue
             order += 10
             row = database.execute(
-                """INSERT INTO canopy_location(parent_id,kind,code,name,is_active,sort_order,created_at,updated_at)
-                   VALUES (%s,%s,%s,%s,true,%s,%s,%s) RETURNING *""",
-                (payload.parent_id, payload.kind, name if payload.code_from_name else None, name, order, current, current),
+                """INSERT INTO canopy_location(parent_id,kind,code,name,is_active,sort_order,created_at,updated_at,zone)
+                   VALUES (%s,%s,%s,%s,true,%s,%s,%s,%s) RETURNING *""",
+                (payload.parent_id, payload.kind, name if payload.code_from_name else None, name, order, current, current,
+                 text(payload.zone) if payload.kind == "room" else None),
             ).fetchone()
             created.append(row)
             if payload.kind == "room":

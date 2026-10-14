@@ -1,12 +1,12 @@
 import type { CSSProperties } from "react";
-import ioIconSetUrl from "../../assets/ioiconset.png";
-import lightIoIconSetUrl from "../../assets/ioiconset-light.png";
-import inputIconSetUrl from "../../assets/inputset.png";
-import lightInputIconSetUrl from "../../assets/inputset-light.png";
-import bloodLossIconUrl from "../../assets/bloodloss.png";
-import lightBloodLossIconUrl from "../../assets/bloodloss-light.png";
-import urineIconUrl from "../../assets/urine.png";
-import lightUrineIconUrl from "../../assets/urine-light.png";
+import ioIconSetUrl from "../../assets/io/ioiconset.png";
+import lightIoIconSetUrl from "../../assets/io/ioiconset-light.png";
+import inputIconSetUrl from "../../assets/io/inputset.png";
+import lightInputIconSetUrl from "../../assets/io/inputset-light.png";
+import bloodLossIconUrl from "../../assets/io/bloodloss.png";
+import lightBloodLossIconUrl from "../../assets/io/bloodloss-light.png";
+import urineIconUrl from "../../assets/io/urine.png";
+import lightUrineIconUrl from "../../assets/io/urine-light.png";
 
 export type IoIconName =
   | "input"

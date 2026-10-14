@@ -53,7 +53,7 @@ is `409 version_conflict`), delete, `GET …/sources/{sha256}` (an original docu
 
 * `status`: `draft` → `reviewed` only when the definition has no validation problems; changing the definition of a
   reviewed template makes it a draft again.
-* Migrations: PostgreSQL `0083-formdev-template.sql` (also in `formdev/deploy/formdev-install.sql`), SQLite
+* Migrations: PostgreSQL `0087-formdev-template.sql` (also in `formdev/deploy/formdev-install.sql`), SQLite
   migration 7, MySQL `mysql_0003_template.sql`.
 
 ## 4. Form Studio screens (`frontend/src/formdev/ai/`)

@@ -9,6 +9,8 @@ import {
   type SuggestedCaseEnd,
 } from "../api/caseApi";
 import ClinicalTimelineAxis from "../components/clinical-timeline/ClinicalTimelineAxis";
+import ScoreDialog from "../components/scores/ScoreDialog";
+import { SCORE_ROW_PREFIX, useCaseScores } from "../hooks/useCaseScores";
 import ClinicalTimelineGrid, {
   type ClinicalTimelineEventMarker,
   type ClinicalTimelineIoMarker,
@@ -111,6 +113,7 @@ import {
   normalizeTimeInputHHMM,
 } from "../utils/clinicalInput";
 import HeaderCard from "../components/case/HeaderCard";
+import { caseHeaderOrderStorageKey, DEFAULT_CASE_HEADER_ORDER, isNkaAllergen, readCaseHeaderOrder, type CaseHeaderCardId } from "../components/case/caseHeaderOrder";
 import ClinicalReferenceTooltip from "../components/common/ClinicalReferenceTooltip";
 import IoSpriteIcon from "../components/io/IoSpriteIcon";
 import BloodProductEntryModal from "../components/io/BloodProductEntryModal";
@@ -120,16 +123,12 @@ import {
   getHistoricalDripSuggestion,
   POPULAR_DRIP_MEDICATIONS,
 } from "../utils/medicationDrip";
-import allergyCardIcon from "../assets/card-allergy.png";
-import patientCardIcon from "../assets/card-patient.png";
-import timeCardIcon from "../assets/card-time.png";
-import diagnosisCardIcon from "../assets/card-diagnosis.png";
-import procedureCardIcon from "../assets/card-procedure.png";
+import allergyCardIcon from "../assets/cards/card-allergy.png";
+import patientCardIcon from "../assets/cards/card-patient.png";
+import timeCardIcon from "../assets/cards/card-time.png";
+import diagnosisCardIcon from "../assets/cards/card-diagnosis.png";
+import procedureCardIcon from "../assets/cards/card-procedure.png";
 
-function isNkaAllergen(value: unknown): boolean {
-  const normalized = String(value || "").replace(/[^a-z]/gi, "").toUpperCase();
-  return normalized === "NKA" || normalized === "NKDA" || normalized === "NOKNOWNALLERGY" || normalized === "NOKNOWNDRUGALLERGY" || normalized === "NOKNOWNALLERGIES";
-}
 import { clampEditionTimelineScale, getEditionInfo, isTimelineParamAllowed } from "../edition/config";
 import {
   CHART_PREFERENCES_CHANGED_EVENT,
@@ -199,9 +198,7 @@ function formatHHMMSS(ts: number) {
     .join(":");
 }
 
-type CaseHeaderCardId = "los" | "patient" | "allergy" | "diagnosis" | "operation";
 type SummaryDock = "top" | "left" | "bottom" | "right";
-const DEFAULT_CASE_HEADER_ORDER: CaseHeaderCardId[] = ["los", "patient", "allergy", "diagnosis", "operation"];
 
 function SummaryDockIcon({ position }: { position: SummaryDock }) {
   const bar = {
@@ -218,23 +215,6 @@ function SummaryDockIcon({ position }: { position: SummaryDock }) {
   );
 }
 
-function caseHeaderOrderStorageKey(username: string) {
-  return `flora.caseHeaderOrder.${username || "default"}`;
-}
-
-function readCaseHeaderOrder(username: string): CaseHeaderCardId[] {
-  if (typeof window === "undefined") return DEFAULT_CASE_HEADER_ORDER;
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(caseHeaderOrderStorageKey(username)) || "[]") as unknown[];
-    const allowed = new Set<CaseHeaderCardId>(DEFAULT_CASE_HEADER_ORDER);
-    const valid = parsed.filter((value): value is CaseHeaderCardId => allowed.has(value as CaseHeaderCardId));
-    return valid.length === DEFAULT_CASE_HEADER_ORDER.length && new Set(valid).size === valid.length
-      ? valid
-      : DEFAULT_CASE_HEADER_ORDER;
-  } catch {
-    return DEFAULT_CASE_HEADER_ORDER;
-  }
-}
 
 type IoGridCellValue = {
   kind: "io_cell";
@@ -1240,6 +1220,10 @@ export default function ClinicalChartView({
     ),
     [autoHideEmptyParameters, ivyRows, hiddenRowIdSet, values],
   );
+
+  const caseScores = useCaseScores(caseId, caseStatus.status === "ACTIVE");
+  const gridIvyRows = useMemo(() => [...visibleIvyRows, ...caseScores.rows], [visibleIvyRows, caseScores.rows]);
+  const [scoreDialog, setScoreDialog] = useState<{ scoreId: string; ts: number; resultId: number | null } | null>(null);
 
   const [nowTs, setNowTs] = useState(() => Date.now());
   const [scrollLeft, setScrollLeft] = useState(0);
@@ -5381,9 +5365,15 @@ export default function ClinicalChartView({
     <ClinicalTimelineGrid
       displaySection={displaySection}
       columns={axis}
-      ivyRows={visibleIvyRows}
+      ivyRows={gridIvyRows}
       rowsAfterEvent={rowsAfterEvent}
       values={combinedGridValues}
+      scoreCells={caseScores.cells}
+      onScoreCellClick={(rowId, ts, cell) => {
+        const scoreId = rowId.slice(SCORE_ROW_PREFIX.length);
+        const stored = cell ? caseScores.results.find(row => row.score_id === scoreId && row.ts === cell.ts && row.source === cell.source) : null;
+        setScoreDialog({ scoreId, ts: cell?.ts ?? ts, resultId: stored?.id ?? null });
+      }}
       cellProvenance={cellProvenance}
       ioDripRateByRowTs={ioDripRateByRowTs}
       eventMarkersByTs={eventMarkersByTs}
@@ -5484,8 +5474,12 @@ export default function ClinicalChartView({
     ),
   };
 
+  const scoreDefinition = scoreDialog ? caseScores.byId.get(scoreDialog.scoreId) : undefined;
   return (
     <div className={`case-workspace case-workspace--${summaryDock} relative h-full min-h-0 p-2 bg-gray-50 dark:bg-gray-900`}>
+      {scoreDialog && scoreDefinition && caseId ? <ScoreDialog caseId={caseId} definition={scoreDefinition} ts={scoreDialog.ts}
+        result={caseScores.results.find(row => row.id === scoreDialog.resultId) || null}
+        onClose={() => setScoreDialog(null)} onChanged={caseScores.reload} /> : null}
       <div className="case-kronos rounded-xl border px-3 py-2 text-xs">
         <div className="case-header-grid">
           {headerCardOrder.map(cardId => (

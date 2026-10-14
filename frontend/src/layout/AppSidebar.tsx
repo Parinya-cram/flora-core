@@ -6,26 +6,26 @@ import { useLanguage } from "../context/LanguageContext";
 import { getSurfaceInfo } from "../edition/config";
 import ClinicalReferenceTooltip from "../components/common/ClinicalReferenceTooltip";
 import { useWorkstationSettings } from "../hooks/useWorkstationSettings";
-import chartMenuIcon from "../assets/menu-chart.png";
-import ioMenuIcon from "../assets/menu-io.png";
-import clinicalMenuIcon from "../assets/menu-clinical.png";
-import formMenuIcon from "../assets/menu-form.png";
-import staffMenuIcon from "../assets/menu-staff.png";
-import patientMenuIcon from "../assets/menu-patient.png";
-import reportMenuIcon from "../assets/menu-report.png";
-import configMenuIcon from "../assets/menu-config.png";
-import archiveMenuIcon from "../assets/menu-archive.png";
-import dashboardMenuIcon from "../assets/dashboard.png";
-import canopyDashboardIcon from "../assets/canopy-menu-dashboard.png";
-import canopyClinicalIcon from "../assets/canopy-menu-clinical.png";
-import canopyReportsIcon from "../assets/canopy-menu-reports.png";
-import canopyConfigIcon from "../assets/canopy-menu-config.png";
-import canopyInfrastructureIcon from "../assets/canopy-menu-infrastructure.png";
-import canopyMonitoringIcon from "../assets/canopy-menu-monitoring.png";
-import canopyFormDevIcon from "../assets/canopy-menu-formdev.png";
+import chartMenuIcon from "../assets/menu/menu-chart.png";
+import ioMenuIcon from "../assets/menu/menu-io.png";
+import clinicalMenuIcon from "../assets/menu/menu-clinical.png";
+import formMenuIcon from "../assets/menu/menu-form.png";
+import staffMenuIcon from "../assets/menu/menu-staff.png";
+import patientMenuIcon from "../assets/menu/menu-patient.png";
+import reportMenuIcon from "../assets/menu/menu-report.png";
+import configMenuIcon from "../assets/menu/menu-config.png";
+import archiveMenuIcon from "../assets/menu/menu-archive.png";
+import dashboardMenuIcon from "../assets/menu/dashboard.png";
+import canopyDashboardIcon from "../assets/menu/canopy-menu-dashboard.png";
+import canopyClinicalIcon from "../assets/menu/canopy-menu-clinical.png";
+import canopyReportsIcon from "../assets/menu/canopy-menu-reports.png";
+import canopyConfigIcon from "../assets/menu/canopy-menu-config.png";
+import canopyInfrastructureIcon from "../assets/menu/canopy-menu-infrastructure.png";
+import canopyMonitoringIcon from "../assets/menu/canopy-menu-monitoring.png";
+import canopyFormDevIcon from "../assets/menu/canopy-menu-formdev.png";
 import { canAuthorStudio, canUseAiStudio } from "../auth/studioAccess";
 
-export type AppView = "ward" | "case" | "form" | "diagnosis" | "staff" | "io" | "patient" | "report" | "master" | "account" | "dashboard" | "admissions" | "monitoring" | "fleet" | "infrastructure" | "topology" | "gateway-alerts" | "devices" | "formdev" | "workflows" | "report-studio" | "ai-studio" | "history" | "billing";
+export type AppView = "ward" | "case" | "form" | "diagnosis" | "staff" | "io" | "patient" | "report" | "master" | "account" | "dashboard" | "admissions" | "monitoring" | "fleet" | "infrastructure" | "topology" | "gateway-alerts" | "devices" | "formdev" | "workflows" | "report-studio" | "ai-studio" | "history" | "billing" | "staff-directory";
 
 type Props = {
   activeView: AppView;
@@ -202,6 +202,7 @@ function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, colla
         { view: "fleet", label: "Case List", icon: "canopy-charts" },
         { view: "report", label: "Reports", icon: "canopy-reports" },
         { view: "billing", label: "Billing", icon: "canopy-reports" },
+        ...(canConfigureCanopy || permissions.includes("staff.manage") ? [{ view: "staff-directory" as AppView, label: "Staff directory", icon: "staff" as NavIconName }] : []),
         { view: "topology", label: "Topology", icon: "canopy-monitoring" },
         { view: "devices", label: "Devices", icon: "canopy-infrastructure" },
         { view: "gateway-alerts", label: "Gateway Alerts", icon: "canopy-infrastructure" },

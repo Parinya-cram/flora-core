@@ -3,6 +3,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 
+from .. import staff_sync
 from ..clinical import flag, insert, number, text, update, case_audit
 from ..database import connection
 from .auth_leaf import now_ms, require_permission
@@ -153,6 +154,7 @@ def staff_values(db,payload,old=None):
     values["email"]=(values["email"] or "").lower() or None
     values["staff_role_id"]=role_id
     values["staff_role"]=role_label
+    values["staff_code"]=text(source.get("staff_code",old.get("staff_code")))
     name_parts=[text(profile.get(row["field_key"])) for row in fields if row.get("name_part")]
     values["staff_name"]=text(mapped.get("staff_name")) or text(source.get("name",source.get("staff_name",old.get("staff_name")))) or " ".join(filter(None,name_parts)) or " ".join(filter(None,(values["en_first_name"],values["en_last_name"])))
     if not values["staff_name"]:
@@ -164,22 +166,45 @@ def staff_values(db,payload,old=None):
     return values
 
 
+def check_staff_sync_rules(db,values,entry_id=None):
+    """Doctors and nurses need a staff code (it is how Canopy recognises them); a code is used once."""
+    if not values["staff_code"] and staff_sync.needs_code(db,values["staff_role_id"]):
+        raise HTTPException(400,f'staff code required for {values["staff_role"]} (doctor or nurse code)')
+    if values["staff_code"]:
+        clash=db.execute("SELECT id,staff_name FROM staff_directory WHERE lower(staff_code)=lower(%s) AND id IS DISTINCT FROM %s",
+                         (values["staff_code"],entry_id)).fetchone()
+        if clash: raise HTTPException(409,f'staff code {values["staff_code"]} is already used by {clash["staff_name"]}')
+
+
+def mark_for_canopy(values,current):
+    """A coded person added or edited here goes up to Canopy on the next sync."""
+    values["directory_pending"]=1 if values["staff_code"] else 0
+    values["directory_version"]=current
+    values["sync_error"]=None
+
+
+def refuse_managed(row):
+    if row and row.get("directory_managed"):
+        raise HTTPException(409,"this person is managed by Canopy; change them in Canopy → Staff directory")
+
+
 @router.get("/staff/directory")
 def staff_directory(q:str="",role_id:str="",include_inactive:bool=False,limit:int=Query(200,ge=1,le=500),database:Connection=Depends(connection)):
     like=f"%{q.strip()}%"
     rows=database.execute("""SELECT id,hospital_id,personal_id,email,th_first_name,th_last_name,en_first_name,en_last_name,
-      innovian_id,staff_role_id AS role_id,staff_name AS name,staff_role AS role,entry_year,profile_data,is_active,used_count,last_used_at,created_at,updated_at
+      innovian_id,staff_role_id AS role_id,staff_name AS name,staff_role AS role,entry_year,profile_data,is_active,used_count,last_used_at,created_at,updated_at,
+      staff_code,directory_managed,directory_pending,sync_error
       FROM staff_directory WHERE (%s OR is_active=1) AND (%s='' OR staff_role_id=%s)
-      AND (%s='' OR staff_name ILIKE %s OR coalesce(hospital_id,'') ILIKE %s OR coalesce(email,'') ILIKE %s OR profile_data::text ILIKE %s)
+      AND (%s='' OR staff_name ILIKE %s OR coalesce(hospital_id,'') ILIKE %s OR coalesce(staff_code,'') ILIKE %s OR coalesce(email,'') ILIKE %s OR profile_data::text ILIKE %s)
       ORDER BY is_active DESC,last_used_at DESC NULLS LAST,used_count DESC,staff_name LIMIT %s""",
-      (include_inactive,role_id,role_id,q.strip(),like,like,like,like,limit)).fetchall()
+      (include_inactive,role_id,role_id,q.strip(),like,like,like,like,like,limit)).fetchall()
     return {"rows":rows}
 
 
 @router.get("/staff/library")
 def staff_library(limit:int=Query(50,ge=1,le=200),database:Connection=Depends(connection)):
     return {"rows":database.execute("""SELECT hospital_id,personal_id,email,th_first_name,th_last_name,en_first_name,en_last_name,innovian_id,
-      staff_role_id AS role_id,staff_name AS name,staff_role AS role,entry_year,profile_data,is_active,used_count,last_used_at
+      staff_role_id AS role_id,staff_name AS name,staff_role AS role,entry_year,profile_data,is_active,used_count,last_used_at,staff_code
       FROM staff_directory WHERE is_active=1 ORDER BY last_used_at DESC NULLS LAST,used_count DESC,staff_name LIMIT %s""",(limit,)).fetchall()}
 
 
@@ -188,10 +213,17 @@ def create_staff(payload:dict=Body(...),actor:dict=Depends(require_permission("s
     values=staff_values(database,payload)
     with database.transaction():
         existing=None
-        if values["hospital_id"]: existing=database.execute("SELECT * FROM staff_directory WHERE hospital_id=%s",(values["hospital_id"],)).fetchone()
+        if values["staff_code"]:
+            existing=database.execute("SELECT * FROM staff_directory WHERE lower(staff_code)=lower(%s)",(values["staff_code"],)).fetchone()
+            if existing and (existing["staff_name"]!=values["staff_name"] or existing["staff_role_id"]!=values["staff_role_id"]):
+                raise HTTPException(409,f'staff code {values["staff_code"]} is already used by {existing["staff_name"]} ({existing["staff_role"]})')
+        if not existing and values["hospital_id"]: existing=database.execute("SELECT * FROM staff_directory WHERE hospital_id=%s",(values["hospital_id"],)).fetchone()
         if not existing and values["email"]: existing=database.execute("SELECT * FROM staff_directory WHERE lower(email)=lower(%s)",(values["email"],)).fetchone()
         if not existing: existing=database.execute("SELECT * FROM staff_directory WHERE staff_name=%s AND staff_role_id=%s",(values["staff_name"],values["staff_role_id"])).fetchone()
         current=now_ms()
+        refuse_managed(existing)
+        check_staff_sync_rules(database,values,existing["id"] if existing else None)
+        mark_for_canopy(values,current)
         values.update(is_active=1,last_used_at=current,updated_at=current)
         row=update(database,"staff_directory",existing["id"],values) if existing else insert(database,"staff_directory",dict(**values,used_count=0,created_at=current))
     return {"ok":True,"row":row}
@@ -201,13 +233,18 @@ def create_staff(payload:dict=Body(...),actor:dict=Depends(require_permission("s
 def edit_staff(entry_id:int,payload:dict=Body(...),_:dict=Depends(require_permission("staff.manage")),database:Connection=Depends(connection)):
     old=database.execute("SELECT * FROM staff_directory WHERE id=%s",(entry_id,)).fetchone()
     if not old: raise HTTPException(404,"staff not found")
+    refuse_managed(old)
     values=staff_values(database,payload,old)
-    values.update(is_active=flag(payload.get("is_active",old["is_active"])),updated_at=now_ms())
+    check_staff_sync_rules(database,values,entry_id)
+    current=now_ms()
+    mark_for_canopy(values,current)
+    values.update(is_active=flag(payload.get("is_active",old["is_active"])),updated_at=current)
     return {"ok":True,"row":update(database,"staff_directory",entry_id,values)}
 
 
 @router.delete("/staff/directory/{entry_id}")
 def disable_staff(entry_id:int,_:dict=Depends(require_permission("staff.manage")),database:Connection=Depends(connection)):
+    refuse_managed(database.execute("SELECT directory_managed FROM staff_directory WHERE id=%s",(entry_id,)).fetchone())
     row=database.execute("UPDATE staff_directory SET is_active=0,updated_at=%s WHERE id=%s RETURNING id",(now_ms(),entry_id)).fetchone()
     if not row: raise HTTPException(404,"staff not found")
     return {"ok":True,"deactivated":1}
@@ -252,12 +289,22 @@ def replace_staff(case_id:int,payload:dict=Body(...),actor:dict=Depends(require_
         current=now_ms(); rows=[]
         for index,values in enumerate(normalized,1):
             row=insert(database,"case_staff",dict(case_id=case_id,**values,seq=index,created_by=actor["username"],created_at=current,updated_at=current)); rows.append(row)
-            database.execute("""INSERT INTO staff_directory(hospital_id,personal_id,email,th_first_name,th_last_name,en_first_name,en_last_name,innovian_id,staff_role_id,staff_name,staff_role,entry_year,profile_data,is_active,used_count,last_used_at,created_at,updated_at)
-              VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1,1,%s,%s,%s)
-              ON CONFLICT(staff_name,staff_role) DO UPDATE SET profile_data=excluded.profile_data,used_count=staff_directory.used_count+1,last_used_at=excluded.last_used_at,updated_at=excluded.updated_at""",
-              tuple(values[k] for k in ("hospital_id","personal_id","email","th_first_name","th_last_name","en_first_name","en_last_name","innovian_id","staff_role_id","staff_name","staff_role","entry_year","profile_data"))+(current,current,current,))
+            if values["staff_code"]:
+                known=database.execute("SELECT id FROM staff_directory WHERE lower(staff_code)=lower(%s)",(values["staff_code"],)).fetchone()
+                if known:
+                    database.execute("UPDATE staff_directory SET used_count=used_count+1,last_used_at=%s WHERE id=%s",(current,known["id"]))
+                    continue
+            # A new coded person typed into a case also goes up to Canopy; Canopy-managed entries keep their data.
+            database.execute("""INSERT INTO staff_directory(hospital_id,personal_id,email,th_first_name,th_last_name,en_first_name,en_last_name,innovian_id,staff_role_id,staff_name,staff_role,entry_year,profile_data,staff_code,is_active,used_count,last_used_at,created_at,updated_at,directory_pending,directory_version)
+              VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1,1,%s,%s,%s,CASE WHEN coalesce(%s,'')<>'' THEN 1 ELSE 0 END,%s)
+              ON CONFLICT(staff_name,staff_role) DO UPDATE SET
+                profile_data=CASE WHEN staff_directory.directory_managed=1 THEN staff_directory.profile_data ELSE excluded.profile_data END,
+                staff_code=CASE WHEN staff_directory.directory_managed=1 OR coalesce(staff_directory.staff_code,'')<>'' THEN staff_directory.staff_code ELSE excluded.staff_code END,
+                directory_pending=CASE WHEN staff_directory.directory_managed=0 AND coalesce(staff_directory.staff_code,'')='' AND coalesce(excluded.staff_code,'')<>'' THEN 1 ELSE staff_directory.directory_pending END,
+                used_count=staff_directory.used_count+1,last_used_at=excluded.last_used_at,updated_at=excluded.updated_at""",
+              tuple(values[k] for k in ("hospital_id","personal_id","email","th_first_name","th_last_name","en_first_name","en_last_name","innovian_id","staff_role_id","staff_name","staff_role","entry_year","profile_data","staff_code"))+(current,current,current,values["staff_code"],current))
         case_audit(database,case_id,"staff.replace",before,rows,actor)
-    return {"ok":True,"case_id":case_id,"rows":[dict(id=r["id"],hospital_id=r["hospital_id"],personal_id=r["personal_id"],email=r["email"],th_first_name=r["th_first_name"],th_last_name=r["th_last_name"],en_first_name=r["en_first_name"],en_last_name=r["en_last_name"],innovian_id=r["innovian_id"],role_id=r["staff_role_id"],name=r["staff_name"],role=r["staff_role"],entry_year=r["entry_year"],profile_data=r["profile_data"],seq=r["seq"]) for r in rows]}
+    return {"ok":True,"case_id":case_id,"rows":[dict(id=r["id"],hospital_id=r["hospital_id"],personal_id=r["personal_id"],email=r["email"],th_first_name=r["th_first_name"],th_last_name=r["th_last_name"],en_first_name=r["en_first_name"],en_last_name=r["en_last_name"],innovian_id=r["innovian_id"],role_id=r["staff_role_id"],name=r["staff_name"],role=r["staff_role"],entry_year=r["entry_year"],profile_data=r["profile_data"],seq=r["seq"],staff_code=r.get("staff_code")) for r in rows]}
 
 
 def io_code(value):

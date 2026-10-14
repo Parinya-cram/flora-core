@@ -37,6 +37,7 @@ export default function CanopyLocationListsPanel({ data, onChanged }: { data: Co
   const [search, setSearch] = useState("");
   const [wardFilter, setWardFilter] = useState("");
   const [roomFilter, setRoomFilter] = useState("");
+  const [zoneFilter, setZoneFilter] = useState("");
   const [status, setStatus] = useState<Status>("active");
   const [unassignedOnly, setUnassignedOnly] = useState(false);
   const [editing, setEditing] = useState<ControlPlaneLocation | null>(null);
@@ -70,18 +71,22 @@ export default function CanopyLocationListsPanel({ data, onChanged }: { data: Co
     (childrenOf.get(row.id) || []).flatMap(child => child.kind === kind ? [child] : descendants(child, kind));
 
   const wards = data.locations.filter(row => row.kind === "care_unit");
+  const zoneOf = (row: ControlPlaneLocation) => (row.kind === "room" ? row.zone : ancestor(row, "room")?.zone) || "";
+  const zones = [...new Set(data.locations.filter(row => row.kind === "room" && row.zone
+    && (!wardFilter || String(ancestor(row, "care_unit")?.id) === wardFilter)).map(row => row.zone as string))].sort();
   const rooms = data.locations.filter(row => row.kind === "room" && (!wardFilter || String(ancestor(row, "care_unit")?.id) === wardFilter));
   const rows = data.locations
     .filter(row => row.kind === level)
     .filter(row => status === "all" || (status === "active" ? row.is_active : !row.is_active))
     .filter(row => level === "care_unit" || !wardFilter || String(ancestor(row, "care_unit")?.id) === wardFilter)
     .filter(row => level !== "bed" || !roomFilter || String(row.parent_id) === roomFilter)
+    .filter(row => level === "care_unit" || !zoneFilter || zoneOf(row) === zoneFilter)
     .filter(row => level !== "bed" || !unassignedOnly || !leafByBed.has(row.id))
     .filter(row => {
       const text = search.trim().toLowerCase();
       if (!text) return true;
       const leaf = leafByBed.get(row.id);
-      return [row.name, row.code, ancestor(row, "care_unit")?.name, ancestor(row, "room")?.name, leaf?.display_name]
+      return [row.name, row.code, ancestor(row, "care_unit")?.name, ancestor(row, "room")?.name, zoneOf(row), leaf?.display_name]
         .some(value => String(value || "").toLowerCase().includes(text));
     })
     .sort((a, b) => {
@@ -103,6 +108,7 @@ export default function CanopyLocationListsPanel({ data, onChanged }: { data: Co
       await updateControlLocation(row.id, {
         parent_id: next.parent_id ?? null, kind: next.kind, code: (next.code || "").trim() || null,
         name: next.name.trim(), is_active: next.is_active, sort_order: Number(next.sort_order) || 0,
+        zone: next.kind === "room" ? (next.zone || "").trim() || null : null,
       });
       setEditing(null);
       setNote(`${levelLabel[level].one} “${next.name}” saved.`);
@@ -116,7 +122,8 @@ export default function CanopyLocationListsPanel({ data, onChanged }: { data: Co
   const parentName = (row: ControlPlaneLocation) => {
     if (row.kind === "care_unit") return ancestor(row, "building")?.name;
     if (row.kind === "room") return ancestor(row, "care_unit")?.name;
-    return [ancestor(row, "care_unit")?.name, ancestor(row, "room")?.name].filter(Boolean).join(" · ");
+    const room = ancestor(row, "room");
+    return [ancestor(row, "care_unit")?.name, room ? `${room.name}${room.zone ? ` (${room.zone})` : ""}` : null].filter(Boolean).join(" · ");
   };
 
   return <section className="space-y-3">
@@ -142,6 +149,10 @@ export default function CanopyLocationListsPanel({ data, onChanged }: { data: Co
         <option value="">All wards</option>
         {wards.map(ward => <option key={ward.id} value={ward.id}>{ward.name}</option>)}
       </select> : null}
+      {level !== "care_unit" && zones.length ? <select className={`${inputClass} max-w-[200px]`} value={zoneFilter} onChange={event => setZoneFilter(event.target.value)} aria-label="Zone">
+        <option value="">All zones</option>
+        {zones.map(zone => <option key={zone} value={zone}>{zone}</option>)}
+      </select> : null}
       {level === "bed" ? <select className={`${inputClass} max-w-[220px]`} value={roomFilter} onChange={event => setRoomFilter(event.target.value)}>
         <option value="">All rooms</option>
         {rooms.map(room => <option key={room.id} value={room.id}>{room.name}</option>)}
@@ -155,6 +166,7 @@ export default function CanopyLocationListsPanel({ data, onChanged }: { data: Co
     {error ? <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-sm text-rose-500">{error}</div> : null}
     {note ? <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-700 dark:text-emerald-300">{note}</div> : null}
 
+    <datalist id="room-zones">{[...new Set(data.locations.filter(row => row.zone).map(row => row.zone as string))].sort().map(zone => <option key={zone} value={zone} />)}</datalist>
     <div className="overflow-x-auto rounded-2xl border border-[var(--app-border)] bg-[var(--app-panel-bg)]">
       <table className="w-full min-w-[720px] text-left text-sm">
         <thead className="border-b border-[var(--app-border)] text-[10px] font-extrabold uppercase tracking-[0.12em] text-[var(--app-muted)]">
@@ -162,6 +174,7 @@ export default function CanopyLocationListsPanel({ data, onChanged }: { data: Co
             <th className="px-3 py-2">{levelLabel[level].one}</th>
             <th className="px-3 py-2">Code</th>
             <th className="px-3 py-2">{level === "care_unit" ? "Building" : level === "room" ? "Ward" : "Ward · room"}</th>
+            {level === "room" ? <th className="px-3 py-2">Zone</th> : null}
             {level === "care_unit" ? <><th className="px-3 py-2">Rooms</th><th className="px-3 py-2">Beds</th><th className="px-3 py-2">Leafs</th></> : null}
             {level === "room" ? <><th className="px-3 py-2">Beds</th><th className="px-3 py-2">Leafs</th></> : null}
             {level === "bed" ? <th className="px-3 py-2">Leaf</th> : null}
@@ -188,6 +201,9 @@ export default function CanopyLocationListsPanel({ data, onChanged }: { data: Co
                     {parentOptions.map(parent => <option key={parent.id} value={parent.id}>{[parentName(parent), parent.name].filter(Boolean).join(" · ")}</option>)}
                   </select>
                 : parentName(row) || "—"}</td>
+              {level === "room" ? <td className="px-3 py-2 text-[var(--app-muted)]">{isEditing
+                ? <input className={inputClass} list="room-zones" value={editing.zone || ""} placeholder="e.g. Resuscitation" onChange={event => setEditing({ ...editing, zone: event.target.value })} />
+                : row.zone ? <span className="rounded-full bg-[var(--app-control-bg)] px-2 py-0.5 text-xs font-semibold text-[var(--app-text)]">{row.zone}</span> : "—"}</td> : null}
               {level === "care_unit" ? <><td className="px-3 py-2">{descendants(row, "room").length}</td><td className="px-3 py-2">{beds.length}</td><td className="px-3 py-2">{assigned}</td></> : null}
               {level === "room" ? <><td className="px-3 py-2">{beds.length}</td><td className="px-3 py-2">{assigned}</td></> : null}
               {level === "bed" ? <td className="px-3 py-2">{leaf
@@ -233,6 +249,7 @@ function BulkForm({ level, parents, parentLabel, onDone }: {
   const [list, setList] = useState("");
   const [bedsPerRoom, setBedsPerRoom] = useState(level === "room" ? 1 : 0);
   const [bedPrefix, setBedPrefix] = useState("Bed ");
+  const [zone, setZone] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const names = mode === "list" ? list.split("\n").map(value => value.trim()).filter(Boolean) : pattern(prefix, start, count, pad, suffix);
@@ -245,6 +262,7 @@ function BulkForm({ level, parents, parentLabel, onDone }: {
       const result = await bulkCreateLocations({
         parent_id: parentId, kind: level, names,
         beds_per_room: level === "room" ? bedsPerRoom : 0, bed_prefix: bedPrefix,
+        zone: level === "room" ? zone.trim() || null : null,
       });
       const what = levelLabel[level].many.toLowerCase();
       await onDone(`Created ${result.created.length} ${what}${result.beds_created ? ` and ${result.beds_created} beds` : ""}${result.skipped.length ? `; skipped existing: ${result.skipped.join(", ")}` : ""}.`);
@@ -280,7 +298,8 @@ function BulkForm({ level, parents, parentLabel, onDone }: {
       <label className="text-xs font-semibold text-[var(--app-muted)]">Digits<input type="number" className={`${inputClass} mt-1`} value={pad} min={0} max={6} onChange={event => setPad(Number(event.target.value) || 0)} /></label>
       <label className="text-xs font-semibold text-[var(--app-muted)]">Suffix<input className={`${inputClass} mt-1`} value={suffix} onChange={event => setSuffix(event.target.value)} /></label>
     </div> : <textarea className={`${inputClass} min-h-28`} placeholder={"ICU\nCCU\nPACU"} value={list} onChange={event => setList(event.target.value)} />}
-    {level === "room" ? <div className="grid gap-3 sm:grid-cols-2">
+    {level === "room" ? <div className="grid gap-3 sm:grid-cols-3">
+      <label className="text-xs font-semibold text-[var(--app-muted)]">Zone (optional)<input className={`${inputClass} mt-1`} list="room-zones" value={zone} placeholder="e.g. Resuscitation, Fast track" onChange={event => setZone(event.target.value)} /></label>
       <label className="text-xs font-semibold text-[var(--app-muted)]">Beds in each new room<input type="number" className={`${inputClass} mt-1`} value={bedsPerRoom} min={0} max={20} onChange={event => setBedsPerRoom(Number(event.target.value) || 0)} /></label>
       <label className="text-xs font-semibold text-[var(--app-muted)]">Bed name prefix<input className={`${inputClass} mt-1`} value={bedPrefix} onChange={event => setBedPrefix(event.target.value)} /></label>
     </div> : null}

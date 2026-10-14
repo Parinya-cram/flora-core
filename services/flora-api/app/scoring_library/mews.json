@@ -1,0 +1,35 @@
+{
+  "format": "flora-score/1",
+  "id": "mews",
+  "name": "MEWS",
+  "description": "Modified Early Warning Score for adult medical and surgical patients.",
+  "reference": "Subbe CP, Kruger M, Rutherford P, Gemmel L. Validation of a modified Early Warning Score in medical admissions. QJM 2001;94:521-6.",
+  "mode": "auto",
+  "interval_min": 15,
+  "missing": "partial",
+  "inputs": {
+    "sbp": {"source": "param", "param": "nibp_sys", "fallback": ["art_sys"], "window_min": 60, "agg": "latest", "round": 0, "label": "Systolic BP", "unit": "mmHg"},
+    "hr": {"source": "param", "param": "hr", "fallback": ["pr"], "window_min": 15, "agg": "latest", "round": 0, "label": "Heart rate", "unit": "/min"},
+    "rr": {"source": "param", "param": "rr", "window_min": 60, "agg": "latest", "round": 0, "label": "Respiratory rate", "unit": "/min"},
+    "temp": {"source": "param", "param": "temperature", "window_min": 240, "agg": "latest", "round": 1, "label": "Temperature", "unit": "°C"},
+    "avpu": {"source": "param", "param": "avpu", "window_min": 240, "agg": "latest", "type": "text", "label": "AVPU"}
+  },
+  "items": [
+    {"key": "sbp", "label": "Systolic BP", "input": "sbp",
+     "bands": [{"max": 70, "points": 3}, {"min": 71, "max": 80, "points": 2}, {"min": 81, "max": 100, "points": 1}, {"min": 101, "max": 199, "points": 0}, {"min": 200, "points": 2}]},
+    {"key": "hr", "label": "Heart rate", "input": "hr",
+     "bands": [{"max": 40, "points": 2}, {"min": 41, "max": 50, "points": 1}, {"min": 51, "max": 100, "points": 0}, {"min": 101, "max": 110, "points": 1}, {"min": 111, "max": 129, "points": 2}, {"min": 130, "points": 3}]},
+    {"key": "rr", "label": "Respiratory rate", "input": "rr",
+     "bands": [{"max": 8, "points": 2}, {"min": 9, "max": 14, "points": 0}, {"min": 15, "max": 20, "points": 1}, {"min": 21, "max": 29, "points": 2}, {"min": 30, "points": 3}]},
+    {"key": "temp", "label": "Temperature", "input": "temp",
+     "bands": [{"max": 34.9, "points": 2}, {"min": 35.0, "max": 38.4, "points": 0}, {"min": 38.5, "points": 2}]},
+    {"key": "avpu", "label": "AVPU", "input": "avpu",
+     "options": [{"value": "A", "points": 0, "label": "Alert"}, {"value": "V", "points": 1, "label": "Reacting to voice"}, {"value": "P", "points": 2, "label": "Reacting to pain"}, {"value": "U", "points": 3, "label": "Unresponsive"}]}
+  ],
+  "bands": [
+    {"max": 2, "label": "Low", "level": "info"},
+    {"min": 3, "max": 4, "label": "Increased", "level": "warning", "action": "Inform the nurse in charge; increase observations"},
+    {"min": 5, "label": "High", "level": "critical", "action": "Urgent medical review"}
+  ],
+  "flags": []
+}

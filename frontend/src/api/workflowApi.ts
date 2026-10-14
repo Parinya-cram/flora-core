@@ -44,6 +44,8 @@ export type WorkflowDefinition = {
   packet: WorkflowPacketEntry[];
   /** Itemize (billing) template for the Leaf Billing screen; one template may serve many workflows. */
   billing?: { template_id: string | null };
+  /** Clinical scores (Workflow Studio → Scores) the Leaf computes for cases of this workflow. */
+  scores?: string[];
   bundled_forms?: Record<string, { version: number; definition: unknown }>;
 };
 
@@ -82,6 +84,7 @@ export function emptyWorkflow(): WorkflowDefinition {
     forms: [],
     packet: [{ kind: "anesthesia_report", mode: "standard" }],
     billing: { template_id: null },
+    scores: [],
   };
 }
 
@@ -214,3 +217,53 @@ export const duplicateBillingTemplate = (id: string, newId: string, name: string
   canopyJson<BillingTemplateRow>(`${bt(id)}/duplicate`, "POST", { id: newId, name });
 export const validateBillingTemplate = (definition: BillingTemplateDefinition) =>
   canopyJson<{ issues: BillingTemplateIssue[] }>("/api/fleet/workflows/billing-templates/validate", "POST", { definition });
+
+// ---------------------------------------------------------------- clinical scores (app/scoring.py)
+
+export type ScoreLevel = "info" | "warning" | "critical";
+export type ScoreBand = { min?: number; max?: number; points?: number; label?: string; level?: ScoreLevel; action?: string };
+export type ScoreOption = { value: string | number | boolean; points: number; label?: string };
+export type ScoreInput = {
+  source: "param" | "manual"; param?: string; fallback?: string[]; window_min?: number; agg?: "latest" | "min" | "max" | "avg";
+  type?: "number" | "text" | "bool"; round?: number; default?: unknown; label?: string; unit?: string;
+};
+export type ScoreItem = { key: string; label: string; input?: string; formula?: string; requires?: string[]; bands?: ScoreBand[]; options?: ScoreOption[] };
+export type ScoreDefinition = {
+  format: "flora-score/1"; id: string; name: string; description?: string; reference?: string; version?: number;
+  mode: "auto" | "manual"; interval_min: number; missing: "partial" | "none";
+  inputs: Record<string, ScoreInput>; items: ScoreItem[]; total?: { formula?: string };
+  bands: ScoreBand[]; flags: Array<{ when: string; label: string; level: ScoreLevel }>;
+};
+export type ScoreRow = {
+  id: string; name: string; description?: string | null; status: WorkflowStatus; version: number;
+  updatedAt?: number | null; updatedBy?: string | null; publishedAt?: number | null;
+  definition: ScoreDefinition; itemCount: number; mode: "auto" | "manual";
+  usedBy: Array<{ id: string; name: string; status: WorkflowStatus }>;
+};
+export type ScoreOptions = {
+  parameters: Array<{ param_key: string; label: string; display_name: string; value_type: string; unit?: string | null }>;
+  library: Array<{ id: string; name: string; description?: string; reference?: string; imported: boolean }>;
+};
+export type ScoreTryResult = {
+  total: number | null; band: string | null; level: ScoreLevel | null; partial: boolean; missing: string[];
+  items: Array<{ key: string; label: string; value: unknown; points: number | null }>; flags: Array<{ label: string; level: ScoreLevel }>;
+};
+
+export function emptyScore(): ScoreDefinition {
+  return { format: "flora-score/1", id: "", name: "", description: "", reference: "", mode: "auto", interval_min: 15,
+    missing: "partial", inputs: {}, items: [], bands: [], flags: [] };
+}
+
+const sc = (id: string) => `/api/fleet/workflows/scores/${encodeURIComponent(id)}`;
+export const listScores = () => canopyJson<{ rows: ScoreRow[] }>("/api/fleet/workflows/scores").then(data => data.rows || []);
+export const getScoreOptions = () => canopyJson<ScoreOptions>("/api/fleet/workflows/scores/options");
+export const createScore = (definition: ScoreDefinition) => canopyJson<ScoreRow>("/api/fleet/workflows/scores", "POST", { definition });
+export const importLibraryScore = (libraryId: string) => canopyJson<ScoreRow>(`/api/fleet/workflows/scores/library/${encodeURIComponent(libraryId)}`, "POST", {});
+export const saveScore = (id: string, definition: ScoreDefinition) => canopyJson<ScoreRow>(sc(id), "PUT", { definition });
+export const publishScore = (id: string) => canopyJson<ScoreRow>(`${sc(id)}/publish`, "POST", {});
+export const archiveScore = (id: string) => canopyJson<ScoreRow>(`${sc(id)}/archive`, "POST", {});
+export const duplicateScore = (id: string, newId: string, name: string) => canopyJson<ScoreRow>(`${sc(id)}/duplicate`, "POST", { id: newId, name });
+export const validateScore = (definition: ScoreDefinition) =>
+  canopyJson<{ issues: BillingTemplateIssue[] }>("/api/fleet/workflows/scores/validate", "POST", { definition });
+export const tryScore = (definition: ScoreDefinition, values: Record<string, unknown>) =>
+  canopyJson<ScoreTryResult>("/api/fleet/workflows/scores/try", "POST", { definition, values });

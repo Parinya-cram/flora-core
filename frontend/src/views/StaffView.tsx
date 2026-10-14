@@ -18,6 +18,16 @@ import {
   type StaffMember,
   type StaffRole,
 } from "../api/staffApi";
+import StaffSyncPanel from "../components/staff/StaffSyncPanel";
+
+/** Where a directory row comes from and whether it reaches Canopy. */
+function syncBadge(item: StaffMember, needsCode: boolean): { label: string; className: string; title: string } {
+  if (item.directory_managed) return { label: "Canopy", className: "border-emerald-500 text-emerald-700 dark:text-emerald-300", title: "From Canopy (edit it in Canopy → Staff directory)" };
+  if (item.sync_error) return { label: "Not accepted", className: "border-red-500 text-red-600 dark:text-red-300", title: `Canopy did not take this entry: ${item.sync_error}` };
+  if (item.directory_pending) return { label: "Waiting to send", className: "border-amber-500 text-amber-700 dark:text-amber-300", title: "Goes up to Canopy at the next sync" };
+  if (!item.staff_code && needsCode) return { label: "Code needed", className: "border-red-500 text-red-600 dark:text-red-300", title: "Doctors and nurses need a staff code to sync with Canopy" };
+  return { label: "Local", className: "border-gray-400 text-gray-500", title: "Kept on this Leaf only (no staff code)" };
+}
 
 type Props = {
   caseStatus: CaseStatus;
@@ -223,6 +233,10 @@ export default function StaffView({ caseStatus, sessionUser, defaultTab = "curre
   );
 
   const activeRoleId = sortedRoles[0]?.id || FALLBACK_ROLES[0].id;
+  const codedRoleIds = useMemo(
+    () => new Set(roles.filter(row => row.staff_type === "doctor" || row.staff_type === "nurse").map(row => row.id)),
+    [roles],
+  );
 
   const isCaseDirty = useMemo(
     () =>
@@ -411,6 +425,9 @@ export default function StaffView({ caseStatus, sessionUser, defaultTab = "curre
       const payload = directoryPayloadFromForm();
       if (!payload.name || !payload.role_id) {
         throw new Error("Name and role are required");
+      }
+      if (codedRoleIds.has(payload.role_id) && !String(payload.staff_code || "").trim()) {
+        throw new Error("Doctors and nurses need a staff code (it is how Canopy recognises them)");
       }
 
       if (editingDirectoryId != null) {
@@ -758,6 +775,7 @@ export default function StaffView({ caseStatus, sessionUser, defaultTab = "curre
       ) : (
         <section className={`${card} lg:min-h-[calc(100vh-13rem)] lg:grid lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)] lg:gap-4 lg:space-y-0`}>
           <div className="rounded border border-gray-200 dark:border-gray-800 p-2 space-y-2 min-h-0">
+            <StaffSyncPanel onSynced={() => void loadDirectory()} />
             <div className="flex items-center justify-between gap-2">
               <div className="text-sm font-semibold">Staff Directory</div>
               <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -822,10 +840,10 @@ export default function StaffView({ caseStatus, sessionUser, defaultTab = "curre
                           <div className="min-w-0">
                             <div className="truncate font-medium">
                               {fillDisplayName(item)}
-                              {item.hospital_id ? (
+                              {item.staff_code || item.hospital_id ? (
                                 <span className="text-xs text-gray-500 dark:text-gray-400">
                                   {" "}
-                                  ({item.hospital_id})
+                                  ({item.staff_code || item.hospital_id})
                                 </span>
                               ) : null}
                             </div>
@@ -835,11 +853,14 @@ export default function StaffView({ caseStatus, sessionUser, defaultTab = "curre
                               {item.is_active === 0 ? " | Inactive" : ""}
                             </div>
                           </div>
-                          {isSelected ? (
-                            <span className="shrink-0 rounded border border-blue-500 px-1.5 py-0.5 text-[10px] text-blue-600 dark:text-blue-300">
-                              Editing
-                            </span>
-                          ) : null}
+                          {(() => {
+                            const badge = syncBadge(item, codedRoleIds.has(String(item.role_id || "")));
+                            return (
+                              <span title={badge.title} className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] ${badge.className}`}>
+                                {isSelected ? "Selected · " : ""}{badge.label}
+                              </span>
+                            );
+                          })()}
                         </div>
                         <div className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
                           used {item.used_count} | last {fmt(item.last_used_at)}
@@ -948,6 +969,11 @@ export default function StaffView({ caseStatus, sessionUser, defaultTab = "curre
               ) : null}
             </div>
 
+            {form.directory_managed ? (
+              <div className="rounded border border-emerald-400/60 bg-emerald-500/5 px-2 py-1.5 text-xs">
+                This person comes from Canopy and is read-only here. Change them in Canopy → Staff directory; the change arrives at the next sync.
+              </div>
+            ) : null}
             <div className="space-y-1">
               <div className="text-sm font-semibold">
                 {editingDirectoryId == null ? "Create Staff Entry" : `Edit Entry #${editingDirectoryId}`}
@@ -978,6 +1004,16 @@ export default function StaffView({ caseStatus, sessionUser, defaultTab = "curre
                 );
               })}
               <label className="text-xs font-medium">
+                Staff code (doctor / nurse code){codedRoleIds.has(String(form.role_id || activeRoleId)) ? " *" : ""}
+                <input
+                  className="mt-1 w-full rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-2 py-1.5 text-sm"
+                  value={form.staff_code || ""}
+                  disabled={Boolean(form.directory_managed)}
+                  placeholder={codedRoleIds.has(String(form.role_id || activeRoleId)) ? "Required to sync with Canopy" : "Optional"}
+                  onChange={e => setForm(prev => ({ ...prev, staff_code: e.target.value.trim() }))}
+                />
+              </label>
+              <label className="text-xs font-medium">
                 Clinical role *
               <select
                 className="mt-1 w-full rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-2 py-1.5 text-sm"
@@ -997,7 +1033,7 @@ export default function StaffView({ caseStatus, sessionUser, defaultTab = "curre
               <button
                 type="button"
                 onClick={() => void saveDirectory()}
-                disabled={directorySaving}
+                disabled={directorySaving || Boolean(form.directory_managed)}
                 className={`rounded px-3 py-1.5 text-sm text-white ${
                   directorySaving
                     ? "bg-gray-400 cursor-not-allowed"
@@ -1017,7 +1053,7 @@ export default function StaffView({ caseStatus, sessionUser, defaultTab = "curre
                 <button
                   type="button"
                   onClick={() => void deactivateDirectory()}
-                  disabled={directorySaving}
+                  disabled={directorySaving || Boolean(form.directory_managed)}
                   className="rounded border border-red-400 text-red-600 dark:text-red-300 px-3 py-1.5 text-sm"
                 >
                   Deactivate

@@ -1,4 +1,4 @@
--- Form Studio template library (MySQL). Mirrors 0083-formdev-template.sql.
+-- Form Studio template library (MySQL). Mirrors 0087-formdev-template.sql.
 CREATE TABLE IF NOT EXISTS formdev_template (
   template_id varchar(64) NOT NULL PRIMARY KEY,
   title varchar(400) NOT NULL,

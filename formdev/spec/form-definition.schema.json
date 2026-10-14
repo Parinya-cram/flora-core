@@ -1129,6 +1129,65 @@
             },
             "hide_empty_rows": {
               "type": "boolean"
+            },
+            "colors": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Chart colours: each series its own colour (mode series, defaults overridable) or one colour for all (mode mono)",
+              "properties": {
+                "mode": {
+                  "enum": [
+                    "series",
+                    "mono"
+                  ]
+                },
+                "mono": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-fA-F]{6}$"
+                },
+                "series": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "hr": {
+                      "type": "string",
+                      "pattern": "^#[0-9a-fA-F]{6}$"
+                    },
+                    "pr": {
+                      "type": "string",
+                      "pattern": "^#[0-9a-fA-F]{6}$"
+                    },
+                    "spo2": {
+                      "type": "string",
+                      "pattern": "^#[0-9a-fA-F]{6}$"
+                    },
+                    "nibp": {
+                      "type": "string",
+                      "pattern": "^#[0-9a-fA-F]{6}$"
+                    },
+                    "art": {
+                      "type": "string",
+                      "pattern": "^#[0-9a-fA-F]{6}$"
+                    },
+                    "cvp": {
+                      "type": "string",
+                      "pattern": "^#[0-9a-fA-F]{6}$"
+                    },
+                    "temperature": {
+                      "type": "string",
+                      "pattern": "^#[0-9a-fA-F]{6}$"
+                    },
+                    "et_co2": {
+                      "type": "string",
+                      "pattern": "^#[0-9a-fA-F]{6}$"
+                    },
+                    "bis": {
+                      "type": "string",
+                      "pattern": "^#[0-9a-fA-F]{6}$"
+                    }
+                  }
+                }
+              }
             }
           }
         },

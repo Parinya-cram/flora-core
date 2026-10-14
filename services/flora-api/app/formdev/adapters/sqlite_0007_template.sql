@@ -1,4 +1,4 @@
--- Form Studio template library (SQLite migration 7). Mirrors 0083-formdev-template.sql.
+-- Form Studio template library (SQLite migration 7). Mirrors 0087-formdev-template.sql.
 CREATE TABLE IF NOT EXISTS formdev_template (
   template_id text PRIMARY KEY,
   title text NOT NULL,

@@ -316,6 +316,7 @@ class DeviceInput(BaseModel):
     serial_number: str | None = Field(default=None, max_length=120)
     asset_tag: str | None = Field(default=None, max_length=120)
     unit_id: int | None = None
+    bed_id: int | None = None   # fixed at a bed; empty = mobile / shared (shown only through its gateway link)
     location: str | None = Field(default=None, max_length=200)
     status: Literal["in_service", "maintenance", "out_of_service", "retired"] = "in_service"
     acquired_at: int | None = None
@@ -334,6 +335,20 @@ def _clean(payload: BaseModel) -> dict[str, Any]:
     return {key: (value.strip() or None) if isinstance(value, str) else value for key, value in values.items()}
 
 
+def _place(database: Connection, values: dict[str, Any]) -> None:
+    """A device fixed at a bed belongs to that bed's ward."""
+    if values.get("bed_id") is None:
+        _check_unit(database, values.get("unit_id"))
+        return
+    row = database.execute(
+        """SELECT unit.id AS unit_id FROM canopy_location bed JOIN canopy_location room ON room.id=bed.parent_id
+           JOIN canopy_location unit ON unit.id=room.parent_id AND unit.kind='care_unit'
+           WHERE bed.id=%s AND bed.kind='bed'""", (values["bed_id"],)).fetchone()
+    if not row:
+        raise HTTPException(404, "bed not found")
+    values["unit_id"] = row["unit_id"]
+
+
 def _check_unit(database: Connection, unit_id: int | None) -> None:
     if unit_id is not None and not database.execute(
             "SELECT 1 FROM canopy_location WHERE id=%s AND kind='care_unit'", (unit_id,)).fetchone():
@@ -344,7 +359,7 @@ def _check_unit(database: Connection, unit_id: int | None) -> None:
 def create_device(payload: DeviceInput, user: dict[str, Any] = Depends(read_token),
                   database: Connection = Depends(connection)) -> dict[str, Any]:
     values, now = _clean(payload), directory.now_ms()
-    _check_unit(database, values["unit_id"])
+    _place(database, values)
     try:
         row = database.execute(
             f"""INSERT INTO canopy_medical_device ({', '.join(DEVICE_COLUMNS)}, registry_status, created_at, created_by,
@@ -361,7 +376,7 @@ def update_device(device_pk: int, payload: DeviceInput, user: dict[str, Any] = D
                   database: Connection = Depends(connection)) -> dict[str, Any]:
     """Saving a device an administrator has reviewed also marks it registered."""
     values = _clean(payload)
-    _check_unit(database, values["unit_id"])
+    _place(database, values)
     try:
         row = database.execute(
             f"""UPDATE canopy_medical_device SET {', '.join(f'{c}=%s' for c in DEVICE_COLUMNS)},

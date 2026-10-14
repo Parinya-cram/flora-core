@@ -17,6 +17,8 @@ export type RegistryFields = {
   serial_number: string | null;
   asset_tag: string | null;
   unit_id: number | null;
+  /** Fixed at this bed; null = mobile / shared (shown only through its gateway link). */
+  bed_id: number | null;
   location: string | null;
   status: DeviceStatus;
   acquired_at: number | null;

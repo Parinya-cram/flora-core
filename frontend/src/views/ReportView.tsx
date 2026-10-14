@@ -47,7 +47,7 @@ import ReportVitalSignsTrendChart from "./report/ReportVitalSignsTrendChart";
 import ReportClinicalTimelineGrid from "./report/ReportClinicalTimelineGrid";
 import type { IoDripPart, IoGridCellValue, ReportChartVisibility, ReportEventMarker, ReportPreparedMarker } from "./report/types";
 import { clampEditionReportMode, getEditionInfo, isTimelineParamAllowed } from "../edition/config";
-import eforlLogo from "../assets/eforllogo.png";
+import eforlLogo from "../assets/logos/eforllogo.png";
 import { useAuth } from "../auth/useAuth";
 import {
   formatPatientDisplayName,

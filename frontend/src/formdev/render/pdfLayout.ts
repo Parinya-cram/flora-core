@@ -586,7 +586,7 @@ function timelineBlocks(ctx: Ctx, field: FieldDefinition, value: JsonValue | und
       parts.push(rowBlock("Events", undefined, axis.map((_, index) => events.filter(event => event.column === from + index).map(event => String(event.n)).join(" "))));
     }
     if (config.parts.includes("chart")) {
-      const legend = config.chart.map(name => SERIES[name]);
+      const legend = config.chart.map(name => ({ ...SERIES[name], color: config.colors[name] }));
       parts.push({
         height: M.tl.chart, gapAfter: 0,
         draw: (x, y) => {
@@ -605,7 +605,7 @@ function timelineBlocks(ctx: Ctx, field: FieldDefinition, value: JsonValue | und
             }
             ops.push({ kind: "text", x: lx + 3 * MM, y: ly + M.tl.size / 2.8, size: M.tl.size, text: style.label });
           });
-          for (const shape of chartShapes({ ...timeline, axis }, config.chart, { x: x + M.tl.label, y: y + 2 * MM, width: gridWidth, height: M.tl.chart - 4 * MM, columns })) {
+          for (const shape of chartShapes({ ...timeline, axis }, config.chart, { x: x + M.tl.label, y: y + 2 * MM, width: gridWidth, height: M.tl.chart - 4 * MM, columns }, 0, config.colors)) {
             if (shape.kind === "grid") ops.push({ kind: "line", x1: shape.x1, y1: shape.y1, x2: shape.x2, y2: shape.y2, width: shape.strong ? 0.4 : 0.15, color: "#cbd5e1" });
             else if (shape.kind === "label") ops.push({ kind: "text", x: shape.anchor === "end" ? shape.x - ctx.measure(shape.text, 5) - 0.5 : shape.x + 0.5, y: shape.y + 1.8, size: 5, text: shape.text, tone: "muted" });
             else if (shape.kind === "bar") ops.push({ kind: "line", x1: shape.x, y1: shape.y1, x2: shape.x, y2: shape.y2, width: 0.6, color: shape.color });

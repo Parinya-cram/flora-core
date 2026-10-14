@@ -34,6 +34,11 @@ from .routes.chart_undo import router as chart_undo_router
 from .routes.billing_leaf import router as billing_leaf_router
 from .routes.billing_canopy import router as billing_canopy_router
 from .routes.billing_templates import router as billing_templates_router
+from .routes.scores_canopy import router as scores_canopy_router
+from .routes.scores_leaf import router as scores_leaf_router
+from .routes.staff_canopy import router as staff_canopy_router
+from .routes.staff_sync_leaf import router as staff_sync_leaf_router
+from .score_writer import score_writer
 from .routes.canopy_admissions import router as canopy_admissions_router
 from .routes.hl7_interface import admin_router as hl7_admin_router, webhook_router as hl7_webhook_router
 from .routes.public_api import router as public_api_router
@@ -45,6 +50,7 @@ from .routes.sync_ingest import router as sync_ingest_router
 from .routes.gateway_alerts import fleet_router as gateway_alerts_fleet_router, sync_router as gateway_alerts_sync_router
 from .routes.device_management import (control_router as device_control_router, fleet_router as device_fleet_router,
                                        sync_router as device_sync_router)
+from .routes.topology_physical import router as topology_physical_router
 from .routes.workstation import router as workstation_router
 from .routes.terminology import router as terminology_router
 from .routes.formdev import router as formdev_router
@@ -65,6 +71,7 @@ async def lifespan(_: FastAPI):
             ensure_bootstrap_admin(database)
     if api_mode == "leaf":
         device_writer.start()
+        score_writer.start()
     if api_mode == "canopy":
         formdev_runtime.start_background()
     yield
@@ -72,6 +79,7 @@ async def lifespan(_: FastAPI):
         # Workers return unfinished jobs to the queue before the pools close.
         formdev_runtime.stop_background()
     device_writer.stop()
+    score_writer.stop()
     close_pool()
 
 
@@ -94,6 +102,8 @@ if API_MODE == "leaf" and os.getenv("FLORA_LEAF_WRITE_API", "false").lower() == 
     app.include_router(dictation_router)
     app.include_router(chart_undo_router)
     app.include_router(billing_leaf_router)
+    app.include_router(scores_leaf_router)
+    app.include_router(staff_sync_leaf_router)  # before catalog_write's /staff/* routes
     app.include_router(case_workflow_router)
     app.include_router(cases_lifecycle_router)
     app.include_router(clinical_write_router)
@@ -118,6 +128,7 @@ if API_MODE == "canopy":
     app.include_router(gateway_alerts_fleet_router)
     app.include_router(device_fleet_router)
     app.include_router(device_control_router)
+    app.include_router(topology_physical_router)
     app.include_router(fleet_control_router)
     app.include_router(legacy_archive_router)
     app.include_router(canopy_reports_router)
@@ -126,8 +137,10 @@ if API_MODE == "canopy":
     app.include_router(formdev_query_router)
     app.include_router(formdev_ai_router)
     app.include_router(billing_templates_router)  # before workflows: /billing-templates is not a workflow id
+    app.include_router(scores_canopy_router)  # before workflows: /scores is not a workflow id
     app.include_router(workflows_router)
     app.include_router(billing_canopy_router)
+    app.include_router(staff_canopy_router)
 if API_MODE == "sync":
     app.include_router(sync_ingest_router)
     app.include_router(sync_ward_router)

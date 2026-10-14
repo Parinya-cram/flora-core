@@ -53,7 +53,6 @@ COPY infrastructure/postgres/0062-formdev-registry.sql /docker-entrypoint-initdb
 COPY infrastructure/postgres/0063-formdev-lookup.sql /docker-entrypoint-initdb.d/0063-formdev-lookup.sql
 COPY infrastructure/postgres/0064-formdev-attachment.sql /docker-entrypoint-initdb.d/0064-formdev-attachment.sql
 COPY infrastructure/postgres/0065-formdev-index-rebuild.sql /docker-entrypoint-initdb.d/0065-formdev-index-rebuild.sql
-COPY infrastructure/postgres/0083-formdev-template.sql /docker-entrypoint-initdb.d/0083-formdev-template.sql
 COPY infrastructure/postgres/0045-leaf-location-picker.sql /docker-entrypoint-initdb.d/0045-leaf-location-picker.sql
 COPY infrastructure/postgres/0070-workflow-studio.sql /docker-entrypoint-initdb.d/0070-workflow-studio.sql
 COPY infrastructure/postgres/0075-report-studio.sql /docker-entrypoint-initdb.d/0075-report-studio.sql
@@ -63,5 +62,10 @@ COPY infrastructure/postgres/0078-case-change-log.sql /docker-entrypoint-initdb.
 COPY infrastructure/postgres/0080-billing.sql /docker-entrypoint-initdb.d/0080-billing.sql
 COPY infrastructure/postgres/0081-billing-templates.sql /docker-entrypoint-initdb.d/0081-billing-templates.sql
 COPY infrastructure/postgres/0082-device-management.sql /docker-entrypoint-initdb.d/0082-device-management.sql
+COPY infrastructure/postgres/0083-location-zone.sql /docker-entrypoint-initdb.d/0083-location-zone.sql
+COPY infrastructure/postgres/0086-leaf-beds-device-bed.sql /docker-entrypoint-initdb.d/0086-leaf-beds-device-bed.sql
+COPY infrastructure/postgres/0084-scoring.sql /docker-entrypoint-initdb.d/0084-scoring.sql
+COPY infrastructure/postgres/0085-staff-sync.sql /docker-entrypoint-initdb.d/0085-staff-sync.sql
+COPY infrastructure/postgres/0087-formdev-template.sql /docker-entrypoint-initdb.d/0087-formdev-template.sql
 COPY infrastructure/postgres/0071-io-catalog-sync.sql /docker-entrypoint-initdb.d/0071-io-catalog-sync.sql
 COPY infrastructure/postgres/0079-ai-studio-dashboard.sql /docker-entrypoint-initdb.d/0079-ai-studio-dashboard.sql

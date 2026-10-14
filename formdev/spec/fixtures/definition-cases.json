@@ -2684,6 +2684,142 @@
   ]
  },
  {
+  "name": "p1: timeline colors",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "tl",
+       "type": "timeline",
+       "label": "T",
+       "timeline": {
+        "chart": [
+         "nibp",
+         "hr"
+        ],
+        "colors": {
+         "mode": "series",
+         "series": {
+          "hr": "#0EA5E9"
+         }
+        }
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: timeline one colour",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "tl",
+       "type": "timeline",
+       "label": "T",
+       "timeline": {
+        "chart": [
+         "nibp",
+         "hr"
+        ],
+        "colors": {
+         "mode": "mono",
+         "mono": "#111827"
+        }
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: timeline colors invalid",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "tl",
+       "type": "timeline",
+       "label": "T",
+       "timeline": {
+        "chart": [
+         "nibp",
+         "hr"
+        ],
+        "colors": {
+         "mode": "rainbow",
+         "mono": "black",
+         "series": {
+          "hr": "red",
+          "xyz": "#000000"
+         },
+         "extra": 1
+        }
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_layout",
+   "invalid_layout",
+   "invalid_type",
+   "invalid_type",
+   "unknown_property"
+  ]
+ },
+ {
   "name": "p1: timeline print settings",
   "definition": {
    "format": "flora.form/1",

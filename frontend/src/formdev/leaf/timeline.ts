@@ -6,7 +6,7 @@
  * Pure parts (catalog, buckets) work anywhere; loadLeafTimeline needs a case (see caseContext.ts).
  */
 import { BASE_IVY_ROWS } from "../../views/clinical-chart/constants";
-import type { FieldDefinition, JsonValue, TimelineSeries, TimelineValue } from "../core/types";
+import type { FieldDefinition, JsonValue, TimelineColors, TimelineSeries, TimelineValue } from "../core/types";
 
 export type TimelineRowInfo = { id: string; label: string; unit?: string; group: string };
 
@@ -42,6 +42,18 @@ export const SERIES: Record<TimelineSeries, SeriesStyle> = {
   et_co2: { label: "EtCO2", color: "#ca8a04", rows: ["et_co2"], marker: "triangle", axis: "left" },
   temperature: { label: "Temp", color: "#9333ea", rows: ["temperature"], marker: "circle", axis: "right" },
 };
+/** Colour of one-colour charts unless the form sets its own (dark slate: prints well in black and white). */
+export const DEFAULT_MONO_COLOR = "#1f2937";
+
+/** The colour each series is drawn in: one colour for all (mono), or each its own (defaults above, overridable). */
+export function seriesColors(colors: TimelineColors | undefined): Record<TimelineSeries, string> {
+  const out = {} as Record<TimelineSeries, string>;
+  for (const name of Object.keys(SERIES) as TimelineSeries[]) {
+    out[name] = colors?.mode === "mono" ? colors.mono || DEFAULT_MONO_COLOR : colors?.series?.[name] || SERIES[name].color;
+  }
+  return out;
+}
+
 /** Chart scales: left 20-200 (pressures, rates, %), right 20-40 °C (temperature), as on the anesthesia record. */
 export const LEFT_SCALE: [number, number] = [20, 200];
 export const RIGHT_SCALE: [number, number] = [20, 40];
@@ -123,6 +135,8 @@ export const timelineConfig = (field: FieldDefinition) => {
     chart: (config.chart ?? DEFAULT_CHART) as TimelineSeries[],
     step: config.step_min ?? 5,
     source: config.source ?? "leaf",
+    colorMode: config.colors?.mode ?? "series",
+    colors: seriesColors(config.colors),
   };
 };
 

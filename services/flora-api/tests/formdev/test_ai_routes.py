@@ -104,6 +104,19 @@ class Routes(unittest.TestCase):
             formdev_ai.ai_generate(USER, {"files": [encoded("form.pdf", PDF)]})
         self.assertIn("images", caught.exception.details["files"][0]["notes"][-1])
 
+    def test_a_duplicate_file_is_not_sent_twice(self):
+        sent = []
+
+        def ask(conversation):
+            sent.append(conversation.messages[0]["content"])
+            conversation.usage["requests"] += 1
+            return f"<form_json>{json.dumps(example(1))}</form_json><report>{{}}</report>"
+
+        ai_builder.Conversation.ask = ask
+        result = formdev_ai.ai_generate(USER, {"files": [encoded("form.pdf", PDF), encoded("copy.pdf", PDF)]})
+        self.assertEqual(sum(block["type"] == "document" for block in sent[0]), 1)
+        self.assertEqual(len(result["template"]["sources"]), 2, "both names are listed in the inspection")
+
     def test_inspect_validates_form_files(self):
         broken = example(1)
         broken["sections"][0]["fields"][0]["layout"] = {"span": 30}

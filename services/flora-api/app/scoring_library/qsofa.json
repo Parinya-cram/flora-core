@@ -1,0 +1,27 @@
+{
+  "format": "flora-score/1",
+  "id": "qsofa",
+  "name": "qSOFA",
+  "description": "Quick SOFA: bedside prompt for possible sepsis outside the ICU (not a diagnostic criterion).",
+  "reference": "Singer M, et al. The Third International Consensus Definitions for Sepsis and Septic Shock (Sepsis-3). JAMA 2016;315:801-10.",
+  "mode": "auto",
+  "interval_min": 15,
+  "missing": "partial",
+  "inputs": {
+    "rr": {"source": "param", "param": "rr", "window_min": 60, "agg": "latest", "round": 0, "label": "Respiratory rate", "unit": "/min"},
+    "sbp": {"source": "param", "param": "nibp_sys", "fallback": ["art_sys"], "window_min": 60, "agg": "latest", "round": 0, "label": "Systolic BP", "unit": "mmHg"},
+    "gcs": {"source": "param", "param": "gcs", "window_min": 240, "agg": "latest", "round": 0, "label": "GCS"},
+    "avpu": {"source": "param", "param": "avpu", "window_min": 240, "agg": "latest", "type": "text", "label": "ACVPU"}
+  },
+  "items": [
+    {"key": "rr", "label": "Respiratory rate ≥ 22/min", "input": "rr", "bands": [{"max": 21, "points": 0}, {"min": 22, "points": 1}]},
+    {"key": "sbp", "label": "Systolic BP ≤ 100 mmHg", "input": "sbp", "bands": [{"max": 100, "points": 1}, {"min": 101, "points": 0}]},
+    {"key": "mentation", "label": "Altered mentation (GCS < 15)", "requires": [],
+     "formula": "IF(ISBLANK(gcs), IF(ISBLANK(avpu), null, IF(avpu = 'A', 0, 1)), IF(gcs < 15, 1, 0))"}
+  ],
+  "bands": [
+    {"max": 1, "label": "Negative", "level": "info"},
+    {"min": 2, "label": "Positive (≥ 2)", "level": "critical", "action": "Assess for organ dysfunction and possible sepsis"}
+  ],
+  "flags": []
+}

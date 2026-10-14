@@ -1013,6 +1013,30 @@ export function matrixTotals(field: FieldDefinition, value: unknown): Record<str
   return out;
 }
 
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+
+/** timeline.colors: {mode?: series | mono, mono?: "#rrggbb", series?: {hr: "#rrggbb", ...}}. */
+function validateTimelineColors(ctx: Ctx, colors: unknown, path: string) {
+  if (!isObject(colors)) {
+    ctx.add(path, "invalid_type", "colors must be {mode?, mono?, series?}");
+    return;
+  }
+  ctx.unknown(colors, new Set(["mode", "mono", "series"]), path);
+  if ("mode" in colors && colors.mode !== "series" && colors.mode !== "mono") ctx.add(`${path}.mode`, "invalid_layout", "mode is series or mono");
+  if ("mono" in colors && !(typeof colors.mono === "string" && HEX_COLOR.test(colors.mono))) ctx.add(`${path}.mono`, "invalid_type", "mono is a colour like #1f2937");
+  if ("series" in colors) {
+    const series = colors.series;
+    if (!isObject(series)) {
+      ctx.add(`${path}.series`, "invalid_type", "series maps a chart series to a colour like #dc2626");
+      return;
+    }
+    for (const [name, color] of Object.entries(series)) {
+      if (!(TIMELINE_SERIES as readonly string[]).includes(name)) ctx.add(`${path}.series.${name}`, "invalid_layout", `series is one of ${TIMELINE_SERIES.join(", ")}`);
+      else if (!(typeof color === "string" && HEX_COLOR.test(color))) ctx.add(`${path}.series.${name}`, "invalid_type", "colour like #dc2626");
+    }
+  }
+}
+
 /** timeline: which parts show, the table rows, the chart series, the column step (minutes) and the value source. */
 /** logo: a PNG / JPEG picture kept in the definition; barcode: the value of another field of the form. */
 function validatePrintedElement(ctx: Ctx, field: Obj, path: string, scope: Scope) {
@@ -1032,10 +1056,10 @@ function validatePrintedElement(ctx: Ctx, field: Obj, path: string, scope: Scope
 
 function validateTimelineConfig(ctx: Ctx, config: unknown, path: string) {
   if (!isObject(config)) {
-    ctx.add(path, "invalid_type", "timeline must be {parts?, rows?, chart?, step_min?, source?, print_columns?, hide_empty_rows?}");
+    ctx.add(path, "invalid_type", "timeline must be {parts?, rows?, chart?, step_min?, source?, colors?, print_columns?, hide_empty_rows?}");
     return;
   }
-  ctx.unknown(config, new Set(["parts", "rows", "chart", "step_min", "source", "print_columns", "hide_empty_rows"]), path);
+  ctx.unknown(config, new Set(["parts", "rows", "chart", "step_min", "source", "colors", "print_columns", "hide_empty_rows"]), path);
   if ("print_columns" in config && !(isInt(config.print_columns) && config.print_columns >= TIMELINE_PRINT_COLUMNS[0] && config.print_columns <= TIMELINE_PRINT_COLUMNS[1])) {
     ctx.add(`${path}.print_columns`, "invalid_type", `print_columns must be an integer ${TIMELINE_PRINT_COLUMNS[0]}-${TIMELINE_PRINT_COLUMNS[1]}`);
   }
@@ -1050,6 +1074,7 @@ function validateTimelineConfig(ctx: Ctx, config: unknown, path: string) {
   }
   if ("step_min" in config && !(isInt(config.step_min) && config.step_min >= 1 && config.step_min <= 120)) ctx.add(`${path}.step_min`, "invalid_type", "step_min must be an integer 1-120");
   if ("source" in config && !TIMELINE_SOURCES.includes(config.source as string)) ctx.add(`${path}.source`, "invalid_layout", "source is leaf or manual");
+  if ("colors" in config) validateTimelineColors(ctx, config.colors, `${path}.colors`);
   if ("rows" in config) {
     const rows = config.rows;
     if (!Array.isArray(rows) || rows.length > MAX_TIMELINE_ROWS) {

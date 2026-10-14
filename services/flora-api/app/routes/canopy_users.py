@@ -81,9 +81,15 @@ def create_user(payload: UserCreateRequest, actor: dict = Depends(account_manage
                 database: Connection = Depends(connection)) -> dict:
     if payload.auth_source == "ldap" and not ldap_auth.enabled():
         raise HTTPException(status_code=400, detail="LDAP authentication is not enabled")
-    # Canopy has no staff directory link; staff profiles live on each Leaf.
-    return auth_leaf.create_user(payload=payload.model_copy(update={"staff_directory_id": None}),
-                                 actor=actor, database=database)
+    # staff_directory_id is a Canopy staff directory id; Leafs receive the link as the staff code.
+    return auth_leaf.create_user(payload=payload, actor=actor, database=database)
+
+
+@router.put("/users/{user_id}/staff-link")
+def link_user_staff(user_id: int, payload: auth_leaf.StaffLinkRequest, actor: dict = Depends(account_manager),
+                    database: Connection = Depends(connection)) -> dict:
+    """Link a login to a person in the Canopy staff directory (no Leaf PIN on Canopy)."""
+    return auth_leaf.link_user_staff(user_id=user_id, payload=payload, actor=actor, database=database)
 
 
 @router.put("/users/{user_id}/access")

@@ -1,0 +1,3938 @@
+{
+  "format": "flora-workflow/1",
+  "id": "er_emergency",
+  "name": "ER – Emergency (EDIS)",
+  "description": "Emergency department: registration, MOPH ED Triage, physician and nursing assessment, trauma / resuscitation / procedures / investigations / fast-track pathways when needed, observation, consultation, transfer, disposition, SBAR handover and incident record. Vital signs and medications use the case chart.",
+  "anesthesia_record": {
+    "enabled": true,
+    "sections": [
+      "caseInfo",
+      "outcome"
+    ],
+    "optional_sections": [
+      "line",
+      "comorbid",
+      "pain"
+    ]
+  },
+  "forms": [
+    {
+      "form_id": "er_registration",
+      "version": 1,
+      "title": "ER Registration",
+      "phase": "preop",
+      "required": true
+    },
+    {
+      "form_id": "er_triage",
+      "version": 1,
+      "title": "Emergency Triage Record",
+      "phase": "preop",
+      "required": true
+    },
+    {
+      "form_id": "er_physician_assessment",
+      "version": 1,
+      "title": "Emergency Physician Assessment",
+      "phase": "intraop",
+      "required": true
+    },
+    {
+      "form_id": "er_nursing_assessment",
+      "version": 1,
+      "title": "ER Nursing Assessment",
+      "phase": "intraop",
+      "required": true
+    },
+    {
+      "form_id": "er_trauma_assessment",
+      "version": 1,
+      "title": "Trauma Assessment",
+      "phase": "intraop",
+      "required": false
+    },
+    {
+      "form_id": "er_resuscitation_record",
+      "version": 1,
+      "title": "Resuscitation Record",
+      "phase": "intraop",
+      "required": false
+    },
+    {
+      "form_id": "er_procedure_record",
+      "version": 1,
+      "title": "Emergency Procedure Record",
+      "phase": "intraop",
+      "required": false
+    },
+    {
+      "form_id": "er_investigations",
+      "version": 1,
+      "title": "Investigations & Results",
+      "phase": "intraop",
+      "required": false
+    },
+    {
+      "form_id": "er_fast_track_pathway",
+      "version": 1,
+      "title": "Clinical Pathway / Fast Track",
+      "phase": "intraop",
+      "required": false
+    },
+    {
+      "form_id": "er_observation_chart",
+      "version": 1,
+      "title": "ER Observation Chart",
+      "phase": "intraop",
+      "required": false
+    },
+    {
+      "form_id": "er_consultation",
+      "version": 1,
+      "title": "Consultation Record",
+      "phase": "intraop",
+      "required": false
+    },
+    {
+      "form_id": "er_referral_transfer",
+      "version": 1,
+      "title": "Referral & Transfer Record",
+      "phase": "postop",
+      "required": false
+    },
+    {
+      "form_id": "er_disposition_summary",
+      "version": 1,
+      "title": "ER Discharge / Disposition Summary",
+      "phase": "postop",
+      "required": true
+    },
+    {
+      "form_id": "er_nursing_handover",
+      "version": 1,
+      "title": "Emergency Nursing Handover (SBAR)",
+      "phase": "postop",
+      "required": false
+    },
+    {
+      "form_id": "er_quality_incident",
+      "version": 1,
+      "title": "ER Quality & Incident Record",
+      "phase": "postop",
+      "required": false
+    }
+  ],
+  "packet": [
+    {
+      "kind": "anesthesia_report",
+      "mode": "standard"
+    },
+    {
+      "kind": "form",
+      "form_id": "er_registration"
+    },
+    {
+      "kind": "form",
+      "form_id": "er_triage"
+    },
+    {
+      "kind": "form",
+      "form_id": "er_physician_assessment"
+    },
+    {
+      "kind": "form",
+      "form_id": "er_nursing_assessment"
+    },
+    {
+      "kind": "form",
+      "form_id": "er_trauma_assessment"
+    },
+    {
+      "kind": "form",
+      "form_id": "er_resuscitation_record"
+    },
+    {
+      "kind": "form",
+      "form_id": "er_procedure_record"
+    },
+    {
+      "kind": "form",
+      "form_id": "er_investigations"
+    },
+    {
+      "kind": "form",
+      "form_id": "er_fast_track_pathway"
+    },
+    {
+      "kind": "form",
+      "form_id": "er_observation_chart"
+    },
+    {
+      "kind": "form",
+      "form_id": "er_consultation"
+    },
+    {
+      "kind": "form",
+      "form_id": "er_referral_transfer"
+    },
+    {
+      "kind": "form",
+      "form_id": "er_disposition_summary"
+    },
+    {
+      "kind": "form",
+      "form_id": "er_nursing_handover"
+    },
+    {
+      "kind": "form",
+      "form_id": "er_quality_incident"
+    }
+  ],
+  "bundled_forms": {
+    "er_registration": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "er_registration",
+        "schema_version": 1,
+        "title": "ER Registration",
+        "description": "Form 01 · ลงทะเบียนผู้ป่วยห้องฉุกเฉิน",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "visit",
+            "title": "Visit · การมารับบริการ",
+            "fields": [
+              {
+                "id": "hn",
+                "type": "text",
+                "label": "HN",
+                "max_length": 20,
+                "required": true,
+                "indexed": true
+              },
+              {
+                "id": "vn",
+                "type": "text",
+                "label": "VN / AN",
+                "max_length": 30,
+                "indexed": true
+              },
+              {
+                "id": "encounter_id",
+                "type": "text",
+                "label": "Encounter ID (HIS)",
+                "max_length": 60
+              },
+              {
+                "id": "arrival_at",
+                "type": "datetime",
+                "label": "Arrived at ER",
+                "required": true,
+                "indexed": true
+              },
+              {
+                "id": "arrival_mode",
+                "type": "radio",
+                "label": "Arrival",
+                "options": [
+                  {
+                    "value": "walk_in",
+                    "label": "Walk-in"
+                  },
+                  {
+                    "value": "ems",
+                    "label": "EMS / 1669"
+                  },
+                  {
+                    "value": "referral",
+                    "label": "Referral from another hospital"
+                  },
+                  {
+                    "value": "internal",
+                    "label": "Internal transfer (OPD / ward)"
+                  },
+                  {
+                    "value": "police",
+                    "label": "Brought by police / rescue"
+                  },
+                  {
+                    "value": "other",
+                    "label": "Other"
+                  }
+                ],
+                "required": true,
+                "indexed": true,
+                "option_columns": 3
+              },
+              {
+                "id": "category",
+                "type": "radio",
+                "label": "Patient category",
+                "options": [
+                  {
+                    "value": "trauma",
+                    "label": "Trauma (บาดเจ็บ)"
+                  },
+                  {
+                    "value": "non_trauma",
+                    "label": "Non-trauma (เจ็บป่วย)"
+                  }
+                ],
+                "indexed": true,
+                "option_columns": 2,
+                "description": "Trauma / non-trauma is separate from the triage level and from the treatment area."
+              }
+            ]
+          },
+          {
+            "id": "ems",
+            "title": "EMS · การนำส่ง",
+            "fields": [
+              {
+                "id": "ems_operation_no",
+                "type": "text",
+                "label": "EMS operation number",
+                "max_length": 40
+              },
+              {
+                "id": "ems_team_level",
+                "type": "select",
+                "label": "Team level",
+                "options": [
+                  {
+                    "value": "als",
+                    "label": "ALS"
+                  },
+                  {
+                    "value": "ils",
+                    "label": "ILS"
+                  },
+                  {
+                    "value": "bls",
+                    "label": "BLS"
+                  },
+                  {
+                    "value": "fr",
+                    "label": "FR"
+                  },
+                  {
+                    "value": "other",
+                    "label": "Other"
+                  }
+                ]
+              },
+              {
+                "id": "ems_unit",
+                "type": "text",
+                "label": "Unit / agency",
+                "max_length": 120
+              },
+              {
+                "id": "ems_dispatch_at",
+                "type": "datetime",
+                "label": "Call / dispatch time"
+              },
+              {
+                "id": "ems_scene_at",
+                "type": "datetime",
+                "label": "At scene"
+              },
+              {
+                "id": "ems_prehospital",
+                "type": "textarea",
+                "label": "Pre-hospital care and handover notes",
+                "max_length": 2000
+              }
+            ],
+            "visibility": {
+              "when": {
+                "field": "arrival_mode",
+                "operator": "equals",
+                "value": "ems"
+              }
+            }
+          },
+          {
+            "id": "referral",
+            "title": "Referral in · รับส่งต่อ",
+            "fields": [
+              {
+                "id": "referring_hospital",
+                "type": "text",
+                "label": "Referring hospital",
+                "max_length": 200
+              },
+              {
+                "id": "referral_no",
+                "type": "text",
+                "label": "Referral document number",
+                "max_length": 60
+              },
+              {
+                "id": "referral_reason",
+                "type": "textarea",
+                "label": "Reason for referral",
+                "max_length": 1000
+              }
+            ],
+            "visibility": {
+              "when": {
+                "field": "arrival_mode",
+                "operator": "equals",
+                "value": "referral"
+              }
+            }
+          },
+          {
+            "id": "coverage",
+            "title": "Coverage · สิทธิการรักษา",
+            "fields": [
+              {
+                "id": "coverage",
+                "type": "select",
+                "label": "Coverage (สิทธิ)",
+                "options": [
+                  {
+                    "value": "uc",
+                    "label": "UC (บัตรทอง)"
+                  },
+                  {
+                    "value": "sss",
+                    "label": "Social security (ประกันสังคม)"
+                  },
+                  {
+                    "value": "csmbs",
+                    "label": "Civil servant (ข้าราชการ)"
+                  },
+                  {
+                    "value": "lgo",
+                    "label": "Local government (อปท.)"
+                  },
+                  {
+                    "value": "self_pay",
+                    "label": "Self-pay"
+                  },
+                  {
+                    "value": "insurance",
+                    "label": "Private insurance"
+                  },
+                  {
+                    "value": "other",
+                    "label": "Other"
+                  }
+                ],
+                "indexed": true
+              },
+              {
+                "id": "ucep_assessed",
+                "type": "checkbox",
+                "label": "Assessed for UCEP (เจ็บป่วยฉุกเฉินวิกฤต) — criteria per สพฉ./สปสช."
+              },
+              {
+                "id": "road_accident",
+                "type": "checkbox",
+                "label": "Road accident (พ.ร.บ. ผู้ประสบภัยจากรถ)"
+              },
+              {
+                "id": "contact_name",
+                "type": "text",
+                "label": "Relative / contact",
+                "max_length": 120
+              },
+              {
+                "id": "contact_phone",
+                "type": "text",
+                "label": "Contact phone",
+                "max_length": 30
+              },
+              {
+                "id": "registered_by",
+                "type": "text",
+                "label": "Registered by",
+                "max_length": 120,
+                "required": true
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "er_triage": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "er_triage",
+        "schema_version": 1,
+        "title": "Emergency Triage Record",
+        "description": "Form 02 · คัดแยกผู้ป่วยฉุกเฉิน (MOPH ED Triage 5 ระดับ)",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "arrival",
+            "title": "Arrival · การมาถึง",
+            "fields": [
+              {
+                "id": "arrival_at",
+                "type": "datetime",
+                "label": "Arrived at ER",
+                "required": true
+              },
+              {
+                "id": "arrival_mode",
+                "type": "radio",
+                "label": "Arrival",
+                "options": [
+                  {
+                    "value": "walk_in",
+                    "label": "Walk-in"
+                  },
+                  {
+                    "value": "ems",
+                    "label": "EMS / 1669"
+                  },
+                  {
+                    "value": "referral",
+                    "label": "Referral from another hospital"
+                  },
+                  {
+                    "value": "internal",
+                    "label": "Internal transfer (OPD / ward)"
+                  },
+                  {
+                    "value": "police",
+                    "label": "Brought by police / rescue"
+                  },
+                  {
+                    "value": "other",
+                    "label": "Other"
+                  }
+                ],
+                "option_columns": 3
+              },
+              {
+                "id": "category",
+                "type": "radio",
+                "label": "Patient category",
+                "options": [
+                  {
+                    "value": "trauma",
+                    "label": "Trauma (บาดเจ็บ)"
+                  },
+                  {
+                    "value": "non_trauma",
+                    "label": "Non-trauma (เจ็บป่วย)"
+                  }
+                ],
+                "option_columns": 2
+              },
+              {
+                "id": "chief_complaint",
+                "type": "textarea",
+                "label": "Chief complaint (อาการสำคัญ)",
+                "max_length": 500,
+                "required": true
+              },
+              {
+                "id": "duration_value",
+                "type": "integer",
+                "label": "Duration",
+                "min": 0,
+                "max": 100000
+              },
+              {
+                "id": "duration_unit",
+                "type": "select",
+                "label": "Unit",
+                "options": [
+                  {
+                    "value": "min",
+                    "label": "minutes"
+                  },
+                  {
+                    "value": "h",
+                    "label": "hours"
+                  },
+                  {
+                    "value": "d",
+                    "label": "days"
+                  },
+                  {
+                    "value": "w",
+                    "label": "weeks"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "vitals",
+            "title": "Vital signs · สัญญาณชีพ",
+            "fields": [
+              {
+                "id": "sbp",
+                "type": "integer",
+                "label": "SBP",
+                "unit": "mmHg",
+                "min": 0,
+                "max": 300
+              },
+              {
+                "id": "dbp",
+                "type": "integer",
+                "label": "DBP",
+                "unit": "mmHg",
+                "min": 0,
+                "max": 200
+              },
+              {
+                "id": "hr",
+                "type": "integer",
+                "label": "HR",
+                "unit": "/min",
+                "min": 0,
+                "max": 300
+              },
+              {
+                "id": "rr",
+                "type": "integer",
+                "label": "RR",
+                "unit": "/min",
+                "min": 0,
+                "max": 80
+              },
+              {
+                "id": "temp",
+                "type": "decimal",
+                "label": "Temp",
+                "unit": "°C",
+                "min": 25,
+                "max": 45,
+                "decimals": 1
+              },
+              {
+                "id": "spo2",
+                "type": "integer",
+                "label": "SpO₂",
+                "unit": "%",
+                "min": 0,
+                "max": 100
+              },
+              {
+                "id": "o2",
+                "type": "select",
+                "label": "O₂ support",
+                "options": [
+                  {
+                    "value": "room_air",
+                    "label": "Room air"
+                  },
+                  {
+                    "value": "cannula",
+                    "label": "Cannula"
+                  },
+                  {
+                    "value": "mask",
+                    "label": "Mask"
+                  },
+                  {
+                    "value": "nrb",
+                    "label": "Non-rebreather"
+                  },
+                  {
+                    "value": "hfnc",
+                    "label": "HFNC"
+                  },
+                  {
+                    "value": "niv",
+                    "label": "NIV"
+                  },
+                  {
+                    "value": "ett",
+                    "label": "ETT / BVM"
+                  }
+                ]
+              },
+              {
+                "id": "dtx",
+                "type": "integer",
+                "label": "Capillary glucose",
+                "unit": "mg/dL",
+                "min": 0,
+                "max": 2000
+              },
+              {
+                "id": "pain",
+                "type": "integer",
+                "label": "Pain score",
+                "unit": "0–10",
+                "min": 0,
+                "max": 10
+              },
+              {
+                "id": "avpu",
+                "type": "radio",
+                "label": "Consciousness (AVPU)",
+                "options": [
+                  {
+                    "value": "A",
+                    "label": "A – Alert"
+                  },
+                  {
+                    "value": "V",
+                    "label": "V – Voice"
+                  },
+                  {
+                    "value": "P",
+                    "label": "P – Pain"
+                  },
+                  {
+                    "value": "U",
+                    "label": "U – Unresponsive"
+                  }
+                ],
+                "option_columns": 4
+              },
+              {
+                "id": "gcs_e",
+                "type": "select",
+                "label": "GCS E",
+                "options": [
+                  {
+                    "value": "4",
+                    "label": "4 – Spontaneous"
+                  },
+                  {
+                    "value": "3",
+                    "label": "3 – To voice"
+                  },
+                  {
+                    "value": "2",
+                    "label": "2 – To pain"
+                  },
+                  {
+                    "value": "1",
+                    "label": "1 – None"
+                  }
+                ]
+              },
+              {
+                "id": "gcs_v",
+                "type": "select",
+                "label": "GCS V",
+                "options": [
+                  {
+                    "value": "5",
+                    "label": "5 – Oriented"
+                  },
+                  {
+                    "value": "4",
+                    "label": "4 – Confused"
+                  },
+                  {
+                    "value": "3",
+                    "label": "3 – Words"
+                  },
+                  {
+                    "value": "2",
+                    "label": "2 – Sounds"
+                  },
+                  {
+                    "value": "1",
+                    "label": "1 – None"
+                  },
+                  {
+                    "value": "t",
+                    "label": "T – Intubated"
+                  }
+                ]
+              },
+              {
+                "id": "gcs_m",
+                "type": "select",
+                "label": "GCS M",
+                "options": [
+                  {
+                    "value": "6",
+                    "label": "6 – Obeys"
+                  },
+                  {
+                    "value": "5",
+                    "label": "5 – Localises"
+                  },
+                  {
+                    "value": "4",
+                    "label": "4 – Withdraws"
+                  },
+                  {
+                    "value": "3",
+                    "label": "3 – Abnormal flexion"
+                  },
+                  {
+                    "value": "2",
+                    "label": "2 – Extension"
+                  },
+                  {
+                    "value": "1",
+                    "label": "1 – None"
+                  }
+                ]
+              },
+              {
+                "id": "gcs",
+                "type": "calculated",
+                "label": "GCS",
+                "formula": "IF(gcs_e='4', 4, IF(gcs_e='3', 3, IF(gcs_e='2', 2, IF(gcs_e='1', 1, NULL)))) + IF(gcs_v='5', 5, IF(gcs_v='4', 4, IF(gcs_v='3', 3, IF(gcs_v='2', 2, IF(gcs_v='1', 1, IF(gcs_v='t', 1, NULL)))))) + IF(gcs_m='6', 6, IF(gcs_m='5', 5, IF(gcs_m='4', 4, IF(gcs_m='3', 3, IF(gcs_m='2', 2, IF(gcs_m='1', 1, NULL))))))",
+                "decimals": 0
+              }
+            ],
+            "layout": {
+              "type": "grid",
+              "columns": 3
+            }
+          },
+          {
+            "id": "decision",
+            "title": "Decision points · การตัดสินระดับ",
+            "fields": [
+              {
+                "id": "dp_lifesaving",
+                "type": "checkbox",
+                "label": "Needs an immediate life-saving intervention"
+              },
+              {
+                "id": "dp_high_risk",
+                "type": "checkbox",
+                "label": "High-risk situation"
+              },
+              {
+                "id": "dp_altered",
+                "type": "checkbox",
+                "label": "New confusion, lethargy or disorientation"
+              },
+              {
+                "id": "dp_severe_pain",
+                "type": "checkbox",
+                "label": "Severe pain or distress"
+              },
+              {
+                "id": "resources",
+                "type": "radio",
+                "label": "Resources expected",
+                "options": [
+                  {
+                    "value": "0",
+                    "label": "None"
+                  },
+                  {
+                    "value": "1",
+                    "label": "One"
+                  },
+                  {
+                    "value": "2plus",
+                    "label": "Two or more"
+                  }
+                ],
+                "option_columns": 3
+              },
+              {
+                "id": "dp_danger_vitals",
+                "type": "checkbox",
+                "label": "Vital signs in the hospital's danger zone"
+              },
+              {
+                "id": "suggested_level",
+                "type": "calculated",
+                "label": "Suggested level",
+                "formula": "IF(dp_lifesaving, 1, IF(dp_high_risk OR dp_altered OR dp_severe_pain, 2, IF(resources = '2plus', IF(dp_danger_vitals, 2, 3), IF(resources = '1', 4, IF(resources = '0', 5, NULL)))))",
+                "decimals": 0,
+                "description": "Follows the published decision order (life-saving → high risk → resources). Danger-zone limits and any local criteria are set by the hospital."
+              }
+            ],
+            "description": "Decision order of MOPH ED Triage / ESI v4. Confirm against the edition the hospital uses."
+          },
+          {
+            "id": "result",
+            "title": "Triage level · ระดับความฉุกเฉิน",
+            "fields": [
+              {
+                "id": "triage_level",
+                "type": "radio",
+                "label": "Triage level",
+                "options": [
+                  {
+                    "value": "1",
+                    "label": "1 · Resuscitation · แดง"
+                  },
+                  {
+                    "value": "2",
+                    "label": "2 · Emergency · ชมพู"
+                  },
+                  {
+                    "value": "3",
+                    "label": "3 · Urgency · เหลือง"
+                  },
+                  {
+                    "value": "4",
+                    "label": "4 · Semi-urgency · เขียว"
+                  },
+                  {
+                    "value": "5",
+                    "label": "5 · Non-urgency · ขาว"
+                  }
+                ],
+                "required": true,
+                "indexed": true,
+                "option_columns": 5
+              },
+              {
+                "id": "level_num",
+                "type": "calculated",
+                "label": "Level (number)",
+                "formula": "IF(triage_level='1', 1, IF(triage_level='2', 2, IF(triage_level='3', 3, IF(triage_level='4', 4, IF(triage_level='5', 5, NULL)))))",
+                "decimals": 0,
+                "hidden": true
+              },
+              {
+                "id": "triage_reason",
+                "type": "textarea",
+                "label": "Reason for the level (เหตุผลประกอบการคัดแยก)",
+                "max_length": 1000
+              },
+              {
+                "id": "override_reason",
+                "type": "textarea",
+                "label": "Why the level differs from the suggestion",
+                "max_length": 500
+              },
+              {
+                "id": "assigned_zone",
+                "type": "select",
+                "label": "Assigned area (zone)",
+                "options": [
+                  {
+                    "value": "resuscitation",
+                    "label": "Resuscitation (Red)"
+                  },
+                  {
+                    "value": "trauma",
+                    "label": "Trauma"
+                  },
+                  {
+                    "value": "acute_pink",
+                    "label": "Acute (Pink)"
+                  },
+                  {
+                    "value": "urgent_yellow",
+                    "label": "Urgent (Yellow)"
+                  },
+                  {
+                    "value": "fast_track",
+                    "label": "Fast track"
+                  },
+                  {
+                    "value": "observation",
+                    "label": "Observation"
+                  },
+                  {
+                    "value": "isolation",
+                    "label": "Isolation"
+                  },
+                  {
+                    "value": "pediatric",
+                    "label": "Pediatric"
+                  },
+                  {
+                    "value": "psychiatric",
+                    "label": "Psychiatric"
+                  },
+                  {
+                    "value": "procedure",
+                    "label": "Procedure"
+                  }
+                ],
+                "indexed": true
+              },
+              {
+                "id": "triaged_at",
+                "type": "datetime",
+                "label": "Triage time",
+                "required": true,
+                "indexed": true
+              },
+              {
+                "id": "triage_nurse",
+                "type": "text",
+                "label": "Triage nurse",
+                "max_length": 120,
+                "required": true
+              }
+            ]
+          },
+          {
+            "id": "retriage",
+            "title": "Re-triage · คัดแยกซ้ำ",
+            "fields": [
+              {
+                "id": "retriage",
+                "type": "repeat",
+                "label": "Re-triage",
+                "view": "table",
+                "fields": [
+                  {
+                    "id": "at",
+                    "type": "datetime",
+                    "label": "Time",
+                    "required": true
+                  },
+                  {
+                    "id": "level",
+                    "type": "select",
+                    "label": "Level",
+                    "options": [
+                      {
+                        "value": "1",
+                        "label": "1 · Resuscitation · แดง"
+                      },
+                      {
+                        "value": "2",
+                        "label": "2 · Emergency · ชมพู"
+                      },
+                      {
+                        "value": "3",
+                        "label": "3 · Urgency · เหลือง"
+                      },
+                      {
+                        "value": "4",
+                        "label": "4 · Semi-urgency · เขียว"
+                      },
+                      {
+                        "value": "5",
+                        "label": "5 · Non-urgency · ขาว"
+                      }
+                    ],
+                    "required": true
+                  },
+                  {
+                    "id": "zone",
+                    "type": "select",
+                    "label": "Area",
+                    "options": [
+                      {
+                        "value": "resuscitation",
+                        "label": "Resuscitation (Red)"
+                      },
+                      {
+                        "value": "trauma",
+                        "label": "Trauma"
+                      },
+                      {
+                        "value": "acute_pink",
+                        "label": "Acute (Pink)"
+                      },
+                      {
+                        "value": "urgent_yellow",
+                        "label": "Urgent (Yellow)"
+                      },
+                      {
+                        "value": "fast_track",
+                        "label": "Fast track"
+                      },
+                      {
+                        "value": "observation",
+                        "label": "Observation"
+                      },
+                      {
+                        "value": "isolation",
+                        "label": "Isolation"
+                      },
+                      {
+                        "value": "pediatric",
+                        "label": "Pediatric"
+                      },
+                      {
+                        "value": "psychiatric",
+                        "label": "Psychiatric"
+                      },
+                      {
+                        "value": "procedure",
+                        "label": "Procedure"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "reason",
+                    "type": "text",
+                    "label": "Reason",
+                    "max_length": 200
+                  },
+                  {
+                    "id": "by",
+                    "type": "text",
+                    "label": "By",
+                    "max_length": 60
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "rules": [
+          {
+            "id": "override_needs_reason",
+            "assert": "ISBLANK(level_num) OR ISBLANK(suggested_level) OR level_num = suggested_level OR NOT ISBLANK(override_reason)",
+            "message": "Give a reason when the level differs from the suggested level",
+            "fields": [
+              "override_reason"
+            ]
+          }
+        ]
+      }
+    },
+    "er_physician_assessment": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "er_physician_assessment",
+        "schema_version": 1,
+        "title": "Emergency Physician Assessment",
+        "description": "Form 03 · บันทึกการตรวจของแพทย์",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "seen",
+            "title": "Seen by physician",
+            "fields": [
+              {
+                "id": "seen_at",
+                "type": "datetime",
+                "label": "Physician first saw patient",
+                "required": true,
+                "indexed": true
+              },
+              {
+                "id": "physician",
+                "type": "text",
+                "label": "Physician",
+                "max_length": 120,
+                "required": true
+              }
+            ]
+          },
+          {
+            "id": "history",
+            "title": "History · ประวัติ",
+            "fields": [
+              {
+                "id": "hpi",
+                "type": "textarea",
+                "label": "History of present illness",
+                "max_length": 4000,
+                "required": true
+              },
+              {
+                "id": "pmh",
+                "type": "textarea",
+                "label": "Past medical / surgical history",
+                "max_length": 4000
+              },
+              {
+                "id": "medications",
+                "type": "textarea",
+                "label": "Current medications",
+                "max_length": 4000
+              },
+              {
+                "id": "allergies",
+                "type": "text",
+                "label": "Allergies",
+                "max_length": 500
+              },
+              {
+                "id": "social",
+                "type": "textarea",
+                "label": "Social / family history",
+                "max_length": 1000
+              }
+            ]
+          },
+          {
+            "id": "exam",
+            "title": "Physical examination · ตรวจร่างกาย",
+            "fields": [
+              {
+                "id": "pe_general",
+                "type": "textarea",
+                "label": "General appearance",
+                "max_length": 1000
+              },
+              {
+                "id": "pe_heent",
+                "type": "textarea",
+                "label": "HEENT",
+                "max_length": 1000
+              },
+              {
+                "id": "pe_cvs",
+                "type": "textarea",
+                "label": "Cardiovascular",
+                "max_length": 1000
+              },
+              {
+                "id": "pe_resp",
+                "type": "textarea",
+                "label": "Respiratory",
+                "max_length": 1000
+              },
+              {
+                "id": "pe_abd",
+                "type": "textarea",
+                "label": "Abdomen",
+                "max_length": 1000
+              },
+              {
+                "id": "pe_neuro",
+                "type": "textarea",
+                "label": "Neurological",
+                "max_length": 1000
+              },
+              {
+                "id": "pe_ext",
+                "type": "textarea",
+                "label": "Extremities / skin",
+                "max_length": 1000
+              },
+              {
+                "id": "pe_other",
+                "type": "textarea",
+                "label": "Other findings",
+                "max_length": 1000
+              }
+            ]
+          },
+          {
+            "id": "impression",
+            "title": "Assessment and plan",
+            "fields": [
+              {
+                "id": "ddx",
+                "type": "textarea",
+                "label": "Differential diagnosis",
+                "max_length": 1000
+              },
+              {
+                "id": "dx_icd10",
+                "type": "text",
+                "label": "Working diagnosis – ICD-10",
+                "max_length": 20,
+                "indexed": true
+              },
+              {
+                "id": "dx_text",
+                "type": "text",
+                "label": "Working diagnosis",
+                "max_length": 300,
+                "required": true
+              },
+              {
+                "id": "plan",
+                "type": "textarea",
+                "label": "Treatment plan / initial orders",
+                "max_length": 4000,
+                "required": true
+              },
+              {
+                "id": "signature",
+                "type": "signature",
+                "label": "Signature"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "er_nursing_assessment": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "er_nursing_assessment",
+        "schema_version": 1,
+        "title": "ER Nursing Assessment",
+        "description": "Form 04 · ประเมินและบันทึกทางการพยาบาล",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "initial",
+            "title": "Initial nursing assessment",
+            "fields": [
+              {
+                "id": "assessed_at",
+                "type": "datetime",
+                "label": "Assessed at",
+                "required": true
+              },
+              {
+                "id": "airway",
+                "type": "radio",
+                "label": "Airway",
+                "options": [
+                  {
+                    "value": "patent",
+                    "label": "Patent"
+                  },
+                  {
+                    "value": "at_risk",
+                    "label": "At risk"
+                  },
+                  {
+                    "value": "obstructed",
+                    "label": "Obstructed"
+                  }
+                ],
+                "option_columns": 3
+              },
+              {
+                "id": "breathing",
+                "type": "radio",
+                "label": "Breathing",
+                "options": [
+                  {
+                    "value": "normal",
+                    "label": "Normal"
+                  },
+                  {
+                    "value": "distress",
+                    "label": "Distress"
+                  },
+                  {
+                    "value": "assisted",
+                    "label": "Assisted"
+                  }
+                ],
+                "option_columns": 3
+              },
+              {
+                "id": "circulation",
+                "type": "radio",
+                "label": "Circulation",
+                "options": [
+                  {
+                    "value": "normal",
+                    "label": "Normal"
+                  },
+                  {
+                    "value": "impaired",
+                    "label": "Impaired"
+                  },
+                  {
+                    "value": "shock",
+                    "label": "Shock signs"
+                  }
+                ],
+                "option_columns": 3
+              },
+              {
+                "id": "avpu",
+                "type": "radio",
+                "label": "Consciousness",
+                "options": [
+                  {
+                    "value": "A",
+                    "label": "A – Alert"
+                  },
+                  {
+                    "value": "V",
+                    "label": "V – Voice"
+                  },
+                  {
+                    "value": "P",
+                    "label": "P – Pain"
+                  },
+                  {
+                    "value": "U",
+                    "label": "U – Unresponsive"
+                  }
+                ],
+                "option_columns": 4
+              },
+              {
+                "id": "pain",
+                "type": "integer",
+                "label": "Pain score",
+                "unit": "0–10",
+                "min": 0,
+                "max": 10
+              },
+              {
+                "id": "fall_risk",
+                "type": "select",
+                "label": "Fall risk",
+                "options": [
+                  {
+                    "value": "low",
+                    "label": "Low"
+                  },
+                  {
+                    "value": "moderate",
+                    "label": "Moderate"
+                  },
+                  {
+                    "value": "high",
+                    "label": "High"
+                  }
+                ]
+              },
+              {
+                "id": "risks",
+                "type": "multiselect",
+                "label": "Other risks",
+                "options": [
+                  {
+                    "value": "aspiration",
+                    "label": "Aspiration"
+                  },
+                  {
+                    "value": "pressure",
+                    "label": "Pressure injury"
+                  },
+                  {
+                    "value": "violence",
+                    "label": "Violence / aggression"
+                  },
+                  {
+                    "value": "self_harm",
+                    "label": "Self-harm"
+                  },
+                  {
+                    "value": "infection",
+                    "label": "Infection control precautions"
+                  },
+                  {
+                    "value": "bleeding",
+                    "label": "Bleeding"
+                  }
+                ],
+                "option_columns": 3
+              },
+              {
+                "id": "allergies",
+                "type": "text",
+                "label": "Allergies",
+                "max_length": 500
+              }
+            ]
+          },
+          {
+            "id": "care_plan",
+            "title": "Nursing diagnoses and interventions",
+            "fields": [
+              {
+                "id": "diagnoses",
+                "type": "repeat",
+                "label": "Nursing diagnosis",
+                "view": "cards",
+                "fields": [
+                  {
+                    "id": "diagnosis",
+                    "type": "text",
+                    "label": "Nursing diagnosis",
+                    "max_length": 300,
+                    "required": true
+                  },
+                  {
+                    "id": "goal",
+                    "type": "textarea",
+                    "label": "Goal",
+                    "max_length": 500
+                  },
+                  {
+                    "id": "interventions",
+                    "type": "textarea",
+                    "label": "Interventions",
+                    "max_length": 1000
+                  },
+                  {
+                    "id": "evaluation",
+                    "type": "textarea",
+                    "label": "Evaluation",
+                    "max_length": 500
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "progress",
+            "title": "Nursing progress notes",
+            "fields": [
+              {
+                "id": "notes",
+                "type": "repeat",
+                "label": "Note",
+                "view": "table",
+                "fields": [
+                  {
+                    "id": "at",
+                    "type": "datetime",
+                    "label": "Time",
+                    "required": true
+                  },
+                  {
+                    "id": "note",
+                    "type": "textarea",
+                    "label": "Progress / reassessment",
+                    "max_length": 2000
+                  },
+                  {
+                    "id": "by",
+                    "type": "text",
+                    "label": "Nurse",
+                    "max_length": 60
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "er_trauma_assessment": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "er_trauma_assessment",
+        "schema_version": 1,
+        "title": "Trauma Assessment",
+        "description": "Form 05 · ประเมินผู้บาดเจ็บ (Primary / Secondary survey)",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "mechanism",
+            "title": "Mechanism of injury",
+            "fields": [
+              {
+                "id": "injured_at",
+                "type": "datetime",
+                "label": "Time of injury"
+              },
+              {
+                "id": "mechanism",
+                "type": "select",
+                "label": "Mechanism",
+                "options": [
+                  {
+                    "value": "rta_motorcycle",
+                    "label": "Road traffic – motorcycle"
+                  },
+                  {
+                    "value": "rta_car",
+                    "label": "Road traffic – car"
+                  },
+                  {
+                    "value": "rta_pedestrian",
+                    "label": "Road traffic – pedestrian"
+                  },
+                  {
+                    "value": "fall_height",
+                    "label": "Fall from height"
+                  },
+                  {
+                    "value": "fall_level",
+                    "label": "Fall – same level"
+                  },
+                  {
+                    "value": "assault",
+                    "label": "Assault"
+                  },
+                  {
+                    "value": "stab",
+                    "label": "Stab"
+                  },
+                  {
+                    "value": "gunshot",
+                    "label": "Gunshot"
+                  },
+                  {
+                    "value": "burn",
+                    "label": "Burn"
+                  },
+                  {
+                    "value": "crush",
+                    "label": "Crush"
+                  },
+                  {
+                    "value": "other",
+                    "label": "Other"
+                  }
+                ],
+                "indexed": true
+              },
+              {
+                "id": "protection",
+                "type": "multiselect",
+                "label": "Protection",
+                "options": [
+                  {
+                    "value": "helmet",
+                    "label": "Helmet"
+                  },
+                  {
+                    "value": "seatbelt",
+                    "label": "Seat belt"
+                  },
+                  {
+                    "value": "airbag",
+                    "label": "Airbag"
+                  },
+                  {
+                    "value": "none",
+                    "label": "None"
+                  }
+                ],
+                "option_columns": 4
+              },
+              {
+                "id": "alcohol",
+                "type": "checkbox",
+                "label": "Alcohol / substance suspected"
+              },
+              {
+                "id": "mechanism_detail",
+                "type": "textarea",
+                "label": "Details",
+                "max_length": 1000
+              },
+              {
+                "id": "trauma_team",
+                "type": "checkbox",
+                "label": "Trauma team activated"
+              },
+              {
+                "id": "trauma_team_at",
+                "type": "datetime",
+                "label": "Activation time",
+                "visibility": {
+                  "when": {
+                    "field": "trauma_team",
+                    "operator": "equals",
+                    "value": true
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "id": "primary",
+            "title": "Primary survey (ABCDE)",
+            "fields": [
+              {
+                "id": "a_airway",
+                "type": "textarea",
+                "label": "A – Airway and C-spine",
+                "max_length": 1000
+              },
+              {
+                "id": "b_breathing",
+                "type": "textarea",
+                "label": "B – Breathing",
+                "max_length": 1000
+              },
+              {
+                "id": "c_circulation",
+                "type": "textarea",
+                "label": "C – Circulation / haemorrhage control",
+                "max_length": 1000
+              },
+              {
+                "id": "d_disability",
+                "type": "textarea",
+                "label": "D – Disability (GCS, pupils)",
+                "max_length": 1000
+              },
+              {
+                "id": "e_exposure",
+                "type": "textarea",
+                "label": "E – Exposure / temperature",
+                "max_length": 1000
+              },
+              {
+                "id": "adjuncts",
+                "type": "multiselect",
+                "label": "Adjuncts",
+                "options": [
+                  {
+                    "value": "efast",
+                    "label": "eFAST"
+                  },
+                  {
+                    "value": "cxr",
+                    "label": "Chest X-ray"
+                  },
+                  {
+                    "value": "pelvis_xr",
+                    "label": "Pelvis X-ray"
+                  },
+                  {
+                    "value": "ecg",
+                    "label": "ECG"
+                  },
+                  {
+                    "value": "abg",
+                    "label": "ABG"
+                  },
+                  {
+                    "value": "foley",
+                    "label": "Urinary catheter"
+                  },
+                  {
+                    "value": "ngt",
+                    "label": "NG tube"
+                  }
+                ],
+                "option_columns": 4
+              }
+            ]
+          },
+          {
+            "id": "score",
+            "title": "Revised Trauma Score",
+            "fields": [
+              {
+                "id": "rts_gcs",
+                "type": "select",
+                "label": "GCS (coded)",
+                "options": [
+                  {
+                    "value": "4",
+                    "label": "4 · GCS 13–15"
+                  },
+                  {
+                    "value": "3",
+                    "label": "3 · 9–12"
+                  },
+                  {
+                    "value": "2",
+                    "label": "2 · 6–8"
+                  },
+                  {
+                    "value": "1",
+                    "label": "1 · 4–5"
+                  },
+                  {
+                    "value": "0",
+                    "label": "0 · 3"
+                  }
+                ]
+              },
+              {
+                "id": "rts_sbp",
+                "type": "select",
+                "label": "SBP (coded)",
+                "options": [
+                  {
+                    "value": "4",
+                    "label": "4 · SBP > 89"
+                  },
+                  {
+                    "value": "3",
+                    "label": "3 · 76–89"
+                  },
+                  {
+                    "value": "2",
+                    "label": "2 · 50–75"
+                  },
+                  {
+                    "value": "1",
+                    "label": "1 · 1–49"
+                  },
+                  {
+                    "value": "0",
+                    "label": "0 · 0"
+                  }
+                ]
+              },
+              {
+                "id": "rts_rr",
+                "type": "select",
+                "label": "RR (coded)",
+                "options": [
+                  {
+                    "value": "4",
+                    "label": "4 · RR 10–29"
+                  },
+                  {
+                    "value": "3",
+                    "label": "3 · > 29"
+                  },
+                  {
+                    "value": "2",
+                    "label": "2 · 6–9"
+                  },
+                  {
+                    "value": "1",
+                    "label": "1 · 1–5"
+                  },
+                  {
+                    "value": "0",
+                    "label": "0 · 0"
+                  }
+                ]
+              },
+              {
+                "id": "rts",
+                "type": "calculated",
+                "label": "RTS",
+                "formula": "0.9368 * (IF(rts_gcs='4', 4, IF(rts_gcs='3', 3, IF(rts_gcs='2', 2, IF(rts_gcs='1', 1, IF(rts_gcs='0', 0, NULL)))))) + 0.7326 * (IF(rts_sbp='4', 4, IF(rts_sbp='3', 3, IF(rts_sbp='2', 2, IF(rts_sbp='1', 1, IF(rts_sbp='0', 0, NULL)))))) + 0.2908 * (IF(rts_rr='4', 4, IF(rts_rr='3', 3, IF(rts_rr='2', 2, IF(rts_rr='1', 1, IF(rts_rr='0', 0, NULL))))))",
+                "decimals": 4
+              },
+              {
+                "id": "iss",
+                "type": "integer",
+                "label": "Injury Severity Score (if calculated)",
+                "min": 0,
+                "max": 75
+              }
+            ],
+            "description": "RTS = 0.9368·GCSc + 0.7326·SBPc + 0.2908·RRc (Champion et al., 1989)."
+          },
+          {
+            "id": "secondary",
+            "title": "Secondary survey",
+            "fields": [
+              {
+                "id": "secondary",
+                "type": "textarea",
+                "label": "Head-to-toe findings",
+                "max_length": 4000
+              },
+              {
+                "id": "injuries",
+                "type": "repeat",
+                "label": "Injury",
+                "view": "table",
+                "fields": [
+                  {
+                    "id": "region",
+                    "type": "select",
+                    "label": "Region",
+                    "options": [
+                      {
+                        "value": "head",
+                        "label": "Head"
+                      },
+                      {
+                        "value": "face",
+                        "label": "Face"
+                      },
+                      {
+                        "value": "neck",
+                        "label": "Neck"
+                      },
+                      {
+                        "value": "chest",
+                        "label": "Chest"
+                      },
+                      {
+                        "value": "abdomen",
+                        "label": "Abdomen"
+                      },
+                      {
+                        "value": "pelvis",
+                        "label": "Pelvis"
+                      },
+                      {
+                        "value": "spine",
+                        "label": "Spine"
+                      },
+                      {
+                        "value": "upper",
+                        "label": "Upper limb"
+                      },
+                      {
+                        "value": "lower",
+                        "label": "Lower limb"
+                      },
+                      {
+                        "value": "skin",
+                        "label": "Skin / burn"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "injury",
+                    "type": "text",
+                    "label": "Injury",
+                    "max_length": 200
+                  },
+                  {
+                    "id": "plan",
+                    "type": "text",
+                    "label": "Plan",
+                    "max_length": 200
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "reassess",
+            "title": "Reassessment",
+            "fields": [
+              {
+                "id": "reassessments",
+                "type": "repeat",
+                "label": "Reassessment",
+                "view": "table",
+                "fields": [
+                  {
+                    "id": "at",
+                    "type": "datetime",
+                    "label": "Time",
+                    "required": true
+                  },
+                  {
+                    "id": "gcs",
+                    "type": "integer",
+                    "label": "GCS",
+                    "min": 3,
+                    "max": 15
+                  },
+                  {
+                    "id": "sbp",
+                    "type": "integer",
+                    "label": "SBP",
+                    "unit": "mmHg",
+                    "min": 0,
+                    "max": 300
+                  },
+                  {
+                    "id": "hr",
+                    "type": "integer",
+                    "label": "HR",
+                    "unit": "/min",
+                    "min": 0,
+                    "max": 300
+                  },
+                  {
+                    "id": "change",
+                    "type": "text",
+                    "label": "Change / action",
+                    "max_length": 200
+                  },
+                  {
+                    "id": "by",
+                    "type": "text",
+                    "label": "By",
+                    "max_length": 60
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "er_resuscitation_record": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "er_resuscitation_record",
+        "schema_version": 1,
+        "title": "Resuscitation Record",
+        "description": "Form 06 · บันทึกการช่วยฟื้นคืนชีพ",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "arrest",
+            "title": "Arrest",
+            "fields": [
+              {
+                "id": "arrest_at",
+                "type": "datetime",
+                "label": "Arrest / collapse time",
+                "required": true
+              },
+              {
+                "id": "location",
+                "type": "radio",
+                "label": "Location",
+                "options": [
+                  {
+                    "value": "prehospital",
+                    "label": "Pre-hospital"
+                  },
+                  {
+                    "value": "er",
+                    "label": "In ER"
+                  }
+                ],
+                "option_columns": 2
+              },
+              {
+                "id": "witnessed",
+                "type": "checkbox",
+                "label": "Witnessed"
+              },
+              {
+                "id": "bystander_cpr",
+                "type": "checkbox",
+                "label": "Bystander CPR"
+              },
+              {
+                "id": "initial_rhythm",
+                "type": "select",
+                "label": "Initial rhythm",
+                "options": [
+                  {
+                    "value": "vf",
+                    "label": "VF"
+                  },
+                  {
+                    "value": "pvt",
+                    "label": "Pulseless VT"
+                  },
+                  {
+                    "value": "pea",
+                    "label": "PEA"
+                  },
+                  {
+                    "value": "asystole",
+                    "label": "Asystole"
+                  },
+                  {
+                    "value": "unknown",
+                    "label": "Unknown"
+                  }
+                ],
+                "indexed": true
+              },
+              {
+                "id": "cpr_start_at",
+                "type": "datetime",
+                "label": "CPR started (ER)"
+              },
+              {
+                "id": "team_leader",
+                "type": "text",
+                "label": "Team leader",
+                "max_length": 120
+              }
+            ]
+          },
+          {
+            "id": "timeline",
+            "title": "CPR timeline",
+            "fields": [
+              {
+                "id": "events",
+                "type": "repeat",
+                "label": "Event",
+                "view": "table",
+                "fields": [
+                  {
+                    "id": "at",
+                    "type": "time",
+                    "label": "Time",
+                    "required": true
+                  },
+                  {
+                    "id": "event",
+                    "type": "select",
+                    "label": "Event",
+                    "options": [
+                      {
+                        "value": "cpr",
+                        "label": "CPR cycle"
+                      },
+                      {
+                        "value": "rhythm",
+                        "label": "Rhythm check"
+                      },
+                      {
+                        "value": "shock",
+                        "label": "Defibrillation"
+                      },
+                      {
+                        "value": "drug",
+                        "label": "Drug"
+                      },
+                      {
+                        "value": "airway",
+                        "label": "Airway"
+                      },
+                      {
+                        "value": "rosc",
+                        "label": "ROSC"
+                      },
+                      {
+                        "value": "other",
+                        "label": "Other"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "rhythm",
+                    "type": "select",
+                    "label": "Rhythm",
+                    "options": [
+                      {
+                        "value": "vf",
+                        "label": "VF"
+                      },
+                      {
+                        "value": "pvt",
+                        "label": "pVT"
+                      },
+                      {
+                        "value": "pea",
+                        "label": "PEA"
+                      },
+                      {
+                        "value": "asystole",
+                        "label": "Asystole"
+                      },
+                      {
+                        "value": "organised",
+                        "label": "Organised"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "joules",
+                    "type": "integer",
+                    "label": "Joules",
+                    "unit": "J",
+                    "min": 0,
+                    "max": 400
+                  },
+                  {
+                    "id": "drug",
+                    "type": "text",
+                    "label": "Drug / dose / route",
+                    "max_length": 120
+                  },
+                  {
+                    "id": "note",
+                    "type": "text",
+                    "label": "Note",
+                    "max_length": 200
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "airway",
+            "title": "Airway",
+            "fields": [
+              {
+                "id": "airway_device",
+                "type": "select",
+                "label": "Device",
+                "options": [
+                  {
+                    "value": "bvm",
+                    "label": "BVM"
+                  },
+                  {
+                    "value": "sga",
+                    "label": "Supraglottic"
+                  },
+                  {
+                    "value": "ett",
+                    "label": "Endotracheal tube"
+                  }
+                ]
+              },
+              {
+                "id": "ett_size",
+                "type": "decimal",
+                "label": "ETT size",
+                "unit": "mm",
+                "min": 2,
+                "max": 10,
+                "decimals": 1
+              },
+              {
+                "id": "ett_depth",
+                "type": "integer",
+                "label": "Depth at lip",
+                "unit": "cm",
+                "min": 5,
+                "max": 35
+              },
+              {
+                "id": "airway_at",
+                "type": "datetime",
+                "label": "Placed at"
+              },
+              {
+                "id": "etco2_confirmed",
+                "type": "checkbox",
+                "label": "Placement confirmed with EtCO₂"
+              }
+            ]
+          },
+          {
+            "id": "outcome",
+            "title": "Outcome",
+            "fields": [
+              {
+                "id": "outcome",
+                "type": "radio",
+                "label": "Outcome",
+                "options": [
+                  {
+                    "value": "rosc",
+                    "label": "ROSC"
+                  },
+                  {
+                    "value": "ongoing",
+                    "label": "Ongoing at transfer"
+                  },
+                  {
+                    "value": "terminated",
+                    "label": "Resuscitation stopped"
+                  }
+                ],
+                "required": true,
+                "indexed": true,
+                "option_columns": 3
+              },
+              {
+                "id": "rosc_at",
+                "type": "datetime",
+                "label": "ROSC time",
+                "visibility": {
+                  "when": {
+                    "field": "outcome",
+                    "operator": "equals",
+                    "value": "rosc"
+                  }
+                }
+              },
+              {
+                "id": "terminated_at",
+                "type": "datetime",
+                "label": "Stopped at",
+                "visibility": {
+                  "when": {
+                    "field": "outcome",
+                    "operator": "equals",
+                    "value": "terminated"
+                  }
+                }
+              },
+              {
+                "id": "post_rosc",
+                "type": "textarea",
+                "label": "Post-ROSC care / disposition",
+                "max_length": 2000
+              },
+              {
+                "id": "leader_sign",
+                "type": "signature",
+                "label": "Team leader signature"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "er_procedure_record": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "er_procedure_record",
+        "schema_version": 1,
+        "title": "Emergency Procedure Record",
+        "description": "Form 09 · บันทึกหัตถการ",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "procedures",
+            "title": "Procedures",
+            "fields": [
+              {
+                "id": "procedures",
+                "type": "repeat",
+                "label": "Procedure",
+                "view": "cards",
+                "fields": [
+                  {
+                    "id": "procedure",
+                    "type": "select",
+                    "label": "Procedure",
+                    "options": [
+                      {
+                        "value": "intubation",
+                        "label": "Endotracheal intubation"
+                      },
+                      {
+                        "value": "cvc",
+                        "label": "Central line"
+                      },
+                      {
+                        "value": "art",
+                        "label": "Arterial line"
+                      },
+                      {
+                        "value": "chest_drain",
+                        "label": "Chest drain"
+                      },
+                      {
+                        "value": "suture",
+                        "label": "Wound suturing"
+                      },
+                      {
+                        "value": "splint",
+                        "label": "Splint / cast"
+                      },
+                      {
+                        "value": "reduction",
+                        "label": "Reduction"
+                      },
+                      {
+                        "value": "i_and_d",
+                        "label": "Incision and drainage"
+                      },
+                      {
+                        "value": "lp",
+                        "label": "Lumbar puncture"
+                      },
+                      {
+                        "value": "ngt",
+                        "label": "NG tube"
+                      },
+                      {
+                        "value": "foley",
+                        "label": "Urinary catheter"
+                      },
+                      {
+                        "value": "cardioversion",
+                        "label": "Cardioversion / pacing"
+                      },
+                      {
+                        "value": "other",
+                        "label": "Other"
+                      }
+                    ],
+                    "required": true
+                  },
+                  {
+                    "id": "icd9cm",
+                    "type": "text",
+                    "label": "ICD-9-CM",
+                    "max_length": 12
+                  },
+                  {
+                    "id": "at",
+                    "type": "datetime",
+                    "label": "Time",
+                    "required": true
+                  },
+                  {
+                    "id": "site",
+                    "type": "text",
+                    "label": "Site / side",
+                    "max_length": 120
+                  },
+                  {
+                    "id": "operator",
+                    "type": "text",
+                    "label": "Operator",
+                    "max_length": 120,
+                    "required": true
+                  },
+                  {
+                    "id": "assistant",
+                    "type": "text",
+                    "label": "Assistant",
+                    "max_length": 120
+                  },
+                  {
+                    "id": "consent",
+                    "type": "checkbox",
+                    "label": "Consent obtained (per hospital consent policy)"
+                  },
+                  {
+                    "id": "details",
+                    "type": "textarea",
+                    "label": "Technique / findings",
+                    "max_length": 2000
+                  },
+                  {
+                    "id": "complications",
+                    "type": "text",
+                    "label": "Complications",
+                    "max_length": 300
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "er_investigations": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "er_investigations",
+        "schema_version": 1,
+        "title": "Investigations & Results",
+        "description": "Form 10 · การส่งตรวจและผล",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "lab",
+            "title": "Laboratory",
+            "fields": [
+              {
+                "id": "labs",
+                "type": "repeat",
+                "label": "Lab",
+                "view": "table",
+                "fields": [
+                  {
+                    "id": "test",
+                    "type": "text",
+                    "label": "Test",
+                    "max_length": 120,
+                    "required": true
+                  },
+                  {
+                    "id": "ordered_at",
+                    "type": "time",
+                    "label": "Ordered"
+                  },
+                  {
+                    "id": "resulted_at",
+                    "type": "time",
+                    "label": "Resulted"
+                  },
+                  {
+                    "id": "result",
+                    "type": "text",
+                    "label": "Result",
+                    "max_length": 200
+                  },
+                  {
+                    "id": "critical",
+                    "type": "checkbox",
+                    "label": "Critical"
+                  },
+                  {
+                    "id": "ack_by",
+                    "type": "text",
+                    "label": "Acknowledged by",
+                    "max_length": 60
+                  },
+                  {
+                    "id": "ack_at",
+                    "type": "time",
+                    "label": "Ack time"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "imaging",
+            "title": "Imaging",
+            "fields": [
+              {
+                "id": "imaging",
+                "type": "repeat",
+                "label": "Study",
+                "view": "table",
+                "fields": [
+                  {
+                    "id": "modality",
+                    "type": "select",
+                    "label": "Modality",
+                    "options": [
+                      {
+                        "value": "xr",
+                        "label": "X-ray"
+                      },
+                      {
+                        "value": "us",
+                        "label": "Ultrasound"
+                      },
+                      {
+                        "value": "ct",
+                        "label": "CT"
+                      },
+                      {
+                        "value": "mri",
+                        "label": "MRI"
+                      },
+                      {
+                        "value": "other",
+                        "label": "Other"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "study",
+                    "type": "text",
+                    "label": "Study",
+                    "max_length": 120,
+                    "required": true
+                  },
+                  {
+                    "id": "img_ordered_at",
+                    "type": "time",
+                    "label": "Ordered"
+                  },
+                  {
+                    "id": "done_at",
+                    "type": "time",
+                    "label": "Done"
+                  },
+                  {
+                    "id": "report",
+                    "type": "text",
+                    "label": "Report / finding",
+                    "max_length": 300
+                  },
+                  {
+                    "id": "img_critical",
+                    "type": "checkbox",
+                    "label": "Critical"
+                  },
+                  {
+                    "id": "img_ack_by",
+                    "type": "text",
+                    "label": "Acknowledged by",
+                    "max_length": 60
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "ecg",
+            "title": "ECG and point-of-care tests",
+            "fields": [
+              {
+                "id": "ecgs",
+                "type": "repeat",
+                "label": "ECG",
+                "view": "table",
+                "fields": [
+                  {
+                    "id": "at",
+                    "type": "time",
+                    "label": "Time",
+                    "required": true
+                  },
+                  {
+                    "id": "interpretation",
+                    "type": "text",
+                    "label": "Interpretation",
+                    "max_length": 200
+                  },
+                  {
+                    "id": "stemi",
+                    "type": "checkbox",
+                    "label": "STEMI criteria met (physician)"
+                  },
+                  {
+                    "id": "by",
+                    "type": "text",
+                    "label": "Read by",
+                    "max_length": 60
+                  }
+                ]
+              },
+              {
+                "id": "poct",
+                "type": "textarea",
+                "label": "Point-of-care tests (glucose, blood gas, troponin, …)",
+                "max_length": 2000
+              },
+              {
+                "id": "follow_up",
+                "type": "textarea",
+                "label": "Pending results / follow-up",
+                "max_length": 1000
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "er_fast_track_pathway": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "er_fast_track_pathway",
+        "schema_version": 1,
+        "title": "Clinical Pathway / Fast Track",
+        "description": "Form 11 · Fast track ตามแนวทางของโรงพยาบาล",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "pathway",
+            "title": "Pathway",
+            "fields": [
+              {
+                "id": "path_stroke",
+                "type": "checkbox",
+                "label": "Stroke fast track"
+              },
+              {
+                "id": "path_stemi",
+                "type": "checkbox",
+                "label": "STEMI fast track"
+              },
+              {
+                "id": "path_sepsis",
+                "type": "checkbox",
+                "label": "Sepsis"
+              },
+              {
+                "id": "path_trauma",
+                "type": "checkbox",
+                "label": "Major trauma"
+              },
+              {
+                "id": "path_other",
+                "type": "text",
+                "label": "Other pathway",
+                "max_length": 120
+              },
+              {
+                "id": "activated_at",
+                "type": "datetime",
+                "label": "Activated at",
+                "required": true
+              },
+              {
+                "id": "activated_by",
+                "type": "text",
+                "label": "Activated by",
+                "max_length": 120
+              }
+            ],
+            "description": "Records times only; targets come from the hospital's own pathway documents."
+          },
+          {
+            "id": "stroke",
+            "title": "Stroke",
+            "fields": [
+              {
+                "id": "last_known_well",
+                "type": "datetime",
+                "label": "Last known well"
+              },
+              {
+                "id": "nihss",
+                "type": "integer",
+                "label": "NIHSS",
+                "min": 0,
+                "max": 42
+              },
+              {
+                "id": "ct_at",
+                "type": "datetime",
+                "label": "CT / CTA done"
+              },
+              {
+                "id": "ct_read_at",
+                "type": "datetime",
+                "label": "CT read"
+              },
+              {
+                "id": "reperfusion",
+                "type": "radio",
+                "label": "Reperfusion",
+                "options": [
+                  {
+                    "value": "ivt",
+                    "label": "IV thrombolysis"
+                  },
+                  {
+                    "value": "evt",
+                    "label": "Thrombectomy"
+                  },
+                  {
+                    "value": "both",
+                    "label": "Both"
+                  },
+                  {
+                    "value": "none",
+                    "label": "None"
+                  }
+                ],
+                "option_columns": 4
+              },
+              {
+                "id": "needle_at",
+                "type": "datetime",
+                "label": "Thrombolysis start"
+              },
+              {
+                "id": "stroke_notes",
+                "type": "textarea",
+                "label": "Notes",
+                "max_length": 1000
+              }
+            ],
+            "visibility": {
+              "when": {
+                "field": "path_stroke",
+                "operator": "equals",
+                "value": true
+              }
+            }
+          },
+          {
+            "id": "stemi",
+            "title": "STEMI",
+            "fields": [
+              {
+                "id": "first_ecg_at",
+                "type": "datetime",
+                "label": "First ECG"
+              },
+              {
+                "id": "cath_activation_at",
+                "type": "datetime",
+                "label": "Cath lab activated"
+              },
+              {
+                "id": "lysis_at",
+                "type": "datetime",
+                "label": "Fibrinolysis start"
+              },
+              {
+                "id": "transfer_out_at",
+                "type": "datetime",
+                "label": "Left for PCI"
+              },
+              {
+                "id": "stemi_notes",
+                "type": "textarea",
+                "label": "Notes",
+                "max_length": 1000
+              }
+            ],
+            "visibility": {
+              "when": {
+                "field": "path_stemi",
+                "operator": "equals",
+                "value": true
+              }
+            }
+          },
+          {
+            "id": "sepsis",
+            "title": "Sepsis",
+            "fields": [
+              {
+                "id": "time_zero",
+                "type": "datetime",
+                "label": "Time zero"
+              },
+              {
+                "id": "lactate",
+                "type": "decimal",
+                "label": "Lactate",
+                "unit": "mmol/L",
+                "min": 0,
+                "max": 30,
+                "decimals": 1
+              },
+              {
+                "id": "cultures_before_abx",
+                "type": "checkbox",
+                "label": "Cultures before antibiotics"
+              },
+              {
+                "id": "abx_at",
+                "type": "datetime",
+                "label": "Antibiotics given"
+              },
+              {
+                "id": "fluid_ml",
+                "type": "integer",
+                "label": "Fluid given",
+                "unit": "mL",
+                "min": 0,
+                "max": 20000
+              },
+              {
+                "id": "vaso_at",
+                "type": "datetime",
+                "label": "Vasopressor started"
+              }
+            ],
+            "visibility": {
+              "when": {
+                "field": "path_sepsis",
+                "operator": "equals",
+                "value": true
+              }
+            }
+          },
+          {
+            "id": "trauma",
+            "title": "Major trauma",
+            "fields": [
+              {
+                "id": "team_at",
+                "type": "datetime",
+                "label": "Trauma team arrived"
+              },
+              {
+                "id": "ct_trauma_at",
+                "type": "datetime",
+                "label": "CT"
+              },
+              {
+                "id": "or_at",
+                "type": "datetime",
+                "label": "To OR / intervention"
+              },
+              {
+                "id": "mtp",
+                "type": "checkbox",
+                "label": "Massive transfusion protocol"
+              }
+            ],
+            "visibility": {
+              "when": {
+                "field": "path_trauma",
+                "operator": "equals",
+                "value": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    "er_observation_chart": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "er_observation_chart",
+        "schema_version": 1,
+        "title": "ER Observation Chart",
+        "description": "Form 12 · บันทึกการสังเกตอาการ — vital signs from monitors are charted automatically in the case; enter here only what the chart lacks",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "obs",
+            "title": "Observation",
+            "fields": [
+              {
+                "id": "start_at",
+                "type": "datetime",
+                "label": "Observation started",
+                "required": true
+              },
+              {
+                "id": "reason",
+                "type": "textarea",
+                "label": "Reason / goal",
+                "max_length": 500,
+                "required": true
+              },
+              {
+                "id": "plan",
+                "type": "textarea",
+                "label": "Monitoring plan",
+                "max_length": 1000
+              },
+              {
+                "id": "rounds",
+                "type": "repeat",
+                "label": "Reassessment",
+                "view": "table",
+                "fields": [
+                  {
+                    "id": "at",
+                    "type": "datetime",
+                    "label": "Time",
+                    "required": true
+                  },
+                  {
+                    "id": "sbp",
+                    "type": "integer",
+                    "label": "SBP",
+                    "unit": "mmHg",
+                    "min": 0,
+                    "max": 300
+                  },
+                  {
+                    "id": "hr",
+                    "type": "integer",
+                    "label": "HR",
+                    "unit": "/min",
+                    "min": 0,
+                    "max": 300
+                  },
+                  {
+                    "id": "rr",
+                    "type": "integer",
+                    "label": "RR",
+                    "unit": "/min",
+                    "min": 0,
+                    "max": 80
+                  },
+                  {
+                    "id": "spo2",
+                    "type": "integer",
+                    "label": "SpO₂",
+                    "unit": "%",
+                    "min": 0,
+                    "max": 100
+                  },
+                  {
+                    "id": "pain",
+                    "type": "integer",
+                    "label": "Pain",
+                    "unit": "0–10",
+                    "min": 0,
+                    "max": 10
+                  },
+                  {
+                    "id": "progress",
+                    "type": "text",
+                    "label": "Progress / response",
+                    "max_length": 300
+                  },
+                  {
+                    "id": "by",
+                    "type": "text",
+                    "label": "By",
+                    "max_length": 60
+                  }
+                ]
+              },
+              {
+                "id": "end_at",
+                "type": "datetime",
+                "label": "Observation ended"
+              },
+              {
+                "id": "duration_days",
+                "type": "calculated",
+                "label": "Duration",
+                "formula": "DAYS(start_at, end_at)",
+                "decimals": 1,
+                "unit": "days"
+              },
+              {
+                "id": "result",
+                "type": "radio",
+                "label": "Result",
+                "options": [
+                  {
+                    "value": "discharge",
+                    "label": "Discharge"
+                  },
+                  {
+                    "value": "admit",
+                    "label": "Admit"
+                  },
+                  {
+                    "value": "transfer",
+                    "label": "Transfer"
+                  },
+                  {
+                    "value": "other",
+                    "label": "Other"
+                  }
+                ],
+                "option_columns": 4
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "er_consultation": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "er_consultation",
+        "schema_version": 1,
+        "title": "Consultation Record",
+        "description": "Form 13 · การปรึกษาแพทย์เฉพาะทาง",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "consults",
+            "title": "Consultations",
+            "fields": [
+              {
+                "id": "consults",
+                "type": "repeat",
+                "label": "Consultation",
+                "view": "cards",
+                "fields": [
+                  {
+                    "id": "specialty",
+                    "type": "text",
+                    "label": "Specialty",
+                    "max_length": 80,
+                    "required": true
+                  },
+                  {
+                    "id": "question",
+                    "type": "textarea",
+                    "label": "Reason / question",
+                    "max_length": 1000
+                  },
+                  {
+                    "id": "requested_at",
+                    "type": "datetime",
+                    "label": "Requested",
+                    "required": true
+                  },
+                  {
+                    "id": "requested_by",
+                    "type": "text",
+                    "label": "Requested by",
+                    "max_length": 120
+                  },
+                  {
+                    "id": "responded_at",
+                    "type": "datetime",
+                    "label": "Consultant responded"
+                  },
+                  {
+                    "id": "consultant",
+                    "type": "text",
+                    "label": "Consultant",
+                    "max_length": 120
+                  },
+                  {
+                    "id": "assessment",
+                    "type": "textarea",
+                    "label": "Assessment",
+                    "max_length": 2000
+                  },
+                  {
+                    "id": "recommendation",
+                    "type": "textarea",
+                    "label": "Recommendation",
+                    "max_length": 2000
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "er_referral_transfer": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "er_referral_transfer",
+        "schema_version": 1,
+        "title": "Referral & Transfer Record",
+        "description": "Form 14 · ส่งต่อ / ย้ายผู้ป่วย",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "transfer",
+            "title": "Transfer",
+            "fields": [
+              {
+                "id": "type",
+                "type": "radio",
+                "label": "Type",
+                "options": [
+                  {
+                    "value": "refer_out",
+                    "label": "Refer out (other hospital)"
+                  },
+                  {
+                    "value": "internal",
+                    "label": "Internal transfer (ward / ICU / OR)"
+                  }
+                ],
+                "required": true,
+                "option_columns": 2
+              },
+              {
+                "id": "reason",
+                "type": "textarea",
+                "label": "Reason",
+                "max_length": 1000,
+                "required": true
+              },
+              {
+                "id": "destination",
+                "type": "text",
+                "label": "Receiving hospital / unit",
+                "max_length": 200,
+                "required": true
+              },
+              {
+                "id": "accepted_by",
+                "type": "text",
+                "label": "Accepted by (name / role)",
+                "max_length": 120
+              },
+              {
+                "id": "accepted_at",
+                "type": "datetime",
+                "label": "Accepted at"
+              },
+              {
+                "id": "refer_no",
+                "type": "text",
+                "label": "Referral number / system",
+                "max_length": 60
+              }
+            ]
+          },
+          {
+            "id": "condition",
+            "title": "Condition at transfer",
+            "fields": [
+              {
+                "id": "t_sbp",
+                "type": "integer",
+                "label": "SBP",
+                "unit": "mmHg",
+                "min": 0,
+                "max": 300
+              },
+              {
+                "id": "t_dbp",
+                "type": "integer",
+                "label": "DBP",
+                "unit": "mmHg",
+                "min": 0,
+                "max": 200
+              },
+              {
+                "id": "t_hr",
+                "type": "integer",
+                "label": "HR",
+                "unit": "/min",
+                "min": 0,
+                "max": 300
+              },
+              {
+                "id": "t_rr",
+                "type": "integer",
+                "label": "RR",
+                "unit": "/min",
+                "min": 0,
+                "max": 80
+              },
+              {
+                "id": "t_temp",
+                "type": "decimal",
+                "label": "Temp",
+                "unit": "°C",
+                "min": 25,
+                "max": 45,
+                "decimals": 1
+              },
+              {
+                "id": "t_spo2",
+                "type": "integer",
+                "label": "SpO₂",
+                "unit": "%",
+                "min": 0,
+                "max": 100
+              },
+              {
+                "id": "t_o2",
+                "type": "select",
+                "label": "O₂ support",
+                "options": [
+                  {
+                    "value": "room_air",
+                    "label": "Room air"
+                  },
+                  {
+                    "value": "cannula",
+                    "label": "Cannula"
+                  },
+                  {
+                    "value": "mask",
+                    "label": "Mask"
+                  },
+                  {
+                    "value": "nrb",
+                    "label": "Non-rebreather"
+                  },
+                  {
+                    "value": "hfnc",
+                    "label": "HFNC"
+                  },
+                  {
+                    "value": "niv",
+                    "label": "NIV"
+                  },
+                  {
+                    "value": "ett",
+                    "label": "ETT / BVM"
+                  }
+                ]
+              },
+              {
+                "id": "t_dtx",
+                "type": "integer",
+                "label": "Capillary glucose",
+                "unit": "mg/dL",
+                "min": 0,
+                "max": 2000
+              },
+              {
+                "id": "t_pain",
+                "type": "integer",
+                "label": "Pain score",
+                "unit": "0–10",
+                "min": 0,
+                "max": 10
+              },
+              {
+                "id": "t_gcs",
+                "type": "integer",
+                "label": "GCS",
+                "min": 3,
+                "max": 15
+              },
+              {
+                "id": "condition",
+                "type": "textarea",
+                "label": "Condition / risks",
+                "max_length": 1000
+              }
+            ],
+            "layout": {
+              "type": "grid",
+              "columns": 3
+            }
+          },
+          {
+            "id": "transport",
+            "title": "Transport and handover",
+            "fields": [
+              {
+                "id": "team",
+                "type": "select",
+                "label": "Transport team",
+                "options": [
+                  {
+                    "value": "als",
+                    "label": "ALS"
+                  },
+                  {
+                    "value": "bls",
+                    "label": "BLS"
+                  },
+                  {
+                    "value": "nurse",
+                    "label": "Nurse escort"
+                  },
+                  {
+                    "value": "porter",
+                    "label": "Porter"
+                  },
+                  {
+                    "value": "family",
+                    "label": "Family"
+                  }
+                ]
+              },
+              {
+                "id": "equipment",
+                "type": "multiselect",
+                "label": "Equipment",
+                "options": [
+                  {
+                    "value": "monitor",
+                    "label": "Monitor"
+                  },
+                  {
+                    "value": "ventilator",
+                    "label": "Ventilator"
+                  },
+                  {
+                    "value": "pump",
+                    "label": "Infusion pump"
+                  },
+                  {
+                    "value": "o2",
+                    "label": "Oxygen"
+                  },
+                  {
+                    "value": "defib",
+                    "label": "Defibrillator"
+                  }
+                ],
+                "option_columns": 5
+              },
+              {
+                "id": "left_at",
+                "type": "datetime",
+                "label": "Left ER",
+                "required": true
+              },
+              {
+                "id": "handover_to",
+                "type": "text",
+                "label": "Handed over to",
+                "max_length": 120
+              },
+              {
+                "id": "documents",
+                "type": "multiselect",
+                "label": "Documents sent",
+                "options": [
+                  {
+                    "value": "referral",
+                    "label": "Referral letter"
+                  },
+                  {
+                    "value": "imaging",
+                    "label": "Imaging"
+                  },
+                  {
+                    "value": "labs",
+                    "label": "Lab results"
+                  },
+                  {
+                    "value": "ecg",
+                    "label": "ECG"
+                  },
+                  {
+                    "value": "meds",
+                    "label": "Medication list"
+                  }
+                ],
+                "option_columns": 5
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "er_disposition_summary": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "er_disposition_summary",
+        "schema_version": 1,
+        "title": "ER Discharge / Disposition Summary",
+        "description": "Form 15 · สรุปการจำหน่ายจากห้องฉุกเฉิน",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "dx",
+            "title": "Diagnosis and treatment",
+            "fields": [
+              {
+                "id": "final_dx_icd10",
+                "type": "text",
+                "label": "Principal diagnosis – ICD-10",
+                "max_length": 20,
+                "required": true,
+                "indexed": true
+              },
+              {
+                "id": "final_dx",
+                "type": "text",
+                "label": "Principal diagnosis",
+                "max_length": 300,
+                "required": true
+              },
+              {
+                "id": "other_dx",
+                "type": "textarea",
+                "label": "Other diagnoses (ICD-10)",
+                "max_length": 1000
+              },
+              {
+                "id": "treatment_summary",
+                "type": "textarea",
+                "label": "Treatment summary",
+                "max_length": 4000,
+                "required": true
+              }
+            ]
+          },
+          {
+            "id": "disposition",
+            "title": "Disposition · การจำหน่าย",
+            "fields": [
+              {
+                "id": "disposition",
+                "type": "radio",
+                "label": "Disposition",
+                "options": [
+                  {
+                    "value": "discharge",
+                    "label": "Discharge home"
+                  },
+                  {
+                    "value": "admit",
+                    "label": "Admit"
+                  },
+                  {
+                    "value": "transfer",
+                    "label": "Transfer"
+                  },
+                  {
+                    "value": "refer_out",
+                    "label": "Refer out"
+                  },
+                  {
+                    "value": "ama",
+                    "label": "Against medical advice"
+                  },
+                  {
+                    "value": "death",
+                    "label": "Death"
+                  },
+                  {
+                    "value": "left",
+                    "label": "Left without being seen"
+                  }
+                ],
+                "required": true,
+                "indexed": true,
+                "option_columns": 4
+              },
+              {
+                "id": "decision_at",
+                "type": "datetime",
+                "label": "Disposition decided",
+                "required": true
+              },
+              {
+                "id": "left_er_at",
+                "type": "datetime",
+                "label": "Left ER",
+                "required": true,
+                "indexed": true
+              },
+              {
+                "id": "admit_ward",
+                "type": "text",
+                "label": "Admitting ward / unit",
+                "max_length": 120,
+                "visibility": {
+                  "when": {
+                    "field": "disposition",
+                    "operator": "equals",
+                    "value": "admit"
+                  }
+                }
+              },
+              {
+                "id": "death_at",
+                "type": "datetime",
+                "label": "Time of death",
+                "visibility": {
+                  "when": {
+                    "field": "disposition",
+                    "operator": "equals",
+                    "value": "death"
+                  }
+                }
+              },
+              {
+                "id": "ama_note",
+                "type": "textarea",
+                "label": "AMA discussion and signature on the hospital form",
+                "max_length": 1000,
+                "visibility": {
+                  "when": {
+                    "field": "disposition",
+                    "operator": "equals",
+                    "value": "ama"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "id": "home",
+            "title": "Discharge instructions",
+            "fields": [
+              {
+                "id": "discharge_meds",
+                "type": "textarea",
+                "label": "Discharge medication",
+                "max_length": 2000
+              },
+              {
+                "id": "instructions",
+                "type": "textarea",
+                "label": "Patient instructions",
+                "max_length": 4000
+              },
+              {
+                "id": "follow_up",
+                "type": "textarea",
+                "label": "Follow-up appointment",
+                "max_length": 500
+              }
+            ],
+            "visibility": {
+              "when": {
+                "field": "disposition",
+                "operator": "equals",
+                "value": "discharge"
+              }
+            }
+          },
+          {
+            "id": "sign",
+            "title": "Physician",
+            "fields": [
+              {
+                "id": "physician",
+                "type": "text",
+                "label": "Physician",
+                "max_length": 120,
+                "required": true
+              },
+              {
+                "id": "signature",
+                "type": "signature",
+                "label": "Signature"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "er_nursing_handover": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "er_nursing_handover",
+        "schema_version": 1,
+        "title": "Emergency Nursing Handover (SBAR)",
+        "description": "Form 16 · ส่งเวร / ส่งต่อทางการพยาบาล",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "sbar",
+            "title": "SBAR",
+            "fields": [
+              {
+                "id": "at",
+                "type": "datetime",
+                "label": "Handover time",
+                "required": true
+              },
+              {
+                "id": "s",
+                "type": "textarea",
+                "label": "S – Situation",
+                "max_length": 1000,
+                "required": true
+              },
+              {
+                "id": "b",
+                "type": "textarea",
+                "label": "B – Background",
+                "max_length": 2000
+              },
+              {
+                "id": "a",
+                "type": "textarea",
+                "label": "A – Assessment",
+                "max_length": 2000
+              },
+              {
+                "id": "r",
+                "type": "textarea",
+                "label": "R – Recommendation",
+                "max_length": 1000
+              },
+              {
+                "id": "pending",
+                "type": "textarea",
+                "label": "Pending investigations / results",
+                "max_length": 1000
+              },
+              {
+                "id": "meds_due",
+                "type": "textarea",
+                "label": "Medication due / running infusions",
+                "max_length": 1000
+              },
+              {
+                "id": "risks",
+                "type": "multiselect",
+                "label": "Risks",
+                "options": [
+                  {
+                    "value": "fall",
+                    "label": "Fall"
+                  },
+                  {
+                    "value": "aspiration",
+                    "label": "Aspiration"
+                  },
+                  {
+                    "value": "bleeding",
+                    "label": "Bleeding"
+                  },
+                  {
+                    "value": "deterioration",
+                    "label": "Deterioration"
+                  },
+                  {
+                    "value": "self_harm",
+                    "label": "Self-harm"
+                  },
+                  {
+                    "value": "violence",
+                    "label": "Violence"
+                  },
+                  {
+                    "value": "allergy",
+                    "label": "Allergy"
+                  },
+                  {
+                    "value": "infection",
+                    "label": "Isolation"
+                  }
+                ],
+                "option_columns": 4
+              },
+              {
+                "id": "handed_by",
+                "type": "text",
+                "label": "Handed over by",
+                "max_length": 120,
+                "required": true
+              },
+              {
+                "id": "received_by",
+                "type": "text",
+                "label": "Received by",
+                "max_length": 120,
+                "required": true
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "er_quality_incident": {
+      "version": 1,
+      "definition": {
+        "format": "flora.form/1",
+        "form_id": "er_quality_incident",
+        "schema_version": 1,
+        "title": "ER Quality & Incident Record",
+        "description": "Form 17 · บันทึกอุบัติการณ์และความเสี่ยง",
+        "paper": {
+          "size": "A4",
+          "orientation": "portrait",
+          "footer": {
+            "left": "{title}",
+            "right": "{page}/{pages}"
+          }
+        },
+        "style_id": "form.a4.medical",
+        "font_id": "noto-sans-thai",
+        "offline": true,
+        "sections": [
+          {
+            "id": "event",
+            "title": "Event",
+            "fields": [
+              {
+                "id": "occurred_at",
+                "type": "datetime",
+                "label": "Occurred at",
+                "required": true
+              },
+              {
+                "id": "type",
+                "type": "radio",
+                "label": "Type",
+                "options": [
+                  {
+                    "value": "incident",
+                    "label": "Incident"
+                  },
+                  {
+                    "value": "adverse",
+                    "label": "Adverse event"
+                  },
+                  {
+                    "value": "near_miss",
+                    "label": "Near miss"
+                  },
+                  {
+                    "value": "delay",
+                    "label": "Clinical delay"
+                  },
+                  {
+                    "value": "risk",
+                    "label": "Risk event"
+                  }
+                ],
+                "required": true,
+                "indexed": true,
+                "option_columns": 5
+              },
+              {
+                "id": "category",
+                "type": "text",
+                "label": "Category (hospital risk taxonomy)",
+                "max_length": 120
+              },
+              {
+                "id": "description",
+                "type": "textarea",
+                "label": "What happened",
+                "max_length": 4000,
+                "required": true
+              },
+              {
+                "id": "severity",
+                "type": "select",
+                "label": "Severity level",
+                "options": [
+                  {
+                    "value": "A",
+                    "label": "A"
+                  },
+                  {
+                    "value": "B",
+                    "label": "B"
+                  },
+                  {
+                    "value": "C",
+                    "label": "C"
+                  },
+                  {
+                    "value": "D",
+                    "label": "D"
+                  },
+                  {
+                    "value": "E",
+                    "label": "E"
+                  },
+                  {
+                    "value": "F",
+                    "label": "F"
+                  },
+                  {
+                    "value": "G",
+                    "label": "G"
+                  },
+                  {
+                    "value": "H",
+                    "label": "H"
+                  },
+                  {
+                    "value": "I",
+                    "label": "I"
+                  },
+                  {
+                    "value": "1",
+                    "label": "1"
+                  },
+                  {
+                    "value": "2",
+                    "label": "2"
+                  },
+                  {
+                    "value": "3",
+                    "label": "3"
+                  },
+                  {
+                    "value": "4",
+                    "label": "4"
+                  },
+                  {
+                    "value": "5",
+                    "label": "5"
+                  }
+                ],
+                "description": "Clinical A–I / non-clinical 1–5 as used in the hospital's risk system (confirm with the hospital)."
+              },
+              {
+                "id": "immediate_action",
+                "type": "textarea",
+                "label": "Immediate action",
+                "max_length": 1000
+              },
+              {
+                "id": "corrective_action",
+                "type": "textarea",
+                "label": "Corrective / preventive action",
+                "max_length": 2000
+              },
+              {
+                "id": "reported_by",
+                "type": "text",
+                "label": "Reported by",
+                "max_length": 120,
+                "required": true
+              },
+              {
+                "id": "sent_to_risk_system",
+                "type": "checkbox",
+                "label": "Entered in the hospital risk reporting system"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

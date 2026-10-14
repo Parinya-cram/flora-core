@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { BootstrapStatus } from "../bootstrap/floraDesktop";
-import canopyAppIcon from "../assets/canopyicon.png";
+import canopyAppIcon from "../assets/logos/canopyicon.png";
 import ThemePicker from "../components/ThemePicker";
 import LanguagePicker from "../components/LanguagePicker";
 import { useLanguage } from "../context/LanguageContext";

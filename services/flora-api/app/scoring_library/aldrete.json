@@ -1,0 +1,37 @@
+{
+  "format": "flora-score/1",
+  "id": "aldrete",
+  "name": "Modified Aldrete",
+  "description": "Recovery score for discharge from PACU (score ≥ 9 to discharge). Run by the PACU nurse; SpO2 comes from the monitor.",
+  "reference": "Aldrete JA. The post-anesthesia recovery score revisited. J Clin Anesth 1995;7:89-91.",
+  "mode": "manual",
+  "interval_min": 15,
+  "missing": "none",
+  "inputs": {
+    "activity": {"source": "manual", "label": "Activity"},
+    "respiration": {"source": "manual", "label": "Respiration"},
+    "circulation": {"source": "manual", "label": "Circulation (BP vs pre-anaesthetic level)"},
+    "consciousness": {"source": "manual", "label": "Consciousness"},
+    "spo2": {"source": "param", "param": "spo2", "window_min": 5, "agg": "latest", "round": 0, "label": "SpO2", "unit": "%"},
+    "o2": {"source": "param", "param": "o2_supplemental", "window_min": 240, "agg": "latest", "type": "bool", "default": false, "label": "Supplemental oxygen"}
+  },
+  "items": [
+    {"key": "activity", "label": "Activity", "input": "activity",
+     "options": [{"value": 2, "points": 2, "label": "Moves 4 extremities"}, {"value": 1, "points": 1, "label": "Moves 2 extremities"}, {"value": 0, "points": 0, "label": "Moves no extremity"}]},
+    {"key": "respiration", "label": "Respiration", "input": "respiration",
+     "options": [{"value": 2, "points": 2, "label": "Breathes deeply and coughs freely"}, {"value": 1, "points": 1, "label": "Dyspnoea or limited breathing"}, {"value": 0, "points": 0, "label": "Apnoeic"}]},
+    {"key": "circulation", "label": "Circulation", "input": "circulation",
+     "options": [{"value": 2, "points": 2, "label": "BP ± 20% of pre-anaesthetic level"}, {"value": 1, "points": 1, "label": "BP ± 20-49%"}, {"value": 0, "points": 0, "label": "BP ± 50% or more"}]},
+    {"key": "consciousness", "label": "Consciousness", "input": "consciousness",
+     "options": [{"value": 2, "points": 2, "label": "Fully awake"}, {"value": 1, "points": 1, "label": "Arousable on calling"}, {"value": 0, "points": 0, "label": "Not responding"}]},
+    {"key": "spo2", "label": "O2 saturation", "requires": ["spo2"],
+     "formula": "IF(spo2 > 92 and not o2, 2, IF(spo2 >= 90, 1, 0))"}
+  ],
+  "bands": [
+    {"max": 8, "label": "Not ready for discharge", "level": "warning"},
+    {"min": 9, "label": "Ready for discharge (≥ 9)", "level": "info"}
+  ],
+  "flags": [
+    {"when": "points.activity = 0 or points.respiration = 0 or points.circulation = 0 or points.consciousness = 0 or points.spo2 = 0", "label": "A component scores 0", "level": "warning"}
+  ]
+}

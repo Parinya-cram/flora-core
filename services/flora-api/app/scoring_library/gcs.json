@@ -1,0 +1,29 @@
+{
+  "format": "flora-score/1",
+  "id": "gcs",
+  "name": "Glasgow Coma Scale",
+  "description": "GCS total from charted eye, verbal and motor components (E + V + M).",
+  "reference": "Teasdale G, Jennett B. Assessment of coma and impaired consciousness. Lancet 1974;2:81-4.",
+  "mode": "auto",
+  "interval_min": 60,
+  "missing": "none",
+  "inputs": {
+    "e": {"source": "param", "param": "gcs_e", "window_min": 60, "agg": "latest", "round": 0, "label": "Eye opening"},
+    "v": {"source": "param", "param": "gcs_v", "window_min": 60, "agg": "latest", "round": 0, "label": "Verbal response"},
+    "m": {"source": "param", "param": "gcs_m", "window_min": 60, "agg": "latest", "round": 0, "label": "Motor response"}
+  },
+  "items": [
+    {"key": "e", "label": "Eye opening", "input": "e",
+     "options": [{"value": 4, "points": 4, "label": "Spontaneous"}, {"value": 3, "points": 3, "label": "To sound"}, {"value": 2, "points": 2, "label": "To pressure"}, {"value": 1, "points": 1, "label": "None"}]},
+    {"key": "v", "label": "Verbal response", "input": "v",
+     "options": [{"value": 5, "points": 5, "label": "Oriented"}, {"value": 4, "points": 4, "label": "Confused"}, {"value": 3, "points": 3, "label": "Words"}, {"value": 2, "points": 2, "label": "Sounds"}, {"value": 1, "points": 1, "label": "None"}]},
+    {"key": "m", "label": "Motor response", "input": "m",
+     "options": [{"value": 6, "points": 6, "label": "Obeys commands"}, {"value": 5, "points": 5, "label": "Localising"}, {"value": 4, "points": 4, "label": "Normal flexion"}, {"value": 3, "points": 3, "label": "Abnormal flexion"}, {"value": 2, "points": 2, "label": "Extension"}, {"value": 1, "points": 1, "label": "None"}]}
+  ],
+  "bands": [
+    {"min": 3, "max": 8, "label": "Severe", "level": "critical"},
+    {"min": 9, "max": 12, "label": "Moderate", "level": "warning"},
+    {"min": 13, "max": 15, "label": "Mild / normal", "level": "info"}
+  ],
+  "flags": []
+}

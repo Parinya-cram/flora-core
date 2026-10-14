@@ -1,5 +1,5 @@
--- FormDev: every PostgreSQL migration (0060-0065, 0083) in order, for databases created before FormDev.
--- Paste into psql (or psql -f). Safe to run again. Generated from infrastructure/postgres/006*.sql and 0083-formdev-template.sql.
+-- FormDev: every PostgreSQL migration (0060-0065, 0087) in order, for databases created before FormDev.
+-- Paste into psql (or psql -f). Safe to run again. Generated from infrastructure/postgres/006*.sql and 0087-formdev-template.sql.
 
 -- ===== 0060-formdev.sql =====
 -- FormDev data engine (Phase 3): form definitions, versioned schemas, hybrid records,
@@ -504,7 +504,7 @@ GRANT DELETE ON formdev_index_coverage TO flora_view, flora_app;
 
 COMMIT;
 
--- ===== 0083-formdev-template.sql =====
+-- ===== 0087-formdev-template.sql =====
 -- Form Studio template library: complete form definitions offered as starting points, written by hand or built by
 -- the AI form builder from source documents (PDF, images, Word, Excel). A template is a draft until an author marks it
 -- reviewed; forms are created from it in Form Studio and only published forms reach Workflow Studio. The source
