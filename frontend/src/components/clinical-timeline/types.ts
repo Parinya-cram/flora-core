@@ -1,4 +1,4 @@
-export type GridRowType = "event" | "ecg" | "vital" | "io";
+export type GridRowType = "event" | "ecg" | "vital" | "io" | "score";
 
 export interface ClinicalTimelineRow {
   id: string;
@@ -20,6 +20,18 @@ export interface ClinicalTimelineRow {
   /** Cumulative amount recorded for this I/O row, shown in its tooltip. */
   ioTotal?: string;
 }
+
+/** One clinical score result shown in a score row (see api/scoresApi.ts). */
+export type ClinicalTimelineScoreCell = {
+  ts: number;
+  total: number | null;
+  band: string | null;
+  level: "info" | "warning" | "critical" | null;
+  partial: boolean;
+  source: "auto" | "manual";
+  /** Multi-line detail for the tooltip (items, missing readings, alerts). */
+  detail: string;
+};
 
 /**
  * values[rowId][timestamp] = value

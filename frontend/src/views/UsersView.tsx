@@ -19,6 +19,7 @@ import {
   type WardRef,
 } from "../api/authApi";
 import { getStaffDirectory, getStaffMyCases, type StaffLibraryItem, type StaffMyCaseRow } from "../api/staffApi";
+import { listCanopyStaff } from "../api/staffDirectoryApi";
 import type { AuthUser } from "../auth/useAuth";
 import { getSurfaceInfo } from "../edition/config";
 import { useAdminPinGuard } from "../hooks/useAdminPinGuard";
@@ -165,8 +166,12 @@ export default function UsersView({ sessionUser }: Props) {
 
   useEffect(() => {
     if (!isAdmin) return;
-    // Canopy has no staff directory; staff links are managed on Leaf only.
+    // Leaf: its staff directory; Canopy: the central one. Links travel between them as the staff code.
     if (isLeaf) getStaffDirectory({ include_inactive: true, limit: 500 }).then(setStaffDirectory).catch(() => setStaffDirectory([]));
+    else listCanopyStaff({ include_inactive: true }).then(result => setStaffDirectory(result.rows.map(row => ({
+      id: row.id, name: row.staff_name, role: row.staff_role, role_id: row.staff_role_id, hospital_id: row.hospital_id || "",
+      staff_code: row.staff_code || "", is_active: row.is_active, used_count: 0, last_used_at: 0,
+    })))).catch(() => setStaffDirectory([]));
     getAuthRoles().then(setRoles).catch(() => setRoles([]));
     getWardOptions().then(result => {
       setWardOptions(result.rows);
@@ -312,7 +317,7 @@ export default function UsersView({ sessionUser }: Props) {
           username: newUser.username.trim(), name: newUser.name.trim(), password: isLdapUser ? "" : newUser.password,
           authSource: isLdapUser ? "ldap" : "local",
           hospitalId: newUser.hospitalId.trim() || undefined,
-          staffDirectoryId: isLeaf && newUser.staffDirectoryId ? Number(newUser.staffDirectoryId) : null,
+          staffDirectoryId: newUser.staffDirectoryId ? Number(newUser.staffDirectoryId) : null,
           roleCodes: newUser.roleCodes,
           allUnits: newUser.allUnits,
           unitKeys: newUser.allUnits ? [] : newUser.unitKeys,
@@ -394,7 +399,7 @@ export default function UsersView({ sessionUser }: Props) {
               ? <div className="self-end pb-2 text-xs text-[var(--app-muted)]">Signs in with the directory password — no Flora password is stored.</div>
               : <label className="text-xs text-[var(--app-muted)]">Temporary password<input type="password" className="mt-1 w-full rounded border border-[var(--app-border)] px-3 py-2 text-sm" value={newUser.password} onChange={e => setNewUser(v => ({ ...v, password: e.target.value }))} /></label>}
             <label className="text-xs text-[var(--app-muted)]">Hospital ID<input className="mt-1 w-full rounded border border-[var(--app-border)] px-3 py-2 text-sm" value={newUser.hospitalId} onChange={e => setNewUser(v => ({ ...v, hospitalId: e.target.value }))} /></label>
-            {isLeaf ? <label className="text-xs text-[var(--app-muted)] md:col-span-2">Staff profile<select className="mt-1 w-full rounded border border-[var(--app-border)] px-3 py-2 text-sm" value={newUser.staffDirectoryId} onChange={e => setNewUser(v => ({ ...v, staffDirectoryId: e.target.value }))}><option value="">Not linked</option>{staffDirectory.filter(staff => staff.is_active !== 0).map(staff => <option key={staff.id} value={staff.id}>{staff.name} · {staff.role}</option>)}</select></label> : null}
+            {staffDirectory.length ? <label className="text-xs text-[var(--app-muted)] md:col-span-2">Staff profile<select className="mt-1 w-full rounded border border-[var(--app-border)] px-3 py-2 text-sm" value={newUser.staffDirectoryId} onChange={e => setNewUser(v => ({ ...v, staffDirectoryId: e.target.value }))}><option value="">Not linked</option>{staffDirectory.filter(staff => staff.is_active !== 0).map(staff => <option key={staff.id} value={staff.id}>{staff.name} · {staff.role}{staff.staff_code ? ` · ${staff.staff_code}` : ""}</option>)}</select></label> : null}
             <div className="md:col-span-2"><div className="mb-1 text-xs text-[var(--app-muted)]">Access roles</div><div className="flex flex-wrap gap-2">{roles.filter(role => role.isActive).map(role => <label key={role.code} className="inline-flex items-center gap-2 rounded border border-[var(--app-border)] px-3 py-2 text-xs"><input type="checkbox" checked={newUser.roleCodes.includes(role.code)} onChange={() => setNewUser(v => ({ ...v, roleCodes: v.roleCodes.includes(role.code) ? v.roleCodes.filter(code => code !== role.code) : [...v.roleCodes, role.code] }))} />{role.displayName}</label>)}</div></div>
             <div className="md:col-span-2 xl:col-span-4"><div className="mb-1 text-xs text-[var(--app-muted)]">Ward access</div><WardPicker options={wardOptions} allUnits={newUser.allUnits} unitKeys={newUser.unitKeys} disabled={saving} onChange={next => setNewUser(v => ({ ...v, ...next }))} /></div>
           </div>
@@ -613,7 +618,7 @@ export default function UsersView({ sessionUser }: Props) {
                     <button type="button" className="rounded border border-[var(--app-border)] px-3 py-2 text-sm font-medium disabled:opacity-45" disabled={saving || !wardDraftChanged} onClick={() => void handleSaveWards()}>Save ward access</button>
                   </div>
 
-                  {isLeaf ? <div className="space-y-2 rounded border border-[var(--app-border)] bg-[var(--app-control-bg)] p-3">
+                  {staffDirectory.length || selected.staffDirectoryId ? <div className="space-y-2 rounded border border-[var(--app-border)] bg-[var(--app-control-bg)] p-3">
                     <div className="text-sm font-medium">Staff profile</div>
                     <select
                       className="w-full rounded border border-[var(--app-border)] px-3 py-2 text-sm"
@@ -622,9 +627,9 @@ export default function UsersView({ sessionUser }: Props) {
                       onChange={event => void handleStaffLink(event.target.value ? Number(event.target.value) : null)}
                     >
                       <option value="">No linked staff profile</option>
-                      {staffDirectory.map(staff => <option key={staff.id} value={staff.id}>{staff.name} · {staff.role}{staff.hospital_id ? ` · ${staff.hospital_id}` : ""}{staff.is_active === 0 ? " · inactive" : ""}</option>)}
+                      {staffDirectory.map(staff => <option key={staff.id} value={staff.id}>{staff.name} · {staff.role}{staff.staff_code ? ` · ${staff.staff_code}` : staff.hospital_id ? ` · ${staff.hospital_id}` : ""}{staff.is_active === 0 ? " · inactive" : ""}</option>)}
                     </select>
-                    <div className="text-xs text-[var(--app-muted)]">Links login identity to the clinician directory and their case history.</div>
+                    <div className="text-xs text-[var(--app-muted)]">Links login identity to the clinician directory and their case history. The link follows the user to every Leaf by the staff code (people without a code stay linked on this {isLeaf ? "Leaf" : "server"} only).</div>
                   </div> : null}
 
                   <div className="space-y-2 rounded border border-[var(--app-border)] bg-[var(--app-control-bg)] p-3">

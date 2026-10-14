@@ -17,7 +17,9 @@ export type ChartBox = { x: number; y: number; width: number; height: number; co
 const numeric = (value: unknown): number | null => (typeof value === "number" && Number.isFinite(value) ? value : typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value)) ? Number(value) : null);
 
 /** Shapes for `axis.slice(from, from + box.columns)`; each column is box.width / box.columns wide. */
-export function chartShapes(value: TimelineValue, series: TimelineSeries[], box: ChartBox, from = 0): ChartShape[] {
+/** `colors` overrides each series' colour (see seriesColors: one colour or per series). */
+export function chartShapes(value: TimelineValue, series: TimelineSeries[], box: ChartBox, from = 0,
+  colors?: Partial<Record<TimelineSeries, string>>): ChartShape[] {
   const out: ChartShape[] = [];
   const col = box.width / Math.max(1, box.columns);
   const axis = value.axis.slice(from, from + box.columns);
@@ -39,7 +41,7 @@ export function chartShapes(value: TimelineValue, series: TimelineSeries[], box:
   axis.forEach((ts, index) => {
     const cx = box.x + index * col + col / 2;
     for (const name of series) {
-      const style = SERIES[name];
+      const style = { ...SERIES[name], color: colors?.[name] || SERIES[name].color };
       const scale = style.axis === "right" ? RIGHT_SCALE : LEFT_SCALE;
       if (style.marker === "range") {
         const [sys, mean, dia] = style.rows.map(row => cell(row, ts));

@@ -26,6 +26,8 @@ LAST_EXPORT_DIGEST: dict[str, str] = {}
 RELEASED_ACK: list[int] = []
 # Workflow Studio: digest of the ward's workflow set last stored on the Leaf.
 LAST_WORKFLOWS_DIGEST = ""
+# Staff directory: digest of the ward list last applied on the Leaf (Canopy omits an unchanged list).
+LAST_STAFF_DIGEST: str | None = None
 PREVIOUS_ACTIVE_IDS: set[str] = set()
 INITIAL_SYNC_COMPLETE = False
 
@@ -78,6 +80,7 @@ def build_snapshot(client: httpx.Client, case: dict[str, Any]) -> dict[str, Any]
         "workflow": f"/api/case/{case_id}/workflow-snapshot",
         "workflow_forms": f"/api/case/{case_id}/workflow-forms",
         "billing": f"/api/case/{case_id}/billing",
+        "scores": f"/api/case/{case_id}/scores?from={from_ms}&to={end_ms}",
     }
     snapshot: dict[str, Any] = {"case": case, "window": {"from": from_ms, "to": end_ms}}
     for key, path in paths.items():
@@ -204,6 +207,39 @@ def synchronize_directory() -> None:
             )
 
 
+def synchronize_staff() -> dict[str, Any]:
+    """Push staff added on this Leaf (with their doctor / nurse code), then cache this ward's staff from Canopy."""
+    global LAST_STAFF_DIGEST
+    with httpx.Client(timeout=20) as client:
+        try:
+            pending = get_json(client, "/api/case/staff/sync/pending").get("staff", [])
+        except httpx.HTTPStatusError as error:
+            if error.response.status_code == 404:  # a Leaf API without staff sync
+                return {"skipped": "leaf has no staff sync"}
+            raise
+        response = client.post(
+            f"{CANOPY_SYNC_API}/api/sync/v1/staff",
+            headers={"Authorization": f"Bearer {SYNC_SECRET}"},
+            json={"leaf_id": LEAF_ID, "digest": LAST_STAFF_DIGEST, "changes": pending},
+        )
+        if response.status_code == 404:  # a Canopy without staff sync
+            return {"skipped": "canopy has no staff sync"}
+        response.raise_for_status()
+        exchange = response.json()
+        applied = client.put(f"{LEAF_API}/api/case/staff/sync/apply",
+                             headers={"X-FLORA-Service-Secret": LEAF_SERVICE_SECRET}, json=exchange)
+        if applied.status_code == 404:  # a Leaf API without staff sync
+            return {"skipped": "leaf has no staff sync"}
+        applied.raise_for_status()
+        result = applied.json()
+        LAST_STAFF_DIGEST = exchange.get("digest")
+        if pending or not result.get("unchanged"):
+            print(f"staff leaf={LEAF_ID} pushed={len(pending)} received={result.get('received')} "
+                  f"created={result.get('created')} merged={result.get('merged')} rejected={result.get('rejected')} "
+                  f"deactivated={result.get('deactivated')}", flush=True)
+        return {**result, "unit": (exchange.get("unit") or {}).get("unit_name"), "synced_at": time.time_ns() // 1_000_000}
+
+
 def synchronize_admissions() -> None:
     """Exchange Canopy admissions: push form changes of cases started from them, then
     receive admissions this Leaf may start and form edits made in Canopy (tablet)."""
@@ -274,6 +310,7 @@ STEPS = (
     ("ward", synchronize_ward, "ward sync failed"),
     ("cases", synchronize, "sync failed"),
     ("directory", synchronize_directory, "directory sync failed"),
+    ("staff", synchronize_staff, "staff sync failed"),
     ("admissions", synchronize_admissions, "admission sync failed"),
 )
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import GatewayLocationForm from "../components/canopy/GatewayLocationForm";
+import PhysicalTopologyView from "../components/canopy/PhysicalTopology";
 import {
   cloneGatewayConfig,
   getGatewaySnapshots,
@@ -357,6 +358,7 @@ export default function CanopyTopologyView({ sessionUser }: { sessionUser?: Auth
   const [view, setView] = useState({ x: 80, y: 80, k: 1 });
   const [cloneSource, setCloneSource] = useState<CanopyGateway | null>(null);
   const [notice, setNotice] = useState("");
+  const [mode, setMode] = useState<"network" | "physical">("network");
   const canvasRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; vx: number; vy: number } | null>(null);
   const fitted = useRef(false);
@@ -465,6 +467,25 @@ export default function CanopyTopologyView({ sessionUser }: { sessionUser?: Auth
     };
   }, [data]);
 
+  const modeToggle = <div className="flex rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] p-1" role="tablist">
+    {([["network", "Network"], ["physical", "Physical (unit → room → bed)"]] as const).map(([key, label]) => (
+      <button key={key} type="button" role="tab" aria-selected={mode === key} onClick={() => setMode(key)}
+        className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${mode === key ? "bg-[var(--app-accent)] text-[var(--app-accent-contrast)]" : "text-[var(--app-muted)]"}`}>{label}</button>
+    ))}
+  </div>;
+
+  if (mode === "physical") return <main className="flex h-full flex-col overflow-hidden bg-[var(--app-bg)]">
+    <header className="flex flex-wrap items-end justify-between gap-3 px-3 pt-3 sm:px-5 sm:pt-5">
+      <div>
+        <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">ESM Flora Canopy · topology</div>
+        <h1 className="mt-1 text-2xl font-semibold text-[var(--app-text)]">Topology</h1>
+        <p className="mt-1 text-sm text-[var(--app-muted)]">Physical: Care unit → Room (zone) → Bed, with the Leaf, gateways and devices at each bed</p>
+      </div>
+      {modeToggle}
+    </header>
+    <div className="min-h-0 flex-1"><PhysicalTopologyView isAdmin={isAdmin} /></div>
+  </main>;
+
   return <main className="flex h-full flex-col overflow-hidden bg-[var(--app-bg)] p-3 sm:p-5">
     <header className="flex flex-wrap items-end justify-between gap-3">
       <div>
@@ -473,6 +494,7 @@ export default function CanopyTopologyView({ sessionUser }: { sessionUser?: Auth
         <p className="mt-1 text-sm text-[var(--app-muted)]">Live hierarchy: Canopy → Ward → Leaf → Gateway → Device</p>
       </div>
       <div className="flex flex-wrap gap-2">
+        {modeToggle}
         <button type="button" className={button} onClick={() => void refresh()} disabled={loading}>{loading ? "Refreshing…" : "Refresh"}</button>
         <button type="button" className={button} onClick={fit}>Fit view</button>
         <button type="button" className={button} onClick={() => { fitted.current = false; setCollapsed(new Set(allIds.filter(id => id !== "canopy"))); }}>Collapse all</button>

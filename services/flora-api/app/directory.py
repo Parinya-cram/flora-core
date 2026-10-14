@@ -187,7 +187,39 @@ def record(database: Connection, row: dict[str, Any]) -> dict[str, Any]:
         "role_codes": [item["role_code"] for item in roles],
         "units": user_units(database, row["id"]),
         "directory_version": int(row.get("directory_version") or 0),
+        **_staff_link(database, row),
     }
+
+
+def _staff_link(database: Connection, row: dict[str, Any]) -> dict[str, Any]:
+    """The linked staff profile travels as its staff code (ids differ per node): "" = not linked;
+    left out when linked to a person without a code (kept on this node only)."""
+    staff_id = row.get("staff_directory_id")
+    if not staff_id:
+        return {"staff_code": ""}
+    try:
+        staff = database.execute("SELECT staff_code FROM staff_directory WHERE id=%s", (staff_id,)).fetchone()
+    except Exception:  # a node without staff codes yet (migration 0085)
+        return {}
+    code = (staff or {}).get("staff_code")
+    return {"staff_code": code} if code else {}
+
+
+def _apply_staff_link(database: Connection, user_id: int, incoming: dict[str, Any]) -> None:
+    if "staff_code" not in incoming:
+        return
+    code = str(incoming.get("staff_code") or "").strip()
+    if not code:
+        database.execute("UPDATE auth_user SET staff_directory_id=NULL WHERE id=%s", (user_id,))
+        return
+    try:
+        staff = database.execute("SELECT id FROM staff_directory WHERE lower(staff_code)=lower(%s)", (code,)).fetchone()
+    except Exception:
+        return
+    if staff is None:  # not on this node yet (e.g. arrives with the next staff sync); retried next time
+        return
+    database.execute("UPDATE auth_user SET staff_directory_id=NULL WHERE staff_directory_id=%s AND id<>%s", (staff["id"], user_id))
+    database.execute("UPDATE auth_user SET staff_directory_id=%s WHERE id=%s", (staff["id"], user_id))
 
 
 def _default_language(database: Connection) -> str:
@@ -277,6 +309,8 @@ def apply_record(database: Connection, incoming: dict[str, Any], *, from_canopy:
                        VALUES (%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
                     (user_id, str(unit["key"]), str(unit.get("name") or ""), current),
                 )
+        with database.transaction():  # a staff link problem never blocks the account itself
+            _apply_staff_link(database, user_id, incoming)
         if not values["is_active"] and is_leaf():
             database.execute(
                 "UPDATE auth_session SET revoked_at=%s WHERE user_id=%s AND revoked_at IS NULL", (current, user_id)

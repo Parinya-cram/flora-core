@@ -5,7 +5,7 @@
  */
 import type { FieldDefinition, TimelineConfig, TimelinePart, TimelineSeries } from "../core/types";
 import { TIMELINE_SERIES } from "../core/validate";
-import { SERIES, TIMELINE_ROWS, timelineConfig } from "../leaf/timeline";
+import { DEFAULT_MONO_COLOR, SERIES, TIMELINE_ROWS, timelineConfig } from "../leaf/timeline";
 import { tr, type Lang } from "./catalog";
 import { SelectField, TextField } from "./controls";
 import { label } from "./styles";
@@ -52,8 +52,30 @@ export default function TimelineEditor({ field, lang, onPatch }: Props) {
       <div className="flex flex-wrap gap-x-3 gap-y-1">
         {TIMELINE_SERIES.map(series => <label key={series} className={chip}><input type="checkbox" className="accent-[var(--app-accent)]" checked={config.chart.includes(series)}
           onChange={event => set({ chart: event.target.checked ? TIMELINE_SERIES.filter(id => id === series || config.chart.includes(id)) as TimelineSeries[] : config.chart.filter(id => id !== series) })} />
-          <span style={{ color: SERIES[series].color }}>■</span>{SERIES[series].label}</label>)}
+          <span style={{ color: config.colors[series] }}>■</span>{SERIES[series].label}</label>)}
       </div>
+      <span className={label}>{t("สีของกราฟ", "Chart colours")}</span>
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
+        <label className={chip}><input type="radio" className="accent-[var(--app-accent)]" checked={config.colorMode === "series"}
+          onChange={() => set({ colors: { ...(field.timeline?.colors ?? {}), mode: "series" } })} />{t("สีตามชนิดค่า", "Colour by value type")}</label>
+        <label className={chip}><input type="radio" className="accent-[var(--app-accent)]" checked={config.colorMode === "mono"}
+          onChange={() => set({ colors: { ...(field.timeline?.colors ?? {}), mode: "mono" } })} />{t("สีเดียวทั้งกราฟ", "One colour")}</label>
+      </div>
+      {config.colorMode === "mono" ? <label className={chip}>
+        <input type="color" aria-label={t("สีของกราฟ", "Chart colour")} value={field.timeline?.colors?.mono || DEFAULT_MONO_COLOR}
+          onChange={event => set({ colors: { ...(field.timeline?.colors ?? {}), mode: "mono", mono: event.target.value } })} />
+        <span className="font-mono text-[var(--app-muted)]">{field.timeline?.colors?.mono || DEFAULT_MONO_COLOR}</span>
+      </label> : <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+        {config.chart.map(series => <label key={series} className={chip}>
+          <input type="color" aria-label={`${SERIES[series].label} ${t("สี", "colour")}`} value={config.colors[series]}
+            onChange={event => set({ colors: { ...(field.timeline?.colors ?? {}), mode: "series", series: { ...(field.timeline?.colors?.series ?? {}), [series]: event.target.value } } })} />
+          {SERIES[series].label}
+          {field.timeline?.colors?.series?.[series] ? <button type="button" className="text-[10px] text-[var(--app-muted)] underline" onClick={() => {
+            const rest = Object.fromEntries(Object.entries(field.timeline?.colors?.series ?? {}).filter(([name]) => name !== series));
+            set({ colors: { ...(field.timeline?.colors ?? {}), series: rest } });
+          }}>{t("ค่าเดิม", "default")}</button> : null}
+        </label>)}
+      </div>}
     </div> : null}
     {config.parts.includes("table") ? <div className="space-y-2">
       <span className={label}>{t("แถวในตาราง (ตามลำดับที่เลือก)", "Table rows (in the order chosen)")}</span>

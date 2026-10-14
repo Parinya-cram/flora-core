@@ -150,9 +150,12 @@ export type RepeatBlock = { key: string; min_items?: number; max_items?: number 
 export type MatrixCell = { type: "integer" | "number" | "text" | "select"; options?: Array<{ value: string; label: string }>; min?: number; max?: number };
 export type MatrixRow = { id: string; label: string; cell?: MatrixCell };
 export type TimelinePart = "events" | "chart" | "table";
+export type TimelineColors = { mode?: "series" | "mono"; mono?: string; series?: Partial<Record<TimelineSeries, string>> };
 export type TimelineSeries = "hr" | "pr" | "spo2" | "nibp" | "art" | "cvp" | "temperature" | "et_co2" | "bis";
 export type TimelineConfig = {
   parts?: TimelinePart[]; rows?: Array<{ id: string; label?: string; unit?: string }>; chart?: TimelineSeries[]; step_min?: number; source?: "leaf" | "manual";
+  /** Chart colours: each series its own (default, optionally overridden) or one colour for all. */
+  colors?: TimelineColors;
 };
 /** A timeline value: the data shown, stored with the record (prints and syncs without Flora Leaf). Times are ms. */
 export type TimelineValue = {

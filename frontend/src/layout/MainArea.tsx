@@ -20,7 +20,9 @@ import CanopyFormDevView from "../views/CanopyFormDevView";
 import CanopyReportStudioView from "../views/CanopyReportStudioView";
 import CanopyAiStudioView from "../views/CanopyAiStudioView";
 import WorkflowStudioView from "../views/WorkflowStudioView";
+import CanopyStaffView from "../views/CanopyStaffView";
 import { getSurfaceInfo } from "../edition/config";
+import CaseHeaderStrip from "../components/case/CaseHeaderStrip";
 
 const ClinicalChartView = lazy(() => import("../views/ClinicalChartView"));
 const FormView = lazy(() => import("../views/FormView"));
@@ -57,7 +59,8 @@ interface Props {
     | "report-studio"
     | "ai-studio"
     | "history"
-    | "billing";
+    | "billing"
+    | "staff-directory";
   sessionUser: AuthUser | null;
   onCaseDischargeTimeUpdated?: (caseId: number, dischargeTime: number) => void;
   onCaseArchived?: (caseId: number) => void;
@@ -66,6 +69,8 @@ interface Props {
   onCaseStarted?: () => Promise<void> | void;
   onNavigate?: (view: "patient" | "diagnosis" | "io" | "case") => void;
 }
+
+const CASE_PAGES = new Set<Props["activeView"]>(["form", "diagnosis", "staff", "io", "patient", "report", "billing"]);
 
 class ViewErrorBoundary extends Component<
   { resetKey: string; children: ReactNode },
@@ -127,8 +132,9 @@ export default function MainArea({
       ? `${activeView}:IDLE`
       : `${activeView}:case:${caseStatus.case_id}:${caseStatus.status}`;
 
-  return (
-    <ViewErrorBoundary resetKey={resetKey}>
+  // Every case page shows the Chart's case summary on top, so it is always clear which case is open.
+  const caseHeader = surface.clinicalWriteEnabled && caseStatus.status !== "IDLE" && CASE_PAGES.has(activeView);
+  const view = (
       <Suspense fallback={<div className="p-4 text-sm text-gray-400">Loading…</div>}>
       {activeView === "ward" ? (
         <WardView
@@ -190,6 +196,8 @@ export default function MainArea({
         <CanopyReportStudioView sessionUser={sessionUser} />
       ) : activeView === "ai-studio" ? (
         <CanopyAiStudioView sessionUser={sessionUser} />
+      ) : activeView === "staff-directory" ? (
+        <CanopyStaffView sessionUser={sessionUser} />
       ) : activeView === "workflows" ? (
         <WorkflowStudioView sessionUser={sessionUser} />
       ) : activeView === "history" ? (
@@ -206,6 +214,18 @@ export default function MainArea({
         />
       )}
       </Suspense>
+  );
+
+  return (
+    <ViewErrorBoundary resetKey={resetKey}>
+      {caseHeader ? (
+        <div className="flex h-full min-h-0 flex-col bg-gray-50 dark:bg-gray-900">
+          <div className="shrink-0 px-2 pt-2">
+            <CaseHeaderStrip key={caseStatus.case_id} caseStatus={caseStatus} sessionUser={sessionUser} onNavigate={onNavigate} />
+          </div>
+          <div className="min-h-0 flex-1 overflow-auto">{view}</div>
+        </div>
+      ) : view}
     </ViewErrorBoundary>
   );
 }

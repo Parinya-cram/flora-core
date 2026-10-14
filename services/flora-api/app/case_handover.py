@@ -18,7 +18,7 @@ CASE_TABLES = (
     "case_his_patient", "case_his_allergy", "case_allergy", "case_his_lab", "patient_snapshot",
     "case_diagnosis", "case_procedure", "case_staff", "case_detail", "vital_minutes",
     "case_event_note", "case_timeline_value", "case_timeline_mask", "case_io_run", "case_io_event",
-    "case_billing_order", "case_billing_order_item",
+    "case_billing_order", "case_billing_order_item", "case_score_result",
 )
 CASE_COLUMNS_SKIP = {"id", "status", "case_code", "archive_time", "handover_from_leaf_id", "handover_from_case_id",
                      "handover_global_case_id", "handover_to_leaf_id", "handover_at", "canopy_admission_id"}

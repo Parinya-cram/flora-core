@@ -61,6 +61,11 @@ def find_workflow(database: Connection, workflow_id: str) -> dict[str, Any] | No
             template = cached_billing_template(database, template_id)
             if template is not None:
                 snapshot["bundled_billing_template"] = template
+            scores = workflow_state(database)["payload"].get("scores") or {}
+            bundled_scores = {sid: scores[sid] for sid in definition.get("scores") or []
+                              if isinstance(sid, str) and isinstance(scores.get(sid), dict)}
+            if bundled_scores:
+                snapshot["bundled_scores"] = bundled_scores
             return snapshot
     return None
 
@@ -178,7 +183,7 @@ def records(database: Connection, case_id: int) -> dict[str, dict[str, Any]]:
 def strip_bundle(workflow: dict[str, Any] | None) -> dict[str, Any] | None:
     if workflow is None:
         return None
-    return {key: value for key, value in workflow.items() if key != "bundled_forms"}
+    return {key: value for key, value in workflow.items() if key not in {"bundled_forms", "bundled_scores"}}
 
 
 @router.get("/{case_id}/workflow")

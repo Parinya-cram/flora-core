@@ -76,6 +76,9 @@ def normalize(definition: dict[str, Any]) -> dict[str, Any]:
         # Itemize (billing) template shown on the Leaf Billing screen; shared by any number of workflows.
         "billing": {"template_id": (str((definition.get("billing") or {}).get("template_id") or "").strip() or None)
                     if isinstance(definition.get("billing"), dict) else None},
+        # Clinical scores (app/scoring.py) the Leaf computes for cases of this workflow.
+        "scores": [str(item).strip() for item in definition.get("scores") or [] if str(item or "").strip()]
+                  if isinstance(definition.get("scores"), list) else [],
     }
 
 
@@ -88,7 +91,7 @@ def structural_issues(definition: Any) -> list[dict[str, str]]:
         issues.append({"path": "$.format", "message": f"format must be {FORMAT}"})
     if not isinstance(definition.get("id"), str) or not WORKFLOW_ID.match(definition["id"]):
         issues.append({"path": "$.id", "message": "id must match ^[a-z][a-z0-9_]{1,63}$"})
-    for key in ("forms", "packet"):
+    for key in ("forms", "packet", "scores"):
         if key in definition and definition[key] is not None and not isinstance(definition[key], list):
             issues.append({"path": f"$.{key}", "message": f"{key} must be a list"})
     if "anesthesia_record" in definition and not isinstance(definition["anesthesia_record"], dict):
@@ -168,6 +171,14 @@ def validate(database: Connection, definition: Any) -> list[dict[str, str]]:
         if template_id not in billing_templates.published(database, [template_id]):
             issues.append({"path": "$.billing.template_id",
                            "message": f"itemize template '{template_id}' is not published"})
+    if workflow["scores"]:
+        from . import scoring
+        available = scoring.published(database, workflow["scores"])
+        for index, score_id in enumerate(workflow["scores"]):
+            if score_id not in available:
+                issues.append({"path": f"$.scores[{index}]", "message": f"score '{score_id}' is not published"})
+        if len(set(workflow["scores"])) != len(workflow["scores"]):
+            issues.append({"path": "$.scores", "message": "a score is listed twice"})
     return issues
 
 
@@ -211,12 +222,16 @@ def _leaf_delivery(database: Connection, unit_key: str | None) -> dict[str, Any]
     from . import billing_templates
     templates = billing_templates.published(
         database, sorted({tid for row in rows if (tid := billing_templates.template_id_of(row["definition"]))}))
+    from . import scoring
+    scores = scoring.published(database, sorted({sid for row in rows for sid in scoring.score_ids_of(row["definition"])}))
     return {
-        "version": max([int(row["updated_at"]) for row in rows] + [t["updated_at"] for t in templates.values()], default=0),
+        "version": max([int(row["updated_at"]) for row in rows] + [t["updated_at"] for t in templates.values()]
+                       + [s["updated_at"] for s in scores.values()], default=0),
         "items": [{"definition": row["definition"], "isDefault": bool(row["is_default"]),
                    "sortOrder": int(row["sort_order"])} for row in rows],
         "forms": forms,
         "billing_templates": {tid: t["definition"] for tid, t in templates.items()},
+        "scores": {sid: s["definition"] for sid, s in scores.items()},
     }
 
 

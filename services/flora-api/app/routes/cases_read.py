@@ -283,6 +283,18 @@ def effective_timeline(
     case_id = case_id_or_400(case_id_raw)
     case_row = get_case_range_row(database, case_id)
     from_ts, to_ts = resolve_case_range(case_row, request)
+    by_minute, provenance_by_minute, masked_by_minute, masks = effective_minutes(database, case_id, from_ts, to_ts)
+    rows = [
+        {"ts_minute": timestamp, "payload": by_minute[timestamp], "provenance": provenance_by_minute.get(timestamp,{}),
+         **({"masked": masked_by_minute[timestamp]} if timestamp in masked_by_minute else {})}
+        for timestamp in sorted(by_minute)
+    ]
+    return {"case_id": case_id, "from": from_ts, "to": to_ts, "rows": rows, "masks": masks}
+
+
+def effective_minutes(database: Connection, case_id: int, from_ts: int, to_ts: int) -> tuple[dict, dict, dict, list]:
+    """Device minutes with charted values and overrides applied and masked readings moved out:
+    (payload by minute, provenance by minute, masked by minute, masks). Also feeds the scores."""
     raw_rows = database.execute(
         """
         SELECT ts_minute, payload, ivy_source
@@ -346,12 +358,7 @@ def effective_timeline(
 
     masks = active_masks(database, case_id, from_ts, to_ts)
     masked_by_minute = apply_masks(by_minute, provenance_by_minute, masks)
-    rows = [
-        {"ts_minute": timestamp, "payload": by_minute[timestamp], "provenance": provenance_by_minute.get(timestamp,{}),
-         **({"masked": masked_by_minute[timestamp]} if timestamp in masked_by_minute else {})}
-        for timestamp in sorted(by_minute)
-    ]
-    return {"case_id": case_id, "from": from_ts, "to": to_ts, "rows": rows, "masks": masks}
+    return by_minute, provenance_by_minute, masked_by_minute, masks
 
 
 def active_masks(database: Connection, case_id: int, from_ts: int, to_ts: int) -> list[dict]:
@@ -594,8 +601,8 @@ def case_staff(case_id_raw: str, database: Connection = Depends(connection)) -> 
         SELECT id, hospital_id, personal_id, email, th_first_name, th_last_name,
                en_first_name, en_last_name, innovian_id,
                staff_role_id AS role_id, staff_name AS name, staff_role AS role,
-               entry_year, profile_data, seq
-        FROM case_staff
+               entry_year, profile_data, seq, to_jsonb(cs) ->> 'staff_code' AS staff_code
+        FROM case_staff cs
         WHERE case_id = %s
         ORDER BY seq ASC, id ASC
         """,
@@ -608,8 +615,10 @@ def case_staff(case_id_raw: str, database: Connection = Depends(connection)) -> 
 def staff_roles(database: Connection = Depends(connection)) -> dict:
     rows = database.execute(
         """
-        SELECT id, display_name AS name, sort_order
-        FROM staff_role
+        SELECT id, display_name AS name, sort_order,
+               coalesce(to_jsonb(r) ->> 'staff_type', 'other') AS staff_type
+        FROM staff_role r
+        WHERE coalesce((to_jsonb(r) ->> 'is_active')::int, 1) = 1
         ORDER BY sort_order ASC, id ASC
         """
     ).fetchall()

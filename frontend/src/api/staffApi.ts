@@ -6,6 +6,8 @@ export type StaffRole = {
   id: string;
   name: string;
   sort_order: number;
+  /** Doctors and nurses need a staff code (synced with Canopy). */
+  staff_type?: "doctor" | "nurse" | "other";
 };
 
 export type StaffMember = {
@@ -24,6 +26,14 @@ export type StaffMember = {
   is_active?: number;
   name: string;
   role: string;
+  /** Doctor / nurse code: how Canopy recognises this person. */
+  staff_code?: string;
+  /** 1 = from Canopy (read-only on this Leaf). */
+  directory_managed?: number;
+  /** 1 = added here, waiting to go up to Canopy. */
+  directory_pending?: number;
+  /** Why Canopy did not take this person. */
+  sync_error?: string | null;
 };
 
 export type StaffFieldDefinition = {
@@ -77,6 +87,10 @@ function parseStaffRow(row: Record<string, unknown>): StaffMember {
     is_active: numberOrNull(row.is_active) ?? undefined,
     name: text(row.name || row.staff_name),
     role: text(row.role || row.staff_role),
+    staff_code: text(row.staff_code),
+    directory_managed: numberOrNull(row.directory_managed) ?? undefined,
+    directory_pending: numberOrNull(row.directory_pending) ?? undefined,
+    sync_error: typeof row.sync_error === "string" ? row.sync_error : null,
   };
 }
 
@@ -140,7 +154,7 @@ export async function getStaffRoles(): Promise<StaffRole[]> {
   if (!res.ok) throw new Error(`staff roles failed ${res.status}`);
 
   const json = (await res.json()) as {
-    rows?: Array<{ id?: unknown; name?: unknown; sort_order?: unknown }>;
+    rows?: Array<{ id?: unknown; name?: unknown; sort_order?: unknown; staff_type?: unknown }>;
   };
 
   return (json.rows || [])
@@ -148,6 +162,7 @@ export async function getStaffRoles(): Promise<StaffRole[]> {
       id: text(row.id),
       name: text(row.name),
       sort_order: Number(row.sort_order) || 0,
+      staff_type: (["doctor", "nurse"].includes(text(row.staff_type)) ? text(row.staff_type) : "other") as StaffRole["staff_type"],
     }))
     .filter(row => row.id && row.name);
 }

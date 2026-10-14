@@ -62,5 +62,9 @@ COPY infrastructure/postgres/0078-case-change-log.sql /docker-entrypoint-initdb.
 COPY infrastructure/postgres/0080-billing.sql /docker-entrypoint-initdb.d/0080-billing.sql
 COPY infrastructure/postgres/0081-billing-templates.sql /docker-entrypoint-initdb.d/0081-billing-templates.sql
 COPY infrastructure/postgres/0082-device-management.sql /docker-entrypoint-initdb.d/0082-device-management.sql
+COPY infrastructure/postgres/0083-location-zone.sql /docker-entrypoint-initdb.d/0083-location-zone.sql
+COPY infrastructure/postgres/0086-leaf-beds-device-bed.sql /docker-entrypoint-initdb.d/0086-leaf-beds-device-bed.sql
+COPY infrastructure/postgres/0084-scoring.sql /docker-entrypoint-initdb.d/0084-scoring.sql
+COPY infrastructure/postgres/0085-staff-sync.sql /docker-entrypoint-initdb.d/0085-staff-sync.sql
 COPY infrastructure/postgres/0071-io-catalog-sync.sql /docker-entrypoint-initdb.d/0071-io-catalog-sync.sql
 COPY infrastructure/postgres/0079-ai-studio-dashboard.sql /docker-entrypoint-initdb.d/0079-ai-studio-dashboard.sql

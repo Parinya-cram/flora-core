@@ -9,8 +9,8 @@ import { ThemeProvider } from "./context/ThemeContext"; // Import provider
 import { LanguageProvider } from "./context/LanguageContext";
 import { installAuthenticatedFetch } from "./api/authenticatedFetch";
 import { getSurfaceInfo } from "./edition/config";
-import floraAppIcon from "./assets/floraicon.png";
-import canopyAppIcon from "./assets/canopyicon.png";
+import floraAppIcon from "./assets/logos/floraicon.png";
+import canopyAppIcon from "./assets/logos/canopyicon.png";
 
 installAuthenticatedFetch();
 

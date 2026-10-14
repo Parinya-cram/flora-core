@@ -13,11 +13,11 @@ import { getAutoHideEmptyParametersStorageKey, readAutoHideEmptyParametersForUse
 import { hasMeaningfulTimelineValue } from "./clinical-chart/utils";
 import type { FleetCase } from "../api/fleetApi";
 import type { CaseIoEvent, CaseIoRun, CaseIoRunSegment, IoKind } from "../api/caseIoApi";
-import timeCardIcon from "../assets/card-time.png";
-import patientCardIcon from "../assets/card-patient.png";
-import allergyCardIcon from "../assets/card-allergy.png";
-import diagnosisCardIcon from "../assets/card-diagnosis.png";
-import procedureCardIcon from "../assets/card-procedure.png";
+import timeCardIcon from "../assets/cards/card-time.png";
+import patientCardIcon from "../assets/cards/card-patient.png";
+import allergyCardIcon from "../assets/cards/card-allergy.png";
+import diagnosisCardIcon from "../assets/cards/card-diagnosis.png";
+import procedureCardIcon from "../assets/cards/card-procedure.png";
 
 type SnapshotEnvelope = {
   snapshot: Record<string, unknown>;

@@ -73,7 +73,7 @@ export function TimelineInput({ field, value, disabled, label, onChange }: Input
   const axis = timeline?.axis ?? [];
   const width = LABEL + axis.length * COL;
   const shapes = useMemo(() => (timeline && config.parts.includes("chart")
-    ? chartShapes(timeline, config.chart, { x: LABEL, y: 6, width: axis.length * COL, height: CHART_HEIGHT - 12, columns: axis.length }) : []), [timeline, config.chart, config.parts, axis.length]);
+    ? chartShapes(timeline, config.chart, { x: LABEL, y: 6, width: axis.length * COL, height: CHART_HEIGHT - 12, columns: axis.length }, 0, config.colors) : []), [timeline, config.chart, config.parts, config.colors, axis.length]);
   const events = (timeline?.events ?? []).map((event, index) => ({ ...event, n: index + 1, column: eventColumn(axis, event.ts) }));
 
   const cell: CSSProperties = { border: "0.3mm solid #cbd5e1", width: COL, minWidth: COL, maxWidth: COL, padding: 0, textAlign: "center", fontSize: "8.5pt" };
@@ -100,8 +100,8 @@ export function TimelineInput({ field, value, disabled, label, onChange }: Input
           {config.parts.includes("chart") ? <tr><td style={{ ...name, verticalAlign: "top" }}>
             {config.chart.map(series => <div key={series} style={{ display: "flex", alignItems: "center", gap: "1.5mm" }}>
               <svg width="12" height="12" aria-hidden="true">{SERIES[series].marker === "range"
-                ? <path d={`${markerPath("down", 6, 3.5, 7).d}${markerPath("up", 6, 8.5, 7).d}`} fill={SERIES[series].color} />
-                : <path d={markerPath(SERIES[series].marker, 6, 6, 8).d} fill={markerPath(SERIES[series].marker, 6, 6, 8).filled ? SERIES[series].color : "none"} stroke={SERIES[series].color} strokeWidth={1.4} />}</svg>
+                ? <path d={`${markerPath("down", 6, 3.5, 7).d}${markerPath("up", 6, 8.5, 7).d}`} fill={config.colors[series]} />
+                : <path d={markerPath(SERIES[series].marker, 6, 6, 8).d} fill={markerPath(SERIES[series].marker, 6, 6, 8).filled ? config.colors[series] : "none"} stroke={config.colors[series]} strokeWidth={1.4} />}</svg>
               {SERIES[series].label}
             </div>)}
           </td><td colSpan={axis.length} style={{ padding: 0, border: "0.3mm solid #cbd5e1" }}>

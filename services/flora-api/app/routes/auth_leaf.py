@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import logging
 import os
 import re
 import secrets
@@ -1014,6 +1015,7 @@ def link_user_staff(
       hospital_id=coalesce(%s,hospital_id),updated_at=%s WHERE id=%s RETURNING *""",
       (payload.staff_directory_id,staff.get("hospital_id") if staff else None,now_ms(),user_id)).fetchone()
     if row is None: raise HTTPException(status_code=404, detail="user not found")
+    directory.touch(database, user_id)  # the link travels to Canopy / the ward (as the staff code)
     audit(database,"auth.user.staff-link",actor,target=row,detail=approval_detail(actor,{"staffDirectoryId":payload.staff_directory_id}))
     return {"row":managed_user(attach_entitlements(database, row))}
 

@@ -45,6 +45,6 @@ export function cellClass(value: HourCell): string {
 
 export const emptyRegistry = (unitId: number | null = null): RegistryFields => ({
   display_name: "", category: null, device_type: null, manufacturer: null, model: null, serial_number: null,
-  asset_tag: null, unit_id: unitId, location: null, status: "in_service", acquired_at: null, warranty_until: null,
+  asset_tag: null, unit_id: unitId, bed_id: null, location: null, status: "in_service", acquired_at: null, warranty_until: null,
   last_pm_at: null, next_pm_at: null, vendor_contact: null, notes: null,
 });

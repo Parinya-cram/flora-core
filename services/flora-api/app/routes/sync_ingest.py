@@ -369,6 +369,23 @@ def exchange_directory(payload: DirectoryExchange, database: Connection = Depend
     return result
 
 
+class StaffExchange(BaseModel):
+    leaf_id: str = Field(min_length=1, max_length=120)
+    digest: str | None = None
+    changes: list[dict[str, Any]] = Field(default_factory=list, max_length=2000)
+
+
+@router.post("/staff", dependencies=[Depends(require_sync_secret)])
+def exchange_staff(payload: StaffExchange, database: Connection = Depends(connection)) -> dict[str, Any]:
+    """Staff added on a Leaf (with their code), then that Leaf's ward staff directory and roles."""
+    from .. import staff_sync
+    result = staff_sync.exchange(database, payload.leaf_id, payload.changes, payload.digest)
+    created = [item["staff_code"] for item in result["results"] if item["status"] == "created"]
+    if created:
+        _directory_audit(database, "staff.leaf-added", payload.leaf_id, None, {"codes": created[:50]})
+    return result
+
+
 @router.post("/directory/authenticate", dependencies=[Depends(require_sync_secret)])
 def authenticate_for_leaf(payload: DirectoryAuthentication, database: Connection = Depends(connection)) -> dict[str, Any]:
     user = central_auth.authenticate(database, payload.username, payload.password)

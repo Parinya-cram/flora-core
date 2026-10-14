@@ -9,6 +9,7 @@ import {
   getWorkflowOptions,
   importWorkflow,
   listBillingTemplates,
+  listScores,
   listWorkflows,
   publishWorkflow,
   setWorkflowWards,
@@ -22,8 +23,10 @@ import {
   type WorkflowReportMode,
   type WorkflowRow,
   type BillingTemplateRow,
+  type ScoreRow,
 } from "../api/workflowApi";
 import BillingTemplateStudio from "../components/workflow/BillingTemplateStudio";
+import ScoreStudio from "../components/workflow/ScoreStudio";
 
 /** Canopy → Workflow Studio: what a case records and prints (docs/workflow-studio.md). */
 
@@ -60,6 +63,7 @@ function normalizeDefinition(definition: WorkflowDefinition): WorkflowDefinition
     forms: Array.isArray(definition.forms) ? definition.forms : [],
     packet: Array.isArray(definition.packet) ? definition.packet : [],
     billing: { template_id: definition.billing?.template_id ?? null },
+    scores: Array.isArray(definition.scores) ? definition.scores : [],
   };
 }
 
@@ -106,20 +110,23 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
   const [editing, setEditing] = useState<Editing | null>(null);
   const [importResult, setImportResult] = useState<WorkflowImportResult | null>(null);
   const [addFormId, setAddFormId] = useState("");
-  const [mode, setMode] = useState<"workflows" | "templates">("workflows");
+  const [mode, setMode] = useState<"workflows" | "templates" | "scores">("workflows");
   const [templates, setTemplates] = useState<BillingTemplateRow[]>([]);
+  const [scores, setScores] = useState<ScoreRow[]>([]);
   const fileInput = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async (selectId?: string) => {
     setLoading(true);
     setError("");
     try {
-      const [nextRows, nextOptions, nextTemplates] = await Promise.all([
+      const [nextRows, nextOptions, nextTemplates, nextScores] = await Promise.all([
         listWorkflows(),
         getWorkflowOptions().catch(() => ({ sections: [], forms: [], wards: [] }) as WorkflowOptions),
         listBillingTemplates().catch(() => [] as BillingTemplateRow[]),
+        listScores().catch(() => [] as ScoreRow[]),
       ]);
       setTemplates(nextTemplates);
+      setScores(nextScores);
       setRows(nextRows);
       setOptions({ sections: nextOptions.sections || [], forms: nextOptions.forms || [], wards: nextOptions.wards || [] });
       if (selectId) {
@@ -311,7 +318,7 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
       </div>
       <div className="flex flex-wrap gap-2">
         <div className="inline-flex overflow-hidden rounded-xl border border-[var(--app-border)]" role="tablist" aria-label="Workflow Studio">
-          {([["workflows", "Workflows"], ["templates", "Itemize templates"]] as const).map(([key, label]) => (
+          {([["workflows", "Workflows"], ["templates", "Itemize templates"], ["scores", "Scores"]] as const).map(([key, label]) => (
             <button key={key} type="button" role="tab" aria-selected={mode === key} onClick={() => { setMode(key); if (key === "workflows") void load(editing?.originalId || undefined); }}
               className={`px-3 py-2 text-sm font-semibold ${mode === key ? "bg-[var(--app-accent)] text-[var(--app-accent-contrast)]" : "bg-[var(--app-control-bg)]"}`}>{label}</button>
           ))}
@@ -332,7 +339,7 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
       {importResult.warnings.length ? <ul className="mt-1 list-disc pl-5 text-amber-600 dark:text-amber-300">{importResult.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul> : null}
     </div> : null}
 
-    {mode === "templates" ? <BillingTemplateStudio isAdmin={isAdmin} /> : <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
+    {mode === "templates" ? <BillingTemplateStudio isAdmin={isAdmin} /> : mode === "scores" ? <ScoreStudio isAdmin={isAdmin} /> : <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
       <section className={`${card} h-fit space-y-2`}>
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-bold">Workflows <span className="text-[var(--app-muted)]">{visibleRows.length}</span></h2>
@@ -478,6 +485,24 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
           </div>
           {def.billing?.template_id && templates.find(t => t.id === def.billing?.template_id)?.status !== "published"
             ? <p className="text-xs text-amber-600 dark:text-amber-300">Publish this template before publishing the workflow.</p> : null}
+        </div>
+
+        <div className={`${card} space-y-3`}>
+          <div><h3 className="font-bold">Scores</h3><p className="text-xs text-[var(--app-muted)]">Clinical scores the Leaf computes for cases of this workflow: automatic ones every interval from the chart (shown under the vital signs), manual ones when a clinician runs them. Manage them under Scores.</p></div>
+          {scores.filter(score => score.status !== "archived" || def.scores?.includes(score.id)).length ? <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {scores.filter(score => score.status !== "archived" || def.scores?.includes(score.id)).map(score => {
+              const picked = Boolean(def.scores?.includes(score.id));
+              return <label key={score.id} className={`flex items-start gap-2 rounded-xl border p-2 text-sm ${picked ? "border-[var(--app-accent)]/60 bg-[var(--app-accent)]/5" : "border-[var(--app-border)] bg-[var(--app-control-bg)]"}`}>
+                <input type="checkbox" className="mt-0.5 h-4 w-4 accent-[var(--app-accent)]" disabled={readOnly} checked={picked}
+                  onChange={() => patchDef(current => ({ ...current, scores: picked ? (current.scores || []).filter(id => id !== score.id) : [...(current.scores || []), score.id] }))} />
+                <span className="min-w-0"><span className="block truncate font-semibold">{score.name || score.id}</span>
+                  <span className="block truncate text-[11px] text-[var(--app-muted)]">{score.mode === "auto" ? `every ${score.definition.interval_min} min` : "run by clinician"}{score.status !== "published" ? ` · ${score.status}` : ""}</span></span>
+              </label>;
+            })}
+          </div> : <p className="text-sm text-[var(--app-muted)]">No scores yet.</p>}
+          <button type="button" className={secondary} onClick={() => setMode("scores")}>Manage scores</button>
+          {(def.scores || []).some(id => scores.find(score => score.id === id)?.status !== "published")
+            ? <p className="text-xs text-amber-600 dark:text-amber-300">Publish every selected score before publishing the workflow.</p> : null}
         </div>
 
         <details className={card}>

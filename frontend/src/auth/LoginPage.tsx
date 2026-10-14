@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { BootstrapStatus } from "../bootstrap/floraDesktop";
-import floraAppIcon from "../assets/floraicon.png";
-import canopyAppIcon from "../assets/canopyicon.png";
+import floraAppIcon from "../assets/logos/floraicon.png";
+import canopyAppIcon from "../assets/logos/canopyicon.png";
 import ThemePicker from "../components/ThemePicker";
 import LanguagePicker from "../components/LanguagePicker";
 import { useLanguage } from "../context/LanguageContext";

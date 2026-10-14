@@ -1,0 +1,43 @@
+{
+  "format": "flora-score/1",
+  "id": "news2",
+  "name": "NEWS2",
+  "description": "National Early Warning Score 2: deterioration in adults (ward, PACU, step-down). SpO2 scale 2 only for patients with confirmed hypercapnic respiratory failure.",
+  "reference": "Royal College of Physicians. National Early Warning Score (NEWS) 2. London: RCP, 2017.",
+  "mode": "auto",
+  "interval_min": 15,
+  "missing": "partial",
+  "inputs": {
+    "rr": {"source": "param", "param": "rr", "window_min": 60, "agg": "latest", "round": 0, "label": "Respiration rate", "unit": "/min"},
+    "spo2": {"source": "param", "param": "spo2", "window_min": 15, "agg": "latest", "round": 0, "label": "SpO2", "unit": "%"},
+    "o2": {"source": "param", "param": "o2_supplemental", "window_min": 240, "agg": "latest", "type": "bool", "label": "Supplemental oxygen"},
+    "spo2_scale2": {"source": "manual", "type": "bool", "default": false, "label": "Use SpO2 scale 2 (hypercapnic respiratory failure)"},
+    "sbp": {"source": "param", "param": "nibp_sys", "fallback": ["art_sys"], "window_min": 60, "agg": "latest", "round": 0, "label": "Systolic BP", "unit": "mmHg"},
+    "pulse": {"source": "param", "param": "hr", "fallback": ["pr"], "window_min": 15, "agg": "latest", "round": 0, "label": "Pulse", "unit": "/min"},
+    "avpu": {"source": "param", "param": "avpu", "window_min": 240, "agg": "latest", "type": "text", "label": "Consciousness (ACVPU)"},
+    "temp": {"source": "param", "param": "temperature", "window_min": 240, "agg": "latest", "round": 1, "label": "Temperature", "unit": "°C"}
+  },
+  "items": [
+    {"key": "rr", "label": "Respiration rate", "input": "rr",
+     "bands": [{"max": 8, "points": 3}, {"min": 9, "max": 11, "points": 1}, {"min": 12, "max": 20, "points": 0}, {"min": 21, "max": 24, "points": 2}, {"min": 25, "points": 3}]},
+    {"key": "spo2", "label": "SpO2", "requires": ["spo2"],
+     "formula": "IF(spo2_scale2, IF(spo2 <= 83, 3, IF(spo2 <= 85, 2, IF(spo2 <= 87, 1, IF(spo2 <= 92 or not o2, 0, IF(spo2 <= 94, 1, IF(spo2 <= 96, 2, 3)))))), IF(spo2 <= 91, 3, IF(spo2 <= 93, 2, IF(spo2 <= 95, 1, 0))))"},
+    {"key": "o2", "label": "Air or oxygen", "input": "o2", "options": [{"value": true, "points": 2, "label": "Oxygen"}, {"value": false, "points": 0, "label": "Air"}]},
+    {"key": "sbp", "label": "Systolic BP", "input": "sbp",
+     "bands": [{"max": 90, "points": 3}, {"min": 91, "max": 100, "points": 2}, {"min": 101, "max": 110, "points": 1}, {"min": 111, "max": 219, "points": 0}, {"min": 220, "points": 3}]},
+    {"key": "pulse", "label": "Pulse", "input": "pulse",
+     "bands": [{"max": 40, "points": 3}, {"min": 41, "max": 50, "points": 1}, {"min": 51, "max": 90, "points": 0}, {"min": 91, "max": 110, "points": 1}, {"min": 111, "max": 130, "points": 2}, {"min": 131, "points": 3}]},
+    {"key": "avpu", "label": "Consciousness", "input": "avpu",
+     "options": [{"value": "A", "points": 0, "label": "Alert"}, {"value": "C", "points": 3, "label": "New confusion"}, {"value": "V", "points": 3, "label": "Voice"}, {"value": "P", "points": 3, "label": "Pain"}, {"value": "U", "points": 3, "label": "Unresponsive"}]},
+    {"key": "temp", "label": "Temperature", "input": "temp",
+     "bands": [{"max": 35.0, "points": 3}, {"min": 35.1, "max": 36.0, "points": 1}, {"min": 36.1, "max": 38.0, "points": 0}, {"min": 38.1, "max": 39.0, "points": 1}, {"min": 39.1, "points": 2}]}
+  ],
+  "bands": [
+    {"max": 4, "label": "Low", "level": "info", "action": "Ward-based response; minimum 4-12 hourly observations"},
+    {"min": 5, "max": 6, "label": "Medium", "level": "warning", "action": "Urgent response: review by a clinician competent in acute illness"},
+    {"min": 7, "label": "High", "level": "critical", "action": "Emergency response: critical care outreach, continuous monitoring"}
+  ],
+  "flags": [
+    {"when": "max_points >= 3 and total < 5", "label": "A single parameter scores 3: urgent ward-based review", "level": "warning"}
+  ]
+}

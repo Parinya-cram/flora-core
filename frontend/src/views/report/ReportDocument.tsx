@@ -12,7 +12,7 @@ import type { CaseAllergyRow, CaseLabRow } from "../../api/caseHisApi";
 import HnBarcode from "../../components/common/HnBarcode";
 import type { ClinicalTimelineRow, ClinicalTimelineValues } from "../../components/clinical-timeline/types";
 import { getEditionInfo } from "../../edition/config";
-import eforlLogo from "../../assets/eforllogo.png";
+import eforlLogo from "../../assets/logos/eforllogo.png";
 import ReportTimelineAxis from "./ReportTimelineAxis";
 import ReportVitalSignsTrendChart from "./ReportVitalSignsTrendChart";
 import ReportClinicalTimelineGrid from "./ReportClinicalTimelineGrid";
