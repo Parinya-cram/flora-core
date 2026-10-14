@@ -104,7 +104,7 @@ function Editor({ draft, isNew, parsers, onCancel, onSaved }: {
     </label>
   );
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-black/30" onClick={onCancel}>
+    <div className="fixed inset-0 z-[1100] flex justify-end bg-black/30" onClick={onCancel}>
       <aside role="dialog" aria-label="Device type" className="flex h-full w-full max-w-2xl flex-col bg-[var(--app-panel-bg)] shadow-2xl" onClick={event => event.stopPropagation()}>
         <header className="flex items-center justify-between gap-3 border-b border-[var(--app-border)] px-5 py-4">
           <h2 className="text-lg font-semibold text-[var(--app-text)]">{isNew ? "New hospital device type" : `Edit ${value.code}`}</h2>

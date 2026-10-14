@@ -50,12 +50,12 @@ export function HeatGrid({ hours, start, now }: { hours: ActivityHour[]; start: 
     .filter(day => day + 24 * HOUR_MS > start).reverse();
   return (
     <div className="overflow-x-auto">
-      <div className="ml-16 flex gap-[2px] text-[9px] text-[var(--app-muted)]">
+      <div className="ml-24 flex gap-[2px] text-[9px] text-[var(--app-muted)]">
         {Array.from({ length: 24 }, (_, hour) => <span key={hour} className="w-3 text-center">{hour % 3 === 0 ? hour : ""}</span>)}
       </div>
       {rows.map(day => (
         <div key={day} className="mt-[2px] flex items-center gap-[2px]">
-          <span className="w-16 shrink-0 text-[11px] text-[var(--app-muted)]">
+          <span className="w-24 shrink-0 whitespace-nowrap text-[11px] text-[var(--app-muted)]">
             {new Date(day).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })}
           </span>
           {Array.from({ length: 24 }, (_, hour) => {
@@ -187,7 +187,7 @@ function Drawer({ title, subtitle, onClose, children }: { title: string; subtitl
     return () => window.removeEventListener("keydown", close);
   }, [onClose]);
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-black/30" onClick={onClose}>
+    <div className="fixed inset-0 z-[1100] flex justify-end bg-black/30" onClick={onClose}>
       <aside role="dialog" aria-label={title} className="flex h-full w-full max-w-2xl flex-col bg-[var(--app-panel-bg)] shadow-2xl"
         onClick={event => event.stopPropagation()}>
         <header className="flex items-start justify-between gap-3 border-b border-[var(--app-border)] px-5 py-4">
