@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import type { CaseStatus } from "../../api/caseApi";
 import { getCaseDiagnosis, getCaseProcedures, type CaseDiagnosisRow, type CaseProcedureRow } from "../../api/caseClinicalApi";
 import { getCaseAllergies, getCasePatientInfo, type CaseAllergyRow, type CasePatientInfo } from "../../api/caseHisApi";
 import type { AuthUser } from "../../auth/useAuth";
+import { useLanguage } from "../../context/LanguageContext";
 import { useWorkstationSettings } from "../../hooks/useWorkstationSettings";
 import { formatConfiguredDateTime } from "../../utils/dateTime";
 import { formatPatientDisplayName, normalizePatientNameLanguage } from "../../utils/patientName";
@@ -13,7 +14,7 @@ import timeCardIcon from "../../assets/cards/card-time.png";
 import diagnosisCardIcon from "../../assets/cards/card-diagnosis.png";
 import procedureCardIcon from "../../assets/cards/card-procedure.png";
 import HeaderCard from "./HeaderCard";
-import { isNkaAllergen, readCaseHeaderOrder } from "./caseHeaderOrder";
+import { isNkaAllergen, readCaseHeaderExpanded, readCaseHeaderOrder, writeCaseHeaderExpanded } from "./caseHeaderOrder";
 
 type OpenCase = Exclude<CaseStatus, { status: "IDLE" }>;
 type Props = {
@@ -45,18 +46,45 @@ const elapsed = (ms: number) => {
   return `${Math.floor(minutes / 60)} hr ${minutes % 60} min`;
 };
 
+function Chevron({ up }: { up: boolean }) {
+  return (
+    <svg viewBox="0 0 20 20" className="case-header-chevron" aria-hidden="true">
+      <path d={up ? "M5 12.5 10 7.5l5 5" : "M5 7.5l5 5 5-5"} />
+    </svg>
+  );
+}
+
+/** One part of the one-line summary: opens the same page as its card. */
+function LineItem({ icon, title, tone, onClick, children }: { icon: string; title: string; tone?: "alert" | "success" | "muted"; onClick?: () => void; children: ReactNode }) {
+  return (
+    <button type="button" className={`case-header-line__item${tone ? ` case-header-line__item--${tone}` : ""}`} onClick={onClick} title={title}>
+      <img src={icon} alt="" aria-hidden="true" className="case-header-card__icon case-header-line__icon" />
+      {children}
+    </button>
+  );
+}
+
 /**
- * The Chart's case summary cards (LOS, patient, allergy, diagnosis, operation) on every other case page,
- * in the same order, so the clinician always sees which patient and case they are working on.
- * Clicking a card opens the page where it is edited.
+ * The Chart's case summary (LOS, patient, allergy, diagnosis, operation) on every other case page, in the same order,
+ * so the clinician always sees which patient and case they are working on. It is one line (LOS, patient, allergy)
+ * so the page keeps its room; the full cards open on request, remembered per user. Clicking a card or an item
+ * opens the page where it is edited.
  */
 export default function CaseHeaderStrip({ caseStatus, sessionUser, onNavigate }: Props) {
   const workstation = useWorkstationSettings();
+  const { t } = useLanguage();
   const caseId = caseStatus.case_id;
   const [patient, setPatient] = useState<{ caseId: number; patient: CasePatientInfo | null; allergies: CaseAllergyRow[] } | null>(null);
   const [clinical, setClinical] = useState<{ caseId: number; diagnosis: CaseDiagnosisRow[]; operations: CaseProcedureRow[] } | null>(null);
   const [nowTs, setNowTs] = useState(() => Date.now());
-  const order = readCaseHeaderOrder(sessionUser?.username || readStoredUsername());
+  const username = sessionUser?.username || readStoredUsername();
+  const order = readCaseHeaderOrder(username);
+  const [expanded, setExpanded] = useState(() => readCaseHeaderExpanded(username));
+  const cardsId = useId();
+  const toggle = () => {
+    writeCaseHeaderExpanded(username, !expanded);
+    setExpanded(!expanded);
+  };
 
   useEffect(() => {
     let alive = true;
@@ -103,21 +131,64 @@ export default function CaseHeaderStrip({ caseStatus, sessionUser, onNavigate }:
   const endTs = caseStatus.status === "ACTIVE" ? nowTs : caseStatus.discharge_time || nowTs;
   const statusText = caseStatus.status === "ACTIVE" ? undefined : `${caseStatus.status === "DISCHARGED" ? "Discharged" : "Archived"}${caseStatus.discharge_time ? ` ${clock(caseStatus.discharge_time)}` : ""}`;
   const listTooltip = (title: string, rows: string[]) => rows.length ? [`${title} · ${rows.length}`, ...rows.map((row, i) => `${i + 1}. ${row}`)].join("\n") : `${title}\nNot recorded`;
+  const los = elapsed(endTs - caseStatus.start_time);
+  const losTooltip = `CASE LOS\nStarted ${clock(caseStatus.start_time)}${statusText ? `\n${statusText}` : ""}\nClick to open the chart`;
+  const patientTooltip = `PATIENT\n${name}\nHN ${caseStatus.hn}${info?.an ? ` · AN ${info.an}` : ""}\nClick to view patient information`;
+  const allergyMain = !patientLoaded ? "Loading…" : nka ? "No Known Allergies" : allergies.length ? allergies.map(row => row.allergen).filter(Boolean).join(" · ") : "No allergy recorded";
+  const allergyTooltip = listTooltip("ALLERGY", allergies.map(row => [row.allergen, row.reaction, row.severity].filter(Boolean).join(" · ")));
+
+  if (!expanded) {
+    const ageText = patientLoaded ? age(info) : "";
+    const facts = [ageText === "Age not recorded" ? "" : ageText, String(info?.sex || "")].filter(Boolean).join(" · ");
+    const line = {
+      los: (
+        <LineItem key="los" icon={timeCardIcon} title={losTooltip} onClick={() => onNavigate?.("case")}>
+          <span className="case-header-line__label">LOS</span>
+          <strong className="case-header-line__los">{los}</strong>
+          {statusText ? <span className="case-header-line__muted">{statusText}</span> : null}
+        </LineItem>
+      ),
+      patient: (
+        <LineItem key="patient" icon={patientCardIcon} title={patientTooltip} onClick={() => onNavigate?.("patient")}>
+          <b className="case-header-line__hn">HN {caseStatus.hn}</b>
+          <span className="case-header-line__text">{name}</span>
+          {facts ? <span className="case-header-line__muted">{facts}</span> : null}
+        </LineItem>
+      ),
+      allergy: (
+        <LineItem key="allergy" icon={allergyCardIcon} title={allergyTooltip} onClick={() => onNavigate?.("patient")}
+          tone={nka ? "success" : allergies.length ? "alert" : patientLoaded ? "muted" : undefined}>
+          <span className="case-header-line__label">Allergy</span>
+          <span className="case-header-line__text">{allergyMain}</span>
+        </LineItem>
+      ),
+    };
+    return (
+      <div className="case-kronos case-header-strip case-header-strip--line shrink-0 rounded-xl border text-xs" aria-label="Current case">
+        <div className="case-header-line">
+          {order.flatMap(id => (id in line ? [line[id as keyof typeof line]] : []))}
+          <button type="button" className="case-header-line__toggle" onClick={toggle} aria-expanded={false} aria-label={t("caseHeader.expand")}>
+            <span className="case-header-line__toggle-text">{t("caseHeader.expand")}</span> <Chevron up={false} />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const cards = {
-    los: <HeaderCard group="Case LOS" icon={timeCardIcon} main={elapsed(endTs - caseStatus.start_time)} emphasis
+    los: <HeaderCard group="Case LOS" icon={timeCardIcon} main={los} emphasis
       sub1={<><b>Started</b> {clock(caseStatus.start_time)}</>} sub2={statusText}
-      tooltip={`CASE LOS\nStarted ${clock(caseStatus.start_time)}${statusText ? `\n${statusText}` : ""}\nClick to open the chart`}
+      tooltip={losTooltip}
       onClick={() => onNavigate?.("case")} ariaLabel="Open the chart" />,
     patient: <HeaderCard group="Patient" icon={patientCardIcon} main={name}
       sub1={<><b>HN {caseStatus.hn}</b> · {patientLoaded ? age(info) : "…"} · {patientLoaded ? String(info?.sex || "Sex not recorded") : "…"}</>}
       sub2={info?.an ? <>AN {info.an}</> : undefined}
-      tooltip={`PATIENT\n${name}\nHN ${caseStatus.hn}${info?.an ? ` · AN ${info.an}` : ""}\nClick to view patient information`}
+      tooltip={patientTooltip}
       onClick={() => onNavigate?.("patient")} ariaLabel="Open patient information" />,
     allergy: <HeaderCard group="Allergy" icon={allergyCardIcon} count={nka ? undefined : allergies.length || undefined}
-      main={!patientLoaded ? "Loading…" : nka ? "No Known Allergies" : allergies.length ? allergies.map(row => row.allergen).filter(Boolean).join(" · ") : "No allergy recorded"}
+      main={allergyMain}
       sub1={nka ? "Confirmed NKA" : allergies.length ? allergies.map(row => [row.reaction, row.severity].filter(Boolean).join(" · ")).filter(Boolean).join(" | ") || "Recorded allergy" : "Review patient allergy"}
-      tooltip={listTooltip("ALLERGY", allergies.map(row => [row.allergen, row.reaction, row.severity].filter(Boolean).join(" · ")))}
+      tooltip={allergyTooltip}
       onClick={() => onNavigate?.("patient")} ariaLabel="Open allergy information" tone={nka ? "success" : allergies.length ? "alert" : "default"} />,
     diagnosis: <HeaderCard group="Diagnosis" icon={diagnosisCardIcon} count={clinicalLoaded ? diagnosis.length : undefined}
       main={diagnosis[0]?.diagnosis_text || (clinicalLoaded ? "Not recorded" : "Loading…")}
@@ -135,8 +206,14 @@ export default function CaseHeaderStrip({ caseStatus, sessionUser, onNavigate }:
 
   return (
     <div className="case-kronos case-header-strip shrink-0 rounded-xl border px-3 py-2 text-xs" aria-label="Current case">
-      <div className="case-header-grid">
-        {order.map(id => <div key={id} className="case-header-card-slot">{cards[id]}</div>)}
+      <div className="case-header-strip__cards">
+        <div id={cardsId} className="case-header-grid">
+          {order.map(id => <div key={id} className="case-header-card-slot">{cards[id]}</div>)}
+        </div>
+        <button type="button" className="case-header-strip__collapse" onClick={toggle} aria-expanded aria-controls={cardsId}
+          title={t("caseHeader.collapse")} aria-label={t("caseHeader.collapse")}>
+          <Chevron up />
+        </button>
       </div>
     </div>
   );

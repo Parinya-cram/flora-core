@@ -132,7 +132,7 @@ export default function MainArea({
       ? `${activeView}:IDLE`
       : `${activeView}:case:${caseStatus.case_id}:${caseStatus.status}`;
 
-  // Every case page shows the Chart's case summary on top, so it is always clear which case is open.
+  // Every case page shows the Chart's case summary on top (one line unless opened), so it is always clear which case is open.
   const caseHeader = surface.clinicalWriteEnabled && caseStatus.status !== "IDLE" && CASE_PAGES.has(activeView);
   const view = (
       <Suspense fallback={<div className="p-4 text-sm text-gray-400">Loading…</div>}>
@@ -219,11 +219,11 @@ export default function MainArea({
   return (
     <ViewErrorBoundary resetKey={resetKey}>
       {caseHeader ? (
-        <div className="flex h-full min-h-0 flex-col bg-gray-50 dark:bg-gray-900">
-          <div className="shrink-0 px-2 pt-2">
+        <div className="case-header-frame flex h-full min-h-0 flex-col bg-gray-50 dark:bg-gray-900">
+          <div className="case-header-frame__header shrink-0 px-2 pt-2">
             <CaseHeaderStrip key={caseStatus.case_id} caseStatus={caseStatus} sessionUser={sessionUser} onNavigate={onNavigate} />
           </div>
-          <div className="min-h-0 flex-1 overflow-auto">{view}</div>
+          <div className="case-header-frame__page min-h-0 flex-1 overflow-auto">{view}</div>
         </div>
       ) : view}
     </ViewErrorBoundary>

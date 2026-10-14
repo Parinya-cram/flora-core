@@ -1516,6 +1516,37 @@ input {
 .case-header-card--alert .case-header-card__group, .case-header-card--alert .case-header-card__main { color: var(--app-danger,#ef4444); }
 .case-header-card--success { border-color: color-mix(in srgb,#22c55e 55%,var(--app-border)); background: color-mix(in srgb,#22c55e 7%,var(--app-panel-bg)); }
 .case-header-card--success .case-header-card__group, .case-header-card--success .case-header-card__main { color: #22c55e; }
+/* Case pages other than the Chart (CaseHeaderStrip): the summary as one line, the cards on request. */
+.case-header-strip--line { padding: .3rem .4rem; }
+.case-header-line { display: flex; min-width: 0; align-items: center; gap: .55rem; }
+.case-header-line__item { position: relative; display: inline-flex; flex: none; align-items: center; gap: .4rem; border: 1px solid transparent; border-radius: .55rem; background: transparent; padding: .2rem .5rem; color: var(--app-text); font-size: .78rem; line-height: 1.25; text-align: left; white-space: nowrap; cursor: pointer; transition: border-color .15s ease,background .15s ease; }
+.case-header-line__item:has(.case-header-line__text) { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+.case-header-line__item + .case-header-line__item::before { position: absolute; top: 22%; bottom: 22%; left: calc(-.3rem - 1px); width: 1px; background: var(--app-border); content: ""; }
+.case-header-line__item:hover, .case-header-line__item:focus-visible { border-color: var(--app-accent); background: var(--app-control-bg); outline: none; }
+.case-header-line__icon { width: 1.1rem; height: 1.1rem; }
+.case-header-line__label { flex: none; color: var(--app-muted); font-size: .62rem; font-weight: 850; letter-spacing: .11em; text-transform: uppercase; }
+.case-header-line__los { flex: none; color: var(--app-accent); font-size: .9rem; font-variant-numeric: tabular-nums; }
+.case-header-line__hn { flex: none; }
+.case-header-line__text { min-width: 0; overflow: hidden; font-weight: 700; text-overflow: ellipsis; }
+.case-header-line__muted { flex: none; color: var(--app-muted); }
+/* A recorded allergy gives way last: the name is cut before it. */
+.case-header-line__item.case-header-line__item--alert { flex-shrink: .2; }
+.case-header-line__item--alert { border-color: color-mix(in srgb,var(--app-danger,#ef4444) 45%,transparent); background: color-mix(in srgb,var(--app-danger,#ef4444) 8%,transparent); }
+.case-header-line__item--alert .case-header-line__label, .case-header-line__item--alert .case-header-line__text { color: var(--app-danger,#ef4444); }
+.case-header-line__item--success .case-header-line__label, .case-header-line__item--success .case-header-line__text { color: #22c55e; }
+.case-header-line__item--muted .case-header-line__text { color: var(--app-muted); font-weight: 600; }
+.case-header-line__toggle { display: inline-flex; flex: none; align-items: center; gap: .3rem; margin-left: auto; border: 1px solid var(--app-border); border-radius: .55rem; background: var(--app-control-bg); padding: .2rem .6rem; color: var(--app-text); font-size: .72rem; font-weight: 700; white-space: nowrap; }
+.case-header-line__toggle:hover, .case-header-line__toggle:focus-visible { border-color: var(--app-accent); outline: none; }
+.case-header-strip__cards { display: flex; align-items: stretch; gap: .45rem; }
+.case-header-strip__cards > .case-header-grid { flex: 1 1 auto; min-width: 0; }
+.case-header-strip__collapse { display: grid; flex: none; width: 1.6rem; place-items: center; border: 1px solid var(--app-border); border-radius: .6rem; background: var(--app-control-bg); color: var(--app-muted); font-size: .8rem; }
+.case-header-strip__collapse:hover, .case-header-strip__collapse:focus-visible { border-color: var(--app-accent); color: var(--app-text); outline: none; }
+.case-header-chevron { width: .95rem; height: .95rem; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.2; }
+@media (max-width: 760px) {
+  .case-header-line { gap: .35rem; }
+  .case-header-line__label, .case-header-line__muted, .case-header-line__toggle-text { display: none; }
+  .case-header-line__item { padding: .2rem .35rem; }
+}
 .case-kronos__eyebrow { color: var(--app-muted); font-size: .68rem; font-weight: 800; letter-spacing: .09em; }
 .case-kronos__toolbar { display: flex; align-items: center; gap: .75rem; flex: 0 0 auto; border-color: var(--app-border); background: var(--app-panel-bg); color: var(--app-text); }
 .case-kronos__controls { display: flex; align-items: center; gap: .5rem; }
@@ -2463,6 +2494,20 @@ input {
     background: #ffffff !important;
     width: auto !important;
     max-width: none !important;
+  }
+
+  /* The case summary strip is for the screen; its frame must not clip the printed pages. */
+  .case-header-frame__header {
+    display: none !important;
+  }
+
+  .case-header-frame,
+  .case-header-frame__page {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
   }
 
   .app-rail,

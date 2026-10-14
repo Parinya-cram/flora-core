@@ -190,6 +190,8 @@ export const messages: Record<string, Record<string, string>> = {
     "landing.canopyBadge": "Canopy",
     "landing.preopFilled": "Pre-op filled",
     "landing.canopySource": "Canopy admission",
+    "caseHeader.expand": "Show details",
+    "caseHeader.collapse": "Hide details",
   },
   th: {
     "login.title": "เข้าสู่ระบบ",
@@ -359,6 +361,8 @@ export const messages: Record<string, Record<string, string>> = {
     "landing.canopyBadge": "Canopy",
     "landing.preopFilled": "กรอก Pre-op แล้ว",
     "landing.canopySource": "รับผู้ป่วยจาก Canopy",
+    "caseHeader.expand": "ขยาย",
+    "caseHeader.collapse": "ย่อ",
   },
 };
 
