@@ -29,10 +29,13 @@ os.environ["FLORA_HIS_DEMO_MODE"] = "true"
 BASE = "http://127.0.0.1:8008"
 
 
-def request(path, body=None, token=None, method=None):
+def request(path, body=None, token=None, method=None, pin=None):
     headers = {"Content-Type": "application/json"}
     if token:
         headers["X-FLORA-Session"] = token
+    if pin:
+        # Leaf user-management writes need an administrator's PIN (routes/auth_leaf.py pin_approval).
+        headers["X-Flora-Admin-Pin"] = pin
     req = urllib.request.Request(BASE + path, data=json.dumps(body).encode() if body is not None else None,
                                  headers=headers, method=method or ("POST" if body is not None else "GET"))
     try:
@@ -57,6 +60,13 @@ class LeafWrites(unittest.TestCase):
                VALUES (%s,'Migration test','admin',%s,%s,1,1,1) RETURNING id""",
             (cls.username,salt.hex(),hashed),
         ).fetchone()["id"]
+        # The test administrator approves user-management writes with its own PIN, set as the app sets it.
+        cls.database.execute(
+            """INSERT INTO auth_user_role(user_id,role_code,created_at,updated_at)
+               VALUES (%s,'system_admin',1,1) ON CONFLICT DO NOTHING""", (cls.user_id,))
+        from app import directory
+        cls.pin = str(10_000_000 + secrets.randbelow(89_999_999))
+        directory.set_admin_pin(cls.database, cls.user_id, cls.pin)
         for code in ("urine", "bloodLoss"):
             cls.database.execute(
                 """INSERT INTO io_item_master(kind,code,name,default_unit,is_active,created_at,updated_at)
@@ -72,6 +82,15 @@ class LeafWrites(unittest.TestCase):
         else:
             cls.server.terminate()
             raise RuntimeError("Test API failed to start")
+
+    def setUp(self):
+        # Every test starts without an active case, whatever an earlier test left behind.
+        token = self.login()
+        status = request("/api/case/status", token=token)[1]
+        if status.get("status") == "ACTIVE":
+            ends = max(int(status["start_time"]) + 60_000, int(time.time() * 1000))
+            request("/api/case/discharge", {"case_id": status["case_id"], "discharge_time": ends}, token)
+            request("/api/case/archive", {"case_id": status["case_id"]}, token)
 
     @classmethod
     def tearDownClass(cls):
@@ -135,7 +154,8 @@ class LeafWrites(unittest.TestCase):
             field_key: "MD",
         }
         status, staff = request("/api/case/staff/directory", {
-            "staff": {"role_id": role["id"], "profile_data": profile}
+            # Doctors and nurses need a staff code (Canopy staff sync, 0085-staff-sync.sql).
+            "staff": {"role_id": role["id"], "staff_code": "T" + self.suffix, "profile_data": profile}
         }, token)
         self.assertEqual(status, 200, staff)
         self.assertEqual(staff["row"]["staff_name"], staff_name)
@@ -144,7 +164,7 @@ class LeafWrites(unittest.TestCase):
 
         status, linked = request(
             f"/api/auth/users/{self.user_id}/staff-link",
-            {"staff_directory_id": staff["row"]["id"]}, token, "PUT",
+            {"staff_directory_id": staff["row"]["id"]}, token, "PUT", pin=self.pin,
         )
         self.assertEqual(status, 200, linked)
         self.assertEqual(linked["row"]["staffDirectoryId"], staff["row"]["id"])
@@ -167,7 +187,9 @@ class LeafWrites(unittest.TestCase):
         status,options = request("/api/auth/preferences/options")
         self.assertEqual(status,200,options)
         self.assertEqual({item["code"] for item in options["languages"]},{"en","th"})
-        self.assertEqual(len(options["themes"]),6)
+        active_themes = self.database.execute("SELECT count(*) AS n FROM theme_scheme_master WHERE is_active=1").fetchone()["n"]
+        self.assertGreater(active_themes, 0)
+        self.assertEqual(len(options["themes"]), active_themes)
         self.assertEqual(request("/api/auth/login",{"username":self.username,"password":"wrong"})[0],401)
         self.assertEqual(request("/api/auth/whoami")[0],401)
         token = self.login()
@@ -202,13 +224,17 @@ class LeafWrites(unittest.TestCase):
         )
         username = "viewer_" + self.suffix
         password = "Demo-" + self.password
+        # Without an administrator's PIN a Leaf may not create accounts.
+        refused = request("/api/auth/users", {"username": "nopin_" + self.suffix, "name": "No PIN", "password": "Demo-" + self.password,
+                                              "role_codes": ["viewer"], "language_code": "en"}, admin_token)
+        self.assertEqual(refused, (403, {"error": "admin PIN required"}))
         status, created = request("/api/auth/users", {
             "username": username,
             "name": "Read-only reviewer",
             "password": password,
             "role_codes": ["viewer"],
             "language_code": "en",
-        }, admin_token)
+        }, admin_token, pin=self.pin)
         self.assertEqual(status, 200, created)
         self.assertEqual(created["row"]["roleCodes"], ["viewer"])
         self.assertTrue(created["row"]["mustChangePassword"])
@@ -227,13 +253,13 @@ class LeafWrites(unittest.TestCase):
 
         status, updated = request(
             f"/api/auth/users/{created['row']['id']}/access",
-            {"role_codes": ["clinician"]}, admin_token, "PUT",
+            {"role_codes": ["clinician"]}, admin_token, "PUT", pin=self.pin,
         )
         self.assertEqual(status, 200, updated)
         self.assertIn("case.chart", updated["row"]["permissions"])
         self.assertEqual(request("/api/case/start-overlap-check", {"start_time": check_time}, viewer_token)[0], 200)
         self.assertEqual(
-            request(f"/api/auth/users/{self.user_id}/access", {"role_codes": ["viewer"]}, admin_token, "PUT")[0],
+            request(f"/api/auth/users/{self.user_id}/access", {"role_codes": ["viewer"]}, admin_token, "PUT", pin=self.pin)[0],
             400,
         )
 
@@ -242,7 +268,7 @@ class LeafWrites(unittest.TestCase):
         status, masters = request("/api/auth/preferences/master", token=token)
         self.assertEqual(status, 200, masters)
         self.assertGreaterEqual(len(masters["languages"]), 2)
-        self.assertEqual(len(masters["themes"]), 6)
+        self.assertEqual(len(masters["themes"]), self.database.execute("SELECT count(*) AS n FROM theme_scheme_master").fetchone()["n"])
         language = masters["languages"][0]
         status, saved_language = request(
             f"/api/auth/preferences/languages/{language['code']}",
@@ -492,7 +518,7 @@ class LeafWrites(unittest.TestCase):
         self.assertEqual(request("/api/auth/login",{"username":self.username,"password":self.password})[0],401)
         self.__class__.password = "test-pass-123"
         new_token = self.login()
-        self.assertEqual(request(f"/api/auth/users/{self.user_id}/active",{"is_active":False},new_token,"PUT")[0],400)
+        self.assertEqual(request(f"/api/auth/users/{self.user_id}/active",{"is_active":False},new_token,"PUT",pin=self.pin)[0],400)
         self.assertEqual(request("/api/auth/whoami",token=new_token)[0],200)
 
     def test_clinical_writes_and_audit_rollback(self):

@@ -128,7 +128,7 @@ PYTHONPATH=services/flora-api python3 formdev/scripts/import_lookup.py thai_addr
 | Validation works | ✅ | 79 Phase 1 definition cases + 25 record cases in shared fixtures, identical results in Python and TS; readable locations (13 path cases); strict JSON (duplicate keys) over HTTP |
 | Unit tests pass | ✅ | Python 183 (SQLite and PostgreSQL, 0 skipped on PostgreSQL), TypeScript 407 |
 | Existing project build passes | ✅ | `tsc -b`, `vite build` (Canopy surface), `check_intranet.py` on the bundle (no external requests) |
-| Existing tests do not break | ✅ | All Phase 3/4 suites green, Phase 4 HTTP smoke 29/29; the two whole-project ESLint errors exist unchanged in the committed code (outside FormDev); `tests/test_leaf_writes.py` needs a database with Flora reference data and was not run |
+| Existing tests do not break | ✅ | All Phase 3/4 suites green, Phase 4 HTTP smoke 29/29; the two whole-project ESLint errors exist unchanged in the committed code (outside FormDev); `tests/test_leaf_writes.py` runs on a disposable database built by `scripts/test-leaf-writes.sh` (13/13) |
 
 ## Phase 2 acceptance
 
