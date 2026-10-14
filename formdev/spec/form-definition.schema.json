@@ -225,6 +225,14 @@
         },
         "footer": {
           "$ref": "#/$defs/band"
+        },
+        "density": {
+          "enum": [
+            "normal",
+            "compact",
+            "fit_page"
+          ],
+          "description": "Print density: compact = denser type and rows; fit_page = the largest size that fits one page, the rest continues on the next pages"
         }
       }
     },
@@ -765,7 +773,9 @@
             "group",
             "repeat",
             "matrix",
-            "timeline"
+            "timeline",
+            "logo",
+            "barcode"
           ]
         },
         "label": {
@@ -1110,8 +1120,56 @@
                 "leaf",
                 "manual"
               ]
+            },
+            "print_columns": {
+              "type": "integer",
+              "minimum": 8,
+              "maximum": 48,
+              "description": "Printed time columns per page"
+            },
+            "hide_empty_rows": {
+              "type": "boolean"
             }
           }
+        },
+        "src": {
+          "type": "string",
+          "pattern": "^data:image/(png|jpeg);base64,[A-Za-z0-9+/=]+$",
+          "maxLength": 400000,
+          "description": "logo: the picture (PNG or JPEG data URL, kept in the definition)"
+        },
+        "height_mm": {
+          "type": "number",
+          "minimum": 4,
+          "maximum": 60,
+          "description": "logo / barcode: printed height in mm"
+        },
+        "align": {
+          "enum": [
+            "left",
+            "center",
+            "right"
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/itemId",
+          "description": "barcode: the key of the field whose value is encoded (e.g. hn)"
+        },
+        "symbology": {
+          "enum": [
+            "i2of5",
+            "code128",
+            "code39"
+          ],
+          "description": "barcode: Interleaved 2 of 5 (digits; Flora Leaf's HN barcode), Code 128 or Code 39"
+        },
+        "show_text": {
+          "type": "boolean"
+        },
+        "bind": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)+$",
+          "description": "The case datum this field shows when the form is filled or printed on Flora Leaf (e.g. patient.hn, patient.weight_kg)"
         }
       },
       "allOf": [

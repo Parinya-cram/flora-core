@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { FormDevError, type FontEntry, type FormDefinition, type FormSummary, type Issue, type RecordData, type SchemaVersion, type StyleEntry } from "../core/types";
 import { describeIssues, issueText, parseJsonStrict, validateDefinition } from "../core/validate";
 import type { RestApiAdapter } from "../data/RestApiAdapter";
+import type { Template } from "../ai/types";
 import { evaluateRecord } from "../logic/evaluate";
 import { lookupIds, type LookupTables } from "../logic/lookup";
 import { DEFAULT_FONTS, DEFAULT_STYLES } from "../registry/defaults";
@@ -26,8 +27,13 @@ import {
 import type { LookupInfo } from "./OptionsEditor";
 import { danger, input, panel, primary, secondary, small } from "./styles";
 
-/** onPublished: the form was published (refresh the local catalogue); onUse: open data entry for it. */
-type Props = { remote: RestApiAdapter; online: boolean; language?: string; onPublished?: (formId: string) => void; onUse?: (formId: string) => void };
+/** What another Form Studio tab asks the designer to open: a library template (saved back to the template) or a form. */
+export type DesignerIncoming = { key: number } & ({ kind: "template"; template: Template } | { kind: "form"; formId: string });
+/** onPublished: the form was published (refresh the local catalogue); onUse: open data entry for it; onTemplateSaved: back to its review. */
+type Props = {
+  remote: RestApiAdapter; online: boolean; language?: string; onPublished?: (formId: string) => void; onUse?: (formId: string) => void;
+  incoming?: DesignerIncoming | null; onTemplateSaved?: (templateId: string) => void;
+};
 /** Where the form stands on the server: not created yet, a draft version, or a published version (edits become the next version). */
 type Source = { exists: boolean; version: number; status: "draft" | "published" | null; previous: FormDefinition | null };
 type View = "design" | "try" | "print" | "json";
@@ -66,9 +72,20 @@ function prepared(definition: FormDefinition, source: Source): FormDefinition {
   return out;
 }
 
+/** The latest version of a form and where it stands (a draft, or published: edits become the next version). */
+async function loadForm(remote: RestApiAdapter, formId: string): Promise<{ definition: FormDefinition; source: Source } | null> {
+  const versions: SchemaVersion[] = await remote.listSchemas(formId);
+  const latest = versions.reduce<SchemaVersion | null>((best, row) => (!best || row.schema_version > best.schema_version ? row : best), null);
+  if (!latest) return null;
+  const published = versions.filter(row => row.status === "published").sort((a, b) => b.schema_version - a.schema_version)[0] ?? null;
+  return latest.status === "draft"
+    ? { definition: latest.definition, source: { exists: true, version: latest.schema_version, status: "draft", previous: published?.definition ?? null } }
+    : { definition: latest.definition, source: { exists: true, version: latest.schema_version, status: "published", previous: latest.definition } };
+}
+
 const newFormId = () => `form_${new Date().toISOString().slice(0, 10).replace(/-/g, "")}_${Math.random().toString(36).slice(2, 5)}`;
 
-export default function DesignerPanel({ remote, online, language = "th", onPublished, onUse }: Props) {
+export default function DesignerPanel({ remote, online, language = "th", onPublished, onUse, incoming, onTemplateSaved }: Props) {
   const lang = langOf(language);
   const t = (th: string, en: string) => tr(lang, th, en);
   const history = useHistory();
@@ -85,6 +102,8 @@ export default function DesignerPanel({ remote, online, language = "th", onPubli
   const [tryData, setTryData] = useState<RecordData>({});
   const [showIssues, setShowIssues] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  /** Editing a library template: saving writes the template, not a form. */
+  const [templateLink, setTemplateLink] = useState<{ id: string; version: number; title: string } | null>(null);
   const dragRef = useRef<DragItem | null>(null);
   const getDrag = () => dragRef.current;
   const setDrag = (item: DragItem | null) => { dragRef.current = item; };
@@ -146,7 +165,31 @@ export default function DesignerPanel({ remote, online, language = "th", onPubli
     writeAutosave({ definition: next, source: nextSource, at: Date.now() });
   };
 
-  if (!definition) return <StartScreen lang={lang} remote={remote} online={online} onOpen={open} />;
+  // A template or form sent from another tab (Templates): opened once per request.
+  const handled = useRef<number | null>(null);
+  useEffect(() => {
+    if (!incoming || handled.current === incoming.key) return;
+    // Deferred, and marked handled when it runs: a cancelled timer (React's development double run) does not count.
+    const timer = setTimeout(() => {
+      handled.current = incoming.key;
+      if (incoming.kind === "template") {
+        const { template } = incoming;
+        open(structuredClone(template.definition), NEW_SOURCE);
+        setTemplateLink({ id: template.template_id, version: template.version, title: template.title });
+        return;
+      }
+      void loadForm(remote, incoming.formId).then(found => {
+        if (!found) return;
+        setTemplateLink(null);
+        open(found.definition, found.source);
+        setMessage({ tone: "info", text: t("สร้างแบบฟอร์มจากแม่แบบแล้ว (ร่างเวอร์ชัน 1) — ตรวจแล้วกด เผยแพร่ใช้งาน เพื่อให้เลือกได้ใน Workflow Studio",
+          "Form created from the template (draft version 1) — check it, then Publish so Workflow Studio can offer it") });
+      }).catch(error => setMessage({ tone: "error", text: error instanceof Error ? error.message : String(error) }));
+    }, 0);
+    return () => clearTimeout(timer);
+  });
+
+  if (!definition) return <StartScreen lang={lang} remote={remote} online={online} onOpen={(next, nextSource) => { setTemplateLink(null); open(next, nextSource); }} />;
 
   // Editing ----------------------------------------------------------------------------------------
   const lastList = (): Path => {
@@ -272,6 +315,35 @@ export default function DesignerPanel({ remote, online, language = "th", onPubli
     }
   };
 
+  /** Library template: the edited definition goes back to the template (problems allowed while it is a draft). */
+  const saveTemplate = async () => {
+    if (!templateLink) return;
+    setBusy(true);
+    try {
+      const saved = await remote.updateTemplate(templateLink.id, { version: templateLink.version, definition, title: definition.title });
+      setTemplateLink({ id: saved.template.template_id, version: saved.template.version, title: saved.template.title });
+      writeAutosave(null);
+      setMessage({ tone: saved.issues.length ? "info" : "ok", text: saved.issues.length
+        ? t(`บันทึกแม่แบบแล้ว — ยังมี ${saved.issues.length} จุดที่ต้องแก้ก่อนทำเครื่องหมายว่าตรวจแล้ว`, `Template saved — ${saved.issues.length} problem(s) left before it can be marked reviewed`)
+        : t("บันทึกแม่แบบแล้ว", "Template saved") });
+    } catch (error) {
+      setMessage({ tone: "error", text: failure(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const keepAsTemplate = async () => {
+    setBusy(true);
+    try {
+      const saved = await remote.createTemplate({ definition: prepared(definition, NEW_SOURCE), title: definition.title, origin: "manual" });
+      setMessage({ tone: "ok", text: t(`เก็บเป็นแม่แบบ "${saved.template.template_id}" ในคลังแล้ว`, `Kept as the template "${saved.template.template_id}"`) });
+    } catch (error) {
+      setMessage({ tone: "error", text: failure(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const pdf = async () => {
     setBusy(true);
     try {
@@ -294,12 +366,13 @@ export default function DesignerPanel({ remote, online, language = "th", onPubli
 
   return <div className="space-y-3">
     <div className={`${panel} flex flex-wrap items-center gap-2 p-2`}>
-      <button type="button" className={small} title={t("งานที่ยังไม่บันทึกกู้คืนได้จากหน้าเริ่มต้น", "Unsaved work can be restored from the start screen")} onClick={() => history.reset(null)}>
+      <button type="button" className={small} title={t("งานที่ยังไม่บันทึกกู้คืนได้จากหน้าเริ่มต้น", "Unsaved work can be restored from the start screen")} onClick={() => { setTemplateLink(null); history.reset(null); }}>
         ← {t("แบบฟอร์มอื่น", "Other forms")}
       </button>
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-bold text-[var(--app-text)]">{definition.title}</div>
-        <div className="text-[11px] text-[var(--app-muted)]"><code>{definition.form_id}</code> · {versionLabel}</div>
+        <div className="text-[11px] text-[var(--app-muted)]"><code>{definition.form_id}</code> · {templateLink
+          ? t(`แม่แบบ ${templateLink.id} v${templateLink.version}`, `template ${templateLink.id} v${templateLink.version}`) : versionLabel}</div>
       </div>
       <button type="button" className={small} disabled={!history.canUndo} onClick={history.undo} title="Ctrl+Z">↶ {t("เลิกทำ", "Undo")}</button>
       <button type="button" className={small} disabled={!history.canRedo} onClick={history.redo} title="Ctrl+Shift+Z">↷ {t("ทำซ้ำ", "Redo")}</button>
@@ -315,8 +388,15 @@ export default function DesignerPanel({ remote, online, language = "th", onPubli
         className={`rounded-lg px-2.5 py-1 text-xs font-bold ${checkIssues.length ? "bg-rose-500/15 text-rose-600 dark:text-rose-300" : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300"}`}>
         {checkIssues.length ? t(`⚠ ต้องแก้ ${checkIssues.length} จุด`, `⚠ ${checkIssues.length} to fix`) : t("✓ พร้อมใช้", "✓ Ready")}
       </button>
-      <button type="button" className={secondary} disabled={busy} onClick={() => void run("save")}>{t("บันทึกร่าง", "Save draft")}</button>
-      <button type="button" className={primary} disabled={busy} onClick={() => setConfirming(true)}>{t("เผยแพร่ใช้งาน", "Publish")}</button>
+      {templateLink ? <>
+        <button type="button" className={primary} disabled={busy} onClick={() => void saveTemplate()}>{t("บันทึกแม่แบบ", "Save template")}</button>
+        {onTemplateSaved ? <button type="button" className={secondary} disabled={busy} onClick={() => onTemplateSaved(templateLink.id)}>{t("กลับไปตรวจแม่แบบ", "Back to the review")}</button> : null}
+      </> : <>
+        <button type="button" className={small} disabled={busy || !online} title={t("เก็บแบบฟอร์มนี้ไว้ในคลังแม่แบบ เพื่อใช้เริ่มแบบฟอร์มอื่น", "Keep this form in the template library to start other forms from")}
+          onClick={() => void keepAsTemplate()}>{t("เก็บเป็นแม่แบบ", "Keep as template")}</button>
+        <button type="button" className={secondary} disabled={busy} onClick={() => void run("save")}>{t("บันทึกร่าง", "Save draft")}</button>
+        <button type="button" className={primary} disabled={busy} onClick={() => setConfirming(true)}>{t("เผยแพร่ใช้งาน", "Publish")}</button>
+      </>}
     </div>
 
     {confirming ? <div role="alertdialog" aria-label={t("ยืนยันการเผยแพร่", "Confirm publishing")} className="rounded-xl border border-[var(--app-accent)] bg-[var(--app-panel-bg)] p-3 text-sm text-[var(--app-text)]">
@@ -454,12 +534,8 @@ function StartScreen({ lang, remote, online, onOpen }: { lang: Lang; remote: Res
   const openExisting = async (id: string) => {
     setError("");
     try {
-      const versions: SchemaVersion[] = await remote.listSchemas(id);
-      const latest = versions.reduce<SchemaVersion | null>((best, row) => (!best || row.schema_version > best.schema_version ? row : best), null);
-      if (!latest) return;
-      const published = versions.filter(row => row.status === "published").sort((a, b) => b.schema_version - a.schema_version)[0] ?? null;
-      if (latest.status === "draft") onOpen(latest.definition, { exists: true, version: latest.schema_version, status: "draft", previous: published?.definition ?? null });
-      else onOpen(latest.definition, { exists: true, version: latest.schema_version, status: "published", previous: latest.definition });
+      const found = await loadForm(remote, id);
+      if (found) onOpen(found.definition, found.source);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     }

@@ -24,7 +24,8 @@ The same JSON is stored in Canopy, exported/imported as a file, and sent to Leaf
   },
   "forms": [
     { "form_id": "patient_assessment", "version": 3, "title": "Nursing assessment",
-      "phase": "preop", "required": false }
+      "phase": "preop", "required": false,
+      "after_section": "preop", "hint": "Filled in by the ward nurse on arrival" }
   ],
   "packet": [
     { "kind": "anesthesia_report", "mode": "standard" },
@@ -38,8 +39,13 @@ The same JSON is stored in Canopy, exported/imported as a file, and sent to Leaf
   starts (core tabs `caseInfo, preop, checklist, pacu, outcome` plus optional
   `ga_ett | ga_lma | ga_tubeless | neuraxial | pnb | line | comorbid | extubation | pain`).
   `optional_sections` – the optional tabs the clinician may still switch on/off.
-- `forms[]` – Form Studio forms, pinned to a **published** `version`. `phase`:
-  `preop | intraop | postop | any` (tab grouping only).
+- `forms[]` – Form Studio forms, pinned to a **published** `version`. Where each one is
+  filled in on Flora Leaf: `phase` `preop | intraop | postop | any` (shown on the tab),
+  `after_section` – the built-in tab id the form's tab follows (`null` or a tab the case
+  does not show: after every record tab), `hint` – a note of at most 300 characters shown
+  above the form. When a form is added, Workflow Studio takes `phase` and `after_section`
+  from the form's suggestion (`extensions["flora.leaf_placement"]`, written by Form Studio's
+  AI builder and editable on the template review), see `formdev/docs/AI-BUILDER.md`.
 - `packet[]` – order of the combined PDF. `kind`: `anesthesia_report` (`mode`:
   `standard | smart_fit | detail`) or `form` (`form_id` from `forms`).
 - `bundled_forms` – present only in exported files; on import, missing forms are

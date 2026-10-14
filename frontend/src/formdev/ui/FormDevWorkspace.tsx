@@ -10,7 +10,8 @@ import { lookupIds, type LookupTables } from "../logic/lookup";
 import { recordAllows } from "../logic/permission";
 import type { QueueCounts } from "../offline/SyncEngine";
 import type { QueryPrincipal } from "../query/types";
-import DesignerPanel from "../designer/DesignerPanel";
+import DesignerPanel, { type DesignerIncoming } from "../designer/DesignerPanel";
+import TemplateLibrary from "../ai/TemplateLibrary";
 import FormPreview from "./FormPreview";
 import PdfPreview, { type PdfPreviewHandle } from "./PdfPreview";
 import FormRenderer from "./FormRenderer";
@@ -19,7 +20,7 @@ import QueryPanel from "./QueryPanel";
 import RecordsSheet from "./RecordsSheet";
 
 type Props = { username: string; isAdmin: boolean; principal: QueryPrincipal; language?: string };
-type Tab = "records" | "designer" | "preview" | "query" | "jobs";
+type Tab = "records" | "designer" | "templates" | "preview" | "query" | "jobs";
 /** form = data entry, detail = read-only (display.detail), print = A4 sheet. */
 type Editing = { record: LocalRecord | null; data: RecordData; issues: Issue[]; definition: FormDefinition; view: "form" | "detail" | "print" };
 
@@ -52,6 +53,9 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
   const codes = useMemo(() => [...(principal.roles ?? []), ...(principal.permissions ?? [])], [principal]);
   const [tab, setTab] = useState<Tab>("records");
   const [jobsVersion, setJobsVersion] = useState(0);
+  // Templates tab → designer (edit a template, open a form made from one) and back (the template's review).
+  const [designerIncoming, setDesignerIncoming] = useState<DesignerIncoming | null>(null);
+  const [templateFocus, setTemplateFocus] = useState<{ templateId: string; key: number } | null>(null);
   const remote = useMemo(() => new RestApiAdapter({ baseUrl: BACKEND_BASE }), []);
   const [client, setClient] = useState<FormDevClient | null>(null);
   // Files of the open record: on this device until sync uploads them, otherwise from the server via the record.
@@ -230,17 +234,21 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
         </div>
       </header>
       <nav className="flex gap-2 border-b border-[var(--app-border)] pb-2" aria-label="Form Studio sections">
-        {(isAdmin ? ["records", "designer", "preview", "query", "jobs"] as const : ["records", "preview", "query", "jobs"] as const).map(item => <button key={item} type="button" onClick={() => setTab(item)} aria-current={tab === item ? "page" : undefined}
+        {(isAdmin ? ["records", "designer", "templates", "preview", "query", "jobs"] as const : ["records", "preview", "query", "jobs"] as const).map(item => <button key={item} type="button" onClick={() => setTab(item)} aria-current={tab === item ? "page" : undefined}
           className={`rounded-xl px-4 py-2 text-sm font-bold ${tab === item ? "bg-[var(--app-accent)] text-[var(--app-accent-contrast)]" : "text-[var(--app-muted)] hover:bg-[var(--app-control-bg)]"}`}>
-          {item === "records" ? (thai ? "กรอกข้อมูล" : "Records") : item === "designer" ? (thai ? "ออกแบบฟอร์ม" : "Form designer") : item === "preview" ? "Preview" : item === "query" ? "Query" : "Jobs"}
+          {item === "records" ? (thai ? "กรอกข้อมูล" : "Records") : item === "designer" ? (thai ? "ออกแบบฟอร์ม" : "Form designer") : item === "templates" ? (thai ? "แม่แบบ / AI" : "Templates / AI") : item === "preview" ? "Preview" : item === "query" ? "Query" : "Jobs"}
         </button>)}
       </nav>
       {/* Kept mounted while other tabs are open, so the form being designed is not lost. */}
       {isAdmin ? <div hidden={tab !== "designer"}>
         <DesignerPanel remote={remote} online={online} language={language} onPublished={publishedId => {
           void client?.pull().then(async () => { setFormId(publishedId); setEditing(null); await refresh(); });
-        }} onUse={formToUse => { setFormId(formToUse); setEditing(null); setTab("records"); }} />
+        }} onUse={formToUse => { setFormId(formToUse); setEditing(null); setTab("records"); }}
+          incoming={designerIncoming} onTemplateSaved={templateId => { setTemplateFocus({ templateId, key: Date.now() }); setTab("templates"); }} />
       </div> : null}
+      {isAdmin && tab === "templates" ? <TemplateLibrary remote={remote} online={online} language={language} focus={templateFocus}
+        onEdit={template => { setDesignerIncoming({ key: Date.now(), kind: "template", template }); setTab("designer"); }}
+        onFormCreated={createdId => { setDesignerIncoming({ key: Date.now(), kind: "form", formId: createdId }); setTab("designer"); void refresh(); }} /> : null}
       {tab === "preview" ? <FormPreview remote={remote} online={online} definitions={previewDefinitions} language={language} /> : null}
       {tab === "query" ? <QueryPanel remote={remote} principal={principal} online={online} onJobCreated={() => setJobsVersion(value => value + 1)} /> : null}
       {tab === "jobs" ? <JobsPanel remote={remote} refreshKey={jobsVersion} online={online} /> : null}

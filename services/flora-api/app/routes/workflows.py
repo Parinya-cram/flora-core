@@ -105,7 +105,7 @@ def options(_: dict = Depends(read_token), database: Connection = Depends(connec
     return {
         "sections": workflows.SECTIONS,
         "forms": [{"form_id": form_id, "title": form["title"], "published_version": form["published_version"],
-                   "versions": form["versions"]} for form_id, form in forms.items()],
+                   "versions": form["versions"], "placement": form["placement"]} for form_id, form in forms.items()],
         "wards": [{"key": ward["key"], "name": ward["name"], "buildingName": ward.get("buildingName"),
                    "isDemo": bool(ward.get("isDemo"))} for ward in directory.ward_options(database)["rows"]],
     }

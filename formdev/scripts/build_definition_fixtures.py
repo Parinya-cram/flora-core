@@ -29,6 +29,7 @@ GENERATED = ("p1: ", "p2: ")
 STYLES = [row["style_id"] for row in json.loads((ROOT / "registry/styles.json").read_text(encoding="utf-8"))]
 FONTS = [row["font_id"] for row in json.loads((ROOT / "registry/fonts.json").read_text(encoding="utf-8"))]
 SHOWCASE = "examples/phase1-showcase/v1.form.json"
+PNG_1PX = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 BASE = {"format": "flora.form/1", "form_id": "demo_form", "schema_version": 1, "title": "Demo", "paper": "A4", "style_id": "form.a4.medical",
         "sections": [{"id": "main", "title": "Main", "fields": [{"id": "name", "type": "text", "label": "Name"}]}]}
 
@@ -105,6 +106,17 @@ DEFINITION_CASES: list[tuple[str, dict[str, Any], list[str]]] = [
     ("timeline defaults", with_fields(field(id="tl", type="timeline", label="T")), []),
     ("timeline settings", with_fields(field(id="tl", type="timeline", label="T", timeline={"parts": ["chart", "table"], "rows": [{"id": "hr"}, {"id": "bis", "label": "BIS", "unit": ""}], "chart": ["nibp", "hr"], "step_min": 20, "source": "manual"})), []),
     ("timeline settings are checked", with_fields(field(id="tl", type="timeline", label="T", timeline={"parts": ["graph"], "chart": ["ecg"], "step_min": 0, "source": "monitor", "extra": 1})), ["invalid_layout", "invalid_layout", "invalid_layout", "invalid_type", "unknown_property"]),
+    ("bind to case data", with_fields(field(id="weight", type="decimal", label="WT", bind="patient.weight_kg")), []),
+    ("bind is checked", with_fields(field(id="weight", type="decimal", label="WT", bind="Patient Weight"), field(id="grp", type="group", label="G", bind="patient.hn", fields=[TEXT])),
+        ["invalid_type", "property_not_supported"]),
+    ("logo and barcode", with_fields(field(id="hn", type="text", label="HN"), field(id="logo", type="logo", label="Logo", src=PNG_1PX, height_mm=12, align="left"),
+        field(id="hn_barcode", type="barcode", label="HN barcode", source="hn", symbology="code128", height_mm=10, show_text=False, align="right")), []),
+    ("logo and barcode are checked", with_fields(field(id="logo", type="logo", label="Logo", src="https://example.com/logo.png", height_mm=80, align="middle"),
+        field(id="hn_barcode", type="barcode", label="HN barcode", source="nowhere", symbology="qr", height_mm=2, show_text="yes")),
+        ["invalid_file", "invalid_layout", "invalid_layout", "unknown_field_reference", "invalid_layout", "invalid_layout", "invalid_type"]),
+    ("printed elements take no value properties", with_fields(field(id="hn_barcode", type="barcode", label="HN", required=True, indexed=True)), ["property_not_supported", "property_not_supported", "unknown_field_reference"]),
+    ("timeline print settings", with_fields(field(id="tl", type="timeline", label="T", timeline={"print_columns": 24, "hide_empty_rows": True})), []),
+    ("timeline print settings are checked", with_fields(field(id="tl", type="timeline", label="T", timeline={"print_columns": 60, "hide_empty_rows": "yes"})), ["invalid_type", "invalid_type"]),
     ("timeline rows", with_fields(field(id="tl", type="timeline", label="T", timeline={"rows": [{"id": "HR"}, {"id": "hr"}, {"id": "hr"}]})), ["invalid_field_id", "duplicate_field_id"]),
     ("option columns", with_fields(field(id="c", type="multiselect", label="C", option_columns=4, options=[{"value": "a", "label": "A"}])), []),
     ("option columns range", with_fields(field(id="c", type="radio", label="C", option_columns=9, options=[{"value": "a", "label": "A"}])), ["invalid_columns"]),
@@ -148,6 +160,8 @@ DEFINITION_CASES: list[tuple[str, dict[str, Any], list[str]]] = [
     ("paper size", form(setter(["paper"], {"size": "B5"})), ["invalid_paper"]),
     ("margin out of range", form(setter(["paper"], {"size": "A4", "margin_mm": {"top": 80}})), ["invalid_margin"]),
     ("unknown template token", form(setter(["paper"], {"size": "A4", "footer": {"left": "{patient}"}})), ["unknown_template_token"]),
+    ("print density", form(setter(["paper"], {"size": "A4", "density": "fit_page"})), []),
+    ("print density is checked", form(setter(["paper"], {"size": "A4", "density": "tiny"})), ["invalid_paper"]),
     ("band height", form(setter(["paper"], {"size": "A4", "header": {"height_mm": 50}})), ["invalid_band"]),
     # 1.7 - 1.9 Styles and fonts
     ("style object instead of style_id", form(lambda d: (d.pop("style_id"), d.update(style={"id": "style.a4.official", "override": {"fontSize": 14}}))), []),

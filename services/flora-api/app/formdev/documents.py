@@ -1,0 +1,325 @@
+"""Source documents for the AI form builder (Form Studio): what each uploaded file is and what can be read from it.
+
+Every file is checked before anything is sent to the AI service: the real type from its first bytes (not the name
+or the browser's claim), the size and page limits, encrypted or damaged PDFs, scans without a text layer (read as
+images), Word and Excel files (their text is extracted here, with the standard library only), plain text / CSV, and
+JSON files that already are flora.form/1 definitions (checked with the validator, no AI needed). The report is shown
+to the author; a file with status "error" stops the build.
+"""
+from __future__ import annotations
+
+import base64
+import binascii
+import hashlib
+import io
+import json
+import re
+import zipfile
+from dataclasses import dataclass, field
+from typing import Any
+from xml.etree import ElementTree
+
+MAX_FILES = 10
+MAX_FILE_BYTES = 20 * 1024 * 1024
+MAX_TOTAL_BYTES = 30 * 1024 * 1024
+MAX_PDF_PAGES = 100
+MAX_TEXT_CHARS = 200_000
+MAX_PAGE_IMAGES = 40
+MAX_NAME = 200
+
+IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
+WORD_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+SHEET_NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+PAGE = re.compile(rb"/Type\s*/Page(?![a-zA-Z])")
+# A JPEG image XObject (what phone scanners and most scan-to-PDF tools embed, one per page).
+JPEG_OBJECT = re.compile(rb"<<(?:(?!>>).)*?/Subtype\s*/Image(?:(?!>>).)*?/Filter\s*\[?\s*/DCTDecode(?:(?!>>).)*?>>\s*stream\r?\n", re.S)
+MIN_SCAN_IMAGE_BYTES = 10_000  # smaller JPEGs are logos and stamps, not pages
+
+
+@dataclass
+class SourceFile:
+    """One uploaded file and what the inspection found."""
+
+    name: str
+    content: bytes
+    kind: str = "unknown"  # pdf | image | docx | xlsx | text | form_json
+    media_type: str = "application/octet-stream"
+    status: str = "ok"  # ok | warning | error
+    notes: list[str] = field(default_factory=list)
+    pages: int | None = None
+    text: str = ""  # extracted text (Word, Excel, text files)
+    has_text_layer: bool | None = None
+    definition: dict[str, Any] | None = None  # a flora.form/1 file
+    page_images: list[bytes] = field(default_factory=list)  # PNG renderings of PDF pages (OpenAI-compatible hosts)
+    scan_images: list[bytes] = field(default_factory=list)  # JPEG pages embedded in a scanned PDF
+
+    @property
+    def sha256(self) -> str:
+        return hashlib.sha256(self.content).hexdigest()
+
+    def note(self, status: str, message: str) -> None:
+        self.notes.append(message)
+        if status == "error" or (status == "warning" and self.status == "ok"):
+            self.status = status
+
+    def report(self) -> dict[str, Any]:
+        return {"name": self.name, "kind": self.kind, "media_type": self.media_type, "size": len(self.content), "sha256": self.sha256,
+                "status": self.status, "notes": self.notes, "pages": self.pages, "text_chars": len(self.text),
+                "has_text_layer": self.has_text_layer, "page_images": len(self.page_images),
+                "scan_images": len(self.scan_images)}
+
+
+class DocumentError(ValueError):
+    """The request itself is unusable (too many files, bad base64); shown to the author."""
+
+
+def _decode(value: Any, what: str) -> bytes:
+    if not isinstance(value, str):
+        raise DocumentError(f"{what}: data must be base64 text")
+    try:
+        return base64.b64decode(value.split(",", 1)[1] if value.startswith("data:") else value, validate=True)
+    except (binascii.Error, ValueError) as error:
+        raise DocumentError(f"{what}: data is not valid base64") from error
+
+
+def read_upload(body: Any) -> list[SourceFile]:
+    """{"files": [{name, data (base64), page_images?: [base64 PNG]}]} -> files, not yet inspected."""
+    items = body.get("files") if isinstance(body, dict) else None
+    if not isinstance(items, list) or not items:
+        raise DocumentError("Add at least one document")
+    if len(items) > MAX_FILES:
+        raise DocumentError(f"At most {MAX_FILES} documents at a time")
+    files: list[SourceFile] = []
+    total = 0
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            raise DocumentError(f"files[{index}] must be an object")
+        name = str(item.get("name") or f"document-{index + 1}").strip()[:MAX_NAME] or f"document-{index + 1}"
+        content = _decode(item.get("data"), name)
+        total += len(content)
+        source = SourceFile(name=name, content=content)
+        images = item.get("page_images") or []
+        if not isinstance(images, list) or len(images) > MAX_PAGE_IMAGES:
+            raise DocumentError(f"{name}: page_images is a list of at most {MAX_PAGE_IMAGES} PNG pages")
+        for page, image in enumerate(images):
+            data = _decode(image, f"{name} page {page + 1}")
+            if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+                raise DocumentError(f"{name} page {page + 1}: page images are PNG")
+            total += len(data)
+            source.page_images.append(data)
+        files.append(source)
+    if total > MAX_TOTAL_BYTES:
+        raise DocumentError(f"Documents are limited to {MAX_TOTAL_BYTES // (1024 * 1024)} MB in total")
+    return files
+
+
+def sniff(content: bytes) -> tuple[str, str]:
+    """(kind, media type) from the file's first bytes."""
+    head = content[:16]
+    if head.startswith(b"%PDF-"):
+        return "pdf", "application/pdf"
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image", "image/png"
+    if head.startswith(b"\xff\xd8\xff"):
+        return "image", "image/jpeg"
+    if head.startswith((b"GIF87a", b"GIF89a")):
+        return "image", "image/gif"
+    if head.startswith(b"RIFF") and content[8:12] == b"WEBP":
+        return "image", "image/webp"
+    if head.startswith(b"PK\x03\x04"):
+        try:
+            names = set(zipfile.ZipFile(io.BytesIO(content)).namelist())
+        except zipfile.BadZipFile:
+            return "unknown", "application/zip"
+        if "word/document.xml" in names:
+            return "docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        if "xl/workbook.xml" in names:
+            return "xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        return "unknown", "application/zip"
+    if head.startswith(b"\xd0\xcf\x11\xe0"):
+        return "legacy_office", "application/msword"
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return "unknown", "application/octet-stream"
+    if "\x00" in text:
+        return "unknown", "application/octet-stream"
+    stripped = text.lstrip()
+    if stripped.startswith("{"):
+        return "form_json", "application/json"
+    return "text", "text/plain"
+
+
+def _pdf(source: SourceFile) -> None:
+    content = source.content
+    if b"/Encrypt" in content:
+        source.note("error", "The PDF is password protected or encrypted; save an unprotected copy and upload that")
+        return
+    if b"%%EOF" not in content[-2048:]:
+        source.note("warning", "The PDF looks cut short (no end marker); pages may be missing")
+    source.pages = len(PAGE.findall(content)) or None
+    if source.pages is None:
+        source.note("warning", "The page count could not be read (compressed page tree); the AI reads the file as is")
+    elif source.pages > MAX_PDF_PAGES:
+        source.note("error", f"{source.pages} pages: at most {MAX_PDF_PAGES} pages per PDF")
+    source.has_text_layer = b"/Font" in content
+    if not source.has_text_layer:
+        source.scan_images = scan_jpegs(content)[:MAX_PAGE_IMAGES]
+        source.note("warning", "No text layer (a scan or a photo): the AI reads the page images, so check labels carefully")
+
+
+def scan_jpegs(content: bytes) -> list[bytes]:
+    """The JPEG page images of a scanned PDF, in file order (usually page order)."""
+    images: list[bytes] = []
+    for match in JPEG_OBJECT.finditer(content):
+        length = re.search(rb"/Length\s+(\d+)(?!\s+\d+\s+R)", match.group(0))
+        start = match.end()
+        end = start + int(length.group(1)) if length else content.find(b"endstream", start)
+        data = content[start:end].rstrip(b"\r\n")
+        if data.startswith(b"\xff\xd8") and len(data) >= MIN_SCAN_IMAGE_BYTES:
+            images.append(data)
+    return images
+
+
+def _docx(source: SourceFile) -> None:
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(source.content))
+        root = ElementTree.fromstring(archive.read("word/document.xml"))
+    except (zipfile.BadZipFile, KeyError, ElementTree.ParseError):
+        source.note("error", "The Word file is damaged and cannot be read")
+        return
+    lines: list[str] = []
+    body = root.find(f"{WORD_NS}body")
+    for block in list(body) if body is not None else []:
+        if block.tag == f"{WORD_NS}p":
+            text = "".join(node.text or "" for node in block.iter(f"{WORD_NS}t")).strip()
+            if text:
+                lines.append(text)
+        elif block.tag == f"{WORD_NS}tbl":
+            lines.append("[table]")
+            for row in block.iter(f"{WORD_NS}tr"):
+                cells = ["".join(node.text or "" for node in cell.iter(f"{WORD_NS}t")).strip() for cell in row.iter(f"{WORD_NS}tc")]
+                lines.append(" | ".join(cells))
+            lines.append("[/table]")
+    # Check boxes drawn as symbols (☐ ☑ ■ □) are kept in the text; images inside the document are not read.
+    if any(name.startswith("word/media/") for name in archive.namelist()):
+        source.note("warning", "The Word file contains pictures; only its text and tables are read")
+    source.text = "\n".join(lines)
+
+
+def _column_index(ref: str) -> int:
+    letters = re.match(r"[A-Z]+", ref or "")
+    number = 0
+    for char in letters.group(0) if letters else "":
+        number = number * 26 + ord(char) - 64
+    return max(0, number - 1)
+
+
+def _xlsx(source: SourceFile) -> None:
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(source.content))
+        shared: list[str] = []
+        if "xl/sharedStrings.xml" in archive.namelist():
+            for item in ElementTree.fromstring(archive.read("xl/sharedStrings.xml")).iter(f"{SHEET_NS}si"):
+                shared.append("".join(node.text or "" for node in item.iter(f"{SHEET_NS}t")))
+        workbook = ElementTree.fromstring(archive.read("xl/workbook.xml"))
+        names = [sheet.get("name") or f"Sheet{index + 1}" for index, sheet in enumerate(workbook.iter(f"{SHEET_NS}sheet"))]
+        sheets = sorted((name for name in archive.namelist() if re.fullmatch(r"xl/worksheets/sheet\d+\.xml", name)),
+                        key=lambda name: int(re.findall(r"\d+", name)[-1]))
+        lines: list[str] = []
+        for index, path in enumerate(sheets):
+            lines.append(f"[sheet {names[index] if index < len(names) else index + 1}]")
+            for row in ElementTree.fromstring(archive.read(path)).iter(f"{SHEET_NS}row"):
+                cells: dict[int, str] = {}
+                for cell in row.iter(f"{SHEET_NS}c"):
+                    value = cell.find(f"{SHEET_NS}v")
+                    inline = cell.find(f"{SHEET_NS}is")
+                    if cell.get("t") == "s" and value is not None and (value.text or "").isdigit():
+                        text = shared[int(value.text)] if int(value.text) < len(shared) else ""
+                    elif inline is not None:
+                        text = "".join(node.text or "" for node in inline.iter(f"{SHEET_NS}t"))
+                    else:
+                        text = value.text if value is not None and value.text else ""
+                    if text.strip():
+                        cells[_column_index(cell.get("r", ""))] = text.strip()
+                if cells:
+                    lines.append(" | ".join(cells.get(column, "") for column in range(max(cells) + 1)))
+    except (zipfile.BadZipFile, KeyError, ElementTree.ParseError, ValueError):
+        source.note("error", "The Excel file is damaged and cannot be read")
+        return
+    source.text = "\n".join(lines)
+
+
+def _form_json(source: SourceFile) -> None:
+    from .definition import FORMAT, parse_json_strict
+
+    value, issues = parse_json_strict(source.content.decode("utf-8-sig"))
+    if any(issue.code == "invalid_json" for issue in issues):
+        source.kind, source.media_type = "text", "text/plain"
+        source.text = source.content.decode("utf-8-sig")
+        return
+    if isinstance(value, dict) and isinstance(value.get("definition"), dict):
+        value = value["definition"]  # an API response or a template export
+    if isinstance(value, dict) and value.get("format") == FORMAT:
+        source.definition = value
+        if issues:
+            source.note("warning", "The JSON repeats a key; the last value of each repeated key is used")
+        return
+    source.kind, source.media_type = "text", "application/json"
+    source.text = source.content.decode("utf-8-sig")
+
+
+def inspect(files: list[SourceFile]) -> list[SourceFile]:
+    """Fill in kind, media type, notes and extracted text for every file."""
+    seen: set[str] = set()
+    for source in files:
+        source.kind, source.media_type = sniff(source.content)
+        if not source.content:
+            source.note("error", "The file is empty")
+            continue
+        if len(source.content) > MAX_FILE_BYTES:
+            source.note("error", f"Larger than {MAX_FILE_BYTES // (1024 * 1024)} MB")
+            continue
+        if source.sha256 in seen:
+            source.note("warning", "The same file was added twice; it is read once")
+        seen.add(source.sha256)
+        if source.kind == "pdf":
+            _pdf(source)
+        elif source.kind == "image":
+            source.pages = 1
+            if len(source.content) < 20_000:
+                source.note("warning", "A small image: small print may be unreadable, use a scan of at least 150 dpi")
+        elif source.kind == "docx":
+            _docx(source)
+        elif source.kind == "xlsx":
+            _xlsx(source)
+        elif source.kind == "form_json":
+            _form_json(source)
+        elif source.kind == "text":
+            source.text = source.content.decode("utf-8-sig")
+        elif source.kind == "legacy_office":
+            source.note("error", "Old Word / Excel format (.doc / .xls): save it as .docx / .xlsx or PDF and upload that")
+        else:
+            source.note("error", "Unsupported file: use PDF, PNG / JPEG / WEBP / GIF, Word (.docx), Excel (.xlsx), text / CSV or a .form.json")
+        if source.kind in {"docx", "xlsx", "text"} and source.status != "error":
+            if not source.text.strip():
+                source.note("error", "No text could be read from this file")
+            elif len(source.text) > MAX_TEXT_CHARS:
+                source.note("warning", f"Long text: only the first {MAX_TEXT_CHARS:,} characters are read")
+                source.text = source.text[:MAX_TEXT_CHARS]
+    definitions = [source for source in files if source.definition is not None]
+    if definitions and len(definitions) != len(files):
+        for source in definitions:
+            source.note("warning", "A form definition next to other documents: the AI uses it as the starting point")
+    return files
+
+
+def summary(files: list[SourceFile]) -> dict[str, Any]:
+    reports = [source.report() for source in files]
+    return {"files": reports, "ok": all(report["status"] != "error" for report in reports),
+            "errors": sum(report["status"] == "error" for report in reports),
+            "warnings": sum(report["status"] == "warning" for report in reports)}
+
+
+def dumps(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))

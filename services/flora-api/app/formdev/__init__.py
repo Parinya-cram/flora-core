@@ -16,6 +16,7 @@ from .attachments import AttachmentStore
 from .lookups import LookupRepository
 from .repositories import FormRepository, RecordRepository, SchemaRepository, StyleRepository
 from .sync import SyncService
+from .templates import TemplateRepository
 
 
 @dataclass
@@ -32,6 +33,10 @@ class FormDevServices:
     @property
     def attachments(self) -> AttachmentStore:
         return self.records.attachments
+
+    @property
+    def templates(self) -> TemplateRepository:
+        return TemplateRepository(self.adapter, self.schemas.validate)
 
 
 def services_for(

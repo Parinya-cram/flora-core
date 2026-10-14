@@ -2467,6 +2467,296 @@
   ]
  },
  {
+  "name": "p1: bind to case data",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "weight",
+       "type": "decimal",
+       "label": "WT",
+       "bind": "patient.weight_kg"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: bind is checked",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "weight",
+       "type": "decimal",
+       "label": "WT",
+       "bind": "Patient Weight"
+      },
+      {
+       "id": "grp",
+       "type": "group",
+       "label": "G",
+       "bind": "patient.hn",
+       "fields": [
+        {
+         "id": "other",
+         "type": "text",
+         "label": "Other"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_type",
+   "property_not_supported"
+  ]
+ },
+ {
+  "name": "p1: logo and barcode",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "hn",
+       "type": "text",
+       "label": "HN"
+      },
+      {
+       "id": "logo",
+       "type": "logo",
+       "label": "Logo",
+       "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+       "height_mm": 12,
+       "align": "left"
+      },
+      {
+       "id": "hn_barcode",
+       "type": "barcode",
+       "label": "HN barcode",
+       "source": "hn",
+       "symbology": "code128",
+       "height_mm": 10,
+       "show_text": false,
+       "align": "right"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: logo and barcode are checked",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "logo",
+       "type": "logo",
+       "label": "Logo",
+       "src": "https://example.com/logo.png",
+       "height_mm": 80,
+       "align": "middle"
+      },
+      {
+       "id": "hn_barcode",
+       "type": "barcode",
+       "label": "HN barcode",
+       "source": "nowhere",
+       "symbology": "qr",
+       "height_mm": 2,
+       "show_text": "yes"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_file",
+   "invalid_layout",
+   "invalid_layout",
+   "invalid_layout",
+   "invalid_layout",
+   "invalid_type",
+   "unknown_field_reference"
+  ]
+ },
+ {
+  "name": "p1: printed elements take no value properties",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "hn_barcode",
+       "type": "barcode",
+       "label": "HN",
+       "required": true,
+       "indexed": true
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "property_not_supported",
+   "property_not_supported",
+   "unknown_field_reference"
+  ]
+ },
+ {
+  "name": "p1: timeline print settings",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "tl",
+       "type": "timeline",
+       "label": "T",
+       "timeline": {
+        "print_columns": 24,
+        "hide_empty_rows": true
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: timeline print settings are checked",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "tl",
+       "type": "timeline",
+       "label": "T",
+       "timeline": {
+        "print_columns": 60,
+        "hide_empty_rows": "yes"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_type",
+   "invalid_type"
+  ]
+ },
+ {
   "name": "p1: timeline rows",
   "definition": {
    "format": "flora.form/1",
@@ -3867,6 +4157,66 @@
   "valid": false,
   "codes": [
    "unknown_template_token"
+  ]
+ },
+ {
+  "name": "p1: print density",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": {
+    "size": "A4",
+    "density": "fit_page"
+   },
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: print density is checked",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": {
+    "size": "A4",
+    "density": "tiny"
+   },
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_paper"
   ]
  },
  {

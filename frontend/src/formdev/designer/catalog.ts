@@ -42,6 +42,10 @@ export const PALETTE: PaletteGroup[] = [
     { type: "matrix", icon: "▤", th: "ตารางคะแนน (แถว × คอลัมน์)", en: "Score table (rows × columns)", hintTh: "Aldrete score, คะแนนตามเวลา", hintEn: "Aldrete score, scores over time" },
     { type: "timeline", icon: "📈", th: "กราฟ + ตาราง Timeline (Flora Leaf)", en: "Timeline chart + table (Flora Leaf)", hintTh: "สัญญาณชีพตามเวลา, เหตุการณ์", hintEn: "Vitals over time, events" },
   ] },
+  { th: "ส่วนหัวกระดาษ", en: "Document header", items: [
+    { type: "logo", icon: "🏥", th: "โลโก้โรงพยาบาล", en: "Hospital logo", hintTh: "รูปที่พิมพ์ทุกครั้ง", hintEn: "A picture printed on the form" },
+    { type: "barcode", icon: "▌▌", th: "บาร์โค้ด", en: "Barcode", hintTh: "HN / AN ของผู้ป่วย", hintEn: "Patient HN / AN" },
+  ] },
   { th: "ไฟล์และลายเซ็น", en: "Files and signature", items: [
     { type: "image", icon: "🖼", th: "รูปภาพ", en: "Image", hintTh: "ภาพแผล, ฟิล์ม", hintEn: "Wound photo" },
     { type: "file", icon: "📎", th: "ไฟล์แนบ", en: "File", hintTh: "เอกสาร PDF", hintEn: "PDF document" },

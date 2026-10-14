@@ -1,5 +1,5 @@
--- FormDev: every PostgreSQL migration (0060-0065) in order, for databases created before FormDev.
--- Paste into psql (or psql -f). Safe to run again. Generated from infrastructure/postgres/006*.sql.
+-- FormDev: every PostgreSQL migration (0060-0065, 0083) in order, for databases created before FormDev.
+-- Paste into psql (or psql -f). Safe to run again. Generated from infrastructure/postgres/006*.sql and 0083-formdev-template.sql.
 
 -- ===== 0060-formdev.sql =====
 -- FormDev data engine (Phase 3): form definitions, versioned schemas, hybrid records,
@@ -501,6 +501,35 @@ WHERE EXISTS (SELECT 1 FROM formdev_record r WHERE r.form_id = f.form_id)
 ON CONFLICT (form_id, field_id) DO NOTHING;
 
 GRANT DELETE ON formdev_index_coverage TO flora_view, flora_app;
+
+COMMIT;
+
+-- ===== 0083-formdev-template.sql =====
+-- Form Studio template library: complete form definitions offered as starting points, written by hand or built by
+-- the AI form builder from source documents (PDF, images, Word, Excel). A template is a draft until an author marks it
+-- reviewed; forms are created from it in Form Studio and only published forms reach Workflow Studio. The source
+-- documents stay in formdev_attachment (sources lists their sha256). Idempotent.
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS formdev_template (
+  template_id text PRIMARY KEY CHECK (template_id ~ '^[a-z][a-z0-9_]{1,63}$'),
+  title text NOT NULL,
+  description text NOT NULL DEFAULT '',
+  origin text NOT NULL CHECK (origin IN ('ai', 'manual', 'import')),
+  status text NOT NULL CHECK (status IN ('draft', 'reviewed')),
+  definition jsonb NOT NULL,
+  report jsonb,
+  sources jsonb NOT NULL DEFAULT '[]'::jsonb,
+  version integer NOT NULL CHECK (version >= 1),
+  created_at bigint NOT NULL,
+  created_by text,
+  updated_at bigint NOT NULL,
+  updated_by text
+);
+
+CREATE INDEX IF NOT EXISTS formdev_template_updated ON formdev_template (updated_at DESC);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON formdev_template TO flora_view, flora_app;
 
 COMMIT;
 

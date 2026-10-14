@@ -68,6 +68,7 @@ services:
       - ../infrastructure/postgres/0063-formdev-lookup.sql:/docker-entrypoint-initdb.d/0063-formdev-lookup.sql:ro
       - ../infrastructure/postgres/0064-formdev-attachment.sql:/docker-entrypoint-initdb.d/0064-formdev-attachment.sql:ro
       - ../infrastructure/postgres/0065-formdev-index-rebuild.sql:/docker-entrypoint-initdb.d/0065-formdev-index-rebuild.sql:ro
+      - ../infrastructure/postgres/0083-formdev-template.sql:/docker-entrypoint-initdb.d/0083-formdev-template.sql:ro
       - ../infrastructure/postgres/0070-workflow-studio.sql:/docker-entrypoint-initdb.d/0070-workflow-studio.sql:ro
       - ../infrastructure/postgres/0075-report-studio.sql:/docker-entrypoint-initdb.d/0075-report-studio.sql:ro
       - ../infrastructure/postgres/0076-ai-studio.sql:/docker-entrypoint-initdb.d/0076-ai-studio.sql:ro

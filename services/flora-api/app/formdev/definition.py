@@ -92,11 +92,26 @@ TIMELINE_SERIES = ("hr", "pr", "spo2", "nibp", "art", "cvp", "temperature", "et_
 TIMELINE_SOURCES = ("leaf", "manual")
 TIMELINE_ROW_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 MAX_TIMELINE_COLUMNS = 1500
+# logo / barcode: printed elements. The picture lives in the definition (offline, PDF without fetching); Interleaved
+# 2 of 5 is Flora Leaf's HN barcode (digits only), Code 128 / Code 39 take letters too (e.g. AN "67-00123").
+# bind: the case datum (Flora Leaf) a field shows, as domain.name (patient.hn, case.asa, anesthesia.start).
+BIND = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+\Z")
+LOGO_SRC = re.compile(r"^data:image/(png|jpeg);base64,[A-Za-z0-9+/=]+\Z")
+MAX_LOGO_CHARS = 400_000
+LOGO_HEIGHT_MM = (4, 60)
+BARCODE_HEIGHT_MM = (5, 30)
+ALIGNS = ("left", "center", "right")
+SYMBOLOGIES = ("i2of5", "code128", "code39")
+# Printed time columns per page (the print step widens to fit them, as on the paper anesthesia record).
+TIMELINE_PRINT_COLUMNS = (8, 48)
 MAX_TIMELINE_ROWS = 80
 MAX_TIMELINE_EVENTS = 300
 MATRIX_NUMERIC = ("integer", "number")
 MAX_MATRIX_ITEMS = 60
-PAPER_KEYS = {"size", "orientation", "margin_mm", "header", "footer"}
+PAPER_KEYS = {"size", "orientation", "margin_mm", "header", "footer", "density"}
+# Print density: compact = denser type and rows; fit_page = the largest size that fits one page (never below the
+# compact minimum; content that still does not fit continues on the next pages).
+DENSITIES = ("normal", "compact", "fit_page")
 BAND_KEYS = {"left", "center", "right", "height_mm", "first_page"}
 MARGIN_KEYS = ("top", "right", "bottom", "left")
 CALCULATOR_KEYS = {"id", "name", "description", "formula", "output"}
@@ -247,7 +262,8 @@ def paper_spec(definition: dict[str, Any]) -> dict[str, Any]:
     if width is not None and orientation == "landscape":
         width, height = height, width
     return {"size": size, "orientation": orientation, "width_mm": width, "height_mm": height,
-            "margin_mm": spec.get("margin_mm") or {}, "header": spec.get("header"), "footer": spec.get("footer")}
+            "margin_mm": spec.get("margin_mm") or {}, "header": spec.get("header"), "footer": spec.get("footer"),
+            "density": spec.get("density") or "normal"}
 
 
 def style_ref(definition: dict[str, Any]) -> str | None:
@@ -456,6 +472,8 @@ def _validate_paper(ctx: _Ctx, paper: Any) -> None:
         margin = paper["margin_mm"]
         if not isinstance(margin, dict) or set(margin) - set(MARGIN_KEYS) or not all(is_number(v) and 0 <= v <= 60 for v in margin.values()):
             ctx.add("$.paper.margin_mm", "invalid_margin", "margin_mm takes top, right, bottom and left in mm (0-60)")
+    if "density" in paper and paper["density"] not in DENSITIES:
+        ctx.add("$.paper.density", "invalid_paper", f"density must be one of {', '.join(DENSITIES)}")
     for band_name in ("header", "footer"):
         if band_name in paper:
             _validate_band(ctx, paper[band_name], f"$.paper.{band_name}")
@@ -1004,6 +1022,10 @@ def _validate_field(ctx: _Ctx, field: Any, path: str, scope: _Scope, columns: in
         _validate_matrix(ctx, field, path)
     if field_type == "timeline" and "timeline" in field:
         _validate_timeline_config(ctx, field["timeline"], f"{path}.timeline")
+    if field_type in ("logo", "barcode"):
+        _validate_printed_element(ctx, field, path, scope)
+    if "bind" in field and not (isinstance(field["bind"], str) and BIND.match(field["bind"])):
+        ctx.add(f"{path}.bind", "invalid_type", "bind names a case datum such as patient.hn or case.asa")
     if "derive" in field and "derive" in allowed:
         _validate_derive(ctx, field, path, scope)
 
@@ -1131,13 +1153,42 @@ def matrix_totals(field: dict[str, Any], value: Any) -> dict[str, dict[str, floa
     return out
 
 
+def _validate_printed_element(ctx: _Ctx, field: dict[str, Any], path: str, scope: _Scope) -> None:
+    """logo: a PNG / JPEG picture kept in the definition; barcode: the value of another field of the form."""
+    low, high = LOGO_HEIGHT_MM if field["type"] == "logo" else BARCODE_HEIGHT_MM
+    if "height_mm" in field and not (is_number(field["height_mm"]) and low <= field["height_mm"] <= high):
+        ctx.add(f"{path}.height_mm", "invalid_layout", f"height_mm must be {low}-{high}")
+    if "align" in field and field["align"] not in ALIGNS:
+        ctx.add(f"{path}.align", "invalid_layout", "align is left, center or right")
+    if field["type"] == "logo":
+        src = field.get("src")
+        if not isinstance(src, str) or not LOGO_SRC.match(src):
+            ctx.add(f"{path}.src", "invalid_file", "src is a PNG or JPEG picture (data:image/png;base64,...)")
+        elif len(src) > MAX_LOGO_CHARS:
+            ctx.add(f"{path}.src", "invalid_max_size", f"The picture is limited to {MAX_LOGO_CHARS // 1000} KB (base64); use a smaller image")
+        return
+    source = field.get("source")
+    if not isinstance(source, str) or not ITEM_ID.match(source):
+        ctx.add(f"{path}.source", "unknown_field_reference", "source names the field whose value the barcode shows (e.g. hn)")
+    else:
+        ctx.refs.append((f"{path}.source", source, scope))
+    if "symbology" in field and field["symbology"] not in SYMBOLOGIES:
+        ctx.add(f"{path}.symbology", "invalid_layout", f"symbology is one of {', '.join(SYMBOLOGIES)}")
+    if "show_text" in field and not isinstance(field["show_text"], bool):
+        ctx.add(f"{path}.show_text", "invalid_type", "show_text must be a boolean")
+
+
 def _validate_timeline_config(ctx: _Ctx, config: Any, path: str) -> None:
     """timeline: which parts show (events row, trend chart, parameter table), the table rows, the chart series, the
     column step in minutes and where values come from (Flora Leaf, or typed in)."""
     if not isinstance(config, dict):
-        ctx.add(path, "invalid_type", "timeline must be {parts?, rows?, chart?, step_min?, source?}")
+        ctx.add(path, "invalid_type", "timeline must be {parts?, rows?, chart?, step_min?, source?, print_columns?, hide_empty_rows?}")
         return
-    ctx.unknown(config, {"parts", "rows", "chart", "step_min", "source"}, path)
+    ctx.unknown(config, {"parts", "rows", "chart", "step_min", "source", "print_columns", "hide_empty_rows"}, path)
+    if "print_columns" in config and not (is_int(config["print_columns"]) and TIMELINE_PRINT_COLUMNS[0] <= config["print_columns"] <= TIMELINE_PRINT_COLUMNS[1]):
+        ctx.add(f"{path}.print_columns", "invalid_type", f"print_columns must be an integer {TIMELINE_PRINT_COLUMNS[0]}-{TIMELINE_PRINT_COLUMNS[1]}")
+    if "hide_empty_rows" in config and not isinstance(config["hide_empty_rows"], bool):
+        ctx.add(f"{path}.hide_empty_rows", "invalid_type", "hide_empty_rows must be a boolean")
     parts = config.get("parts")
     if "parts" in config and (not isinstance(parts, list) or not parts or not all(part in TIMELINE_PARTS for part in parts) or len(set(parts)) != len(parts)):
         ctx.add(f"{path}.parts", "invalid_layout", f"parts lists some of {', '.join(TIMELINE_PARTS)}")

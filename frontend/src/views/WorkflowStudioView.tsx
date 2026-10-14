@@ -170,7 +170,9 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
     const version = option.published_version ?? option.versions[option.versions.length - 1] ?? 1;
     patchDef(current => ({
       ...current,
-      forms: [...current.forms, { form_id: option.form_id, version, title: option.title, phase: "any", required: false }],
+      // Where Form Studio suggests the form is filled in on Leaf (AI builder), else any time at the end.
+      forms: [...current.forms, { form_id: option.form_id, version, title: option.title, phase: option.placement?.phase ?? "any", required: false,
+        after_section: option.placement?.after_section ?? null, hint: "", display: "tab" }],
       packet: [...current.packet, { kind: "form", form_id: option.form_id }],
     }));
     setAddFormId("");
@@ -401,7 +403,7 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
         </div>
 
         <div className={`${card} space-y-3`}>
-          <div><h3 className="font-bold">Forms</h3><p className="text-xs text-[var(--app-muted)]">Published Form Studio forms, pinned to a version. Each becomes an extra tab on the case.</p></div>
+          <div><h3 className="font-bold">Forms</h3><p className="text-xs text-[var(--app-muted)]">Published Form Studio forms, pinned to a version. Each becomes an extra tab on the case in Flora Leaf, placed after the record tab chosen here (with the phase it belongs to and a note for whoever fills it in).</p></div>
           {def.forms.length ? <div className="space-y-2">{def.forms.map((form, index) => {
             const option = formOption.get(form.form_id);
             const versions = Array.from(new Set([...(option?.versions || []), form.version])).sort((a, b) => a - b);
@@ -413,7 +415,23 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
               <label className="text-xs text-[var(--app-muted)]">Phase <select className={`${inputClass} !w-auto !py-1`} disabled={readOnly} value={form.phase || "any"} onChange={event => patchForm(index, { phase: event.target.value as WorkflowPhase })}>
                 {PHASES.map(phase => <option key={phase} value={phase}>{phase}</option>)}
               </select></label>
+              <label className="text-xs text-[var(--app-muted)]">Used as <select className={`${inputClass} !w-auto !py-1`} disabled={readOnly} value={form.display ?? "tab"}
+                onChange={event => patchForm(index, { display: event.target.value as WorkflowFormRef["display"] })}>
+                <option value="tab">data-entry tab + print</option>
+                <option value="report">print from Reports only</option>
+              </select></label>
+              <label className="text-xs text-[var(--app-muted)]">Leaf tab after <select className={`${inputClass} !w-auto !py-1`} disabled={readOnly} value={form.after_section ?? ""} onChange={event => patchForm(index, { after_section: event.target.value || null })}>
+                <option value="">the last record tab</option>
+                {options.sections.map(section => <option key={section.id} value={section.id}>{section.label}</option>)}
+              </select></label>
               <label className="flex items-center gap-1 text-xs font-semibold"><input type="checkbox" disabled={readOnly} checked={Boolean(form.required)} onChange={event => patchForm(index, { required: event.target.checked })} className="accent-[var(--app-accent)]" />Required</label>
+              <input className={`${inputClass} !py-1 basis-full text-xs`} disabled={readOnly} maxLength={300} value={form.hint ?? ""} placeholder="Note shown on Leaf, e.g. Filled in by the PACU nurse before discharge"
+                aria-label={`Note for ${form.title || form.form_id} on Leaf`} onChange={event => patchForm(index, { hint: event.target.value })} />
+              {option?.placement && (option.placement.phase !== (form.phase || "any") || (option.placement.after_section ?? null) !== (form.after_section ?? null))
+                ? <div className="basis-full text-[11px] text-[var(--app-muted)]">Form Studio suggests {option.placement.phase}
+                  {option.placement.after_section ? `, after ${options.sections.find(section => section.id === option.placement?.after_section)?.label ?? option.placement.after_section}` : ", at the end"}
+                  {!readOnly ? <button type="button" className={`${tiny} ml-2`} onClick={() => patchForm(index, { phase: option.placement!.phase, after_section: option.placement!.after_section })}>Use it</button> : null}
+                </div> : null}
               {!readOnly ? <div className="flex gap-1">
                 <button type="button" className={tiny} disabled={index === 0} onClick={() => patchDef(current => ({ ...current, forms: move(current.forms, index, -1) }))} aria-label="Move up">↑</button>
                 <button type="button" className={tiny} disabled={index === def.forms.length - 1} onClick={() => patchDef(current => ({ ...current, forms: move(current.forms, index, 1) }))} aria-label="Move down">↓</button>

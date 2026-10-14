@@ -47,6 +47,13 @@ export default function TimelineEditor({ field, lang, onPatch }: Props) {
         { value: "leaf", label: t("Flora Leaf (แก้ไขได้)", "Flora Leaf (editable)") }, { value: "manual", label: t("กรอกเอง", "Typed in") }]}
         onChange={value => set({ source: value as "leaf" | "manual" })} />
     </div>
+    <div className="grid grid-cols-2 gap-2">
+      <SelectField label={t("คอลัมน์เวลาต่อหน้า (พิมพ์)", "Time columns per printed page")} value={String(field.timeline?.print_columns ?? "")}
+        options={[{ value: "", label: t("อัตโนมัติ (~13)", "Automatic (~13)") }, ...[16, 20, 24, 28, 32, 40].map(n => ({ value: String(n), label: t(`${n} คอลัมน์ (ช่วงเวลาขยายให้พอดีเคส)`, `${n} columns (the step widens to fit the case)`) }))]}
+        onChange={value => set({ print_columns: value ? Number(value) : undefined })} />
+      <label className={`${chip} self-end pb-2`}><input type="checkbox" className="accent-[var(--app-accent)]" checked={Boolean(field.timeline?.hide_empty_rows)}
+        onChange={event => set({ hide_empty_rows: event.target.checked || undefined })} />{t("ซ่อนแถวที่ไม่มีค่าเมื่อพิมพ์", "Leave out empty rows when printing")}</label>
+    </div>
     {config.parts.includes("chart") ? <div className="space-y-1">
       <span className={label}>{t("เส้นในกราฟ", "Chart series")}</span>
       <div className="flex flex-wrap gap-x-3 gap-y-1">

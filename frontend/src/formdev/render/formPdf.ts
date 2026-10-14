@@ -164,6 +164,9 @@ async function draw(pdf: PDFDocument, page: PDFPage, op: Op, fonts: Fonts, image
     case "rect":
       page.drawRectangle({ x: op.x, y: H - op.y - op.h, width: op.w, height: op.h, borderWidth: 0.4, borderColor: LINE_COLOR, color: op.fill ? FILL_COLOR : undefined });
       return;
+    case "fill":
+      page.drawRectangle({ x: op.x, y: H - op.y - op.h, width: op.w, height: op.h, color: op.color ? hex(op.color) : TONES.text });
+      return;
     case "mark": {
       const half = op.size / 2;
       const cx = op.x + half;
@@ -193,7 +196,8 @@ async function draw(pdf: PDFDocument, page: PDFPage, op: Op, fonts: Fonts, image
       const scale = Math.min(op.w / image.width, op.h / image.height);
       const w = image.width * scale;
       const h = image.height * scale;
-      page.drawImage(image, { x: op.x + (op.w - w) / 2, y: H - op.y - h, width: w, height: h });
+      const left = op.align === "left" ? op.x : op.align === "right" ? op.x + op.w - w : op.x + (op.w - w) / 2;
+      page.drawImage(image, { x: left, y: H - op.y - h, width: w, height: h });
     }
   }
 }

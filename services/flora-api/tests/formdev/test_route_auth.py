@@ -6,7 +6,7 @@ import unittest
 os.environ.setdefault("FLORA_DATABASE_URL", "postgresql://unused@localhost/unused")
 os.environ.setdefault("FLORA_API_MODE", "canopy")
 
-AUTH_DEPENDENCIES = {"read_token", "require_admin", "require_studio_author", "current_canopy_user", "query_context", "api_context", "formdev"}
+AUTH_DEPENDENCIES = {"read_token", "require_admin", "require_studio_author", "current_canopy_user", "ai_author", "query_context", "api_context", "formdev"}
 
 
 def _names(dependant) -> set:

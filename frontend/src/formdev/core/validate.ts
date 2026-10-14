@@ -77,7 +77,22 @@ const TIMELINE_ROW_ID = /^[a-z][a-z0-9_]{0,63}$/;
 const MAX_TIMELINE_COLUMNS = 1500;
 const MAX_TIMELINE_ROWS = 80;
 const MAX_TIMELINE_EVENTS = 300;
-const PAPER_KEYS = new Set(["size", "orientation", "margin_mm", "header", "footer"]);
+const PAPER_KEYS = new Set(["size", "orientation", "margin_mm", "header", "footer", "density"]);
+/** Print density: compact = denser type and rows; fit_page = the largest size that fits one page (never below the
+ * compact minimum; what still does not fit continues on the next pages). */
+export const DENSITIES = ["normal", "compact", "fit_page"] as const;
+/** logo / barcode: printed elements. The picture lives in the definition (offline, PDF without fetching); Interleaved
+ * 2 of 5 is Flora Leaf's HN barcode (digits only), Code 128 / Code 39 take letters too (e.g. AN "67-00123"). */
+/** bind: the case datum (Flora Leaf) a field shows, as domain.name (patient.hn, case.asa, anesthesia.start). */
+export const BIND = /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/;
+export const LOGO_SRC = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/;
+export const MAX_LOGO_CHARS = 400_000;
+export const LOGO_HEIGHT_MM = [4, 60] as const;
+export const BARCODE_HEIGHT_MM = [5, 30] as const;
+export const ALIGNS = ["left", "center", "right"] as const;
+export const SYMBOLOGIES = ["i2of5", "code128", "code39"] as const;
+/** Printed time columns per page (the print step widens to fit them, as on the paper anesthesia record). */
+export const TIMELINE_PRINT_COLUMNS = [8, 48] as const;
 const BAND_KEYS = new Set(["left", "center", "right", "height_mm", "first_page"]);
 const MARGIN_KEYS = ["top", "right", "bottom", "left"];
 const CALCULATOR_KEYS = new Set(["id", "name", "description", "formula", "output"]);
@@ -186,6 +201,7 @@ export type PaperSpec = {
   margin_mm: Partial<Record<"top" | "right" | "bottom" | "left", number>>;
   header?: PaperBand;
   footer?: PaperBand;
+  density: (typeof DENSITIES)[number];
 };
 
 /** Normalised paper: size, orientation, sheet size and bands. */
@@ -197,7 +213,8 @@ export function paperSpec(definition: Pick<FormDefinition, "paper">): PaperSpec 
   let [width, height]: Array<number | null> = PAPER_SIZES_MM[size] ?? [null, null];
   if (width !== null && orientation === "landscape") [width, height] = [height, width];
   return { size, orientation, width_mm: width, height_mm: height, margin_mm: (spec.margin_mm as PaperSpec["margin_mm"]) ?? {},
-    header: spec.header as PaperBand | undefined, footer: spec.footer as PaperBand | undefined };
+    header: spec.header as PaperBand | undefined, footer: spec.footer as PaperBand | undefined,
+    density: (DENSITIES as readonly unknown[]).includes(spec.density) ? spec.density as PaperSpec["density"] : "normal" };
 }
 
 export function styleRef(definition: FormDefinition): string | undefined {
@@ -396,6 +413,7 @@ function validatePaper(ctx: Ctx, paper: unknown) {
       ctx.add("$.paper.margin_mm", "invalid_margin", "margin_mm takes top, right, bottom and left in mm (0-60)");
     }
   }
+  if ("density" in paper && !(DENSITIES as readonly unknown[]).includes(paper.density)) ctx.add("$.paper.density", "invalid_paper", `density must be one of ${DENSITIES.join(", ")}`);
   for (const band of ["header", "footer"]) if (band in paper) validateBand(ctx, paper[band], `$.paper.${band}`);
 }
 
@@ -878,6 +896,8 @@ function validateField(ctx: Ctx, field: unknown, path: string, scope: Scope, col
   }
   if (field.type === "matrix") validateMatrix(ctx, field, path);
   if (field.type === "timeline" && "timeline" in field) validateTimelineConfig(ctx, field.timeline, `${path}.timeline`);
+  if (field.type === "logo" || field.type === "barcode") validatePrintedElement(ctx, field, path, scope);
+  if ("bind" in field && !(isText(field.bind) && BIND.test(field.bind))) ctx.add(`${path}.bind`, "invalid_type", "bind names a case datum such as patient.hn or case.asa");
   if ("derive" in field && allowed.has("derive")) validateDerive(ctx, field, path, scope);
 
   if (field.indexed === true && allowed.has("indexed")) {
@@ -994,12 +1014,32 @@ export function matrixTotals(field: FieldDefinition, value: unknown): Record<str
 }
 
 /** timeline: which parts show, the table rows, the chart series, the column step (minutes) and the value source. */
-function validateTimelineConfig(ctx: Ctx, config: unknown, path: string) {
-  if (!isObject(config)) {
-    ctx.add(path, "invalid_type", "timeline must be {parts?, rows?, chart?, step_min?, source?}");
+/** logo: a PNG / JPEG picture kept in the definition; barcode: the value of another field of the form. */
+function validatePrintedElement(ctx: Ctx, field: Obj, path: string, scope: Scope) {
+  const [low, high] = field.type === "logo" ? LOGO_HEIGHT_MM : BARCODE_HEIGHT_MM;
+  if ("height_mm" in field && !(isNumber(field.height_mm) && field.height_mm >= low && field.height_mm <= high)) ctx.add(`${path}.height_mm`, "invalid_layout", `height_mm must be ${low}-${high}`);
+  if ("align" in field && !(ALIGNS as readonly unknown[]).includes(field.align)) ctx.add(`${path}.align`, "invalid_layout", "align is left, center or right");
+  if (field.type === "logo") {
+    if (!isText(field.src) || !LOGO_SRC.test(field.src)) ctx.add(`${path}.src`, "invalid_file", "src is a PNG or JPEG picture (data:image/png;base64,...)");
+    else if (field.src.length > MAX_LOGO_CHARS) ctx.add(`${path}.src`, "invalid_max_size", `The picture is limited to ${MAX_LOGO_CHARS / 1000} KB (base64); use a smaller image`);
     return;
   }
-  ctx.unknown(config, new Set(["parts", "rows", "chart", "step_min", "source"]), path);
+  if (!isText(field.source) || !ITEM_ID.test(field.source)) ctx.add(`${path}.source`, "unknown_field_reference", "source names the field whose value the barcode shows (e.g. hn)");
+  else ctx.refs.push([`${path}.source`, field.source, scope]);
+  if ("symbology" in field && !(SYMBOLOGIES as readonly unknown[]).includes(field.symbology)) ctx.add(`${path}.symbology`, "invalid_layout", `symbology is one of ${SYMBOLOGIES.join(", ")}`);
+  if ("show_text" in field && typeof field.show_text !== "boolean") ctx.add(`${path}.show_text`, "invalid_type", "show_text must be a boolean");
+}
+
+function validateTimelineConfig(ctx: Ctx, config: unknown, path: string) {
+  if (!isObject(config)) {
+    ctx.add(path, "invalid_type", "timeline must be {parts?, rows?, chart?, step_min?, source?, print_columns?, hide_empty_rows?}");
+    return;
+  }
+  ctx.unknown(config, new Set(["parts", "rows", "chart", "step_min", "source", "print_columns", "hide_empty_rows"]), path);
+  if ("print_columns" in config && !(isInt(config.print_columns) && config.print_columns >= TIMELINE_PRINT_COLUMNS[0] && config.print_columns <= TIMELINE_PRINT_COLUMNS[1])) {
+    ctx.add(`${path}.print_columns`, "invalid_type", `print_columns must be an integer ${TIMELINE_PRINT_COLUMNS[0]}-${TIMELINE_PRINT_COLUMNS[1]}`);
+  }
+  if ("hide_empty_rows" in config && typeof config.hide_empty_rows !== "boolean") ctx.add(`${path}.hide_empty_rows`, "invalid_type", "hide_empty_rows must be a boolean");
   const parts = config.parts;
   if ("parts" in config && (!Array.isArray(parts) || !parts.length || !parts.every(part => (TIMELINE_PARTS as readonly unknown[]).includes(part)) || new Set(parts).size !== parts.length)) {
     ctx.add(`${path}.parts`, "invalid_layout", `parts lists some of ${TIMELINE_PARTS.join(", ")}`);

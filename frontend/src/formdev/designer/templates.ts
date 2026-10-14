@@ -30,7 +30,9 @@ export function perioperativeHeader(title: string): SectionDefinition {
     { id: "room", type: "text", label: "Room", ...span(3) },
     { id: "asa_status", type: "select", label: "ASA Status", options: options("1", "2", "3", "4", "5", "6", ["1e", "1E"], ["2e", "2E"], ["3e", "3E"], ["4e", "4E"], ["5e", "5E"]), ...span(3) },
     { id: "case_type", type: "text", label: "Case Type", ...span(4) },
-    { id: "allergy", type: "text", label: "Allergy", ...span(24) },
+    { id: "allergy", type: "text", label: "Allergy", ...span(16) },
+    // The patient's HN as a barcode, the same symbology as Flora Leaf's wristband / sidebar barcode.
+    { id: "hn_barcode", type: "barcode", label: "HN barcode", source: "hn", symbology: "i2of5", height_mm: 8, ...span(8) },
   ];
   return { id: "patient_header", title, print_style: "boxed", repeat_on_pages: "header", fields };
 }

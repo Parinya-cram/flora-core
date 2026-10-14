@@ -49,6 +49,7 @@ from .routes.workstation import router as workstation_router
 from .routes.terminology import router as terminology_router
 from .routes.formdev import router as formdev_router
 from .routes.formdev_query import router as formdev_query_router
+from .routes.formdev_ai import router as formdev_ai_router
 from .routes.workflows import router as workflows_router
 from .routes.case_workflow import router as case_workflow_router
 from .routes import formdev_runtime
@@ -123,6 +124,7 @@ if API_MODE == "canopy":
     app.include_router(ai_studio_router)
     app.include_router(formdev_router)
     app.include_router(formdev_query_router)
+    app.include_router(formdev_ai_router)
     app.include_router(billing_templates_router)  # before workflows: /billing-templates is not a workflow id
     app.include_router(workflows_router)
     app.include_router(billing_canopy_router)

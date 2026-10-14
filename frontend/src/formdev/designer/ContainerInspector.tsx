@@ -45,6 +45,11 @@ export default function ContainerInspector({ definition, lang, styles, formIdEdi
           <SelectField label={t("แนวกระดาษ", "Orientation")} value={paper.orientation ?? "portrait"} onChange={value => setPaper({ orientation: value as "portrait" | "landscape" })}
             options={[{ value: "portrait", label: t("แนวตั้ง", "Portrait") }, { value: "landscape", label: t("แนวนอน", "Landscape") }]} />
         </div>
+        <SelectField label={t("ความหนาแน่นเมื่อพิมพ์", "Print density")} value={paper.density ?? "normal"}
+          onChange={value => setPaper({ density: value === "normal" ? undefined : value as PaperConfig["density"] })}
+          options={[{ value: "normal", label: t("ปกติ", "Normal") }, { value: "compact", label: t("กะทัดรัด (ตัวอักษรและแถวเล็กลง)", "Compact (smaller type and rows)") },
+            { value: "fit_page", label: t("พอดี 1 หน้า (ที่เหลือขึ้นหน้าต่อ)", "Fit one page (the rest continues)") }]}
+          hint={t("ตัวอักษรไม่เล็กกว่า 5.5 pt — เนื้อหาที่ไม่พอดีจะขึ้นหน้าถัดไป ไม่ถูกตัดทิ้ง", "Type stays at 5.5 pt or larger — what does not fit continues on the next page, nothing is cut")} />
         <SelectField label={t("รูปแบบตัวอักษรและสี (สไตล์)", "Style")} value={definition.style_id ?? definition.style?.id ?? ""} onChange={value => set({ style_id: value, style: undefined })}
           options={styles.filter(style => style.definition.category === "form" || style.style_id.startsWith("style.")).map(style => ({ value: style.style_id, label: String(style.definition.name ?? style.style_id) }))} />
         <TextField label={t("หัวกระดาษ (กลาง)", "Header (centre)")} value={paper.header?.center} placeholder="{title}" onChange={value => setPaper({ header: { ...paper.header, center: value } })} />

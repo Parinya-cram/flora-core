@@ -1,6 +1,6 @@
 {
   "description": "Field type registry (Phase 1.3). Single source of truth for both runtimes: services/flora-api/app/formdev/field_types.py and frontend/src/formdev/core/fieldTypes.ts must equal this file (checked by tests). value = how a value is stored and validated; query = Phase 4 query family (blob and list can be selected but not filtered, sorted or grouped; null: not queryable); index = record index column family (null: cannot be indexed); props = type-specific properties allowed in addition to common (or common_container for fields without a value).",
-  "common": ["id", "key", "type", "label", "description", "required", "readonly", "hidden", "visible", "display", "layout", "style", "validation", "visibility", "clear_when_hidden", "permission", "indexed"],
+  "common": ["id", "key", "type", "label", "description", "required", "readonly", "hidden", "visible", "display", "layout", "style", "validation", "visibility", "clear_when_hidden", "permission", "indexed", "bind"],
   "common_container": ["id", "type", "label", "description", "readonly", "hidden", "visible", "display", "layout", "style", "visibility", "clear_when_hidden", "permission"],
   "types": {
     "text": { "value": "text", "query": "text", "index": "text", "props": ["unit", "max_length", "placeholder", "derive"] },
@@ -23,6 +23,8 @@
     "group": { "value": null, "query": null, "index": null, "props": ["fields", "columns"] },
     "repeat": { "value": "list", "query": "list", "index": null, "props": ["fields", "columns", "min_items", "max_items", "view"] },
     "matrix": { "value": "matrix", "query": null, "index": null, "props": ["rows", "cols", "cell", "totals"] },
-    "timeline": { "value": "timeline", "query": null, "index": null, "props": ["timeline"] }
+    "timeline": { "value": "timeline", "query": null, "index": null, "props": ["timeline"] },
+    "logo": { "value": null, "query": null, "index": null, "props": ["src", "height_mm", "align"] },
+    "barcode": { "value": null, "query": null, "index": null, "props": ["source", "symbology", "height_mm", "show_text", "align"] }
   }
 }

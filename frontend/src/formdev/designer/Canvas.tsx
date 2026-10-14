@@ -12,6 +12,7 @@ import { tr, typeIcon, typeName, type Lang } from "./catalog";
 import { DRAG_MIME, type DragItem, type DropTarget } from "./drag";
 import { fieldPath, GRID_COLUMNS, samePath, type FieldRef, type Path, type Selection } from "./model";
 import { small } from "./styles";
+import PrintedElement from "../ui/PrintedElement";
 
 type Ctx = {
   definition: FormDefinition; lang: Lang; mode: Exclude<LayoutMode, "print">; selection: Selection; styleColumns: number;
@@ -257,6 +258,8 @@ function MockInput({ field, ctx, fieldRef, columns }: { field: FieldDefinition; 
       {field.type === "repeat" ? <div className="mt-1 text-[10px] text-[var(--app-accent)]">+ {t("เพิ่มแถว", "Add row")}</div> : null}
     </div>;
   }
+  // Printed elements as they print (a sample HN for the barcode).
+  if (field.type === "logo" || field.type === "barcode") return <PrintedElement field={field} data={field.source ? { [field.source]: field.symbology === "i2of5" || !field.symbology ? "6512345" : "67-00123" } : {}} />;
   if (field.lookup) return <div className={box}>▾ {t(`เลือกจากตาราง ${field.lookup.source}`, `from table ${field.lookup.source}`)}</div>;
   if (field.options?.length && (field.type === "radio" || field.type === "multiselect")) {
     const mark = field.type === "radio" ? "○" : "☐";

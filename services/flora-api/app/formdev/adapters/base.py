@@ -188,3 +188,17 @@ class DataAdapter(ABC):
 
     @abstractmethod
     def save_lookup(self, row: dict[str, Any]) -> None: ...
+
+    # Template library (Form Studio) -------------------------------------------
+    @abstractmethod
+    def get_template(self, template_id: str) -> dict[str, Any] | None: ...
+
+    @abstractmethod
+    def list_templates(self) -> list[dict[str, Any]]:
+        """Every template without its definition and report, most recently changed first."""
+
+    @abstractmethod
+    def save_template(self, row: dict[str, Any]) -> None: ...
+
+    @abstractmethod
+    def delete_template(self, template_id: str) -> None: ...

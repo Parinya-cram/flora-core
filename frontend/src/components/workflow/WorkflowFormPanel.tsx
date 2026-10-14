@@ -25,11 +25,13 @@ type Props = {
   caseId: number;
   formId: string;
   form: CaseWorkflowForm;
+  /** Workflow Studio's note for whoever fills the form in. */
+  hint?: string;
   readOnly?: boolean;
   hidden?: boolean;
 };
 
-export default function WorkflowFormPanel({ caseId, formId, form, readOnly = false, hidden = false }: Props) {
+export default function WorkflowFormPanel({ caseId, formId, form, hint = "", readOnly = false, hidden = false }: Props) {
   const { t, language } = useLanguage();
   const [value, setValue] = useState<RecordData>(() => ({ ...(form.record?.data || {}) }));
   const [status, setStatus] = useState<"draft" | "completed">(form.record?.status === "completed" ? "completed" : "draft");
@@ -105,6 +107,7 @@ export default function WorkflowFormPanel({ caseId, formId, form, readOnly = fal
       <div className="min-w-0">
         <h2 className="font-semibold">{form.definition.title || formId}</h2>
         {form.definition.description ? <p className="mt-0.5 text-xs text-[var(--app-muted)]">{form.definition.description}</p> : null}
+        {hint ? <p className="mt-1 rounded-lg bg-[var(--app-accent)]/10 px-2 py-1 text-xs text-[var(--app-text)]">ℹ {hint}</p> : null}
       </div>
       <div className="flex items-center gap-2">
         {saveLabel ? <span className={`text-xs ${save.status === "error" ? "text-rose-500" : "text-[var(--app-muted)]"}`}>{saveLabel}</span> : null}

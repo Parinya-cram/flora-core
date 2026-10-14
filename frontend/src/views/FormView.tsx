@@ -4,7 +4,7 @@ import ConfirmDialog from "../components/common/ConfirmDialog";
 import { MicIcon } from "../components/common/DictationButton";
 import FormDictationModal from "../components/dictation/FormDictationModal";
 import { getSurfaceInfo } from "../edition/config";
-import { useCaseWorkflow, workflowFormTabs } from "../components/workflow/caseWorkflow";
+import { orderCaseTabs, useCaseWorkflow, workflowFormTabs } from "../components/workflow/caseWorkflow";
 import {
   getCaseDetailDraft,
   patchCaseDetailDraft,
@@ -2703,9 +2703,21 @@ export default function FormView({
           </div>
 
           <div className="mt-3 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Anesthesia record sections">
-            {builtInRecord ? visibleTabs.map(tabId => {
-              const tab = FORM_TAB_DEFS.find(item => item.id === tabId);
-              const progress = completionByTab[tabId];
+            {orderCaseTabs(builtInRecord ? visibleTabs : [], workflowTabs).map(entry => {
+              if (entry.kind === "form") {
+                const tab = entry.tab;
+                return (
+                  <button key={`wf-${tab.formId}`} type="button" role="tab" aria-selected={workflowTab === tab.formId} title={[tab.phase !== "any" ? tab.phase : "", tab.hint].filter(Boolean).join(" · ") || undefined}
+                    className={`${tabButtonBase} min-h-11 whitespace-nowrap rounded-xl px-3 ${workflowTab === tab.formId
+                      ? "border-[var(--app-accent)] bg-[var(--app-accent)] text-[var(--app-accent-contrast)] shadow-sm"
+                      : "border-dashed border-[var(--app-border)] bg-[var(--app-control-bg)] text-[var(--app-muted)] hover:bg-[var(--app-control-bg-hover)] hover:text-[var(--app-text)]"}`}
+                    onClick={() => setWorkflowTab(tab.formId)}>
+                    <span className="font-bold">{tab.title}</span>{tab.required ? <span className="ml-1 text-rose-500">*</span> : null}
+                  </button>
+                );
+              }
+              const tab = FORM_TAB_DEFS.find(item => item.id === entry.id);
+              const progress = completionByTab[entry.id as FormTabId];
               if (!tab) return null;
               return (
                 <button key={tab.id} type="button" role="tab" aria-selected={activeTab === tab.id && !workflowTab} className={tabClass(tab.id)} onClick={() => { setActiveTab(tab.id); setWorkflowTab(null); }}>
@@ -2713,16 +2725,7 @@ export default function FormView({
                   {progress?.percent != null ? <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[9px] ${progress.percent === 100 ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300" : "bg-black/10 dark:bg-white/10"}`}>{progress.done}/{progress.total}</span> : null}
                 </button>
               );
-            }) : null}
-            {workflowTabs.map(tab => (
-              <button key={`wf-${tab.formId}`} type="button" role="tab" aria-selected={workflowTab === tab.formId} title={tab.phase !== "any" ? tab.phase : undefined}
-                className={`${tabButtonBase} min-h-11 whitespace-nowrap rounded-xl px-3 ${workflowTab === tab.formId
-                  ? "border-[var(--app-accent)] bg-[var(--app-accent)] text-[var(--app-accent-contrast)] shadow-sm"
-                  : "border-dashed border-[var(--app-border)] bg-[var(--app-control-bg)] text-[var(--app-muted)] hover:bg-[var(--app-control-bg-hover)] hover:text-[var(--app-text)]"}`}
-                onClick={() => setWorkflowTab(tab.formId)}>
-                <span className="font-bold">{tab.title}</span>{tab.required ? <span className="ml-1 text-rose-500">*</span> : null}
-              </button>
-            ))}
+            })}
           </div>
 
           {!allowedTabs && !readOnly && builtInRecord ? <details className="mt-2 rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] px-3 py-2">
@@ -3487,7 +3490,7 @@ export default function FormView({
 
       {leafCaseId != null && workflowTabs.length ? <Suspense fallback={workflowTab ? <div className="p-4 text-sm text-[var(--app-muted)]">Loading form…</div> : null}>
         {workflowTabs.map(tab => <WorkflowFormPanel key={`${leafCaseId}-${tab.formId}`} caseId={leafCaseId} formId={tab.formId}
-          form={caseWorkflow.forms[tab.formId]} readOnly={readOnly || caseStatus.status === "ARCHIVED"} hidden={workflowTab !== tab.formId} />)}
+          form={caseWorkflow.forms[tab.formId]} hint={tab.hint} readOnly={readOnly || caseStatus.status === "ARCHIVED"} hidden={workflowTab !== tab.formId} />)}
       </Suspense> : null}
 
       {showSavedPreview ? (

@@ -27,6 +27,8 @@ ATTACHMENT_COLUMNS = ("sha256", "media_type", "size", "content", "created_at", "
 LOOKUP_COLUMNS = ("lookup_id", "version", "metadata", "entries", "updated_at", "updated_by")
 POLICY_COLUMNS = ("form_id", "policy", "version", "updated_at", "updated_by")
 SOURCE_COLUMNS = ("source_id", "form_id", "config", "version", "updated_at", "updated_by")
+TEMPLATE_COLUMNS = ("template_id", "title", "description", "origin", "status", "definition", "report", "sources", "version",
+                    "created_at", "created_by", "updated_at", "updated_by")
 QUERY_COLUMNS = ("query_id", "definition", "owner_user_id", "owner", "created_at", "updated_at")
 JOB_COLUMNS = ("job_id", "kind", "status", "query", "format", "owner_user_id", "owner", "rows_processed", "total_estimate", "checkpoint",
                "result_bytes", "result_sha256", "error", "attempt", "max_attempts", "lease_owner", "lease_expires_at", "cancel_requested",
@@ -35,7 +37,7 @@ OPEN_JOB_STATUSES = ("queued", "running")
 AUDIT_COLUMNS = ("audit_id", "at", "actor_user_id", "actor", "actor_roles", "action", "source_id", "fingerprint", "fields",
                  "filter_fields", "row_count", "job_id", "result_sha256", "client_ip")
 JSON_COLUMNS = {"definition", "data", "result", "local_data", "server_data", "metadata", "policy", "config", "shape",
-                "checkpoint", "error", "query", "actor_roles", "fields", "filter_fields", "entries"}
+                "checkpoint", "error", "query", "actor_roles", "fields", "filter_fields", "entries", "report", "sources"}
 
 
 def _cols(columns: Iterable[str], alias: str = "") -> str:
@@ -349,6 +351,20 @@ class SqlDataAdapter(DataAdapter):
 
     def delete_saved_query(self, query_id: str) -> None:
         self._execute("DELETE FROM formdev_query WHERE query_id = ?", (query_id,))
+
+    # Template library ------------------------------------------------------------
+    def get_template(self, template_id: str) -> dict[str, Any] | None:
+        return self._one(f"SELECT {_cols(TEMPLATE_COLUMNS)} FROM formdev_template WHERE template_id = ?", (template_id,))
+
+    def list_templates(self) -> list[dict[str, Any]]:
+        columns = tuple(column for column in TEMPLATE_COLUMNS if column not in ("definition", "report"))
+        return self._all(f"SELECT {_cols(columns)} FROM formdev_template ORDER BY updated_at DESC, template_id")
+
+    def save_template(self, row: dict[str, Any]) -> None:
+        self._execute(self._upsert_sql("formdev_template", TEMPLATE_COLUMNS, ("template_id",)), self._params(row, TEMPLATE_COLUMNS))
+
+    def delete_template(self, template_id: str) -> None:
+        self._execute("DELETE FROM formdev_template WHERE template_id = ?", (template_id,))
 
     # Background jobs (fenced leases) --------------------------------------------------
     def lock_job_quota(self, owner_user_id: Any) -> None:

@@ -197,6 +197,43 @@ def case_workflow(case_id: int, _: dict = Depends(require_permission("case.read"
     return {"workflow": strip_bundle(workflow), "forms": forms}
 
 
+@router.get("/{case_id}/report-templates")
+def report_templates(case_id: int, _: dict = Depends(require_permission("case.read")),
+                     database: Connection = Depends(connection)) -> dict[str, Any]:
+    """Form Studio templates this case can print from Reports: the forms of the case's workflow (pinned version, with
+    what was filled in), then the forms of the ward's current workflows (so cases started before a template was added
+    can print it too). Nothing is changed: listing and printing never write the case."""
+    case = case_row(database, case_id)
+    workflow = case["workflow"] or {}
+    saved = records(database, case_id)
+    templates: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for entry in workflow.get("forms") or []:
+        if not isinstance(entry, dict) or not entry.get("form_id") or entry["form_id"] in seen:
+            continue
+        definition = definition_for(database, workflow, entry)
+        if definition is None:
+            continue
+        seen.add(entry["form_id"])
+        templates.append({"form_id": entry["form_id"], "version": entry["version"], "title": entry.get("title") or definition.get("title") or entry["form_id"],
+                          "display": entry.get("display") or "tab", "source": "case", "workflow": workflow.get("name") or "",
+                          "definition": definition, "record": public_record(saved.get(entry["form_id"]))})
+    items, forms, synced_at = cached_items(database)
+    for item in items:
+        definition_of = item["definition"]
+        for entry in definition_of.get("forms") or []:
+            if not isinstance(entry, dict) or not entry.get("form_id") or entry["form_id"] in seen:
+                continue
+            definition = forms.get(f"{entry['form_id']}@{entry.get('version')}")
+            if definition is None:
+                continue
+            seen.add(entry["form_id"])
+            templates.append({"form_id": entry["form_id"], "version": entry["version"], "title": entry.get("title") or definition.get("title") or entry["form_id"],
+                              "display": entry.get("display") or "tab", "source": "ward", "workflow": definition_of.get("name") or "",
+                              "definition": definition, "record": public_record(saved.get(entry["form_id"]))})
+    return {"templates": templates, "syncedAt": synced_at}
+
+
 @router.get("/{case_id}/workflow-snapshot")
 def workflow_snapshot(case_id: int, _: dict = Depends(require_permission("case.read")),
                       database: Connection = Depends(connection)) -> dict[str, Any] | None:

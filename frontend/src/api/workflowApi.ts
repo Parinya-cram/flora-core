@@ -14,7 +14,17 @@ export type WorkflowFormRef = {
   title?: string;
   phase?: WorkflowPhase;
   required?: boolean;
+  /** Flora Leaf shows the form's tab right after this built-in record tab (null: after every record tab). */
+  after_section?: string | null;
+  /** A short note shown to whoever fills the form in on Leaf (at most 300 characters). */
+  hint?: string;
+  /** tab: a data-entry tab on Leaf (default); report: printed from Reports only, filled from the case's data. */
+  display?: WorkflowFormDisplay;
 };
+export type WorkflowFormDisplay = "tab" | "report";
+
+/** A form's suggested Leaf placement (Form Studio's AI builder, extensions["flora.leaf_placement"]). */
+export type WorkflowPlacement = { phase: WorkflowPhase; after_section: string | null };
 
 export type WorkflowPacketEntry =
   | { kind: "anesthesia_report"; mode?: WorkflowReportMode }
@@ -56,7 +66,7 @@ export type WorkflowRow = {
 
 export type WorkflowOptions = {
   sections: Array<{ id: string; label: string; core: boolean }>;
-  forms: Array<{ form_id: string; title: string; published_version: number | null; versions: number[] }>;
+  forms: Array<{ form_id: string; title: string; published_version: number | null; versions: number[]; placement?: WorkflowPlacement | null }>;
   wards: Array<{ key: string; name: string; buildingName?: string | null; isDemo?: boolean }>;
 };
 
@@ -149,6 +159,15 @@ export type CaseWorkflow = { workflow: WorkflowDefinition | null; forms: Record<
 
 export const getCaseWorkflow = (caseId: number) =>
   leafJson<Partial<CaseWorkflow>>(`${CASE_BASE}/${caseId}/workflow`).then(data => ({ workflow: data.workflow ?? null, forms: data.forms || {} }) as CaseWorkflow);
+
+/** A Form Studio template the case can print from Reports (case workflow first, then the ward's workflows). */
+export type ReportTemplate = {
+  form_id: string; version: number; title: string; display: WorkflowFormDisplay; source: "case" | "ward"; workflow: string;
+  definition: FormDefinition; record: CaseWorkflowFormRecord | null;
+};
+export const getReportTemplates = (caseId: number) =>
+  leafJson<{ templates?: ReportTemplate[]; syncedAt?: number | null }>(`${CASE_BASE}/${caseId}/report-templates`)
+    .then(data => ({ templates: data.templates || [], syncedAt: data.syncedAt ?? null }));
 
 export const patchCaseWorkflowForm = (caseId: number, formId: string, patch: RecordData, status?: "draft" | "completed") =>
   leafJson<{ definition?: FormDefinition; record?: CaseWorkflowFormRecord }>(`${CASE_BASE}/${caseId}/workflow-forms/${encodeURIComponent(formId)}`, {

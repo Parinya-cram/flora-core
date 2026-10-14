@@ -30,7 +30,7 @@ from .sql import SqlDataAdapter
 from .sql_query import CompiledQuery, QueryFailed, QueryTimeout
 
 HERE = Path(__file__).parent
-MIGRATIONS: tuple[Path, ...] = (HERE / "mysql_schema.sql", HERE / "mysql_0002_registry.sql")
+MIGRATIONS: tuple[Path, ...] = (HERE / "mysql_schema.sql", HERE / "mysql_0002_registry.sql", HERE / "mysql_0003_template.sql")
 # Re-applied whenever the registry changes (generated, idempotent); the schema runs once.
 ALWAYS = {"mysql_0002_registry.sql"}
 

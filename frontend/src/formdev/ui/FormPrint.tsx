@@ -16,6 +16,7 @@ import type { CategoryDefinition, ContainerLayout, FieldDefinition, FileValue, F
 import { formStyle, gridCss, registries, rootCss, sectionCss, typeCss, type Registries } from "./formStyle";
 import { thaiDate } from "./renderUtils";
 import { cellText, optionText, printedText } from "../render/printValues";
+import PrintedElement from "./PrintedElement";
 
 type Props = {
   definition: FormDefinition;
@@ -108,6 +109,7 @@ function PrintField({ field, data, columns, style, ctx, containerType, siblings 
       <PrintGrid fields={field.fields ?? []} data={data} columns={containerColumns({ columns: field.columns }, columns)} style={own} ctx={ctx} />
     </div>;
   }
+  if (field.type === "logo" || field.type === "barcode") return <div data-field={field.id} style={css}><PrintedElement field={field} data={data} /></div>;
   const value = data[fieldKey(field)];
   if (field.type === "repeat") {
     return <div data-field={fieldKey(field)} style={css}>{label}<RepeatTable field={field} items={Array.isArray(value) ? (value as Array<Record<string, JsonValue>>) : []} style={own} ctx={ctx} /></div>;

@@ -21,6 +21,8 @@ export type PaperConfig = {
   margin_mm?: { top?: number; right?: number; bottom?: number; left?: number };
   header?: PaperBand;
   footer?: PaperBand;
+  /** Print density: compact, or fit_page (one page when it fits; the rest continues on the next pages). */
+  density?: "normal" | "compact" | "fit_page";
 };
 /** Legacy form: a size name. */
 export type Paper = PaperSize | PaperConfig;
@@ -128,6 +130,18 @@ export type FieldDefinition = {
   totals?: Array<{ id: string; label: string; of: string[] }>;
   /** timeline: Flora Leaf's events row, trend chart and parameter table over time (Form Studio). */
   timeline?: TimelineConfig;
+  /** The case datum (Flora Leaf) this field shows when the form is filled or printed for a case, e.g. patient.hn. */
+  bind?: string;
+  /** logo: the picture (PNG / JPEG data URL, kept in the definition). */
+  src?: string;
+  /** logo / barcode: printed height in mm. */
+  height_mm?: number;
+  align?: "left" | "center" | "right";
+  /** barcode: the key of the field whose value is encoded (e.g. hn). */
+  source?: string;
+  /** barcode: i2of5 = Interleaved 2 of 5 (digits; Flora Leaf's HN barcode), code128, code39. */
+  symbology?: "i2of5" | "code128" | "code39";
+  show_text?: boolean;
 };
 
 /** A named sub-group between section and field (Phase 2.0); its fields share the section's data scope. */
@@ -153,6 +167,10 @@ export type TimelinePart = "events" | "chart" | "table";
 export type TimelineSeries = "hr" | "pr" | "spo2" | "nibp" | "art" | "cvp" | "temperature" | "et_co2" | "bis";
 export type TimelineConfig = {
   parts?: TimelinePart[]; rows?: Array<{ id: string; label?: string; unit?: string }>; chart?: TimelineSeries[]; step_min?: number; source?: "leaf" | "manual";
+  /** Printed time columns per page; the print step widens (5/10/15/20/30 min) so the case fits them. */
+  print_columns?: number;
+  /** Printed table rows with no value on the page are left out. */
+  hide_empty_rows?: boolean;
 };
 /** A timeline value: the data shown, stored with the record (prints and syncs without Flora Leaf). Times are ms. */
 export type TimelineValue = {

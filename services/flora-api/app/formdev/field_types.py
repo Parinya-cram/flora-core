@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 COMMON_PROPS = ("id", "key", "type", "label", "description", "required", "readonly", "hidden", "visible", "display", "layout", "style",
-                "validation", "visibility", "clear_when_hidden", "permission", "indexed")
+                "validation", "visibility", "clear_when_hidden", "permission", "indexed", "bind")
 COMMON_CONTAINER_PROPS = ("id", "type", "label", "description", "readonly", "hidden", "visible", "display", "layout", "style", "visibility",
                           "clear_when_hidden", "permission")
 
@@ -36,6 +36,10 @@ FIELD_TYPES: dict[str, dict[str, Any]] = {
     "repeat": {"value": "list", "query": "list", "index": None, "props": ["fields", "columns", "min_items", "max_items", "view"]},
     "matrix": {"value": "matrix", "query": None, "index": None, "props": ["rows", "cols", "cell", "totals"]},
     "timeline": {"value": "timeline", "query": None, "index": None, "props": ["timeline"]},
+    # Printed elements without a value: a picture kept in the definition (hospital logo) and a barcode of another
+    # field's value (the patient's HN, as on wristbands and Flora Leaf).
+    "logo": {"value": None, "query": None, "index": None, "props": ["src", "height_mm", "align"]},
+    "barcode": {"value": None, "query": None, "index": None, "props": ["source", "symbology", "height_mm", "show_text", "align"]},
 }
 
 STYLE_COMPONENTS = ("label", "input", "section", "header", "footer")

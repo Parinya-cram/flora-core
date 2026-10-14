@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useLanguage } from "../context/LanguageContext";
 import { useWorkstationSettings } from "../hooks/useWorkstationSettings";
 import { formatConfiguredDate, formatConfiguredDateTime, formatConfiguredTime, type DateTimePreferences } from "../utils/dateTime";
 import { flushSync } from "react-dom";
@@ -52,6 +53,8 @@ import {
   formatPatientDisplayName,
   normalizePatientNameLanguage,
 } from "../utils/patientName";
+
+const FormStudioReportPanel = lazy(() => import("../components/workflow/FormStudioReportPanel"));
 
 type ReportIoRowMode = "bolus" | "drip";
 
@@ -535,6 +538,8 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
   const [previewFileName, setPreviewFileName] = useState("flora-report.pdf");
   const [browserPreviewOpen, setBrowserPreviewOpen] = useState(false);
   const [packetBusy, setPacketBusy] = useState(false);
+  // Form Studio templates printed with this case's data (beside the anesthesia report, which is unchanged).
+  const [formStudioOpen, setFormStudioOpen] = useState(false);
   const [packetNote, setPacketNote] = useState("");
   // Workflow Studio: the case packet (hidden when the case has no workflow).
   const caseWorkflow = useCaseWorkflow(caseStatus.status !== "IDLE" ? caseStatus.case_id : null);
@@ -1175,6 +1180,11 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
   }, [data?.timelineRows]);
 
   const currentCase = caseStatus.status === "IDLE" ? null : caseStatus;
+  const { language: reportLanguage } = useLanguage();
+  // What the Form Studio panel knows the case by (a stable object, so it reloads only when the case changes).
+  const currentCaseHead = useMemo(() => (currentCase ? { caseId: currentCase.case_id, hn: currentCase.hn, admissionNumber: currentCase.admission_number ?? null,
+    startTime: currentCase.start_time, dischargeTime: currentCase.discharge_time ?? null } : null),
+  [currentCase?.case_id, currentCase?.hn, currentCase?.admission_number, currentCase?.start_time, currentCase?.discharge_time]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const gaSummaryRows = useMemo(() => {
     const rows: Array<{ label: string; value: string }> = [];
@@ -2546,6 +2556,14 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
           >
             {previewBusy ? "Opening PDF..." : "Review report"}
           </button>
+          {currentCaseHead ? <button
+            type="button"
+            className={`rounded border px-3 py-1.5 text-xs ${formStudioOpen ? "border-[var(--app-accent)] bg-[var(--app-accent)] text-[var(--app-accent-contrast)]" : "border-gray-300 dark:border-gray-700"}`}
+            onClick={() => setFormStudioOpen(open => !open)}
+            title="Print a Form Studio template with this case's data"
+          >
+            Form Studio
+          </button> : null}
           {caseWorkflow.workflow && packetEntries.length ? <button
             type="button"
             className="rounded border border-[var(--app-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--app-accent)]"
@@ -2572,6 +2590,9 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
         <div className="rounded border border-gray-300 bg-white p-4 text-sm text-gray-500">No active case</div>
       ) : (
       <>
+      {formStudioOpen && currentCaseHead ? <Suspense fallback={<div className="mb-2 text-xs text-gray-500">Loading Form Studio…</div>}>
+        <FormStudioReportPanel head={currentCaseHead} language={reportLanguage} />
+      </Suspense> : null}
       <section className="report-setup mb-4 rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-4 shadow-sm">
           <div className="mb-3 flex items-baseline justify-between">
             <div className="text-sm font-semibold">Report Setup</div>

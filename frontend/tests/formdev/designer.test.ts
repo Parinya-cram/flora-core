@@ -20,12 +20,13 @@ describe("designer model", () => {
     expect(issues(blank())).toEqual([]);
   });
 
-  it("every palette type can be dropped in, and only a calculated field asks for its formula", () => {
+  it("every palette type can be dropped in; a calculated field asks for its formula, a logo for its picture, a barcode for its field", () => {
     let definition = blank();
     for (const item of PALETTE.flatMap(group => group.items)) {
       definition = insertFields(definition, FIELDS, 99, [paletteField(item.type, usedNames(definition), "th")]);
     }
-    expect(issues(definition)).toEqual(["calculated_requires_formula"]);
+    // The blank form has no hn field for the barcode to show.
+    expect(issues(definition).sort()).toEqual(["calculated_requires_formula", "invalid_file", "unknown_field_reference"]);
     const keys = allFields(definition).map(entry => entry.field.id);
     expect(new Set(keys).size).toBe(keys.length);
   });

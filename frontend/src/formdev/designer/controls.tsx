@@ -32,14 +32,15 @@ export function Toggle({ label, checked, onChange, hint }: { label: string; chec
   </label>;
 }
 
-export function SelectField({ label, value, options, onChange }: {
-  label: string; value: string; options: Array<{ value: string; label: string }>; onChange: (next: string) => void;
+export function SelectField({ label, value, options, onChange, hint }: {
+  label: string; value: string; options: Array<{ value: string; label: string }>; onChange: (next: string) => void; hint?: string;
 }) {
   return <label className="block space-y-1">
     <span className={labelClass}>{label}</span>
     <select className={input} value={value} onChange={event => onChange(event.target.value)}>
       {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
     </select>
+    {hint ? <span className="block text-[11px] text-[var(--app-muted)]">{hint}</span> : null}
   </label>;
 }
 

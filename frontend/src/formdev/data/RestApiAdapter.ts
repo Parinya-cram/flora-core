@@ -5,6 +5,7 @@
 import { FormDevError, type FontEntry, type FormDefinition, type FormRecord, type FormSummary, type Issue, type JsonValue, type LookupTable, type RecordPage, type RecordQuery, type SchemaVersion, type StyleEntry, type SyncAck, type SyncOp } from "../core/types";
 import type { FormDevJob, JobKind, PublicQueryCatalog, QueryBody, QueryIssue, QueryPolicy, QueryResult, QuerySource } from "../query/types";
 import type { RemoteDataAdapter } from "./DataAdapter";
+import type { AiStatus, GenerateRequest, GenerateResult, Inspection, TemplateRow, TemplateWithIssues, UploadFile } from "../ai/types";
 
 /** Thrown when the request did not get a usable answer; retriable errors keep the op queued. */
 export class TransportError extends Error {
@@ -20,6 +21,8 @@ export class TransportError extends Error {
 }
 
 const RETRIABLE_STATUS = new Set([401, 408, 425, 429, 500, 502, 503, 504]);
+/** An AI form build reads every document and may correct itself twice: allow it minutes, not seconds. */
+const AI_BUILD_TIMEOUT_MS = 15 * 60_000;
 
 type Options = { baseUrl?: string; fetch?: typeof fetch; timeoutMs?: number };
 
@@ -260,5 +263,45 @@ export class RestApiAdapter implements RemoteDataAdapter {
 
   assetUrl(formId: string, path: string): string {
     return `${this.baseUrl}/api/formdev/forms/${encodeURIComponent(formId)}/assets/${path.split("/").map(encodeURIComponent).join("/")}`;
+  }
+  // Template library and AI form builder ---------------------------------------------------
+  async aiStatus(): Promise<AiStatus> {
+    return await this.json<AiStatus>("GET", "/ai/status");
+  }
+
+  async aiInspect(files: UploadFile[]): Promise<Inspection> {
+    return await this.json<Inspection>("POST", "/ai/inspect", { files }, Math.max(this.timeoutMs, 120_000));
+  }
+
+  async aiGenerate(body: GenerateRequest): Promise<GenerateResult> {
+    return await this.json<GenerateResult>("POST", "/ai/generate", body, AI_BUILD_TIMEOUT_MS);
+  }
+
+  async listTemplates(): Promise<TemplateRow[]> {
+    return (await this.json<{ rows: TemplateRow[] }>("GET", "/templates")).rows;
+  }
+
+  async getTemplate(templateId: string): Promise<TemplateWithIssues> {
+    return await this.json<TemplateWithIssues>("GET", `/templates/${encodeURIComponent(templateId)}`);
+  }
+
+  async createTemplate(body: { definition: FormDefinition; title?: string; description?: string; origin?: "manual" | "import" }): Promise<TemplateWithIssues> {
+    return await this.json<TemplateWithIssues>("POST", "/templates", body);
+  }
+
+  async updateTemplate(templateId: string, body: { version: number; title?: string; description?: string; definition?: FormDefinition; status?: "draft" | "reviewed" }): Promise<TemplateWithIssues> {
+    return await this.json<TemplateWithIssues>("PUT", `/templates/${encodeURIComponent(templateId)}`, body);
+  }
+
+  async deleteTemplate(templateId: string): Promise<void> {
+    await this.send("DELETE", `/templates/${encodeURIComponent(templateId)}`);
+  }
+
+  async templateSource(templateId: string, sha256: string): Promise<Blob> {
+    return await (await this.send("GET", `/templates/${encodeURIComponent(templateId)}/sources/${sha256}`, undefined, "application/json", 60_000)).blob();
+  }
+
+  async formFromTemplate(templateId: string, formId: string, title?: string): Promise<{ form_id: string; version: SchemaVersion }> {
+    return await this.json("POST", `/templates/${encodeURIComponent(templateId)}/forms`, { form_id: formId, title });
   }
 }

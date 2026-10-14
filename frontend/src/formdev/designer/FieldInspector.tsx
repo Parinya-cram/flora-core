@@ -15,6 +15,8 @@ import { Group, NumberField, SelectField, TextField, Toggle } from "./controls";
 import { allFields, fieldAt, fieldPath, patchField, placeOnGrid, renameKey, samePath, uniqueName, usedNames, type FieldRef } from "./model";
 import MatrixEditor from "./MatrixEditor";
 import TimelineEditor from "./TimelineEditor";
+import PrintedEditor from "./PrintedEditor";
+import { CONCEPT_BY_KEY, CONCEPTS, conceptOf } from "../leaf/concepts";
 import OptionsEditor, { type LookupInfo } from "./OptionsEditor";
 import PermissionEditor from "./PermissionEditor";
 import { input, label, small } from "./styles";
@@ -26,6 +28,8 @@ const NUMERIC = new Set(["number", "integer", "decimal", "calculated"]);
 const TEXTUAL = new Set(["text", "textarea"]);
 const CHOICE = new Set(["select", "radio", "multiselect"]);
 const CONTAINER = new Set(["group", "repeat"]);
+/** Printed elements (no value): no required / read-only, checks or index. */
+const PRINTED = new Set(["logo", "barcode"]);
 const DATES = new Set(["date", "datetime"]);
 const INDEXABLE = new Set(["text", "number", "integer", "decimal", "date", "datetime", "time", "select", "radio", "checkbox", "switch", "calculated"]);
 const KEY = /^[a-z][a-z0-9_]{0,63}$/;
@@ -48,6 +52,8 @@ export default function FieldInspector({ definition, fieldRef, lang, lookups, pu
   };
   const key = fieldKey(field);
   const type = field.type;
+  const named = conceptOf({ id: field.id, key: field.key });
+  const autoConcept = named ? CONCEPT_BY_KEY.get(named.key) : undefined;
   const everyField = allFields(definition);
   const candidates = everyField
     .filter(entry => (entry.depth === 0 || samePath(entry.ref.list, fieldRef.list)) && !samePath(fieldPath(entry.ref), fieldPath(fieldRef)) && !CONTAINER.has(entry.field.type))
@@ -65,6 +71,11 @@ export default function FieldInspector({ definition, fieldRef, lang, lookups, pu
     if (next !== "calculated") { patch.calculator = undefined; patch.formula = undefined; } else patch.required = undefined;
     if (next !== "text") patch.derive = undefined;
     if (next !== "decimal" && next !== "calculated") patch.decimals = undefined;
+    if (PRINTED.has(next)) {
+      Object.assign(patch, { required: undefined, indexed: undefined, validation: undefined, placeholder: undefined, unit: undefined, max_length: undefined, min: undefined, max: undefined, key: undefined });
+      if (next === "logo") Object.assign(patch, { height_mm: 14, source: undefined, symbology: undefined, show_text: undefined });
+      else Object.assign(patch, { source: field.source ?? "hn", symbology: field.symbology ?? "i2of5", height_mm: 10, src: undefined });
+    } else Object.assign(patch, { src: undefined, source: undefined, symbology: undefined, height_mm: undefined, show_text: undefined, align: undefined });
     set(patch);
   };
 
@@ -110,10 +121,15 @@ export default function FieldInspector({ definition, fieldRef, lang, lookups, pu
         ? <TextField label={t("ข้อความตัวอย่างในช่อง", "Placeholder")} value={field.placeholder} onChange={value => set({ placeholder: value })} /> : null}
       {NUMERIC.has(type) || type === "text" ? <TextField label={t("หน่วย", "Unit")} value={field.unit} placeholder="kg, mmHg, °C" onChange={value => set({ unit: value })} /> : null}
       {type === "decimal" || type === "calculated" ? <NumberField label={t("จำนวนตำแหน่งทศนิยม", "Decimal places")} value={field.decimals} min={0} max={10} onChange={value => set({ decimals: value })} /> : null}
-      {!CONTAINER.has(type) && type !== "calculated" ? <Toggle label={t("ต้องกรอก", "Required")} checked={field.required === true} onChange={on => set({ required: on || undefined })} /> : null}
-      {!CONTAINER.has(type) && type !== "calculated" ? <Toggle label={t("อ่านอย่างเดียว", "Read-only")} checked={field.readonly === true} onChange={on => set({ readonly: on || undefined })} /> : null}
+      {!CONTAINER.has(type) && !PRINTED.has(type) && type !== "calculated" ? <Toggle label={t("ต้องกรอก", "Required")} checked={field.required === true} onChange={on => set({ required: on || undefined })} /> : null}
+      {!CONTAINER.has(type) && !PRINTED.has(type) && type !== "calculated" ? <Toggle label={t("อ่านอย่างเดียว", "Read-only")} checked={field.readonly === true} onChange={on => set({ readonly: on || undefined })} /> : null}
       {type === "repeat" ? <Toggle label={t("แสดงเป็นตารางแบบ Excel (1 แถวต่อรายการ, วางข้อมูลจาก Excel ได้)", "Show as an Excel-style table (one row per entry; paste from Excel)")}
         checked={field.view === "table"} onChange={on => set({ view: on ? "table" : undefined })} /> : null}
+      {!CONTAINER.has(type) && !PRINTED.has(type) && !["timeline", "matrix", "signature", "file", "image", "calculated"].includes(type) ? <SelectField
+        label={t("ข้อมูลจาก Flora Leaf (เติมให้เมื่อพิมพ์/กรอกในเคส)", "Flora Leaf case datum (filled when printed / filled for a case)")}
+        value={field.bind ?? ""} onChange={value => set({ bind: value || undefined })}
+        options={[{ value: "", label: autoConcept ? t(`อัตโนมัติจากชื่อช่อง: ${autoConcept.th}`, `Automatic from the field name: ${autoConcept.en}`) : t("ไม่เชื่อม", "Not linked") },
+          ...CONCEPTS.map(concept => ({ value: concept.key, label: `${tr(lang, concept.th, concept.en)} (${concept.key})` }))]} /> : null}
       <SelectField label={t("ชนิดช่อง", "Field type")} value={type} onChange={value => changeType(value as FieldType)}
         options={PALETTE.flatMap(group => group.items).map(item => ({ value: item.type, label: tr(lang, item.th, item.en) }))} />
     </Group>
@@ -123,6 +139,10 @@ export default function FieldInspector({ definition, fieldRef, lang, lookups, pu
       {type !== "select" || field.option_columns ? <SelectField label={t("จัดตัวเลือกเป็นคอลัมน์ (เหมือนแบบฟอร์มกระดาษ)", "Lay the options out in columns (as on paper)")}
         value={String(field.option_columns ?? "")} options={[{ value: "", label: t("เรียงต่อกัน", "In a line") }, ...[1, 2, 3, 4, 5, 6].map(n => ({ value: String(n), label: t(`${n} คอลัมน์`, `${n} columns`) }))]}
         onChange={value => set({ option_columns: value ? Number(value) : undefined })} /> : null}
+    </Group> : null}
+
+    {PRINTED.has(type) ? <Group title={type === "logo" ? t("รูปโลโก้", "Logo picture") : t("บาร์โค้ด", "Barcode")} open>
+      <PrintedEditor field={field} candidates={candidates} lang={lang} onPatch={set} />
     </Group> : null}
 
     {type === "timeline" ? <Group title={t("Timeline (Flora Leaf)", "Timeline (Flora Leaf)")} open>
@@ -196,7 +216,7 @@ export default function FieldInspector({ definition, fieldRef, lang, lookups, pu
         onChange={on => set({ clear_when_hidden: on || undefined })} /> : null}
     </Group>
 
-    {!CONTAINER.has(type) && type !== "calculated" && type !== "matrix" && type !== "timeline" ? <Group title={t("การตรวจสอบค่า", "Checks")} badge={Object.keys(rules).length || field.min !== undefined || field.max !== undefined ? "✓" : undefined}>
+    {!CONTAINER.has(type) && !PRINTED.has(type) && type !== "calculated" && type !== "matrix" && type !== "timeline" ? <Group title={t("การตรวจสอบค่า", "Checks")} badge={Object.keys(rules).length || field.min !== undefined || field.max !== undefined ? "✓" : undefined}>
       {NUMERIC.has(type) ? <div className="grid grid-cols-2 gap-2">
         <NumberField label={t("ค่าต่ำสุด", "Minimum")} value={field.min} onChange={value => set({ min: value })} />
         <NumberField label={t("ค่าสูงสุด", "Maximum")} value={field.max} onChange={value => set({ max: value })} />

@@ -110,7 +110,7 @@ export function uniqueName(base: string, used: Set<string>): string {
 
 // New items ------------------------------------------------------------------------------------
 
-const BASE_NAME: Partial<Record<FieldType, string>> = { textarea: "note", multiselect: "choices", checkbox: "check", switch: "yes_no", calculated: "result" };
+const BASE_NAME: Partial<Record<FieldType, string>> = { textarea: "note", multiselect: "choices", checkbox: "check", switch: "yes_no", calculated: "result", barcode: "hn_barcode" };
 
 /** A field of `type` with working defaults and a unique id/key. */
 export function newField(type: FieldType, used: Set<string>, label: string, defaults: { option: (n: number) => string; child: string } = { option: n => `Option ${n}`, child: "Item" }): FieldDefinition {
@@ -128,6 +128,9 @@ export function newField(type: FieldType, used: Set<string>, label: string, defa
     field.timeline = { parts: ["events", "chart", "table"], step_min: 5, source: "leaf" };
     field.layout = { span: 12 };
   }
+  if (type === "logo") { field.height_mm = 14; field.layout = { span: 6 }; }
+  // The patient's HN when the form has it (the usual case); otherwise the author picks the field.
+  if (type === "barcode") { field.source = used.has("hn") ? "hn" : undefined; field.symbology = "i2of5"; field.height_mm = 10; field.layout = { span: 6 }; }
   if (type === "matrix") {
     field.cell = { type: "select", options: ["0", "1", "2"].map(value => ({ value, label: value })) };
     field.rows = [1, 2, 3].map(n => ({ id: `row${n}`, label: `${defaults.child} ${n}` }));

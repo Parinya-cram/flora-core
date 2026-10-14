@@ -2,7 +2,7 @@
 # Create or drop the FormDev perf database (Phase 4.13). Refuses names that do not end in _test.
 #   formdev/scripts/perf/db.sh create flora_formdev_perf_test
 #   formdev/scripts/perf/db.sh drop   flora_formdev_perf_test
-# Applies the FormDev migrations only (0060-0065), as the API's FormDev tables expect them.
+# Applies the FormDev migrations only (0060-0065, 0083), as the API's FormDev tables expect them.
 set -eu
 ACTION="${1:?create|drop}"
 DB="${2:?database name}"
@@ -16,7 +16,7 @@ case "$ACTION" in
     psql_admin -d postgres -c "DROP DATABASE IF EXISTS $DB WITH (FORCE)"
     psql_admin -d postgres -c "CREATE DATABASE $DB"
     for f in 0060-formdev.sql 0061-formdev-query.sql 0061b-formdev-query-indexes.sql 0062-formdev-registry.sql 0063-formdev-lookup.sql \
-             0064-formdev-attachment.sql 0065-formdev-index-rebuild.sql; do
+             0064-formdev-attachment.sql 0065-formdev-index-rebuild.sql 0083-formdev-template.sql; do
       psql_admin -d "$DB" < "$REPO/infrastructure/postgres/$f"
     done
     psql_admin -d "$DB" -Atc "SELECT indexname FROM pg_indexes WHERE tablename IN ('formdev_record','formdev_record_index') ORDER BY 1"

@@ -2,7 +2,9 @@
 
 A workflow (`flora-workflow/1`, see docs/workflow-studio.md) says which built-in
 Anesthesia record sections a case uses, which Form Studio forms it adds (pinned to a
-published version) and the order of the case packet PDF.
+published version) and the order of the case packet PDF. Each form says where it is filled
+in on Flora Leaf: the case phase, the built-in tab it follows (after_section) and a note for
+whoever fills it in (hint); Form Studio's AI builder suggests the first two.
 """
 from __future__ import annotations
 
@@ -40,6 +42,12 @@ SECTION_IDS = [section["id"] for section in SECTIONS]
 CORE_SECTIONS = [section["id"] for section in SECTIONS if section["core"]]
 PHASES = {"preop", "intraop", "postop", "any"}
 REPORT_MODES = {"standard", "smart_fit", "detail"}
+MAX_HINT = 300
+# Where a workflow form is used on Leaf: a data-entry tab (and printable), or printed from Reports only (no tab; its
+# fields are filled from the case's data when printed).
+DISPLAYS = ("tab", "report")
+# Where Form Studio keeps a form's suggested Leaf placement (formdev.ai_builder.PLACEMENT_KEY).
+PLACEMENT_KEY = "flora.leaf_placement"
 
 
 def now_ms() -> int:
@@ -59,7 +67,10 @@ def normalize(definition: dict[str, Any]) -> dict[str, Any]:
             continue
         entry = {"form_id": item.get("form_id"), "version": item.get("version"),
                  "title": item.get("title") or "", "phase": item.get("phase") or "any",
-                 "required": bool(item.get("required"))}
+                 "required": bool(item.get("required")),
+                 "after_section": item.get("after_section") or None,
+                 "hint": item.get("hint") if isinstance(item.get("hint"), str) else "",
+                 "display": item.get("display") or "tab"}
         forms.append(entry)
     return {
         "format": definition.get("format") or FORMAT,
@@ -96,18 +107,29 @@ def structural_issues(definition: Any) -> list[dict[str, str]]:
     return issues
 
 
+def placement(value: Any) -> dict[str, Any] | None:
+    """A form's suggested Leaf placement {phase, after_section}, when well formed."""
+    if not isinstance(value, dict) or value.get("phase") not in PHASES:
+        return None
+    after = value.get("after_section")
+    return {"phase": value["phase"], "after_section": after if after in SECTION_IDS else None}
+
+
 def published_versions(database: Connection) -> dict[str, dict[str, Any]]:
-    """{form_id: {title, published_version, versions:[n...]}} from Form Studio (published versions only)."""
+    """{form_id: {title, published_version, versions:[n...], placement}} from Form Studio (published versions only);
+    placement is the latest published version's suggested Leaf placement."""
     if database.execute("SELECT to_regclass('formdev_form') AS t").fetchone()["t"] is None:
         return {}
     rows = database.execute(
         """SELECT f.form_id, f.title, f.published_version,
                   coalesce(array_agg(v.schema_version ORDER BY v.schema_version)
-                           FILTER (WHERE v.status = 'published'), '{}') AS versions
+                           FILTER (WHERE v.status = 'published'), '{}') AS versions,
+                  (SELECT p.definition -> 'extensions' -> %s FROM formdev_schema_version p
+                   WHERE p.form_id = f.form_id AND p.schema_version = f.published_version) AS placement
            FROM formdev_form f LEFT JOIN formdev_schema_version v ON v.form_id = f.form_id
-           GROUP BY f.form_id, f.title, f.published_version ORDER BY f.title, f.form_id""").fetchall()
+           GROUP BY f.form_id, f.title, f.published_version ORDER BY f.title, f.form_id""", (PLACEMENT_KEY,)).fetchall()
     return {row["form_id"]: {"title": row["title"], "published_version": row["published_version"],
-                             "versions": [int(v) for v in row["versions"]]} for row in rows}
+                             "versions": [int(v) for v in row["versions"]], "placement": placement(row["placement"])} for row in rows}
 
 
 def validate(database: Connection, definition: Any) -> list[dict[str, str]]:
@@ -141,6 +163,12 @@ def validate(database: Connection, definition: Any) -> list[dict[str, str]]:
         listed.add(form_id)
         if item.get("phase") not in PHASES:
             issues.append({"path": f"{path}.phase", "message": "phase must be preop, intraop, postop or any"})
+        if item.get("after_section") is not None and item["after_section"] not in SECTION_IDS:
+            issues.append({"path": f"{path}.after_section", "message": f"unknown Leaf tab '{item['after_section']}'"})
+        if item.get("display") not in DISPLAYS:
+            issues.append({"path": f"{path}.display", "message": "display is tab (data entry on Leaf) or report (printed from Reports only)"})
+        if len(item.get("hint") or "") > MAX_HINT:
+            issues.append({"path": f"{path}.hint", "message": f"the note for Leaf is at most {MAX_HINT} characters"})
         if form_id not in known:
             issues.append({"path": f"{path}.form_id", "message": f"form '{form_id}' does not exist in Form Studio"})
         elif not isinstance(version, int) or isinstance(version, bool) or version not in known[form_id]["versions"]:

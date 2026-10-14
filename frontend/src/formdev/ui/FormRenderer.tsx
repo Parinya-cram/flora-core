@@ -17,6 +17,7 @@ import { isGridPaste, parseTsv, pasteInto } from "./gridPaste";
 import { FIELD_INPUTS } from "./inputRegistry";
 import { changeRecord, errorsByPath } from "./renderUtils";
 import { formStyle, gridCss, inputCss, registries, rootCss, sectionCss, typeCss, type Registries } from "./formStyle";
+import PrintedElement from "./PrintedElement";
 
 type Props = {
   definition: FormDefinition;
@@ -95,6 +96,8 @@ function FieldBlock({ field, scope, columns, style, ctx, containerType, siblings
       <legend style={typeCss(own, ctx.regs, "label")}>{field.label}</legend>
       <FieldGrid fields={field.fields ?? []} scope={scope} columns={inner} style={own} ctx={ctx} />
     </fieldset>;
+  } else if (field.type === "logo" || field.type === "barcode") {
+    body = <PrintedElement field={field} data={scope.data} />;
   } else if (field.type === "repeat") {
     body = <><span style={{ ...typeCss(own, ctx.regs, "label"), display: "block", marginBottom: "1mm" }}>{field.label}</span>
       {field.view === "table" && tableColumnsOk(field)
