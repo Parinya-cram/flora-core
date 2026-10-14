@@ -55,3 +55,6 @@ backup/
 
 # OS files
 .DS_Store
+
+# PowerPoint/Office temp lock files
+~$*
