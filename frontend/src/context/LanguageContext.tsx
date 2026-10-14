@@ -19,6 +19,8 @@ const FALLBACK_LANGUAGES: LanguageOption[] = [
   { code: "th", nameEn: "Thai", nameNative: "ไทย" },
 ];
 
+// Shared with ManageView's language editor; the provider below is the component of this file.
+// eslint-disable-next-line react-refresh/only-export-components
 export const messages: Record<string, Record<string, string>> = {
   en: {
     "login.title": "Sign in",

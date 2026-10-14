@@ -21,7 +21,7 @@ function rows(value: unknown): DataRow[] {
 function clean(value: unknown, fallback = "Not recorded") {
   const raw = value == null ? "" : String(value).trim();
   const output = raw
-    .replace(/[^\u000a\u000d\u0020-\u007e\u00a0-\u024f\u0e00-\u0e7f]/gi, " ")
+    .replace(/[^\n\r\u0020-\u007e\u00a0-\u024f\u0e00-\u0e7f]/gi, " ")
     .replace(/[ \t]+/g, " ")
     .trim();
   return output || fallback;

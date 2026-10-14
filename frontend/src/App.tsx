@@ -92,8 +92,8 @@ export default function App() {
   useEffect(() => {
     if (!user?.username) return;
     // A changed authenticated session resets navigation to its safe landing view.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     // Leaf opens on its Ward page (local data first); the case is one click away.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setActiveView(user.mustChangePassword ? "account" : surface.code === "canopy" ? "dashboard" : "ward");
     if (!user.mustChangePassword && surface.code === "leaf") void refreshCase();
   }, [refreshCase, surface.code, user?.mustChangePassword, user?.username]);

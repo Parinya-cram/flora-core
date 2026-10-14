@@ -132,6 +132,19 @@ const LOCATION_LEVELS: Array<{ kind: CanopyLocation["kind"]; label: string; fiel
   { kind: "bed", label: "Bed / workstation", field: "bedName" },
 ];
 
+/** Hospital → bed ids of a bed's location chain (null where a level is missing). */
+function pathTo(data: CanopyLocations, bedId: number): Array<number | null> {
+  const lookup = new Map(data.locations.map(item => [item.id, item]));
+  const chain: Array<number | null> = [null, null, null, null, null];
+  let current = lookup.get(bedId);
+  while (current) {
+    const index = LOCATION_LEVELS.findIndex(level => level.kind === current!.kind);
+    if (index >= 0) chain[index] = current.id;
+    current = current.parent_id ? lookup.get(current.parent_id) : undefined;
+  }
+  return chain;
+}
+
 function LocationTab() {
   const [value, setValue] = useState(emptyWorkstation);
   const [note, setNote] = useState("");
@@ -158,17 +171,6 @@ function LocationTab() {
   }, []);
 
   const byId = useMemo(() => new Map((tree ? tree.locations : []).map(item => [item.id, item])), [tree]);
-  const pathTo = (data: CanopyLocations, bedId: number) => {
-    const lookup = new Map(data.locations.map(item => [item.id, item]));
-    const chain: Array<number | null> = [null, null, null, null, null];
-    let current = lookup.get(bedId);
-    while (current) {
-      const index = LOCATION_LEVELS.findIndex(level => level.kind === current!.kind);
-      if (index >= 0) chain[index] = current.id;
-      current = current.parent_id ? lookup.get(current.parent_id) : undefined;
-    }
-    return chain;
-  };
   const optionsAt = (index: number) => !tree ? [] : tree.locations.filter(item =>
     item.kind === LOCATION_LEVELS[index].kind && (index === 0 ? true : item.parent_id === path[index - 1]));
   const choose = (index: number, id: number | null) => setPath(current => current.map((item, i) => (i < index ? item : i === index ? id : null)));
