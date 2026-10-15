@@ -196,6 +196,12 @@ cross-site metrics when links allow; the heartbeat fleet view remains the offlin
   **no cluster-admin for app workloads.**
 - **NetworkPolicy (Calico):** default-deny per namespace; allow only real flows (web→api→db,
   haber↔sync-api, controller→apiserver). Sync endpoints internal-only.
+- **Egress segmentation — Haber is the only internet-facing device-management image.** Only the
+  Haber pod is allowed outbound to Root/internet (it mirrors images + syncs releases); **every
+  other Canopy pod is egress default-deny**. So Canopy can be mostly air-gapped while one
+  controlled component reaches out — "บางส่วนออกเน็ตได้ บางส่วนไม่ได้." Optionally route Haber's
+  egress through a dedicated proxy for allow-listing + logging. This is the core rationale of the
+  Phase 1 Haber split, now enforced by NetworkPolicy.
 - **Secrets:** k8s **Secrets** (never ConfigMap) for tokens / DB passwords / session / AI keys;
   **Sealed Secrets** (or Vault) so they are git-safe; **rotate the `admin`/`admin` dev defaults**.
 - **Image trust:** keep the **Ed25519 release verification** (already) + optionally cosign and an
@@ -225,3 +231,31 @@ Haber control plane + its overview API + the **Phase 2 distribution UI**; Ed2551
 digest-pinned images; the offline mirror; `publish_release.py` + the release model; the Phase 1
 DB decouple + env-driven URLs (already k8s-shaped). Manifests/Helm are distro-agnostic — the same
 charts that run the pilot run the HA cluster.
+
+---
+
+## 16. DevOps maturity — what's done vs what's still missing
+**Done**
+- All tiers containerized; compose production running; **Phase 0 CI test stage** (frontend+api)
+  gating deploy; **Phase 1** Haber split + DB decouple; **Phase 2** device-distribution UI +
+  Haber control plane; existing **release signing + digest pinning + offline mirror +
+  approve/hold (rollback)**.
+
+**Still missing (prioritized)**
+- **P1 — close now**
+  - CI **build + push + sign** in the pipeline (today only `test` runs; reuse `publish_release.py`).
+  - **Image scanning + SBOM** (Trivy) and **secrets management** — move off `admin`/`admin`
+    defaults to k8s Secrets + Sealed Secrets, with rotation.
+  - **Liveness/readiness probes + resource requests/limits** on every k8s workload.
+- **P2**
+  - **Observability actually deployed** (Prometheus/Grafana/Loki + the Root fleet dashboard) —
+    today it is design only; the running system has no metrics/log aggregation/alerting.
+  - **Backup automation** (etcd snapshots, per-tier Postgres, Velero/Longhorn PVC). **Backup
+    target can reuse the existing production machine (VM 151) as the backup store** — deferred;
+    stand up the main k8s node first.
+  - **IaC + GitOps** — codify cluster bootstrap (Ansible) and deploys (Argo/Flux) instead of
+    manual kubeadm/CLI.
+- **P3**
+  - DR runbook + agreed **RPO/RTO**; load/capacity testing; dependency-update bot (Renovate);
+    on-call alert routing; **gateway (stays docker) metrics fed into the Root fleet view**;
+    a DB-migration rollback strategy (migrations are forward-only idempotent today).
