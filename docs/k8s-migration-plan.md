@@ -281,3 +281,36 @@ charts that run the pilot run the HA cluster.
   - DR runbook + agreed **RPO/RTO**; load/capacity testing; dependency-update bot (Renovate);
     on-call alert routing; **gateway (stays docker) metrics fed into the Root fleet view**;
     a DB-migration rollback strategy (migrations are forward-only idempotent today).
+
+---
+
+## 17. Installer & packaging
+- **Images only — no source to the hospital.** The vendor ships signed, built images; the
+  operator never sees source code. Install *pulls* images (from the appliance registry / offline
+  media), never builds from source on site.
+- **One command, any component, any host:** `flora install <component…>` installs any
+  tier/component on the target — **separate OR co-located** (canopy+leaf+gateway on one box for a
+  small site; each on its own host for a large one). Co-location is handled by a shared network +
+  a non-conflicting port scheme (docker) or namespaces (k8s).
+- **Offline / air-gap:** install runs with no internet — from a local bundle / the appliance
+  mirror / offline media. Only fetching *new* versions needs the vendor link (or media).
+- **Auto-enroll:** after install a component registers itself with the hospital appliance (and the
+  appliance with vendor Root by tenant key), so the pieces connect themselves — no manual wiring.
+- **Same CLI, two backends:** docker today (compose profiles) → helm/k8s later (a chart per
+  namespace). The command interface does not change.
+- **Idempotent:** re-running `flora install` = update / repair. Granularity (per-role-with-deps vs
+  per-single-container) is still open — leaning per-role with an optional per-container override.
+
+## 18. Multi-tenant & fleet (vendor Root)
+- **Root is the vendor's side — not installed in any hospital.** It is the central console + the
+  release source across every hospital.
+- **Each hospital = an isolated unit** (its own cluster, appliance, registry cache, data) keyed by
+  a **`tenant_id`**; hospitals never talk to each other, so one site going down or being
+  compromised never touches another. Per-tenant license/keys enforce the isolation.
+- **Root manages by list, not by pod:** a fleet list (one row per hospital — tenant · version ·
+  health · alerts) + a per-hospital drill-down (Gateways/Devices: gateway version, connected
+  devices, parser versions, link status), fed by the extended per-tenant heartbeat
+  (store-and-forward → offline-tolerant).
+- **Scaling is linear:** more hospitals = more rows, not more per-site complexity; filter/group by
+  region / channel / status; hospitals may run different release channels/versions (Root tracks
+  per tenant). This is why many hospitals do not become confusing.
