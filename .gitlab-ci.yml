@@ -8,7 +8,7 @@
 # Required CI/CD variable (Settings > CI/CD > Variables):
 #   DEPLOY_PATH   absolute path of the checkout on the server, e.g. /opt/flora
 
-stages: [validate, deploy]
+stages: [validate, test, deploy]
 
 default:
   interruptible: true
@@ -51,6 +51,49 @@ frontend-build:
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
     - if: $CI_COMMIT_BRANCH
+
+# ---------------------------------------------------------------- test
+# Automated tests gate the deploy stage: a red test job means deploy-dev never runs.
+# Both drive a throwaway container on the shell runner (same pattern as frontend-build).
+
+test-frontend:
+  stage: test
+  tags: [flora-dev]
+  script:
+    - >
+      docker run --rm
+      --user "$(id -u):$(id -g)"
+      -e HOME=/tmp -e npm_config_cache=/tmp/.npm
+      -v "$CI_PROJECT_DIR:/app"
+      -w /app/frontend
+      node:22-bookworm-slim
+      sh -c "npm ci --no-audit --no-fund && npx vitest run tests"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH
+
+test-api:
+  stage: test
+  tags: [flora-dev]
+  # Runs as root inside an ephemeral container: deps install into the container's own
+  # site-packages (not the mounted source), and PYTHONDONTWRITEBYTECODE keeps the mount clean.
+  # Covers the SQLite-backed formdev + AI-builder suites (no external database needed).
+  script:
+    - >
+      docker run --rm
+      -e HOME=/tmp -e PYTHONPATH=/app/services/flora-api -e PYTHONDONTWRITEBYTECODE=1
+      -v "$CI_PROJECT_DIR:/app"
+      -w /app/services/flora-api
+      python:3.13-slim
+      sh -c "pip install --quiet --no-cache-dir -r requirements.txt pytest && python -m pytest tests/formdev -q"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH
+
+# TODO (follow-up): add a DB-backed job for tests/test_leaf_writes.py and tests/test_scoring.py.
+# They need a disposable PostgreSQL (database name ending in _test) with the schema loaded;
+# scripts/test-leaf-writes.sh does this against the dev stack. In CI it needs a dedicated
+# postgres service built from Dockerfile.postgres.dev, so it is wired separately.
 
 # ---------------------------------------------------------------- deploy
 deploy-dev:
