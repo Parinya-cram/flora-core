@@ -12,6 +12,7 @@ import CanopyInfrastructureView from "../views/CanopyInfrastructureView";
 import CanopyTopologyView from "../views/CanopyTopologyView";
 import CanopyGatewayAlertsView from "../views/CanopyGatewayAlertsView";
 import CanopyDeviceManagementView from "../views/CanopyDeviceManagementView";
+import DeviceDistributionView from "../views/DeviceDistributionView";
 import IdleCaseLanding from "../views/IdleCaseLanding";
 import AccountView from "../views/AccountView";
 import CanopyReportsView from "../views/CanopyReportsView";
@@ -54,6 +55,7 @@ interface Props {
     | "topology"
     | "gateway-alerts"
     | "devices"
+    | "distribution"
     | "formdev"
     | "workflows"
     | "report-studio"
@@ -186,6 +188,8 @@ export default function MainArea({
         <CanopyTopologyView sessionUser={sessionUser} />
       ) : activeView === "devices" ? (
         <CanopyDeviceManagementView sessionUser={sessionUser} />
+      ) : activeView === "distribution" ? (
+        <DeviceDistributionView />
       ) : activeView === "gateway-alerts" ? (
         <CanopyGatewayAlertsView />
       ) : activeView === "infrastructure" ? (

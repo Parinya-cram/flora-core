@@ -25,7 +25,7 @@ import canopyMonitoringIcon from "../assets/menu/canopy-menu-monitoring.png";
 import canopyFormDevIcon from "../assets/menu/canopy-menu-formdev.png";
 import { canAuthorStudio, canUseAiStudio } from "../auth/studioAccess";
 
-export type AppView = "ward" | "case" | "form" | "diagnosis" | "staff" | "io" | "patient" | "report" | "master" | "account" | "dashboard" | "admissions" | "monitoring" | "fleet" | "infrastructure" | "topology" | "gateway-alerts" | "devices" | "formdev" | "workflows" | "report-studio" | "ai-studio" | "history" | "billing" | "staff-directory";
+export type AppView = "ward" | "case" | "form" | "diagnosis" | "staff" | "io" | "patient" | "report" | "master" | "account" | "dashboard" | "admissions" | "monitoring" | "fleet" | "infrastructure" | "topology" | "gateway-alerts" | "devices" | "distribution" | "formdev" | "workflows" | "report-studio" | "ai-studio" | "history" | "billing" | "staff-directory";
 
 type Props = {
   activeView: AppView;
@@ -110,6 +110,13 @@ function GearIcon() {
   </svg>;
 }
 
+function DistributionIcon() {
+  return <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 3 4 7l8 4 8-4-8-4Z" />
+    <path d="M4 12l8 4 8-4M4 17l8 4 8-4" />
+  </svg>;
+}
+
 type SystemMenuProps = {
   collapsed: boolean;
   canSettings: boolean;
@@ -137,7 +144,7 @@ function SystemMenu({ collapsed, canSettings, activeView, sessionUser, navigate,
   const menuStyle = anchor ? (collapsed
     ? { left: anchor.right + 8, bottom: window.innerHeight - anchor.bottom }
     : { left: anchor.left, bottom: window.innerHeight - anchor.top + 8, width: Math.max(anchor.width, 256) }) : undefined;
-  const settingsActive = activeView === "master" || activeView === "account";
+  const settingsActive = activeView === "master" || activeView === "account" || activeView === "distribution";
 
   useEffect(() => {
     if (!open) return;
@@ -169,6 +176,7 @@ function SystemMenu({ collapsed, canSettings, activeView, sessionUser, navigate,
         {location ? <div className="truncate text-xs font-semibold">{location}</div> : null}
         <div className="truncate text-[11px] text-[var(--app-muted)]">{sessionUser?.name || sessionUser?.username}</div>
       </div>
+      {surface.code === "canopy" && canSettings ? <button role="menuitem" type="button" onClick={() => choose(() => navigate("distribution"))} className={itemClass}><span className="inline-flex h-5 w-5 items-center justify-center"><DistributionIcon /></span>{t("system.distribution")}</button> : null}
       {canSettings ? <button role="menuitem" type="button" onClick={() => choose(() => navigate("master"))} className={itemClass}><span className="inline-flex h-5 w-5 items-center justify-center"><GearIcon /></span>{t("system.settings")}</button> : null}
       <button role="menuitem" type="button" onClick={() => choose(() => navigate("account"))} className={itemClass}><span className="inline-flex h-5 w-5 items-center justify-center"><NavIcon name="patient" /></span>{t("topbar.accountSettings")}</button>
       {onLogout ? <button role="menuitem" type="button" onClick={() => choose(onLogout)} className={`${itemClass} mt-1 text-rose-400 hover:bg-rose-500/10`}><span className="inline-flex h-5 w-5 items-center justify-center text-base">⏻</span>{t("topbar.signOut")}</button> : null}

@@ -21,6 +21,7 @@ from .routes.device_writer import router as device_writer_router
 from .routes.his import router as his_router
 from .routes.fleet_read import router as fleet_read_router
 from .routes.fleet_control import router as fleet_control_router
+from .routes.device_distribution import router as device_distribution_router
 from .routes.legacy_archive import router as legacy_archive_router
 from .routes.canopy_reports import router as canopy_reports_router
 from .routes.ai_studio import router as ai_studio_router
@@ -130,6 +131,7 @@ if API_MODE == "canopy":
     app.include_router(device_control_router)
     app.include_router(topology_physical_router)
     app.include_router(fleet_control_router)
+    app.include_router(device_distribution_router)
     app.include_router(legacy_archive_router)
     app.include_router(canopy_reports_router)
     app.include_router(ai_studio_router)
