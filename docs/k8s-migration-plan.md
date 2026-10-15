@@ -159,16 +159,68 @@ Disk: registry mirror holds every approved image (≈6 GB today) — keep headro
 
 ---
 
-## 11. Open decisions (sign-off before building past the pilot)
+## 11. Observability & the central fleet monitor (Root) — the DevOps view
+Two layers, by design:
+
+**(a) Per-cluster stack (deep, local):** namespace `monitoring` with **Prometheus** (scrapes
+kube-state-metrics, node-exporter, and each service's `/metrics` + `/health`), **Grafana**
+(dashboards per tier), **Loki + promtail** (logs), **Alertmanager** (alerts → on-call / Haber).
+This is the hospital's own ops view and works fully offline.
+
+**(b) Central fleet monitor = Root (our own console, across every hospital).** Each site's Haber
+already heartbeats to Root (`POST /api/v1/tenants/{id}/heartbeat`: canopy_version, bundle_id,
+usage). We grow that into **Root's central DevOps dashboard**: every tenant × {approved release
+per tier, device/node counts, node health & drift, last-seen, open alerts}. It is **coarse but
+offline-tolerant** (store-and-forward heartbeats — always works even when a site's link is down),
+so it is the single pane to answer "who is running what, and is anything unhealthy across the
+fleet." → **This is the "ตัวจัดการ device กลาง": Root is the central monitor; Haber + the Phase 2
+Canopy UI are the per-hospital console.**
+
+Optional later: per-site Prometheus `remote_write` → a central Thanos/Grafana at Root for deep
+cross-site metrics when links allow; the heartbeat fleet view remains the offline-safe baseline.
+
+## 12. Backup & disaster recovery
+- **etcd:** scheduled `etcdctl snapshot save` (kubeadm control plane) shipped off-node (NFS/S3).
+- **Databases:** per-tier Postgres backups — `pg_dump` + WAL archiving, or **CloudNativePG**
+  continuous backup if DB moves to an operator. Covers canopy-db / leaf-db / root-db.
+- **PVCs:** **Velero** (namespace objects + PV snapshots) and/or **Longhorn** snapshots → NFS/S3.
+- **haber-registry mirror:** snapshot to avoid a long re-mirror; it is also re-fillable from Root.
+- **Haber state** (`haber_data`, approvals/mirror status) and **manifests/Helm** (in git = GitOps,
+  self-recovering).
+- **DR drill:** restore etcd + PVCs on a fresh cluster; document **RPO/RTO**; each offline site
+  keeps its own local backups so it can recover without the vendor.
+
+## 13. Security & RBAC
+- **k8s RBAC (platform/ops):** least-privilege ServiceAccounts — the Flora controller may only
+  patch Deployments in its tier namespaces; the gateway operator may only manage `Device`/Pods;
+  **no cluster-admin for app workloads.**
+- **NetworkPolicy (Calico):** default-deny per namespace; allow only real flows (web→api→db,
+  haber↔sync-api, controller→apiserver). Sync endpoints internal-only.
+- **Secrets:** k8s **Secrets** (never ConfigMap) for tokens / DB passwords / session / AI keys;
+  **Sealed Secrets** (or Vault) so they are git-safe; **rotate the `admin`/`admin` dev defaults**.
+- **Image trust:** keep the **Ed25519 release verification** (already) + optionally cosign and an
+  **admission policy (Kyverno/Gatekeeper)** that admits only images from the hospital mirror.
+- **Pod Security:** `restricted` Pod Security Standard — non-root, drop caps, read-only rootfs
+  where possible. Host-access pods (gateway operator/controllers) are the explicit, pinned
+  exception on the edge pool.
+- **Ingress:** TLS via cert-manager (keep the existing edge CA model); mTLS for inter-tier sync.
+- **Audit:** k8s audit log + the app's own audit trails (e.g. formdev_audit) — two layers.
+- **App RBAC vs k8s RBAC:** Flora's user roles (admin/clinician/…) stay for application access;
+  k8s RBAC governs the platform. Keep them separate.
+
+## 14. Open decisions (sign-off before building past the pilot)
 - CNI: **Calico** (NetworkPolicy, scales) vs Flannel (minimal).
 - LoadBalancer: **MetalLB** vs NodePort (+ external LB).
 - Storage at scale: **Longhorn** vs external NFS/CSI; DB: in-cluster StatefulSet vs CloudNativePG.
 - Multi-site shape: **cluster-per-hospital** vs namespace-per-tenant.
 - Gateway: stays docker (recommended) vs edge k8s pool + Device operator.
+- Observability: self-hosted **Prometheus/Grafana/Loki** (recommended, offline) vs managed.
+- Backup tool: **Velero** vs per-component scripts; secrets: **Sealed Secrets** vs Vault.
+- Central fleet monitor: extend Root heartbeat dashboard (recommended) vs central Thanos federation.
 
 ---
 
-## 12. Reused unchanged (not thrown away)
+## 15. Reused unchanged (not thrown away)
 Haber control plane + its overview API + the **Phase 2 distribution UI**; Ed25519 signing/verify;
 digest-pinned images; the offline mirror; `publish_release.py` + the release model; the Phase 1
 DB decouple + env-driven URLs (already k8s-shaped). Manifests/Helm are distro-agnostic — the same
