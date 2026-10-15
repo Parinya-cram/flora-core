@@ -27,7 +27,6 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-import psycopg
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from fastapi import FastAPI, HTTPException, Request
@@ -50,7 +49,6 @@ REGISTRY_URL = os.getenv("HABER_REGISTRY_URL", "http://haber-registry:5000")
 REGISTRY_PUBLIC = os.getenv("HABER_REGISTRY_PUBLIC", "localhost:7205")
 ROOT_REGISTRY_URL = os.getenv("FLORA_ROOT_REGISTRY_URL", "").rstrip("/")  # empty = the one Root advertises
 COMPONENTS = ("canopy", "leaf", "gateway")
-CANOPY_DB_URL = os.getenv("CANOPY_DATABASE_URL", "")
 # Canopy keeps every gateway's configuration and can hand one back (clone / restore).
 CANOPY_SYNC_URL = os.getenv("FLORA_CANOPY_SYNC_URL", "").rstrip("/")
 SYNC_SECRET = os.getenv("FLORA_SYNC_SHARED_SECRET", "")
@@ -270,17 +268,18 @@ def nodes() -> list[dict[str, Any]]:
 # ------------------------------------------------------------------ usage
 
 def canopy_leaves() -> list[dict[str, Any]]:
-    if not CANOPY_DB_URL:
+    """The hospital's Leaf nodes, read from Canopy over HTTP (sync-api) rather than canopy-db
+    directly, so Haber needs no database credentials and can run as its own stack."""
+    if not CANOPY_SYNC_URL or not SYNC_SECRET:
         return []
     try:
-        with psycopg.connect(CANOPY_DB_URL, connect_timeout=3) as connection:
-            rows = connection.execute(
-                "SELECT leaf_id, coalesce(canopy_display_name, display_name) AS name, hospital_id, "
-                "extract(epoch FROM last_seen_at)*1000 AS last_seen FROM sync_leaf_node ORDER BY leaf_id").fetchall()
-    except Exception as error:
+        response = httpx.get(f"{CANOPY_SYNC_URL}/api/sync/v1/leaves",
+                             headers={"authorization": f"Bearer {SYNC_SECRET}"}, timeout=3)
+        response.raise_for_status()
+        return response.json().get("leaves", [])
+    except Exception as error:  # Canopy down must not break Haber's overview
         log.warning("cannot read Canopy leaves: %s", error)
         return []
-    return [{"leaf_id": r[0], "name": r[1], "hospital_id": r[2], "last_seen": int(r[3] or 0)} for r in rows]
 
 
 def gateways() -> list[dict[str, Any]]:

@@ -1,6 +1,15 @@
 # Flora Canopy (hospital central) — own DB, receives Leaf syncs, licenses gateways via Haber.
 # VM deploy via Portainer. Set FLORA_BIND_ADDR=0.0.0.0.
+#
+# Haber + haber-registry now live in the flora-haber stack (see ../flora-haber). canopy-api
+# and sync-api join the external `flora_shared` network to reach Haber by service name.
+# One-time: docker network create flora_shared
 name: flora-canopy
+
+networks:
+  default:
+  flora_shared:
+    external: true
 
 services:
   canopy-db:
@@ -38,6 +47,10 @@ services:
       FLORA_BOOTSTRAP_ADMIN_USERNAME: admin
       FLORA_BOOTSTRAP_ADMIN_PASSWORD: admin
       FLORA_BOOTSTRAP_ADMIN_NAME: Administrator
+      # Haber runs in the flora-haber stack, reached over flora_shared by service name.
+      FLORA_HABER_URL: ${FLORA_HABER_URL:-http://haber:8000}
+      HABER_ADMIN_USERNAME: ${HABER_ADMIN_USERNAME:-admin}
+      HABER_ADMIN_PASSWORD: ${HABER_ADMIN_PASSWORD:-admin}
     ports:
       - "${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_CANOPY_API_PORT:-6895}:8000"
     depends_on:
@@ -48,6 +61,9 @@ services:
       interval: 10s
       timeout: 3s
       retries: 10
+    networks:
+      - default
+      - flora_shared      # reach Haber (flora-haber stack)
     restart: unless-stopped
 
   sync-api:
@@ -68,6 +84,9 @@ services:
       interval: 10s
       timeout: 3s
       retries: 10
+    networks:
+      - default
+      - flora_shared      # Haber reads the Leaf list here (GET /api/sync/v1/leaves)
     restart: unless-stopped
 
   canopy-web:
@@ -85,49 +104,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  haber-registry:
-    image: registry:3
-    environment:
-      REGISTRY_STORAGE_DELETE_ENABLED: "true"
-      OTEL_TRACES_EXPORTER: none
-    ports:
-      - "${FLORA_BIND_ADDR:-127.0.0.1}:${HABER_REGISTRY_PORT:-7205}:5000"
-    volumes:
-      - haber_registry_data:/var/lib/registry
-    restart: unless-stopped
-
-  haber:
-    build:
-      context: ./haber
-    environment:
-      FLORA_ROOT_URL: ${FLORA_ROOT_URL:-http://host.docker.internal:7100}
-      FLORA_TENANT_ID: ${FLORA_TENANT_ID:-hospital-01}
-      FLORA_ROOT_TENANT_KEY: ${FLORA_ROOT_TENANT_KEY:-root-tenant-demo-key}
-      FLORA_ROOT_PUBLIC_KEY: ${FLORA_ROOT_PUBLIC_KEY:-}
-      HABER_GATEWAY_TOKEN: ${HABER_GATEWAY_TOKEN:-haber-gateway-demo-token}
-      HABER_NODE_TOKEN: ${HABER_NODE_TOKEN:-haber-node-demo-token}
-      HABER_ADMIN_USERNAME: admin
-      HABER_ADMIN_PASSWORD: admin
-      CANOPY_DATABASE_URL: postgresql://flora_view:${FLORA_DB_VIEW_PASSWORD:-admin}@canopy-db:5432/${FLORA_POSTGRES_DB:-flora}
-      FLORA_CANOPY_SYNC_URL: http://sync-api:8000
-      FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:-admin}
-      HABER_REGISTRY_URL: http://haber-registry:5000
-      HABER_REGISTRY_PUBLIC: ${HABER_REGISTRY_PUBLIC:-172.22.1.151:7205}
-      HABER_ROOT_SYNC_SEC: ${HABER_ROOT_SYNC_SEC:-15}
-    ports:
-      - "${FLORA_BIND_ADDR:-127.0.0.1}:${HABER_PORT:-7204}:8000"
-    volumes:
-      - haber_data:/data
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      canopy-db:
-        condition: service_healthy
-      haber-registry:
-        condition: service_started
-    restart: unless-stopped
+  # haber + haber-registry moved to the flora-haber stack (../flora-haber/compose.server.yaml).
 
 volumes:
   flora_canopy_pgdata_v2:
-  haber_data:
-  haber_registry_data:

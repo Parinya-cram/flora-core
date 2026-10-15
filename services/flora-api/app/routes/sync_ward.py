@@ -24,6 +24,17 @@ def now_ms() -> int:
     return int(time.time() * 1000)
 
 
+@router.get("/leaves")
+def leaves(database: Connection = Depends(connection)) -> dict[str, Any]:
+    """The hospital's Leaf nodes (id, name, hospital, last-seen ms). Lets Haber build its
+    overview/usage without reading canopy-db directly (so Haber can run as its own stack)."""
+    rows = database.execute(
+        "SELECT leaf_id, coalesce(canopy_display_name, display_name) AS name, hospital_id, "
+        "extract(epoch FROM last_seen_at)*1000 AS last_seen FROM sync_leaf_node ORDER BY leaf_id").fetchall()
+    return {"leaves": [{"leaf_id": r["leaf_id"], "name": r["name"], "hospital_id": r["hospital_id"],
+                        "last_seen": int(r["last_seen"] or 0)} for r in rows]}
+
+
 # ---------------------------------------------------------------- ward exchange
 
 class WardExchange(BaseModel):

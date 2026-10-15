@@ -58,3 +58,6 @@ backup/
 
 # PowerPoint/Office temp lock files
 ~$*
+
+# stray PowerPoint files dropped in the repo root
+/*.pptx
