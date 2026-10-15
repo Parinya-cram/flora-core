@@ -10,6 +10,19 @@ and Helm charts are identical across every stage; only the cluster grows underne
 
 ---
 
+## 0. Device-management model — decided (2026-10-15)
+- **The device/image manager (Haber + registry) is a separate block = its own namespace** in the
+  Canopy k8s cluster, egress-isolated: **only this namespace may reach the internet/Root**; every
+  other Canopy namespace is egress default-deny. It downloads versions from Root and keeps the
+  hospital's copy (the offline source). "แยกออกไปอีกก้อน" = this namespace + egress policy.
+- **Each Leaf keeps its own local image cache** (its downloaded version), runs offline, and shows
+  which version it holds — like a downloaded app.
+- **Updates are manual, per node.** Approving a version at the appliance makes it *available*; each
+  Canopy / Leaf / Gateway applies it only when an admin taps "update" for that node in the
+  System-menu UI (opt-in, so an OR updates between cases, never mid-case). **Implication:** the
+  rollout controller/updater runs in **opt-in mode** (not auto-apply-on-approve), and the Phase 2
+  UI gains a per-node "update available → update" action + "installed version" indicator.
+
 ## 1. Principles
 - **k8s is the capstone, applied tier by tier** — the compose + Haber + updater model already
   works and is offline-capable; migrate deliberately, server tier first.
@@ -90,7 +103,9 @@ Each is a Helm chart per tier (values per environment), rendered from the signed
 Replace `flora-updater` (polls Haber, `docker compose up`) with a small **controller Deployment**
 that watches Haber `nodes/{id}/desired`, verifies Root's Ed25519 signature, and `kubectl set
 image` on the tier's Deployments (or patches a Helm release). Keeps Haber as source of truth +
-offline + signature verification + the Phase 2 approve UI. (GitOps/Argo is the heavier alternative
+offline + signature verification + the Phase 2 approve UI. **Runs in opt-in mode (per §0):** an
+approved version becomes *available*; the controller applies it to a node only after an admin
+triggers "update" for that node — not automatically on approve. (GitOps/Argo is the heavier alternative
 but weakens the offline story.)
 
 ### 5.2 parser-per-device → Operator + `Device` CRD (only if gateway ever goes to k8s)
