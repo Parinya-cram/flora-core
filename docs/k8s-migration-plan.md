@@ -191,6 +191,13 @@ so it is the single pane to answer "who is running what, and is anything unhealt
 fleet." → **This is the "ตัวจัดการ device กลาง": Root is the central monitor; Haber + the Phase 2
 Canopy UI are the per-hospital console.**
 
+**Root console menus:** a fleet list (one row per hospital — tenant · version · health · alerts)
+plus a **per-hospital drill-down with a Gateways / Devices view** — each gateway's running version,
+its connected devices, the parser/driver versions, and connection/link status. This needs the
+per-tenant heartbeat extended to carry a gateway + device summary (gateway list + version, device
+list + link state) alongside the usage counts — still store-and-forward, so the view works even
+when a site's link is down (it shows last-known state + last-seen).
+
 Optional later: per-site Prometheus `remote_write` → a central Thanos/Grafana at Root for deep
 cross-site metrics when links allow; the heartbeat fleet view remains the offline-safe baseline.
 
