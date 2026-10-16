@@ -613,7 +613,7 @@ class SettingsIn(BaseModel):
     canopy_sync_url: str | None = None
     tenant_id: str | None = None
     tenant_key: str | None = None   # write-only; blank keeps the current value
-    sync_interval: int | None = None
+    sync_interval: int | str | None = None   # blank string resets to the env default (like the URL fields)
 
 
 @app.get("/api/haber/v1/settings")

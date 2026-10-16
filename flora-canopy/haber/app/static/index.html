@@ -209,7 +209,7 @@ async function loadSettings() {
 async function saveSettings(e) {
   e.preventDefault();
   const body = {};
-  new FormData(e.target).forEach((v, k) => { body[k] = (k === "sync_interval") ? (v === "" ? null : Number(v)) : v; });
+  new FormData(e.target).forEach((v, k) => { body[k] = (k === "sync_interval" && v !== "") ? Number(v) : v; });
   const r = await fetch("api/haber/v1/settings", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   if (!r.ok) { alert(await r.text()); return; }
   const d = await r.json();
