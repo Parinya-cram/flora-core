@@ -314,3 +314,30 @@ charts that run the pilot run the HA cluster.
 - **Scaling is linear:** more hospitals = more rows, not more per-site complexity; filter/group by
   region / channel / status; hospitals may run different release channels/versions (Root tracks
   per tenant). This is why many hospitals do not become confusing.
+
+## 19. Resilience & failure handling
+Two lines of defense: **(1) offline-first = containment** — every tier runs on its own cached
+images + local data, so a failure upstream never stops the tier below; **(2) HA + backup/DR =
+recovery** — survive node/cluster/data loss.
+
+| Failure | Still works? | Recovery |
+|---|---|---|
+| Internet / vendor Root | Hospital fully operational (only *new* versions blocked) | wait for link / offline media |
+| Appliance (Haber + registry) | Nodes keep running already-pulled images | restart pod / restore its volume |
+| **Canopy (server tier)** | **Leaf keeps charting on its own (local DB); sync queues and catches up** | k8s reschedule / restart |
+| A k8s node | Pods reschedule to other nodes (needs multi-node + Longhorn) | automatic (HA) |
+| Control plane | Running pods keep running; no changes until it returns | HA: 3 control-plane + VIP |
+| Database | Restore from snapshot/WAL; Leaf is the case source → re-sync | backups (RPO = backup interval) |
+| Gateway | That OR's device feed stops; manual charting continues | restart (parser pods auto-respawn) |
+| Leaf workstation | Use a spare workstation; local DB survives restart | spare + local DB |
+| Whole hospital cluster | Other hospitals unaffected (isolation) | restore etcd + DB + PVC on a fresh cluster (DR runbook) |
+| Bad release/update | Opt-in per-node update + Haber hold/rollback + updater rolls back on unhealthy | roll back to previous approved |
+
+**Key clinical guarantee:** the Leaf is offline-first and standalone — an OR keeps charting even if
+everything above it is down. This is the non-negotiable; verify it with a test (Canopy/appliance
+offline during an active case).
+
+**Gaps to close:** single-node pilot is a SPOF (HA = multi-node + 3 control-plane + Longhorn,
+later); **RPO/RTO not yet quantified**; backups not yet automated; **OR workstation redundancy**
+(spare Leaf if one dies mid-case) is an operational plan to make; add an automated
+Leaf-standalone-during-case test.
