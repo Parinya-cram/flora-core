@@ -108,3 +108,39 @@ deploy-dev:
     - ./scripts/server/deploy.sh
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# ---------------------------------------------------------------- deploy-k8s (pilot)
+# Builds the app images straight into the k8s node's containerd (namespace k8s.io) with
+# nerdctl, then rolls out the pilot cluster. Runs ONLY on the device-distribution branch,
+# on the runner that lives on the k8s node (tag flora-k8s). Does not touch the .151 deploy.
+# One flora-api image serves canopy-api / sync-api / leaf-api (same source, env differs).
+deploy-k8s:
+  stage: deploy
+  tags: [flora-k8s]
+  environment:
+    name: k8s-pilot
+    url: https://172.22.19.81:9443
+  resource_group: flora-k8s-cluster   # never two cluster deploys at once
+  variables:
+    TAG: $CI_COMMIT_SHORT_SHA
+  script:
+    - echo "build images into containerd (k8s.io), tag=$TAG"
+    - sudo nerdctl -n k8s.io build -t flora-canopy-canopy-api:$TAG services/flora-api
+    - sudo nerdctl -n k8s.io build -t flora-canopy-canopy-web:$TAG --build-arg FLORA_SURFACE=canopy -f Dockerfile.frontend.prod .
+    - sudo nerdctl -n k8s.io build -t flora-leaf-leaf-web:$TAG --build-arg FLORA_SURFACE=leaf -f Dockerfile.frontend.prod .
+    - sudo nerdctl -n k8s.io build -t flora-root-root-api:$TAG flora-root/api
+    - echo "roll out new images"
+    - kubectl -n flora-canopy set image deploy/canopy-api canopy-api=flora-canopy-canopy-api:$TAG
+    - kubectl -n flora-canopy set image deploy/sync-api  sync-api=flora-canopy-canopy-api:$TAG
+    - kubectl -n flora-leaf   set image deploy/leaf-api   leaf-api=flora-canopy-canopy-api:$TAG
+    - kubectl -n flora-canopy set image deploy/canopy-web canopy-web=flora-canopy-canopy-web:$TAG
+    - kubectl -n flora-leaf   set image deploy/leaf-web   leaf-web=flora-leaf-leaf-web:$TAG
+    - kubectl -n flora-root   set image deploy/root-api   root-api=flora-root-root-api:$TAG
+    - kubectl -n flora-canopy rollout status deploy/canopy-api --timeout=300s
+    - kubectl -n flora-canopy rollout status deploy/sync-api  --timeout=300s
+    - kubectl -n flora-canopy rollout status deploy/canopy-web --timeout=300s
+    - kubectl -n flora-leaf   rollout status deploy/leaf-api   --timeout=300s
+    - kubectl -n flora-leaf   rollout status deploy/leaf-web   --timeout=300s
+    - kubectl -n flora-root   rollout status deploy/root-api   --timeout=300s
+  rules:
+    - if: $CI_COMMIT_BRANCH == "device-distribution"

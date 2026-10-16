@@ -1,0 +1,95 @@
+# Flora edge reverse-proxy — mirrors flora-edge on .151. Standard HTTPS ports via hostPort:
+#   9443 -> Canopy   8443 -> Root   7443 -> Leaf   (same on every machine, only node IP differs)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: edge-nginx
+  namespace: flora-canopy
+data:
+  default.conf: |
+    server {
+      listen 9443 ssl;
+      http2 on;
+      server_name _;
+      ssl_certificate /etc/edge-tls/tls.crt;
+      ssl_certificate_key /etc/edge-tls/tls.key;
+      client_max_body_size 50m;
+      location / {
+        proxy_pass http://canopy-web.flora-canopy.svc.cluster.local:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+      }
+    }
+    server {
+      listen 8443 ssl;
+      http2 on;
+      server_name _;
+      ssl_certificate /etc/edge-tls/tls.crt;
+      ssl_certificate_key /etc/edge-tls/tls.key;
+      client_max_body_size 50m;
+      location / {
+        proxy_pass http://root-api.flora-root.svc.cluster.local:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+      }
+    }
+    server {
+      listen 7443 ssl;
+      http2 on;
+      server_name _;
+      ssl_certificate /etc/edge-tls/tls.crt;
+      ssl_certificate_key /etc/edge-tls/tls.key;
+      client_max_body_size 50m;
+      location / {
+        proxy_pass http://leaf-web.flora-leaf.svc.cluster.local:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge
+  namespace: flora-canopy
+spec:
+  replicas: 1
+  strategy: { type: Recreate }   # hostPort: new pod can't bind while old holds it -> must recreate, not roll
+  selector: { matchLabels: { app: edge } }
+  template:
+    metadata: { labels: { app: edge } }
+    spec:
+      containers:
+        - name: edge
+          image: nginx:1.27-alpine
+          ports:
+            - { containerPort: 9443, hostPort: 9443 }   # Canopy
+            - { containerPort: 8443, hostPort: 8443 }   # Root
+            - { containerPort: 7443, hostPort: 7443 }   # Leaf
+          volumeMounts:
+            - { name: conf, mountPath: /etc/nginx/conf.d }
+            - { name: tls,  mountPath: /etc/edge-tls, readOnly: true }
+          readinessProbe:
+            tcpSocket: { port: 9443 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: conf
+          configMap: { name: edge-nginx }
+        - name: tls
+          secret: { secretName: edge-tls }
