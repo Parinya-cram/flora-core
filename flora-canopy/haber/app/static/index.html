@@ -76,6 +76,7 @@
     <div class="syspop" id="syspop" role="menu" hidden>
       <div class="who"><b>ESM Flora Canopy · Haber</b><span class="muted">Settings</span></div>
       <button role="tab" data-go="catalog">Device catalog<span class="badge" hidden></span></button>
+      <button role="tab" data-go="settings">Settings<span class="badge" hidden></span></button>
     </div>
     <button class="sysbtn" id="sysbtn" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.6a1.7 1.7 0 0 1 3.4 0l.2 1.1a7 7 0 0 1 1.7 1l1.1-.4a1.7 1.7 0 0 1 2 .8l.2.3a1.7 1.7 0 0 1-.4 2.2l-.9.7a7 7 0 0 1 0 2l.9.7a1.7 1.7 0 0 1 .4 2.2l-.2.3a1.7 1.7 0 0 1-2 .8l-1.1-.4a7 7 0 0 1-1.7 1l-.2 1.1a1.7 1.7 0 0 1-3.4 0l-.2-1.1a7 7 0 0 1-1.7-1l-1.1.4a1.7 1.7 0 0 1-2-.8l-.2-.3a1.7 1.7 0 0 1 .4-2.2l.9-.7a7 7 0 0 1 0-2l-.9-.7a1.7 1.7 0 0 1-.4-2.2l.2-.3a1.7 1.7 0 0 1 2-.8l1.1.4a7 7 0 0 1 1.7-1Z"/><circle cx="12" cy="12" r="2.6"/></svg><span>System</span></button>
   </div>
@@ -88,6 +89,8 @@
   <section class="wide" data-tab="gateways"><h2>Gateways</h2><div id="gateways"></div></section>
   <section class="wide" data-tab="leaves"><h2>Leaves synced to Canopy</h2><div id="leaves"></div></section>
   <section class="wide" data-tab="catalog"><h2>Device catalog</h2><div id="catalog"></div></section>
+  <section class="wide" data-tab="settings"><h2>Settings · Haber config</h2>
+    <p class="muted">ตั้งค่าที่นี่แทนการแก้ env/redeploy — บันทึกแล้วมีผลทันที</p><div id="settingsbox">Loading…</div></section>
 </main>
 </div>
 <script>
@@ -98,6 +101,7 @@ function showTab(name) {
   if (!tabButtons.some((b) => b.dataset.go === name)) name = "license";
   tabButtons.forEach((b) => b.setAttribute("aria-selected", String(b.dataset.go === name)));
   document.querySelectorAll("main [data-tab]").forEach((s) => { s.hidden = s.dataset.tab !== name; });
+  if (name === "settings") loadSettings();
   document.getElementById("sysbtn").classList.toggle("active", !!document.querySelector(`#syspop [data-go="${name}"]`));
   if (location.hash.slice(1) !== name) history.replaceState(null, "", "#" + name);
 }
@@ -180,6 +184,38 @@ function approve(id) { if (confirm(`Roll out ${id} to every node of this compone
 function hold(c) { if (confirm(`Stop following approvals for ${c}? Nodes keep running what they have.`)) post(`api/haber/v1/components/${c}/hold`); }
 function remirror(id) { post(`api/haber/v1/releases/${id}/mirror`); }
 async function sync() { const r = await fetch("api/haber/v1/root/sync", { method: "POST" }); if (!r.ok) alert(await r.text()); load(); }
+
+// ---- Settings (Haber config via UI instead of env/redeploy) ----
+const SETTING_FIELDS = [
+  ["root_url", "Flora Root URL"], ["root_registry_url", "Root registry URL (blank = use what Root advertises)"],
+  ["registry_public", "Haber registry public (host:port that nodes pull from)"],
+  ["canopy_sync_url", "Canopy sync URL"], ["tenant_id", "Tenant ID"],
+  ["tenant_key", "Root tenant key", true], ["sync_interval", "Root sync interval (seconds)"],
+];
+async function loadSettings() {
+  const s = (await (await fetch("api/haber/v1/settings")).json()).settings;
+  const row = ([name, label, secret]) => {
+    const meta = s[name] || {};
+    const src = meta.overridden ? '<span class="ok">overridden here</span>' : '<span class="muted">env default</span>';
+    if (secret) return `<label>${esc(label)}<input name="${name}" type="password" placeholder="${meta.set ? "•••••• (set, blank = keep)" : "(not set)"}"></label><small>${src}</small>`;
+    const type = name === "sync_interval" ? "number" : "text";
+    return `<label>${esc(label)}<input name="${name}" type="${type}" value="${esc(meta.value ?? "")}"></label><small>${src}</small>`;
+  };
+  document.getElementById("settingsbox").innerHTML =
+    `<form id="setform" class="setform">${SETTING_FIELDS.map(row).join("")}
+       <p><button type="submit">Save</button> <span class="muted">blank ช่องปกติ = reset กลับ env default</span></p></form>`;
+  document.getElementById("setform").addEventListener("submit", saveSettings);
+}
+async function saveSettings(e) {
+  e.preventDefault();
+  const body = {};
+  new FormData(e.target).forEach((v, k) => { body[k] = (k === "sync_interval") ? (v === "" ? null : Number(v)) : v; });
+  const r = await fetch("api/haber/v1/settings", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (!r.ok) { alert(await r.text()); return; }
+  const d = await r.json();
+  alert("Saved: " + (d.changed.join(", ") || "(no change)") + "\nมีผลทันที");
+  loadSettings();
+}
 load(); setInterval(load, 5000);
 // ---------------------------------------------------------------- system menu
 (() => {

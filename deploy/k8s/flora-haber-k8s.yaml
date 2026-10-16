@@ -82,7 +82,7 @@ spec:
           imagePullPolicy: Never
           env:
             - { name: FLORA_TENANT_ID, value: "hospital-01" }
-            - { name: FLORA_ROOT_URL, value: "http://flora-root.flora-root.svc.cluster.local:8000" }  # Root not deployed yet -> root-sync just errors in log
+            - { name: FLORA_ROOT_URL, value: "http://root-api.flora-root.svc.cluster.local:8000" }  # Root not deployed yet -> root-sync just errors in log
             - { name: FLORA_ROOT_TENANT_KEY, value: "root-tenant-demo-key" }
             - { name: FLORA_ROOT_PUBLIC_KEY, value: "" }
             - { name: HABER_GATEWAY_TOKEN, value: "haber-gateway-demo-token" }

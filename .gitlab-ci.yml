@@ -130,6 +130,7 @@ deploy-k8s:
     - sudo nerdctl -n k8s.io build -t flora-canopy-canopy-web:$TAG --build-arg FLORA_SURFACE=canopy -f Dockerfile.frontend.prod .
     - sudo nerdctl -n k8s.io build -t flora-leaf-leaf-web:$TAG --build-arg FLORA_SURFACE=leaf -f Dockerfile.frontend.prod .
     - sudo nerdctl -n k8s.io build -t flora-root-root-api:$TAG flora-root/api
+    - sudo nerdctl -n k8s.io build -t flora-canopy-haber:$TAG flora-canopy/haber
     - echo "roll out new images"
     - kubectl -n flora-canopy set image deploy/canopy-api canopy-api=flora-canopy-canopy-api:$TAG
     - kubectl -n flora-canopy set image deploy/sync-api  sync-api=flora-canopy-canopy-api:$TAG
@@ -137,11 +138,13 @@ deploy-k8s:
     - kubectl -n flora-canopy set image deploy/canopy-web canopy-web=flora-canopy-canopy-web:$TAG
     - kubectl -n flora-leaf   set image deploy/leaf-web   leaf-web=flora-leaf-leaf-web:$TAG
     - kubectl -n flora-root   set image deploy/root-api   root-api=flora-root-root-api:$TAG
+    - kubectl -n flora-appliance set image deploy/haber  haber=flora-canopy-haber:$TAG
     - kubectl -n flora-canopy rollout status deploy/canopy-api --timeout=300s
     - kubectl -n flora-canopy rollout status deploy/sync-api  --timeout=300s
     - kubectl -n flora-canopy rollout status deploy/canopy-web --timeout=300s
     - kubectl -n flora-leaf   rollout status deploy/leaf-api   --timeout=300s
     - kubectl -n flora-leaf   rollout status deploy/leaf-web   --timeout=300s
     - kubectl -n flora-root   rollout status deploy/root-api   --timeout=300s
+    - kubectl -n flora-appliance rollout status deploy/haber --timeout=300s
   rules:
     - if: $CI_COMMIT_BRANCH == "device-distribution"

@@ -54,6 +54,16 @@ CANOPY_SYNC_URL = os.getenv("FLORA_CANOPY_SYNC_URL", "").rstrip("/")
 SYNC_SECRET = os.getenv("FLORA_SYNC_SHARED_SECRET", "")
 SYNC_INTERVAL = int(os.getenv("HABER_ROOT_SYNC_SEC", "20"))
 DB_PATH = os.getenv("HABER_DB_PATH", "/data/haber.db")
+# Config that an admin can change at runtime from the Settings UI. The env value above is the
+# bootstrap default; a value saved in the UI (kv key "setting:<name>") overrides it live — no
+# restart, because the loops read these module globals each iteration. {name: (global, caster)}.
+SETTINGS_KEYS = {
+    "root_url": ("ROOT_URL", str), "root_registry_url": ("ROOT_REGISTRY_URL", str),
+    "registry_public": ("REGISTRY_PUBLIC", str), "canopy_sync_url": ("CANOPY_SYNC_URL", str),
+    "tenant_id": ("TENANT_ID", str), "tenant_key": ("TENANT_KEY", str),
+    "sync_interval": ("SYNC_INTERVAL", int),
+}
+SECRET_KEYS = {"tenant_key"}  # never returned by the API, only writable
 CATALOG = json.loads((Path(__file__).parent / "catalog.json").read_text())
 STATE: dict[str, Any] = {"root": {"status": "never", "error": None, "last_sync": None},
                          "mirror": {"status": "idle", "error": None, "last_run": None}}
@@ -111,6 +121,39 @@ def kv_set(key: str, value: Any) -> None:
     with db() as connection:
         connection.execute("INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                            (key, json.dumps(value)))
+
+
+def kv_del(key: str) -> None:
+    with db() as connection:
+        connection.execute("DELETE FROM kv WHERE key=?", (key,))
+
+
+def apply_settings_overrides() -> None:
+    """Load any admin-saved settings from kv and override the matching module globals, so the
+    loops pick them up without a restart. Env remains the default when nothing is saved."""
+    for name, (global_name, caster) in SETTINGS_KEYS.items():
+        stored = kv_get("setting:" + name)
+        if stored in (None, ""):
+            continue
+        try:
+            value = caster(stored)
+            if isinstance(value, str):
+                value = value.rstrip("/") if global_name.endswith("URL") else value
+            globals()[global_name] = value
+        except (TypeError, ValueError):
+            log.warning("ignoring bad setting %s=%r", name, stored)
+
+
+def current_settings() -> dict[str, Any]:
+    """Effective config for the Settings UI. Secrets report only whether they are set."""
+    out: dict[str, Any] = {}
+    for name, (global_name, _caster) in SETTINGS_KEYS.items():
+        overridden = kv_get("setting:" + name) not in (None, "")
+        if name in SECRET_KEYS:
+            out[name] = {"set": bool(globals().get(global_name)), "overridden": overridden, "secret": True}
+        else:
+            out[name] = {"value": globals().get(global_name), "overridden": overridden}
+    return out
 
 
 # ------------------------------------------------------------------ Root sync
@@ -304,6 +347,7 @@ def usage() -> dict[str, Any]:
 async def lifespan(_: FastAPI):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     init_db()
+    apply_settings_overrides()  # admin-saved settings win over env defaults
     tasks = [asyncio.create_task(root_loop()), asyncio.create_task(mirror_loop())]
     yield
     for task in tasks:
@@ -560,6 +604,45 @@ async def force_root_sync():
         STATE["root"].update(status="offline", error=str(error))
         raise HTTPException(502, str(error)) from None
     return overview()
+
+
+class SettingsIn(BaseModel):
+    root_url: str | None = None
+    root_registry_url: str | None = None
+    registry_public: str | None = None
+    canopy_sync_url: str | None = None
+    tenant_id: str | None = None
+    tenant_key: str | None = None   # write-only; blank keeps the current value
+    sync_interval: int | None = None
+
+
+@app.get("/api/haber/v1/settings")
+def get_settings():
+    """Effective Haber config for the admin UI (env default, overridable here instead of redeploying)."""
+    return {"settings": current_settings()}
+
+
+@app.put("/api/haber/v1/settings")
+def put_settings(body: SettingsIn, request: Request):
+    user = basic_auth.username_of(request)
+    changed = []
+    for name in SETTINGS_KEYS:
+        value = getattr(body, name)
+        if value is None:
+            continue
+        if isinstance(value, str):
+            value = value.strip()
+            if value == "":
+                if name in SECRET_KEYS:
+                    continue            # blank secret = keep current
+                kv_del("setting:" + name)  # blank = reset to the env default
+                changed.append(name)
+                continue
+        kv_set("setting:" + name, value)
+        changed.append(name)
+    apply_settings_overrides()
+    log.info("%s updated settings: %s", user, ", ".join(changed) or "(none)")
+    return {"changed": changed, "settings": current_settings()}
 
 
 @app.get("/api/haber/v1/device-types")
