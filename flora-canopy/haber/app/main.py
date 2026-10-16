@@ -64,6 +64,9 @@ SETTINGS_KEYS = {
     "sync_interval": ("SYNC_INTERVAL", int),
 }
 SECRET_KEYS = {"tenant_key"}  # never returned by the API, only writable
+# Snapshot the env-derived defaults now, before any override is applied, so clearing a
+# setting in the UI can restore the default live (not only after a restart).
+ENV_DEFAULTS = {global_name: globals()[global_name] for global_name, _ in SETTINGS_KEYS.values()}
 CATALOG = json.loads((Path(__file__).parent / "catalog.json").read_text())
 STATE: dict[str, Any] = {"root": {"status": "never", "error": None, "last_sync": None},
                          "mirror": {"status": "idle", "error": None, "last_run": None}}
@@ -134,6 +137,7 @@ def apply_settings_overrides() -> None:
     for name, (global_name, caster) in SETTINGS_KEYS.items():
         stored = kv_get("setting:" + name)
         if stored in (None, ""):
+            globals()[global_name] = ENV_DEFAULTS[global_name]   # no override: restore env default live
             continue
         try:
             value = caster(stored)
