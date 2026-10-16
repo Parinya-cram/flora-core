@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="th" class="page">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Platform · FLORA iCIS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600&family=IBM+Plex+Sans+Thai:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header class="site-header" data-page="platform"></header>
+
+<main>
+  <section class="page-head">
+    <div class="wrap stack">
+      <span class="eyebrow"><span class="th">แพลตฟอร์ม</span><span class="en">Platform</span></span>
+      <h1><span class="th">สี่ชั้นที่ทำงานร่วมกัน ตั้งแต่เครื่องมือแพทย์ถึงคลาวด์</span><span class="en">Four tiers that work together, from device to cloud</span></h1>
+      <p class="lede"><span class="th">ทุกชั้นแยกหน้าที่ชัดเจน ถ้าชั้นใดขัดข้อง ชั้นข้างเตียงยังบันทึกเคสได้ต่อ</span><span class="en">Each tier has one job. If any tier fails, the bedside keeps charting.</span></p>
+      <div class="pipe" aria-label="Data flow">
+        <div class="node"><b><span class="th">เครื่องมือแพทย์</span><span class="en">Devices</span></b><small>Monitor · Vent · Pump</small></div><span class="arrow">→</span>
+        <div class="node"><b>Tendril</b><small><span class="th">แปลงค่า</span><span class="en">normalise</span></small></div><span class="arrow">→</span>
+        <div class="node"><b>Leaf</b><small><span class="th">บันทึกข้างเตียง</span><span class="en">bedside record</span></small></div><span class="arrow">→</span>
+        <div class="node"><b>Canopy</b><small><span class="th">ทั้งโรงพยาบาล + HIS</span><span class="en">hospital + HIS</span></small></div><span class="arrow">⇢</span>
+        <div class="node"><b>Root</b><small><span class="th">ไลเซนส์และอัปเดต</span><span class="en">licences, updates</span></small></div>
+      </div>
+      <nav class="subnav" aria-label="On this page">
+        <a href="#gateway">Tendril</a><a href="#leaf">Leaf</a><a href="#canopy">Canopy</a><a href="#root">Root</a><a href="#studio">Studio</a><a href="#interop"><span class="th">มาตรฐานและ HIS</span><span class="en">Standards &amp; HIS</span></a>
+      </nav>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:0">
+    <div class="wrap">
+      <div class="detail" id="gateway">
+        <div class="label"><span class="where"><span class="th">ข้างเครื่องมือแพทย์</span><span class="en">At the device</span></span><h2>Tendril</h2><span class="note">Medical Device Gateway</span></div>
+        <div class="body">
+          <p><span class="th">ตัวรับข้อมูลจากเครื่องมือแพทย์ ติดตั้งในเครือข่ายห้องผ่าตัดหรือ ICU รับข้อมูลผ่านพอร์ต Serial, LAN, HL7/MLLP และ UDP แล้วแปลงเป็นค่ามาตรฐานรายนาทีส่งให้ Leaf</span><span class="en">The device receiver sits on the OR or ICU network. It reads serial, LAN, HL7/MLLP and UDP feeds and turns them into standard per-minute values for Leaf.</span></p>
+          <ul class="ticks">
+            <li><span class="th">ไดรเวอร์สำหรับ GE (Carestation, CARESCAPE), Dräger (MEDIBUS.X, Infinity) และ B. Braun Space</span><span class="en">Drivers for GE (Carestation, CARESCAPE), Dräger (MEDIBUS.X, Infinity) and B. Braun Space</span></li>
+            <li><span class="th">รับ HL7 v2 จาก central station ของยี่ห้ออื่น</span><span class="en">HL7 v2 from other brands' central stations</span></li>
+            <li><span class="th">แยกสถานะ "ต่อพอร์ตอยู่" กับ "มีข้อมูลเข้า" ให้ช่างและพยาบาลเห็นต้นเหตุทันที</span><span class="en">Separate "port connected" and "data flowing" states, so staff see the cause at once</span></li>
+            <li><span class="th">แจ้งเตือนการเชื่อมต่อขึ้น Canopy</span><span class="en">Connectivity alerts raised on Canopy</span></li>
+          </ul>
+          <p><a href="devices.html"><span class="th">ดูรุ่นเครื่องที่รองรับ →</span><span class="en">See supported models →</span></a></p>
+        </div>
+      </div>
+
+      <div class="detail" id="leaf">
+        <div class="label"><span class="where"><span class="th">ข้างเตียง</span><span class="en">At the bedside</span></span><h2>Leaf</h2></div>
+        <div class="body">
+          <p><span class="th">สถานีบันทึกวิสัญญีและ ICU บนเครื่อง Windows แต่ละเครื่องมีฐานข้อมูล PostgreSQL ของตัวเอง จึงบันทึกต่อได้แม้เครือข่ายหรือเซิร์ฟเวอร์กลางล่ม และส่งข้อมูลขึ้น Canopy อัตโนมัติเมื่อกลับมาเชื่อมต่อ</span><span class="en">The anesthesia and ICU charting station runs on Windows with its own PostgreSQL database. It keeps charting through network or server outages and syncs to Canopy automatically when reconnected.</span></p>
+          <ul class="ticks">
+            <li><span class="th">ใบบันทึกวิสัญญีแบบ timeline ค่าสัญญาณชีพ ยา สารน้ำ และเหตุการณ์</span><span class="en">Timeline anesthesia record with vitals, drugs, fluids and events</span></li>
+            <li><span class="th">พิมพ์ด้วยเสียงภาษาไทยและอังกฤษ ประมวลผลในเครื่อง ไม่ส่งเสียงออกนอกโรงพยาบาล</span><span class="en">Thai and English voice dictation processed on the workstation, with no audio leaving the hospital</span></li>
+            <li><span class="th">ส่งต่อเคสระหว่างเครื่อง Leaf เช่น จากห้องผ่าตัดไป PACU</span><span class="en">Case handover between Leaf stations, for example OR to PACU</span></li>
+            <li><span class="th">พิมพ์ PDF สรุปเคสเพื่อเก็บเข้า HIS</span><span class="en">Case summary PDF for the HIS</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="detail" id="canopy">
+        <div class="label"><span class="where"><span class="th">ในโรงพยาบาล</span><span class="en">In the hospital</span></span><h2>Canopy</h2></div>
+        <div class="body">
+          <p><span class="th">ศูนย์กลางของโรงพยาบาล ติดตั้งบนเซิร์ฟเวอร์ภายใน รวมข้อมูลจากทุก Leaf ให้เห็นทุกห้องผ่าตัดและทุกเตียง ICU ในหน้าเดียว และเป็นจุดเชื่อมกับ HIS</span><span class="en">The hospital hub runs on your own server. It gathers every Leaf so you see every OR and ICU bed on one screen, and it is the link to the HIS.</span></p>
+          <ul class="ticks">
+            <li><span class="th">ภาพรวมหลายห้องหลายเตียง พร้อมเคสที่กำลังดำเนินอยู่</span><span class="en">Multi-room, multi-bed overview with live cases</span></li>
+            <li><span class="th">รายงาน แดชบอร์ด และการส่งออกข้อมูลเพื่องานวิจัยพร้อมบันทึก audit</span><span class="en">Reports, dashboards and audited research export</span></li>
+            <li><span class="th">จัดการผู้ใช้ สิทธิ์ และการตั้งค่าของทุกหน่วยงาน</span><span class="en">Users, permissions and settings for every unit</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="detail" id="root">
+        <div class="label"><span class="where"><span class="th">คลาวด์</span><span class="en">Cloud</span></span><h2>Root</h2></div>
+        <div class="body">
+          <p><span class="th">บริการคลาวด์สำหรับไลเซนส์และอัปเดตซอฟต์แวร์ ทุกรุ่นลงลายเซ็นดิจิทัล และโรงพยาบาลเป็นผู้อนุมัติก่อนติดตั้ง Root ไม่เก็บข้อมูลผู้ป่วย</span><span class="en">The cloud service for licences and software updates. Every release is digitally signed and installed only after the hospital approves it. Root holds no patient data.</span></p>
+        </div>
+      </div>
+
+      <div class="detail" id="studio">
+        <div class="label"><span class="where"><span class="th">เครื่องมือของโรงพยาบาล</span><span class="en">Hospital tools</span></span><h2>Studio</h2></div>
+        <div class="body">
+          <p><span class="th">ชุดเครื่องมือให้ทีมของโรงพยาบาลสร้างและแก้ไขเองได้ ไม่ต้องรอผู้ขาย</span><span class="en">Tools your own team uses to build and change things without waiting for the vendor.</span></p>
+          <div class="cols">
+            <div class="pillar"><h3>Form Studio</h3><p><span class="th">สร้างแบบฟอร์มพร้อมเงื่อนไข ตัวคำนวณ เวอร์ชัน และ PDF</span><span class="en">Forms with logic, calculators, versioning and PDF output</span></p></div>
+            <div class="pillar"><h3>Report Studio</h3><p><span class="th">ออกแบบรายงานและแดชบอร์ดของหน่วยงาน</span><span class="en">Unit reports and dashboards</span></p></div>
+            <div class="pillar"><h3>Workflow Studio</h3><p><span class="th">กำหนดขั้นตอนงานแยกตามหอผู้ป่วยและหน่วยงาน</span><span class="en">Workflows per ward and unit</span></p></div>
+            <div class="pillar"><h3>Flora Agent</h3><p><span class="th">ถามเป็นภาษาคน ได้รายงานที่ตรวจสอบได้ ใช้สิทธิ์เดียวกับผู้ใช้ และทีมยืนยันก่อนบันทึกทุกครั้ง</span><span class="en">Ask in plain language and get a report you can check. It works under the user's own permissions, and staff confirm before anything is saved.</span></p><p class="note">Report Agent <span class="status status--test"><span class="th">ตัวอย่างแรก</span><span class="en">First release</span></span> · Form-input Agent <span class="status status--cand"><span class="th">แนวทางต่อยอด</span><span class="en">Next</span></span></p></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail" id="interop">
+        <div class="label"><span class="where"><span class="th">การเชื่อมต่อ</span><span class="en">Interoperability</span></span><h2><span class="th">มาตรฐานและ HIS</span><span class="en">Standards &amp; HIS</span></h2></div>
+        <div class="body">
+          <ul class="ticks">
+            <li><span class="th">รับข้อมูลผู้ป่วยและตารางผ่าตัดจาก HIS ผ่าน HL7 v2 (ADT, SIU, ORM)</span><span class="en">Patient and OR schedule from the HIS over HL7 v2 (ADT, SIU, ORM)</span></li>
+            <li><span class="th">ดึงประวัติแพ้ยาและผลแล็บจาก HIS ของโรงพยาบาล</span><span class="en">Allergies and lab results from the hospital HIS</span></li>
+            <li><span class="th">รหัสมาตรฐาน ICD-10, ICD-9-CM, SNOMED CT, LOINC, RxNorm, ATC และ UCUM</span><span class="en">ICD-10, ICD-9-CM, SNOMED CT, LOINC, RxNorm, ATC and UCUM coding</span></li>
+            <li><span class="th">API สาธารณะพร้อมการปิดบังข้อมูลส่วนบุคคล</span><span class="en">Public API with personal-data masking</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<section class="cta-band">
+  <div class="wrap">
+    <h2><span class="th">อยากเห็นแพลตฟอร์มทำงานจริง?</span><span class="en">Want to see the platform running?</span></h2>
+    <a class="btn" href="contact.html"><span class="th">ขอเดโม</span><span class="en">Request a demo</span></a>
+  </div>
+</section>
+<footer class="site-footer"></footer>
+<script src="site.js"></script>
+</body>
+</html>

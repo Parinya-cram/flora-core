@@ -1,0 +1,169 @@
+<meta charset="utf-8">
+<title>FLORA iCIS Website</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="FLORA iCIS — ระบบบันทึกวิสัญญีและ ICU ที่เชื่อมเครื่องมือแพทย์หลายยี่ห้อ ทำงานได้แม้ออฟไลน์">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600&family=IBM+Plex+Sans+Thai:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="site.css">
+
+<header class="site-header" data-page="home"></header>
+
+<main>
+  <section class="section">
+    <div class="wrap split">
+      <div class="stack">
+        <span class="eyebrow"><span class="th">ระบบบันทึกวิสัญญีและ ICU</span><span class="en">Anesthesia &amp; ICU information system</span></span>
+        <h1><span class="th">บันทึกทุกนาทีของผู้ป่วย แม้เครือข่ายโรงพยาบาลจะล่ม</span><span class="en">Every minute charted, even when the hospital network drops</span></h1>
+        <p class="lede"><span class="th">FLORA iCIS ดึงค่าสัญญาณชีพจากเครื่องติดตามผู้ป่วยและเครื่องดมยาหลายยี่ห้อ บันทึกที่เครื่องข้างเตียง แล้วซิงก์ขึ้นศูนย์กลางของโรงพยาบาลเมื่อเครือข่ายกลับมา</span><span class="en">FLORA iCIS captures vitals from multi-brand monitors and anesthesia machines, records them at the bedside, and syncs to the hospital centre when the network returns.</span></p>
+        <div class="actions">
+          <a class="btn" href="contact.html"><span class="th">ขอเดโมบนเครื่องของโรงพยาบาลคุณ</span><span class="en">Request a demo on your devices</span></a>
+          <a class="btn btn--ghost" href="platform.html"><span class="th">ดูแพลตฟอร์ม</span><span class="en">See the platform</span></a>
+        </div>
+      </div>
+      <figure class="record" style="margin:0" aria-label="Simulated anesthesia record">
+        <div class="record-head">
+          <span>OR 3 · <span class="th">เคสตัวอย่าง</span><span class="en">sample case</span> · 09:00</span>
+          <span class="net" id="net"><i></i><span id="net-text"></span></span>
+        </div>
+        <canvas id="record" aria-hidden="true"></canvas>
+        <figcaption class="legend">
+          <span style="color:var(--hr)">━ HR</span>
+          <span style="color:var(--spo2)">━ SpO₂</span>
+          <span style="color:var(--bp)">▼▲ NIBP</span>
+          <span><span class="th">แถบสีชมพู = ช่วงที่เครือข่ายล่ม แต่ยังบันทึกต่อ · ข้อมูลจำลอง</span><span class="en">Pink band = network down, still recording · simulated data</span></span>
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap stack-lg">
+      <h2><span class="th">สามเหตุผลที่ทีมวิสัญญีและ ICU เลือก FLORA iCIS</span><span class="en">Three reasons anesthesia and ICU teams choose FLORA iCIS</span></h2>
+      <div class="cols">
+        <div class="pillar"><span class="tag">Tendril</span>
+          <h3><span class="th">เชื่อมเครื่องได้หลายยี่ห้อ</span><span class="en">Multi-brand device capture</span></h3>
+          <p><span class="th">Serial, LAN, HL7 และ UDP ในเกตเวย์เดียว มีไดรเวอร์สำหรับ GE, Dräger และ B. Braun ไม่ต้องซื้อมิดเดิลแวร์แยกต่อเตียง</span><span class="en">Serial, LAN, HL7 and UDP in one gateway, with drivers for GE, Dräger and B. Braun. No per-bed proprietary middleware.</span></p>
+        </div>
+        <div class="pillar"><span class="tag">Leaf</span>
+          <h3><span class="th">ทำงานได้แม้ออฟไลน์</span><span class="en">Works offline at the bedside</span></h3>
+          <p><span class="th">แต่ละห้องมีฐานข้อมูลของตัวเอง เคสไม่หยุดเมื่อเครือข่ายหรือเซิร์ฟเวอร์กลางมีปัญหา</span><span class="en">Each room keeps its own database, so a case never stops when the network or central server fails.</span></p>
+        </div>
+        <div class="pillar"><span class="tag">Studio</span>
+          <h3><span class="th">โรงพยาบาลแก้ฟอร์มเองได้</span><span class="en">Forms your team can edit</span></h3>
+          <p><span class="th">Form, Report และ Workflow Studio ให้ทีมแก้แบบฟอร์มและรายงานภาษาไทยได้เอง ไม่ต้องรอผู้ขาย</span><span class="en">Form, Report and Workflow Studio let your team change Thai forms and reports without a vendor change request.</span></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap stack-lg">
+      <div class="stack">
+        <h2><span class="th">สำหรับห้องผ่าตัดและ ICU</span><span class="en">For the operating room and the ICU</span></h2>
+      </div>
+      <div class="cols-2">
+        <a class="panel" href="solutions.html#or" style="text-decoration:none;color:inherit">
+          <span class="eyebrow">OR · Anesthesia</span>
+          <h3><span class="th">ใบบันทึกวิสัญญีครบตั้งแต่ก่อนผ่าตัดถึง PACU</span><span class="en">The full anesthesia record, pre-op to PACU</span></h3>
+          <ul class="ticks">
+            <li><span class="th">ประเมินก่อนดมยา ดึงประวัติแพ้ยาและแล็บจาก HIS</span><span class="en">Pre-anesthesia assessment with HIS allergies and labs</span></li>
+            <li><span class="th">ค่าสัญญาณชีพและค่าจากเครื่องดมยาลงบันทึกทุกนาที</span><span class="en">Vitals and anesthesia-machine values charted every minute</span></li>
+            <li><span class="th">ยา สารน้ำ เลือด airway และคะแนน Aldrete ใน PACU</span><span class="en">Drugs, fluids, blood, airway and PACU Aldrete score</span></li>
+          </ul>
+        </a>
+        <a class="panel" href="solutions.html#icu" style="text-decoration:none;color:inherit">
+          <span class="eyebrow">ICU</span>
+          <h3><span class="th">Flowsheet ICU และภาพรวมทุกเตียง</span><span class="en">ICU flowsheet and an all-bed overview</span></h3>
+          <ul class="ticks">
+            <li><span class="th">บันทึกสัญญาณชีพจากเครื่องติดตามผู้ป่วยและเครื่องช่วยหายใจ</span><span class="en">Vitals from monitors and ventilators</span></li>
+            <li><span class="th">สมดุลสารน้ำเข้า-ออก (I/O) แยกตามกลุ่ม</span><span class="en">Intake and output balance by group</span></li>
+            <li><span class="th">ตัวคำนวณ GCS, SOFA, qSOFA, P/F ratio</span><span class="en">GCS, SOFA, qSOFA and P/F ratio calculators</span></li>
+          </ul>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap stack-lg">
+      <div class="stack">
+        <h2><span class="th">สี่ชั้น ตั้งแต่ข้างเตียงถึงคลาวด์</span><span class="en">Four tiers, bedside to cloud</span></h2>
+        <p class="muted"><span class="th">ข้อมูลผู้ป่วยอยู่ในโรงพยาบาลทั้งหมด คลาวด์ใช้สำหรับไลเซนส์และอัปเดตเท่านั้น</span><span class="en">Patient data stays inside the hospital. The cloud handles licences and updates only.</span></p>
+      </div>
+      <div class="tiers">
+        <a class="tier" href="platform.html#gateway"><span class="where"><span class="th">ข้างเครื่องมือแพทย์</span><span class="en">At the device</span></span><h3>Tendril</h3><p><span class="th">รับข้อมูลจากเครื่องและแปลงเป็นค่ามาตรฐาน</span><span class="en">Receives device data and normalises it.</span></p></a>
+        <a class="tier" href="platform.html#leaf"><span class="where"><span class="th">ข้างเตียง</span><span class="en">At the bedside</span></span><h3>Leaf</h3><p><span class="th">สถานีบันทึกเคส พร้อมฐานข้อมูลในเครื่อง</span><span class="en">Charting workstation with its own database.</span></p></a>
+        <a class="tier" href="platform.html#canopy"><span class="where"><span class="th">ในโรงพยาบาล</span><span class="en">In the hospital</span></span><h3>Canopy</h3><p><span class="th">ดูทุกห้องและทุกเตียง รายงาน และเชื่อม HIS</span><span class="en">Every room and bed, reports and the HIS link.</span></p></a>
+        <a class="tier" href="platform.html#root"><span class="where"><span class="th">คลาวด์</span><span class="en">Cloud</span></span><h3>Root</h3><p><span class="th">ไลเซนส์และอัปเดตที่ลงลายเซ็นดิจิทัล</span><span class="en">Licences and digitally signed updates.</span></p></a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap split" style="align-items:start">
+      <div class="stack">
+        <span class="eyebrow"><span class="th">ใช้งานจริงแล้ว</span><span class="en">In clinical use</span></span>
+        <h2><span class="th">ทดสอบในห้องผ่าตัดจริงของโรงพยาบาลมหาวิทยาลัย</span><span class="en">Running in real operating rooms at a university hospital</span></h2>
+        <p class="muted"><span class="th">FLORA iCIS บันทึกเคสจริงในห้องผ่าตัด เชื่อมเครื่อง GE Carestation และ CARESCAPE และนำความเห็นของวิสัญญีแพทย์และพยาบาลมาปรับรุ่นใหม่ทุกครั้ง</span><span class="en">FLORA iCIS charts live cases in the OR with GE Carestation and CARESCAPE devices, and each release takes in feedback from anesthesiologists and nurses.</span></p>
+        <p class="note"><span class="todo"><span class="th">รอขออนุญาตโรงพยาบาลก่อนระบุชื่อ</span><span class="en">Hospital name pending permission</span></span></p>
+      </div>
+      <div class="stack">
+        <h3><span class="th">POC กับเครื่องของคุณ ใน 3 ขั้นตอน</span><span class="en">A POC on your equipment, in 3 steps</span></h3>
+        <ol class="stack" style="margin:0;padding-left:1.2rem">
+          <li><span class="th"><b>สำรวจ</b> รุ่นเครื่องติดตามผู้ป่วย เครื่องดมยา และ HIS ที่ใช้อยู่</span><span class="en"><b>Survey</b> your monitors, anesthesia machines and HIS.</span></li>
+          <li><span class="th"><b>ติดตั้ง</b> Tendril และ Leaf หนึ่งห้อง ต่อกับเครื่องจริง</span><span class="en"><b>Install</b> a Tendril and a Leaf in one room, wired to real devices.</span></li>
+          <li><span class="th"><b>ใช้งาน</b> กับเคสจริง แล้วสรุปผลร่วมกับทีมวิสัญญีและ IT</span><span class="en"><b>Run</b> real cases, then review results with anesthesia and IT.</span></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+</main>
+
+<section class="cta-band">
+  <div class="wrap">
+    <h2><span class="th">ทดลองกับเครื่องติดตามผู้ป่วยที่คุณมีอยู่แล้ว</span><span class="en">Try it with the monitors you already own</span></h2>
+    <a class="btn" href="contact.html"><span class="th">นัดทำ POC</span><span class="en">Book a POC</span></a>
+  </div>
+</section>
+<footer class="site-footer"></footer>
+
+<script src="site.js"></script>
+<script>
+(function () {
+  var c = document.getElementById('record'), body = document.body;
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var COLS = 60, data = [], m = 0;
+  function sample(i) { var t = i / 9; return { hr: 74 + 8 * Math.sin(t) + 3 * Math.sin(i * 1.7), spo2: 98 + Math.round(Math.sin(i * 0.9)), sys: 120 + 10 * Math.sin(t * 0.7), dia: 72 + 6 * Math.sin(t * 0.7) }; }
+  function offline(i) { var k = i % 60; return k >= 38 && k < 50; }
+  for (; m < 46; m++) data.push(sample(m));
+  function v(n) { return getComputedStyle(body).getPropertyValue(n).trim(); }
+  function draw() {
+    var dpr = window.devicePixelRatio || 1, r = c.getBoundingClientRect();
+    c.width = Math.max(1, Math.round(r.width * dpr)); c.height = Math.max(1, Math.round(r.height * dpr));
+    var ctx = c.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var w = r.width, h = r.height, L = 30, B = 16, cw = (w - L) / COLS;
+    var y = function (val) { return (h - B) - (val - 40) / 160 * (h - B - 6); };
+    ctx.clearRect(0, 0, w, h); ctx.font = '10px "IBM Plex Mono", monospace';
+    [60, 100, 140, 180].forEach(function (g) { ctx.strokeStyle = v('--grid'); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(L, y(g)); ctx.lineTo(w, y(g)); ctx.stroke(); ctx.fillStyle = v('--muted'); ctx.fillText(g, 2, y(g) + 3); });
+    var start = Math.max(0, data.length - COLS);
+    for (var k = 0; k <= COLS; k += 5) { ctx.strokeStyle = v('--grid'); ctx.beginPath(); ctx.moveTo(L + k * cw, 0); ctx.lineTo(L + k * cw, h - B); ctx.stroke(); }
+    for (var k2 = 0; k2 <= COLS; k2 += 15) { var mm = start + k2; ctx.fillStyle = v('--muted'); ctx.fillText(String(9 + Math.floor(mm / 60)).padStart(2, '0') + ':' + String(mm % 60).padStart(2, '0'), Math.min(L + k2 * cw - 14, w - 34), h - 3); }
+    for (var i = start; i < data.length; i++) if (offline(i)) { ctx.globalAlpha = 0.13; ctx.fillStyle = v('--bp'); ctx.fillRect(L + (i - start) * cw, 0, cw + 0.5, h - B); ctx.globalAlpha = 1; }
+    function line(get, col) { ctx.strokeStyle = col; ctx.lineWidth = 1.8; ctx.beginPath(); for (var i = start; i < data.length; i++) { var x = L + (i - start + 0.5) * cw, yy = y(get(data[i])); i === start ? ctx.moveTo(x, yy) : ctx.lineTo(x, yy); } ctx.stroke(); }
+    line(function (d) { return d.hr; }, v('--hr'));
+    line(function (d) { return 40 + d.spo2 * 1.5; }, v('--spo2'));
+    ctx.fillStyle = v('--bp'); ctx.font = '9px sans-serif';
+    for (var j = start; j < data.length; j += 5) { var x = L + (j - start + 0.5) * cw; ctx.fillText('▼', x - 4, y(data[j].sys) + 3); ctx.fillText('▲', x - 4, y(data[j].dia) + 3); }
+    var off = offline(data.length - 1), en = window.FLORA && FLORA.lang() === 'en';
+    document.getElementById('net').classList.toggle('off', off);
+    document.getElementById('net-text').textContent = off ? (en ? 'Network down · recording locally' : 'เครือข่ายล่ม · บันทึกในเครื่อง') : (en ? 'Synced to Canopy' : 'ซิงก์ Canopy แล้ว');
+  }
+  draw();
+  window.addEventListener('resize', draw);
+  document.addEventListener('flora:lang', draw);
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+  new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  if (document.fonts) document.fonts.ready.then(draw);
+  if (!reduce) setInterval(function () { data.push(sample(m++)); if (data.length > 600) data.shift(); draw(); }, 800);
+})();
+</script>

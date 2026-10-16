@@ -1,0 +1,540 @@
+<title>FLORA iCIS Website Drafts</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+Thai:wght@500;700&family=Sarabun:wght@400;500;600&family=Chakra+Petch:wght@500;600;700&display=swap">
+<style>
+/* Layout: a switcher bar over three full-width homepage concepts; each concept owns its tokens. */
+:root {
+  --chrome-bg: #eef3ef; --chrome-ink: #13261f; --chrome-muted: #587064; --chrome-line: #cddbd2; --chrome-active: #1f7a52; --chrome-on: #ffffff;
+  --font-ui: "IBM Plex Sans Thai", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --chrome-bg: #0e1915; --chrome-ink: #e2ede6; --chrome-muted: #93ab9f; --chrome-line: #24392f; --chrome-active: #4fbf88; --chrome-on: #06140e; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --chrome-bg: #0e1915; --chrome-ink: #e2ede6; --chrome-muted: #93ab9f; --chrome-line: #24392f; --chrome-active: #4fbf88; --chrome-on: #06140e; color-scheme: dark; }
+
+:root:not([lang="en"]) .en { display: none !important; }
+:root[lang="en"] .th { display: none !important; }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--chrome-bg); color: var(--chrome-ink); font-family: var(--font-ui); }
+.pad { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width: 72rem; margin: 0 auto; }
+p { margin: 0; max-width: 62ch; }
+h1, h2, h3 { margin: 0; text-wrap: balance; }
+
+/* switcher chrome */
+.chrome { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 50; background: var(--chrome-bg); border-bottom: 1px solid var(--chrome-line); }
+.chrome .wrap { display: flex; flex-wrap: wrap; gap: 0.6rem 1rem; align-items: center; padding-block: 0.6rem; }
+.chrome .label { font-family: var(--font-mono); font-size: 0.75rem; color: var(--chrome-muted); letter-spacing: 0.06em; text-transform: uppercase; }
+.tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; flex: 1; }
+.tab { font: 500 0.875rem var(--font-ui); border: 1px solid var(--chrome-line); background: transparent; color: var(--chrome-ink); border-radius: 999px; padding: 0.35rem 0.9rem; cursor: pointer; }
+.tab[aria-selected="true"] { background: var(--chrome-active); border-color: var(--chrome-active); color: var(--chrome-on); }
+.lang { font: 500 0.8rem var(--font-mono); border: 1px solid var(--chrome-line); background: transparent; color: var(--chrome-ink); border-radius: 999px; padding: 0.3rem 0.8rem; cursor: pointer; }
+.brief { padding-block: 0.9rem; font-size: 0.9rem; color: var(--chrome-muted); border-bottom: 1px solid var(--chrome-line); }
+.brief strong { color: var(--chrome-ink); }
+button:focus-visible, a:focus-visible { outline: 2px solid #d9a21b; outline-offset: 2px; }
+
+.draft { display: block; }
+.draft img.wordmark { height: 44px; width: auto; display: block; }
+.C img.wordmark { height: 64px; }
+
+/* ============ DRAFT A: Clinical Calm (theme-aware) ============ */
+.A {
+  --bg: #f4f8f8; --surface: #ffffff; --ink: #0d3b3a; --muted: #4c6a69; --line: #d3e3e2; --leaf: #0a7c78; --leaf-soft: #e1f3f2;
+  --teal: #1f6fd1; --stamen: #d62f7c; --grid: #dce9e8; --hr: #4a9e2a; --spo2: #0aa6c4; --bp: #d62f7c; --on-leaf: #fff;
+  background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans Thai", system-ui, sans-serif; line-height: 1.7;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .A { --bg: #0a1a1b; --surface: #102527; --ink: #e2f1f0; --muted: #94b4b2; --line: #21393a; --leaf: #2fc4bb; --leaf-soft: #12312f; --teal: #5fa8ff; --stamen: #ff5aa0; --grid: #18302f; --hr: #8cd43f; --spo2: #19c6e6; --bp: #ff5aa0; --on-leaf: #041414; }
+}
+:root[data-theme="dark"] .A { --bg: #0a1a1b; --surface: #102527; --ink: #e2f1f0; --muted: #94b4b2; --line: #21393a; --leaf: #2fc4bb; --leaf-soft: #12312f; --teal: #5fa8ff; --stamen: #ff5aa0; --grid: #18302f; --hr: #8cd43f; --spo2: #19c6e6; --bp: #ff5aa0; --on-leaf: #041414; }
+.A h1, .A h2, .A h3 { font-family: "Prompt", "IBM Plex Sans Thai", sans-serif; line-height: 1.2; }
+.A header .wrap { display: flex; align-items: center; gap: 1rem; padding-block: 0.9rem; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+.A .logo-dark { display: none !important; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .A .logo-light { display: none !important; } :root:not([data-theme="light"]) .A .logo-dark { display: block !important; } }
+:root[data-theme="dark"] .A .logo-light { display: none !important; } :root[data-theme="dark"] .A .logo-dark { display: block !important; }
+.A .brand { display: flex; gap: 0.5rem; align-items: center; font: 700 1.15rem "Prompt", sans-serif; letter-spacing: 0.05em; }
+.A nav { display: flex; gap: 0.3rem 1.1rem; flex-wrap: wrap; flex: 1; justify-content: flex-end; font-size: 0.875rem; color: var(--muted); }
+.A nav span:first-child { color: var(--ink); box-shadow: inset 0 -2px 0 var(--leaf); }
+.A .btn { display: inline-block; text-decoration: none; font-weight: 600; padding: 0.65rem 1.2rem; border-radius: 999px; border: 1px solid var(--leaf); background: var(--leaf); color: var(--on-leaf); }
+.A .btn.ghost { background: transparent; color: var(--leaf); }
+.A .hero .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 2.5rem; align-items: center; padding-block: clamp(2.5rem, 6vw, 5rem); }
+@media (max-width: 860px) { .A .hero .wrap { grid-template-columns: minmax(0, 1fr); } }
+.A .eyebrow { font: 500 0.78rem "IBM Plex Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase; color: var(--teal); }
+.A h1 { font-size: clamp(2.1rem, 1.4rem + 3vw, 3.4rem); font-weight: 600; }
+.A .lede { font-size: 1.15rem; color: var(--muted); }
+.A .hero .copy { display: flex; flex-direction: column; gap: 1.1rem; }
+.A .actions { display: flex; gap: 0.7rem; flex-wrap: wrap; }
+.A .record { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 1rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.A .record-head { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; font: 0.75rem "IBM Plex Mono", monospace; color: var(--muted); }
+.A .net { display: inline-flex; gap: 0.4rem; align-items: center; }
+.A .net i { width: 8px; height: 8px; border-radius: 50%; background: var(--leaf); display: inline-block; }
+.A .net.off i { background: var(--stamen); }
+.A canvas { width: 100%; height: 220px; display: block; }
+.A .legend { display: flex; gap: 1rem; flex-wrap: wrap; font: 0.75rem "IBM Plex Mono", monospace; color: var(--muted); }
+.A .legend b { font-weight: 500; }
+.A section.band .wrap { padding-block: clamp(2.5rem, 5vw, 4.5rem); border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 2rem; }
+.A h2 { font-size: clamp(1.7rem, 1.3rem + 1.6vw, 2.4rem); font-weight: 600; }
+.A .pillars { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: 2rem; }
+.A .pillar { border-top: 2px solid var(--leaf); padding-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.A .pillar .tag { font: 0.75rem "IBM Plex Mono", monospace; color: var(--muted); }
+.A .pillar p { color: var(--muted); }
+.A .tiers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
+@media (max-width: 860px) { .A .tiers { grid-template-columns: minmax(0, 1fr); } }
+.A .tier { padding: 1.2rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.A .tier + .tier { border-left: 1px solid var(--line); }
+@media (max-width: 860px) { .A .tier + .tier { border-left: none; border-top: 1px solid var(--line); } }
+.A .tier .where { font: 0.72rem "IBM Plex Mono", monospace; text-transform: uppercase; letter-spacing: 0.06em; color: var(--teal); }
+.A .tier p { font-size: 0.9rem; color: var(--muted); }
+.A .cta { background: var(--leaf-soft); }
+.A .cta .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1.2rem; padding-block: 2.5rem; }
+
+/* ============ DRAFT B: OR Monitor (deliberately single dark theme) ============ */
+.B {
+  --bg: #0b1220; --panel: #111b2e; --ink: #e6edf7; --muted: #8fa0bb; --line: #22304a;
+  --hr: #8cd43f; --spo2: #19c6e6; --bp: #ff5aa0; --co2: #f5d547; --accent: #19c6e6;
+  background: var(--bg); color: var(--ink); font-family: "Sarabun", "IBM Plex Sans Thai", sans-serif; line-height: 1.65; color-scheme: dark;
+}
+.B h1, .B h2, .B h3 { font-family: "Chakra Petch", "Sarabun", sans-serif; line-height: 1.15; }
+.B header .wrap { display: flex; align-items: center; gap: 1rem; padding-block: 0.9rem; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+.B .brand { display: flex; gap: 0.5rem; align-items: center; font: 700 1.1rem "Chakra Petch", sans-serif; letter-spacing: 0.12em; text-transform: uppercase; }
+.B nav { display: flex; gap: 0.3rem 1.1rem; flex-wrap: wrap; flex: 1; justify-content: flex-end; font: 500 0.85rem "Chakra Petch", sans-serif; color: var(--muted); letter-spacing: 0.04em; }
+.B .btn { display: inline-block; text-decoration: none; font: 600 0.95rem "Chakra Petch", sans-serif; letter-spacing: 0.04em; padding: 0.65rem 1.2rem; border-radius: 4px; border: 1px solid var(--accent); background: var(--accent); color: #03141a; }
+.B .btn.ghost { background: transparent; color: var(--accent); }
+.B .hero .wrap { padding-block: clamp(2.5rem, 6vw, 4.5rem); display: flex; flex-direction: column; gap: 2rem; }
+.B .hero-top { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 2rem; align-items: end; }
+@media (max-width: 860px) { .B .hero-top { grid-template-columns: minmax(0, 1fr); } }
+.B .bed { font: 0.78rem "IBM Plex Mono", monospace; color: var(--muted); letter-spacing: 0.06em; }
+.B h1 { font-size: clamp(2.2rem, 1.4rem + 3.4vw, 3.8rem); font-weight: 600; }
+.B .lede { color: var(--muted); font-size: 1.1rem; }
+.B .actions { display: flex; gap: 0.7rem; flex-wrap: wrap; margin-top: 1rem; }
+.B .monitor { display: grid; grid-template-columns: minmax(0, 1fr) 13rem; border: 1px solid var(--line); border-radius: 8px; background: #070d18; overflow: hidden; }
+@media (max-width: 700px) { .B .monitor { grid-template-columns: minmax(0, 1fr); } }
+.B .monitor canvas { width: 100%; height: 260px; display: block; }
+.B .nums { border-left: 1px solid var(--line); display: grid; }
+@media (max-width: 700px) { .B .nums { border-left: none; border-top: 1px solid var(--line); grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.B .num { padding: 0.6rem 0.9rem; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; font-variant-numeric: tabular-nums; }
+.B .num:last-child { border-bottom: none; }
+.B .num span { font: 0.72rem "IBM Plex Mono", monospace; letter-spacing: 0.05em; }
+.B .num b { font: 600 2rem "Chakra Petch", sans-serif; }
+.B .num.hr { color: var(--hr); } .B .num.spo2 { color: var(--spo2); } .B .num.bp { color: var(--bp); } .B .num.co2 { color: var(--co2); }
+.B .num.bp b { font-size: 1.4rem; }
+.B .status-row { display: flex; gap: 1.5rem; flex-wrap: wrap; font: 0.75rem "IBM Plex Mono", monospace; color: var(--muted); padding: 0.6rem 0.9rem; border-top: 1px solid var(--line); grid-column: 1 / -1; }
+.B .status-row b { color: var(--accent); font-weight: 500; }
+.B section.band .wrap { padding-block: clamp(2.5rem, 5vw, 4.5rem); border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 2rem; }
+.B h2 { font-size: clamp(1.7rem, 1.3rem + 1.6vw, 2.5rem); font-weight: 600; }
+.B .pillars { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.B .pillar { background: var(--panel); padding: 1.4rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.B .pillar .k { font: 600 2.4rem "Chakra Petch", sans-serif; line-height: 1; }
+.B .pillar:nth-child(1) .k { color: var(--hr); } .B .pillar:nth-child(2) .k { color: var(--spo2); } .B .pillar:nth-child(3) .k { color: var(--co2); }
+.B .pillar p { color: var(--muted); }
+.B .pipe { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; font: 500 0.9rem "IBM Plex Mono", monospace; }
+.B .pipe .node { border: 1px solid var(--line); background: var(--panel); border-radius: 4px; padding: 0.6rem 0.9rem; display: flex; flex-direction: column; }
+.B .pipe .node small { color: var(--muted); font-size: 0.72rem; }
+.B .pipe .arrow { color: var(--accent); }
+.B .cta .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1.2rem; padding-block: 2.5rem; border-top: 1px solid var(--line); }
+
+/* ============ DRAFT C: Botanical Editorial (deliberately single light theme) ============ */
+.C {
+  --bg: #eef4f2; --paper: #f8fbfa; --ink: #0d3b3a; --muted: #536b69; --line: #c6d8d5; --moss: #0d4d4a; --lily: #ffffff; --pollen: #d62f7c; --root: #6b4f3a;
+  background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans Thai", sans-serif; line-height: 1.75; color-scheme: light;
+}
+.C h1, .C h2, .C h3 { font-family: "Noto Serif Thai", Georgia, serif; line-height: 1.25; font-weight: 700; }
+.C header .wrap { display: flex; flex-direction: column; align-items: center; gap: 0.6rem; padding-block: 1.4rem 0.8rem; border-bottom: 1px solid var(--line); }
+.C .brand { display: flex; gap: 0.6rem; align-items: center; font: 700 1.4rem "Noto Serif Thai", serif; letter-spacing: 0.18em; }
+.C nav { display: flex; gap: 0.3rem 1.4rem; flex-wrap: wrap; justify-content: center; font-size: 0.85rem; color: var(--muted); }
+.C .btn { display: inline-block; text-decoration: none; font-weight: 600; padding: 0.65rem 1.3rem; border-radius: 2px; border: 1px solid var(--moss); background: var(--moss); color: #fff; }
+.C .btn.ghost { background: transparent; color: var(--moss); }
+.C .hero .wrap { padding-block: clamp(2.5rem, 6vw, 5rem); display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 3rem; align-items: center; }
+@media (max-width: 860px) { .C .hero .wrap { grid-template-columns: minmax(0, 1fr); } }
+.C .kicker { font-family: "Noto Serif Thai", serif; font-style: italic; color: var(--pollen); font-size: 1.05rem; }
+.C h1 { font-size: clamp(2.2rem, 1.4rem + 3.4vw, 3.9rem); }
+.C .lede { font-size: 1.12rem; color: var(--muted); }
+.C .hero .copy { display: flex; flex-direction: column; gap: 1.2rem; }
+.C .actions { display: flex; gap: 0.7rem; flex-wrap: wrap; }
+.C .plant { width: 100%; max-width: 100%; height: auto; }
+.C section.band .wrap { padding-block: clamp(2.5rem, 5vw, 4.5rem); border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 2rem; }
+.C h2 { font-size: clamp(1.7rem, 1.3rem + 1.6vw, 2.5rem); }
+.C .layers { display: grid; gap: 0; }
+.C .layer { display: grid; grid-template-columns: 9rem minmax(0, 1fr) minmax(0, 1.2fr); gap: 1.5rem; padding-block: 1.2rem; border-top: 1px solid var(--line); align-items: baseline; }
+.C .layer:last-child { border-bottom: 1px solid var(--line); }
+@media (max-width: 760px) { .C .layer { grid-template-columns: minmax(0, 1fr); gap: 0.3rem; } }
+.C .layer .name { font: 700 1.5rem "Noto Serif Thai", serif; color: var(--moss); }
+.C .layer .where { font: 0.75rem "IBM Plex Mono", monospace; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.C .layer p { color: var(--muted); }
+.C .quote { font: 500 clamp(1.3rem, 1rem + 1.2vw, 1.8rem) "Noto Serif Thai", serif; max-width: 34ch; line-height: 1.5; }
+.C .quote cite { display: block; margin-top: 0.8rem; font: 0.85rem "IBM Plex Sans Thai", sans-serif; font-style: normal; color: var(--muted); }
+.C .pillars { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: 2.5rem; }
+.C .pillar { display: flex; flex-direction: column; gap: 0.5rem; }
+.C .pillar .glyph { font: 700 2.6rem "Noto Serif Thai", serif; color: var(--pollen); line-height: 1; }
+.C .pillar p { color: var(--muted); }
+.C .cta .wrap { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1rem; padding-block: 3rem; border-top: 1px solid var(--line); }
+.C .cta p { margin: 0 auto; }
+
+.foot { padding-block: 1.2rem; font-size: 0.8rem; opacity: 0.8; }
+.A .foot { color: var(--muted); border-top: 1px solid var(--line); }
+.B .foot { color: var(--muted); border-top: 1px solid var(--line); }
+.C .foot { color: var(--muted); border-top: 1px solid var(--line); text-align: center; }
+
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="chrome pad">
+  <div class="wrap">
+    <span class="label">Draft</span>
+    <div class="tabs" role="tablist" aria-label="Design drafts">
+      <button class="tab" role="tab" id="tab-A" aria-controls="draft-A" aria-selected="true" data-k="A">A · Clinical Calm</button>
+      <button class="tab" role="tab" id="tab-B" aria-controls="draft-B" aria-selected="false" data-k="B">B · OR Monitor</button>
+      <button class="tab" role="tab" id="tab-C" aria-controls="draft-C" aria-selected="false" data-k="C">C · Botanical</button>
+    </div>
+    <button class="lang" id="lang-btn" type="button">EN</button>
+  </div>
+</div>
+<div class="pad">
+  <div class="wrap brief" id="brief"></div>
+</div>
+
+<!-- ======================= A ======================= -->
+<main class="draft A" id="draft-A" role="tabpanel" aria-labelledby="tab-A">
+  <header class="pad"><div class="wrap">
+    <div class="brand"><img class="wordmark logo-light" src="flora-icis-logo.png" alt="FLORA iCIS"><img class="wordmark logo-dark" src="flora-icis-logo-dark.png" alt="FLORA iCIS"></div>
+    <nav>
+      <span><span class="th">หน้าแรก</span><span class="en">Home</span></span>
+      <span><span class="th">แพลตฟอร์ม</span><span class="en">Platform</span></span>
+      <span><span class="th">โซลูชัน OR / ICU</span><span class="en">OR / ICU</span></span>
+      <span><span class="th">อุปกรณ์</span><span class="en">Devices</span></span>
+      <span><span class="th">ความปลอดภัย</span><span class="en">Security</span></span>
+      <span><span class="th">ติดต่อ</span><span class="en">Contact</span></span>
+    </nav>
+  </div></header>
+
+  <section class="hero pad"><div class="wrap">
+    <div class="copy">
+      <span class="eyebrow"><span class="th">ระบบบันทึกวิสัญญีและ ICU</span><span class="en">Anesthesia &amp; ICU information system</span></span>
+      <h1><span class="th">บันทึกทุกนาทีของผู้ป่วย แม้เครือข่ายโรงพยาบาลจะล่ม</span><span class="en">Every minute charted, even when the hospital network drops</span></h1>
+      <p class="lede"><span class="th">FLORA ดึงค่าสัญญาณชีพจากเครื่องติดตามผู้ป่วยและเครื่องดมยาหลายยี่ห้อ บันทึกที่เครื่องข้างเตียง แล้วซิงก์ขึ้นศูนย์กลางเมื่อเครือข่ายกลับมา</span><span class="en">FLORA captures vitals from multi-brand monitors and anesthesia machines, records them at the bedside, and syncs to the hospital centre when the network returns.</span></p>
+      <div class="actions">
+        <a class="btn" href="#"><span class="th">ขอเดโมบนเครื่องของโรงพยาบาลคุณ</span><span class="en">Request a demo on your devices</span></a>
+        <a class="btn ghost" href="#"><span class="th">ดูแพลตฟอร์ม</span><span class="en">See the platform</span></a>
+      </div>
+    </div>
+    <div class="record" aria-label="Simulated anesthesia record">
+      <div class="record-head">
+        <span>OR 3 · <span class="th">เคสตัวอย่าง</span><span class="en">sample case</span> · 09:00–</span>
+        <span class="net" id="A-net"><i></i><span id="A-net-text">Canopy sync ✓</span></span>
+      </div>
+      <canvas id="A-canvas" aria-hidden="true"></canvas>
+      <div class="legend"><span style="color:var(--hr)">● <b>HR</b></span><span style="color:var(--spo2)">● <b>SpO₂</b></span><span style="color:var(--bp)">▼▲ <b>NIBP</b></span><span><span class="th">ข้อมูลจำลอง</span><span class="en">Simulated data</span></span></div>
+    </div>
+  </div></section>
+
+  <section class="band pad"><div class="wrap">
+    <h2><span class="th">สามเหตุผลที่ทีมวิสัญญีเลือก FLORA</span><span class="en">Three reasons anesthesia teams choose FLORA</span></h2>
+    <div class="pillars">
+      <div class="pillar"><span class="tag">Gateway</span><h3><span class="th">เชื่อมเครื่องได้หลายยี่ห้อ</span><span class="en">Multi-brand device capture</span></h3><p><span class="th">Serial, LAN, HL7 และ UDP ในเกตเวย์เดียว มีไดรเวอร์สำหรับ GE, Dräger และ B. Braun ไม่ต้องซื้อมิดเดิลแวร์แยกต่อเตียง</span><span class="en">Serial, LAN, HL7 and UDP in one gateway, with drivers for GE, Dräger and B. Braun. No per-bed proprietary middleware.</span></p></div>
+      <div class="pillar"><span class="tag">Leaf</span><h3><span class="th">ทำงานได้แม้ออฟไลน์</span><span class="en">Works offline at the bedside</span></h3><p><span class="th">แต่ละห้องมีฐานข้อมูลของตัวเอง เคสไม่หยุดเมื่อเครือข่ายหรือเซิร์ฟเวอร์กลางมีปัญหา</span><span class="en">Each room keeps its own database, so a case never stops when the network or central server fails.</span></p></div>
+      <div class="pillar"><span class="tag">Studio</span><h3><span class="th">โรงพยาบาลแก้ฟอร์มเองได้</span><span class="en">Forms your team can edit</span></h3><p><span class="th">Form, Report และ Workflow Studio ให้ทีมแก้แบบฟอร์มและรายงานภาษาไทยได้เอง ไม่ต้องรอผู้ขาย</span><span class="en">Form, Report and Workflow Studio let your team change Thai forms and reports without a vendor change request.</span></p></div>
+    </div>
+  </div></section>
+
+  <section class="band pad"><div class="wrap">
+    <h2><span class="th">สี่ชั้น ตั้งแต่ข้างเตียงถึงคลาวด์</span><span class="en">Four tiers, bedside to cloud</span></h2>
+    <div class="tiers">
+      <div class="tier"><span class="where"><span class="th">ข้างเครื่องมือแพทย์</span><span class="en">At the device</span></span><h3>Gateway</h3><p><span class="th">รับข้อมูลจากเครื่องและแปลงเป็นค่ามาตรฐาน</span><span class="en">Receives device data and normalises it.</span></p></div>
+      <div class="tier"><span class="where"><span class="th">ข้างเตียง</span><span class="en">At the bedside</span></span><h3>Leaf</h3><p><span class="th">สถานีบันทึกเคส พร้อมฐานข้อมูลในเครื่อง</span><span class="en">Charting workstation with its own database.</span></p></div>
+      <div class="tier"><span class="where"><span class="th">ในโรงพยาบาล</span><span class="en">In the hospital</span></span><h3>Canopy</h3><p><span class="th">ดูทุกห้องและทุกเตียง รายงาน และเชื่อม HIS</span><span class="en">Every room and bed, reports, HIS link.</span></p></div>
+      <div class="tier"><span class="where"><span class="th">คลาวด์</span><span class="en">Cloud</span></span><h3>Root</h3><p><span class="th">ไลเซนส์และอัปเดตที่ลงลายเซ็นดิจิทัล</span><span class="en">Licences and signed updates.</span></p></div>
+    </div>
+  </div></section>
+
+  <section class="cta"><div class="wrap pad">
+    <h2><span class="th">ทดลองกับเครื่องติดตามผู้ป่วยที่คุณมีอยู่แล้ว</span><span class="en">Try it with the monitors you already own</span></h2>
+    <a class="btn" href="#"><span class="th">นัดทำ POC</span><span class="en">Book a POC</span></a>
+  </div></section>
+  <div class="foot pad"><div class="wrap">FLORA · <span class="th">ร่าง A</span><span class="en">Draft A</span></div></div>
+</main>
+
+<!-- ======================= B ======================= -->
+<main class="draft B" id="draft-B" role="tabpanel" aria-labelledby="tab-B" hidden>
+  <header class="pad"><div class="wrap">
+    <div class="brand"><img class="wordmark" src="flora-icis-logo-dark.png" alt="FLORA iCIS"></div>
+    <nav>
+      <span><span class="th">หน้าแรก</span><span class="en">Home</span></span>
+      <span><span class="th">แพลตฟอร์ม</span><span class="en">Platform</span></span>
+      <span><span class="th">OR / ICU</span><span class="en">OR / ICU</span></span>
+      <span><span class="th">อุปกรณ์</span><span class="en">Devices</span></span>
+      <span><span class="th">ความปลอดภัย</span><span class="en">Security</span></span>
+      <span><span class="th">ติดต่อ</span><span class="en">Contact</span></span>
+    </nav>
+  </div></header>
+
+  <section class="hero pad"><div class="wrap">
+    <div class="hero-top">
+      <div>
+        <div class="bed">BED OR-03 · ADULT · <span class="th">ข้อมูลจำลอง</span><span class="en">SIMULATED</span></div>
+        <h1><span class="th">ค่าจากจอมอนิเตอร์ ลงบันทึกให้อัตโนมัติ ทุกนาที</span><span class="en">What the monitor shows, charted for you every minute</span></h1>
+      </div>
+      <div>
+        <p class="lede"><span class="th">FLORA เชื่อมเครื่องติดตามผู้ป่วย เครื่องดมยา เครื่องช่วยหายใจ และปั๊มฉีดยาหลายยี่ห้อ เข้าใบบันทึกวิสัญญีและ ICU โดยตรง ให้พยาบาลและวิสัญญีแพทย์มีเวลาดูผู้ป่วยมากขึ้น</span><span class="en">FLORA connects multi-brand monitors, anesthesia machines, ventilators and pumps straight into the anesthesia and ICU record, so clinicians spend time on the patient, not the paperwork.</span></p>
+        <div class="actions">
+          <a class="btn" href="#"><span class="th">ขอเดโม</span><span class="en">Request a demo</span></a>
+          <a class="btn ghost" href="#"><span class="th">เช็กรุ่นเครื่องที่รองรับ</span><span class="en">Check device support</span></a>
+        </div>
+      </div>
+    </div>
+    <div class="monitor" aria-label="Simulated patient monitor">
+      <canvas id="B-canvas" aria-hidden="true"></canvas>
+      <div class="nums">
+        <div class="num hr"><span>HR</span><b id="B-hr">72</b></div>
+        <div class="num spo2"><span>SpO₂ %</span><b id="B-spo2">99</b></div>
+        <div class="num bp"><span>NIBP</span><b id="B-bp">118/72</b></div>
+        <div class="num co2"><span>EtCO₂</span><b id="B-co2">36</b></div>
+      </div>
+      <div class="status-row"><span>GATEWAY <b>● ONLINE</b></span><span>LEAF <b>● RECORDING</b></span><span id="B-min">MIN 00:42</span></div>
+    </div>
+  </div></section>
+
+  <section class="band pad"><div class="wrap">
+    <h2><span class="th">ออกแบบมาเพื่อห้องผ่าตัดจริง</span><span class="en">Built for real operating rooms</span></h2>
+    <div class="pillars">
+      <div class="pillar"><span class="k">4</span><h3><span class="th">ช่องทางเชื่อมต่อในเกตเวย์เดียว</span><span class="en">connection types, one gateway</span></h3><p><span class="th">Serial, LAN, HL7/MLLP และ UDP ใช้กับเครื่องรุ่นเก่าและใหม่ในห้องเดียวกันได้</span><span class="en">Serial, LAN, HL7/MLLP and UDP, so old and new machines share one room.</span></p></div>
+      <div class="pillar"><span class="k">0</span><h3><span class="th">นาทีที่หายไปเมื่อออฟไลน์</span><span class="en">minutes lost offline</span></h3><p><span class="th">Leaf บันทึกลงฐานข้อมูลในห้อง และส่งต่อขึ้น Canopy เมื่อเครือข่ายกลับมา</span><span class="en">Leaf writes to the room's own database and forwards to Canopy when the network is back.</span></p></div>
+      <div class="pillar"><span class="k">TH</span><h3><span class="th">ภาษาไทยทั้งระบบ</span><span class="en">Thai throughout</span></h3><p><span class="th">หน้าจอ แบบฟอร์ม รายงาน และการพิมพ์ด้วยเสียงแบบออฟไลน์ รองรับทั้งไทยและอังกฤษ</span><span class="en">Screens, forms, reports and offline voice dictation in Thai and English.</span></p></div>
+    </div>
+  </div></section>
+
+  <section class="band pad"><div class="wrap">
+    <h2><span class="th">เส้นทางของข้อมูล</span><span class="en">How the data flows</span></h2>
+    <div class="pipe">
+      <div class="node">Monitor / Vent / Pump<small><span class="th">เครื่องมือแพทย์</span><span class="en">devices</span></small></div><span class="arrow">→</span>
+      <div class="node">Gateway<small><span class="th">แปลงค่า</span><span class="en">normalise</span></small></div><span class="arrow">→</span>
+      <div class="node">Leaf<small><span class="th">บันทึกข้างเตียง</span><span class="en">bedside record</span></small></div><span class="arrow">→</span>
+      <div class="node">Canopy<small><span class="th">ทั้งโรงพยาบาล + HIS</span><span class="en">hospital + HIS</span></small></div><span class="arrow">⇢</span>
+      <div class="node">Root<small><span class="th">ไลเซนส์และอัปเดต</span><span class="en">licences, updates</span></small></div>
+    </div>
+  </div></section>
+
+  <section class="cta pad"><div class="wrap">
+    <h2><span class="th">ต่อกับเครื่องจริงของคุณภายในวันเดียว</span><span class="en">Connect to your own machines for a live POC</span></h2>
+    <a class="btn" href="#"><span class="th">นัดทำ POC</span><span class="en">Book a POC</span></a>
+  </div></section>
+  <div class="foot pad"><div class="wrap">FLORA · <span class="th">ร่าง B</span><span class="en">Draft B</span></div></div>
+</main>
+
+<!-- ======================= C ======================= -->
+<main class="draft C" id="draft-C" role="tabpanel" aria-labelledby="tab-C" hidden>
+  <header class="pad"><div class="wrap">
+    <div class="brand"><img class="wordmark" src="flora-icis-logo.png" alt="FLORA iCIS"></div>
+    <nav>
+      <span><span class="th">หน้าแรก</span><span class="en">Home</span></span>
+      <span><span class="th">แพลตฟอร์ม</span><span class="en">Platform</span></span>
+      <span><span class="th">OR และ ICU</span><span class="en">OR &amp; ICU</span></span>
+      <span><span class="th">อุปกรณ์</span><span class="en">Devices</span></span>
+      <span><span class="th">ความปลอดภัย</span><span class="en">Security</span></span>
+      <span><span class="th">ติดต่อ</span><span class="en">Contact</span></span>
+    </nav>
+  </div></header>
+
+  <section class="hero pad"><div class="wrap">
+    <div class="copy">
+      <span class="kicker"><span class="th">ระบบสารสนเทศทางคลินิกที่เติบโตไปกับโรงพยาบาล</span><span class="en">A clinical information system that grows with your hospital</span></span>
+      <h1><span class="th">ดูแลผู้ป่วยวิกฤต ด้วยข้อมูลที่หยั่งรากในโรงพยาบาลของคุณ</span><span class="en">Critical care, rooted in your own hospital</span></h1>
+      <p class="lede"><span class="th">FLORA เติบโตเป็นชั้น ตั้งแต่ราก (Root) ใบ (Leaf) จนถึงเรือนยอด (Canopy) ข้อมูลผู้ป่วยอยู่ในโรงพยาบาล ทีมของคุณเป็นผู้กำหนดแบบฟอร์ม และระบบยังทำงานต่อได้แม้เครือข่ายขัดข้อง</span><span class="en">FLORA grows in layers, from Root to Leaf to Canopy. Patient data stays in your hospital, your team shapes the forms, and the bedside keeps working when the network does not.</span></p>
+      <div class="actions">
+        <a class="btn" href="#"><span class="th">ขอเดโม</span><span class="en">Request a demo</span></a>
+        <a class="btn ghost" href="#"><span class="th">รู้จักแพลตฟอร์ม</span><span class="en">Meet the platform</span></a>
+      </div>
+    </div>
+    <svg class="plant" viewBox="0 0 360 400" role="img" aria-label="Flora tiers drawn as a plant">
+      <defs>
+        <linearGradient id="gTeal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#19c6e6"/><stop offset="1" stop-color="#0a7c78"/></linearGradient>
+        <linearGradient id="gLime" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d4f04a"/><stop offset="1" stop-color="#1f9a55"/></linearGradient>
+        <linearGradient id="gPink" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff8fa3"/><stop offset="1" stop-color="#a0128c"/></linearGradient>
+        <linearGradient id="gHead" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#0a7c78"/><stop offset="1" stop-color="#c6f04a"/></linearGradient>
+      </defs>
+      <line x1="0" y1="290" x2="360" y2="290" stroke="#c6d8d5" stroke-width="1.5"/>
+      <!-- roots -->
+      <g stroke="#6b4f3a" stroke-width="2" fill="none" stroke-linecap="round">
+        <path d="M180 290 C178 320 160 340 140 370"/><path d="M180 290 C185 325 205 345 230 372"/><path d="M180 290 C180 330 182 350 178 388"/><path d="M165 330 C150 335 130 335 112 345"/><path d="M196 330 C212 336 232 338 250 348"/>
+      </g>
+      <!-- stem -->
+      <path d="M180 290 C176 230 186 190 180 120" stroke="#0d4d4a" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <!-- leaves -->
+      <path d="M180 240 C140 230 112 205 104 180 C140 182 170 205 180 240 Z" fill="url(#gPink)"/>
+      <path d="M181 210 C222 202 250 178 258 152 C222 156 192 178 181 210 Z" fill="url(#gLime)"/>
+      <!-- canopy flower -->
+      <g transform="translate(180 120)">
+        <path d="M0 0 C-6 -40 -30 -70 -58 -84 C-62 -50 -40 -16 0 0 Z" fill="url(#gTeal)"/>
+        <path d="M0 0 C6 -40 30 -70 58 -84 C62 -50 40 -16 0 0 Z" fill="url(#gTeal)"/>
+        <circle cx="0" cy="-86" r="20" fill="url(#gHead)"/>
+      </g>
+      <!-- labels -->
+      <g font-family="IBM Plex Mono, monospace" font-size="11" fill="#536b69" letter-spacing="1">
+        <text x="250" y="40">CANOPY</text><line x1="246" y1="44" x2="222" y2="52" stroke="#536b69"/>
+        <text x="270" y="150">LEAF</text>
+        <text x="40" y="178">LEAF</text>
+        <text x="40" y="282">GATEWAY</text><line x1="96" y1="286" x2="168" y2="290" stroke="#536b69"/>
+        <text x="262" y="372">ROOT</text><line x1="258" y1="368" x2="236" y2="366" stroke="#536b69"/>
+      </g>
+    </svg>
+  </div></section>
+
+  <section class="band pad"><div class="wrap">
+    <h2><span class="th">แต่ละชั้นของ FLORA ทำหน้าที่อะไร</span><span class="en">What each layer does</span></h2>
+    <div class="layers">
+      <div class="layer"><span class="name">Canopy</span><span class="where"><span class="th">ทั้งโรงพยาบาล</span><span class="en">Hospital-wide</span></span><p><span class="th">ภาพรวมทุกห้องผ่าตัดและเตียง ICU รายงาน และการเชื่อมกับ HIS ติดตั้งในโรงพยาบาลของคุณเอง</span><span class="en">Every OR and ICU bed at a glance, reports and the HIS link, installed on your own premises.</span></p></div>
+      <div class="layer"><span class="name">Leaf</span><span class="where"><span class="th">ข้างเตียง</span><span class="en">Bedside</span></span><p><span class="th">สถานีบันทึกวิสัญญีและ ICU ที่มีฐานข้อมูลของตัวเอง ทำงานต่อได้แม้ออฟไลน์</span><span class="en">The anesthesia and ICU charting station, with its own database, keeps working offline.</span></p></div>
+      <div class="layer"><span class="name">Gateway</span><span class="where"><span class="th">ข้างเครื่องมือแพทย์</span><span class="en">At the device</span></span><p><span class="th">รับค่าจากเครื่องติดตามผู้ป่วย เครื่องดมยา และปั๊มหลายยี่ห้อ ผ่าน Serial, LAN, HL7 และ UDP</span><span class="en">Reads multi-brand monitors, anesthesia machines and pumps over serial, LAN, HL7 and UDP.</span></p></div>
+      <div class="layer"><span class="name">Root</span><span class="where"><span class="th">คลาวด์</span><span class="en">Cloud</span></span><p><span class="th">ไลเซนส์และอัปเดตที่ลงลายเซ็นดิจิทัล โรงพยาบาลอนุมัติก่อนติดตั้งทุกครั้ง ไม่มีข้อมูลผู้ป่วยขึ้นคลาวด์</span><span class="en">Signed licences and updates that your hospital approves before install. No patient data in the cloud.</span></p></div>
+    </div>
+  </div></section>
+
+  <section class="band pad"><div class="wrap">
+    <div class="pillars">
+      <div class="pillar"><span class="glyph">๑</span><h3><span class="th">ไม่ผูกกับยี่ห้อเครื่อง</span><span class="en">No device lock-in</span></h3><p><span class="th">เลือกซื้อเครื่องมือแพทย์ได้อิสระ ระบบบันทึกยังเหมือนเดิม</span><span class="en">Buy any monitor brand; the record stays the same.</span></p></div>
+      <div class="pillar"><span class="glyph">๒</span><h3><span class="th">ข้อมูลเป็นของโรงพยาบาล</span><span class="en">Your data, your hospital</span></h3><p><span class="th">ส่งออกข้อมูลได้ครบตามมาตรฐาน และย้ายข้อมูลจากระบบเดิมได้</span><span class="en">Full standards-based export, and migration from legacy systems.</span></p></div>
+      <div class="pillar"><span class="glyph">๓</span><h3><span class="th">ทีมไทย ดูแลใกล้ชิด</span><span class="en">A local team nearby</span></h3><p><span class="th">ติดตั้ง อบรม และดูแลโดยทีมในประเทศ</span><span class="en">Installed, trained and supported by a team in Thailand.</span></p></div>
+    </div>
+  </div></section>
+
+  <section class="cta pad"><div class="wrap">
+    <h2><span class="th">มาดู FLORA ทำงานกับเครื่องของคุณ</span><span class="en">See FLORA with your own equipment</span></h2>
+    <p class="lede"><span class="th">เรานำ Gateway และ Leaf ไปต่อกับเครื่องติดตามผู้ป่วยที่โรงพยาบาลใช้อยู่จริง</span><span class="en">We bring a Gateway and a Leaf and connect them to the monitors you already use.</span></p>
+    <a class="btn" href="#"><span class="th">นัดทำ POC</span><span class="en">Book a POC</span></a>
+  </div></section>
+  <div class="foot pad"><div class="wrap">FLORA · <span class="th">ร่าง C</span><span class="en">Draft C</span></div></div>
+</main>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var briefs = {
+    A: { th: '<strong>A · Clinical Calm</strong> — สีเขียวอมฟ้าจากโลโก้ FLORA iCIS อ่านง่าย ดูน่าเชื่อถือแบบโรงพยาบาล จุดเด่นคือกราฟใบบันทึกวิสัญญีที่ยังบันทึกต่อเมื่อเน็ตหลุด รองรับโหมดมืด เหมาะกับผู้บริหารและทีมวิสัญญี', en: '<strong>A · Clinical Calm</strong> — FLORA iCIS teal, calm and trustworthy. Signature: an anesthesia record that keeps charting when the network drops. Light and dark. Suits directors and anesthesia teams.' },
+    B: { th: '<strong>B · OR Monitor</strong> — โทนมืดเหมือนจอมอนิเตอร์ในห้องผ่าตัด สีของค่า HR/SpO₂/BP/EtCO₂ ตามจอจริง ดูเป็นเทคโนโลยี เหมาะกับฝ่าย IT และวิศวกรรมการแพทย์', en: '<strong>B · OR Monitor</strong> — dark like an OR monitor, with real HR/SpO₂/BP/EtCO₂ colours. Technical feel. Suits IT and biomedical engineering.' },
+    C: { th: '<strong>C · Botanical</strong> — ใช้ชื่อ Root/Leaf/Canopy เป็นภาพต้นไม้ ฟอนต์ไทยแบบมีหัว ดูพรีเมียมและเป็นมิตร เหมาะกับการสร้างแบรนด์และงานบูธ', en: '<strong>C · Botanical</strong> — the Root/Leaf/Canopy names drawn as a plant, Thai serif type. Premium and warm. Suits brand building and events.' }
+  };
+  var current = 'A';
+  function lang() { return root.lang === 'en' ? 'en' : 'th'; }
+  function renderBrief() { document.getElementById('brief').innerHTML = briefs[current][lang()]; }
+  function setLang(l) {
+    root.lang = l;
+    document.getElementById('lang-btn').textContent = l === 'en' ? 'ไทย' : 'EN';
+    try { localStorage.setItem('flora-lang', l); } catch (e) {}
+    renderBrief();
+  }
+  function show(k) {
+    current = k;
+    document.querySelectorAll('.tab').forEach(function (t) { t.setAttribute('aria-selected', t.dataset.k === k ? 'true' : 'false'); });
+    ['A', 'B', 'C'].forEach(function (x) { document.getElementById('draft-' + x).hidden = x !== k; });
+    try { localStorage.setItem('flora-draft', k); } catch (e) {}
+    renderBrief();
+    resize();
+  }
+  document.querySelectorAll('.tab').forEach(function (t) { t.addEventListener('click', function () { show(t.dataset.k); }); });
+  document.getElementById('lang-btn').addEventListener('click', function () { setLang(lang() === 'en' ? 'th' : 'en'); });
+  var savedLang = 'th', savedDraft = 'A';
+  try { savedLang = localStorage.getItem('flora-lang') || 'th'; savedDraft = localStorage.getItem('flora-draft') || 'A'; } catch (e) {}
+  if (/^#[ABC]$/.test(location.hash)) savedDraft = location.hash.slice(1);
+
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function cssVar(el, name) { return getComputedStyle(el).getPropertyValue(name).trim(); }
+  function fit(c) {
+    var dpr = window.devicePixelRatio || 1, r = c.getBoundingClientRect();
+    c.width = Math.max(1, Math.round(r.width * dpr)); c.height = Math.max(1, Math.round(r.height * dpr));
+    var ctx = c.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); return { ctx: ctx, w: r.width, h: r.height };
+  }
+
+  /* ---- Draft A: anesthesia record, 60 minute columns ---- */
+  var aEl = document.getElementById('draft-A'), aC = document.getElementById('A-canvas');
+  var aData = [], aMin = 0, COLS = 60;
+  function aSample(i) {
+    var t = i / 9;
+    return { hr: 74 + 8 * Math.sin(t) + 3 * Math.sin(i * 1.7), spo2: 98 + Math.round(Math.sin(i * 0.9)), sys: 120 + 10 * Math.sin(t * 0.7), dia: 72 + 6 * Math.sin(t * 0.7) };
+  }
+  for (; aMin < 34; aMin++) aData.push(aSample(aMin));
+  function offline(m) { return (m % 60) >= 38 && (m % 60) < 50; }
+  function drawA() {
+    if (aEl.hidden) return;
+    var f = fit(aC), ctx = f.ctx, w = f.w, h = f.h, padL = 30, padB = 16;
+    var grid = cssVar(aEl, '--grid'), muted = cssVar(aEl, '--muted'), stamen = cssVar(aEl, '--stamen');
+    ctx.clearRect(0, 0, w, h);
+    var cw = (w - padL) / COLS, y = function (v) { return (h - padB) - (v - 40) / (200 - 40) * (h - padB - 6); };
+    ctx.font = '10px "IBM Plex Mono", monospace'; ctx.fillStyle = muted;
+    [60, 100, 140, 180].forEach(function (v) { ctx.strokeStyle = grid; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(padL, y(v)); ctx.lineTo(w, y(v)); ctx.stroke(); ctx.fillText(v, 2, y(v) + 3); });
+    for (var c = 0; c <= COLS; c += 5) { ctx.strokeStyle = grid; ctx.beginPath(); ctx.moveTo(padL + c * cw, 0); ctx.lineTo(padL + c * cw, h - padB); ctx.stroke(); if (c % 15 === 0) ctx.fillText('09:' + String(c).padStart(2, '0'), padL + c * cw - 12, h - 3); }
+    var start = Math.max(0, aData.length - COLS);
+    for (var i = start; i < aData.length; i++) {
+      var col = i - start;
+      if (offline(i)) { ctx.fillStyle = stamen; ctx.globalAlpha = 0.14; ctx.fillRect(padL + col * cw, 0, cw, h - padB); ctx.globalAlpha = 1; }
+    }
+    function line(key, color) {
+      ctx.strokeStyle = color; ctx.lineWidth = 1.8; ctx.beginPath();
+      for (var i = start; i < aData.length; i++) { var x = padL + (i - start + 0.5) * cw, v = key === 'spo2' ? 40 + aData[i].spo2 * 1.5 : aData[i][key]; if (i === start) ctx.moveTo(x, y(v)); else ctx.lineTo(x, y(v)); }
+      ctx.stroke();
+    }
+    line('hr', cssVar(aEl, '--hr')); line('spo2', cssVar(aEl, '--spo2'));
+    ctx.fillStyle = cssVar(aEl, '--bp'); ctx.font = '9px sans-serif';
+    for (var j = start; j < aData.length; j += 5) { var x = padL + (j - start + 0.5) * cw; ctx.fillText('▼', x - 4, y(aData[j].sys) + 3); ctx.fillText('▲', x - 4, y(aData[j].dia) + 3); }
+    var off = offline(aData.length - 1), net = document.getElementById('A-net');
+    net.classList.toggle('off', off);
+    document.getElementById('A-net-text').textContent = off
+      ? (lang() === 'en' ? 'Network down · recording locally' : 'เครือข่ายล่ม · บันทึกในเครื่อง')
+      : (lang() === 'en' ? 'Canopy sync ✓' : 'ซิงก์ Canopy ✓');
+  }
+
+  /* ---- Draft B: sweeping waveforms ---- */
+  var bEl = document.getElementById('draft-B'), bC = document.getElementById('B-canvas'), bX = 0, bPrev = null, bT = 0, bF = null;
+  function ecg(t) { var p = t % 0.83; if (p < 0.04) return 0.1 * Math.sin(p / 0.04 * Math.PI); if (p > 0.14 && p < 0.16) return -0.15; if (p >= 0.16 && p < 0.19) return 1; if (p >= 0.19 && p < 0.22) return -0.3; if (p > 0.36 && p < 0.5) return 0.2 * Math.sin((p - 0.36) / 0.14 * Math.PI); return 0; }
+  function pleth(t) { var p = (t % 0.83) / 0.83; return p < 0.3 ? Math.sin(p / 0.3 * Math.PI / 2) : Math.max(0, 1 - (p - 0.3) / 0.7) + 0.12 * Math.sin((p - 0.3) * 9) * (1 - p); }
+  function capno(t) { var p = (t % 4) / 4; return p < 0.08 ? p / 0.08 : p < 0.45 ? 1 + 0.06 * (p - 0.08) : p < 0.52 ? 1 - (p - 0.45) / 0.07 : 0; }
+  function resetB() { bF = fit(bC); bF.ctx.fillStyle = '#070d18'; bF.ctx.fillRect(0, 0, bF.w, bF.h); bX = 0; bPrev = null; }
+  function stepB(dt) {
+    if (bEl.hidden || !bF) return;
+    var ctx = bF.ctx, w = bF.w, h = bF.h, lanes = [
+      { f: ecg, c: '#8cd43f', y0: h * 0.22, a: h * 0.15 },
+      { f: pleth, c: '#19c6e6', y0: h * 0.55, a: h * 0.13 },
+      { f: capno, c: '#f5d547', y0: h * 0.9, a: h * 0.15 }
+    ];
+    var speed = 90, nx = bX + speed * dt;
+    ctx.fillStyle = '#070d18'; ctx.fillRect(bX, 0, Math.min(18, w - bX) + speed * dt, h);
+    lanes.forEach(function (L, k) {
+      var steps = Math.max(1, Math.ceil(nx - bX)); ctx.strokeStyle = L.c; ctx.lineWidth = 1.6; ctx.beginPath();
+      for (var s = 0; s <= steps; s++) { var x = bX + (nx - bX) * s / steps, t = bT + dt * s / steps, yy = L.y0 - L.f(t) * L.a; if (s === 0) ctx.moveTo(x, bPrev ? bPrev[k] : yy); else ctx.lineTo(x, yy); }
+      ctx.stroke();
+    });
+    bT += dt; bX = nx;
+    bPrev = lanes.map(function (L) { return L.y0 - L.f(bT) * L.a; });
+    if (bX > w) { bX = 0; bPrev = null; }
+  }
+  var bSec = 42;
+  setInterval(function () {
+    if (bEl.hidden) return;
+    bSec++;
+    document.getElementById('B-hr').textContent = 70 + Math.round(4 * Math.sin(bSec / 7));
+    document.getElementById('B-spo2').textContent = 98 + (bSec % 9 === 0 ? 1 : 0);
+    document.getElementById('B-co2').textContent = 35 + Math.round(Math.sin(bSec / 5));
+    document.getElementById('B-min').textContent = 'MIN ' + String(Math.floor(bSec / 60)).padStart(2, '0') + ':' + String(bSec % 60).padStart(2, '0');
+  }, 1000);
+
+  function resize() { drawA(); resetB(); if (reduce && !bEl.hidden) { for (var i = 0; i < 120; i++) stepB(1 / 30); } }
+  window.addEventListener('resize', resize);
+  var last = performance.now();
+  function loop(now) {
+    var dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (!reduce) stepB(dt);
+    requestAnimationFrame(loop);
+  }
+  if (!reduce) {
+    setInterval(function () { if (aEl.hidden) return; aData.push(aSample(aMin++)); if (aData.length > 400) aData.shift(); drawA(); }, 700);
+    requestAnimationFrame(loop);
+  }
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawA);
+  new MutationObserver(drawA).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+
+  setLang(savedLang === 'en' ? 'en' : 'th');
+  show(savedDraft);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(resize);
+})();
+</script>
