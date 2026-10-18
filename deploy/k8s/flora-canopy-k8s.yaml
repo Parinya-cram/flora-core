@@ -74,6 +74,14 @@ spec:
   template:
     metadata: { labels: { app: canopy-api } }
     spec:
+      # Wait for the DB to accept connections before starting the API: on a node
+      # reboot the DB pod comes up slower than the API, and the API exits on a
+      # pool timeout instead of retrying. The DB image ships pg_isready.
+      initContainers:
+        - name: wait-for-db
+          image: flora-canopy-canopy-db:latest
+          imagePullPolicy: Never
+          command: ["sh", "-c", "until pg_isready -h canopy-db -p 5432; do echo 'waiting for canopy-db'; sleep 2; done"]
       containers:
         - name: canopy-api
           image: flora-canopy-canopy-api:latest
@@ -118,6 +126,11 @@ spec:
   template:
     metadata: { labels: { app: sync-api } }
     spec:
+      initContainers:
+        - name: wait-for-db
+          image: flora-canopy-canopy-db:latest
+          imagePullPolicy: Never
+          command: ["sh", "-c", "until pg_isready -h canopy-db -p 5432; do echo 'waiting for canopy-db'; sleep 2; done"]
       containers:
         - name: sync-api
           image: flora-canopy-canopy-api:latest

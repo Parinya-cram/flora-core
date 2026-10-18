@@ -91,6 +91,12 @@ spec:
   template:
     metadata: { labels: { app: leaf-api } }
     spec:
+      # Wait for leaf-db before starting: avoids the pool-timeout exit after a node reboot.
+      initContainers:
+        - name: wait-for-db
+          image: flora-canopy-canopy-db:latest
+          imagePullPolicy: Never
+          command: ["sh", "-c", "until pg_isready -h leaf-db -p 5432; do echo 'waiting for leaf-db'; sleep 2; done"]
       containers:
         - name: leaf-api
           image: flora-canopy-canopy-api:latest   # same flora-api source, mode=leaf
