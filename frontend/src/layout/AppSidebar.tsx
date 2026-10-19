@@ -25,7 +25,7 @@ import canopyMonitoringIcon from "../assets/menu/canopy-menu-monitoring.png";
 import canopyFormDevIcon from "../assets/menu/canopy-menu-formdev.png";
 import { canAuthorStudio, canUseAiStudio } from "../auth/studioAccess";
 
-export type AppView = "ward" | "case" | "form" | "diagnosis" | "staff" | "io" | "patient" | "report" | "master" | "account" | "dashboard" | "admissions" | "monitoring" | "fleet" | "infrastructure" | "topology" | "gateway-alerts" | "devices" | "formdev" | "workflows" | "report-studio" | "ai-studio" | "history" | "billing" | "staff-directory";
+export type AppView = "ward" | "case" | "form" | "diagnosis" | "staff" | "io" | "patient" | "report" | "master" | "account" | "dashboard" | "admissions" | "monitoring" | "fleet" | "infrastructure" | "topology" | "gateway-alerts" | "devices" | "twin" | "formdev" | "workflows" | "report-studio" | "ai-studio" | "history" | "billing" | "staff-directory";
 
 type Props = {
   activeView: AppView;
@@ -203,6 +203,7 @@ function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, colla
         { view: "report", label: "Reports", icon: "canopy-reports" },
         { view: "billing", label: "Billing", icon: "canopy-reports" },
         ...(canConfigureCanopy || permissions.includes("staff.manage") ? [{ view: "staff-directory" as AppView, label: "Staff directory", icon: "staff" as NavIconName }] : []),
+        { view: "twin", label: "Digital twin", icon: "canopy-dashboard" },
         { view: "topology", label: "Topology", icon: "canopy-monitoring" },
         { view: "devices", label: "Devices", icon: "canopy-infrastructure" },
         { view: "gateway-alerts", label: "Gateway Alerts", icon: "canopy-infrastructure" },

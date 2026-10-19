@@ -51,6 +51,7 @@ from .routes.gateway_alerts import fleet_router as gateway_alerts_fleet_router, 
 from .routes.device_management import (control_router as device_control_router, fleet_router as device_fleet_router,
                                        sync_router as device_sync_router)
 from .routes.topology_physical import router as topology_physical_router
+from .routes.digital_twin import control_router as twin_control_router, router as twin_router
 from .routes.workstation import router as workstation_router
 from .routes.terminology import router as terminology_router
 from .routes.formdev import router as formdev_router
@@ -129,6 +130,8 @@ if API_MODE == "canopy":
     app.include_router(device_fleet_router)
     app.include_router(device_control_router)
     app.include_router(topology_physical_router)
+    app.include_router(twin_router)
+    app.include_router(twin_control_router)
     app.include_router(fleet_control_router)
     app.include_router(legacy_archive_router)
     app.include_router(canopy_reports_router)

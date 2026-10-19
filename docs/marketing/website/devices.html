@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="th" class="page">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Devices · FLORA iCIS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600&family=IBM+Plex+Sans+Thai:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header class="site-header" data-page="devices"></header>
+
+<main>
+  <section class="page-head">
+    <div class="wrap stack">
+      <span class="eyebrow"><span class="th">การเชื่อมต่ออุปกรณ์</span><span class="en">Device integration</span></span>
+      <h1><span class="th">ใช้เครื่องมือแพทย์ที่โรงพยาบาลมีอยู่แล้ว</span><span class="en">Use the medical devices you already own</span></h1>
+      <p class="lede"><span class="th">Flora Tendril อ่านค่าจากเครื่องติดตามผู้ป่วย เครื่องดมยา เครื่องช่วยหายใจ และปั๊มฉีดยา โดยไม่ผูกกับยี่ห้อใดยี่ห้อหนึ่ง</span><span class="en">Flora Tendril reads patient monitors, anesthesia machines, ventilators and infusion pumps without tying you to one brand.</span></p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:0">
+    <div class="wrap stack-lg">
+      <h2><span class="th">ช่องทางเชื่อมต่อ</span><span class="en">Connection routes</span></h2>
+      <div class="cols">
+        <div class="pillar"><span class="tag">RS-232</span><h3><span class="th">ต่อตรงทาง Serial</span><span class="en">Direct serial</span></h3><p><span class="th">เครื่องดมยาและเครื่องติดตามผู้ป่วยรุ่นที่มีพอร์ต Serial เช่น GE Carestation และ Dräger MEDIBUS.X</span><span class="en">Anesthesia machines and monitors with a serial port, such as GE Carestation and Dräger MEDIBUS.X.</span></p></div>
+        <div class="pillar"><span class="tag">LAN · TCP</span><h3><span class="th">ผ่านเครือข่าย</span><span class="en">Network</span></h3><p><span class="th">ปั๊มฉีดยาผ่าน docking station เช่น B. Braun SpaceCom</span><span class="en">Infusion pumps through a docking station, such as B. Braun SpaceCom.</span></p></div>
+        <div class="pillar"><span class="tag">HL7 v2 · MLLP</span><h3><span class="th">ผ่าน central station</span><span class="en">Via central station</span></h3><p><span class="th">รับข้อความ HL7 จาก central station หรือ gateway ของผู้ผลิต</span><span class="en">HL7 messages from a manufacturer's central station or gateway.</span></p></div>
+        <div class="pillar"><span class="tag">UDP</span><h3><span class="th">Multicast</span><span class="en">Multicast</span></h3><p><span class="th">ระบบเครื่องติดตามผู้ป่วยที่กระจายข้อมูลบนเครือข่าย เช่น Dräger Infinity</span><span class="en">Monitoring systems that broadcast on the network, such as Dräger Infinity.</span></p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap stack-lg">
+      <div class="stack">
+        <h2><span class="th">รุ่นเครื่องที่รองรับ</span><span class="en">Supported models</span></h2>
+        <p class="muted"><span class="th">เราแสดงสถานะตามหลักฐานจริง ทุกการติดตั้งจะทดสอบกับเครื่อง รุ่นเฟิร์มแวร์ และเครือข่ายของโรงพยาบาลก่อนใช้งานกับผู้ป่วย</span><span class="en">Statuses reflect real evidence. Every installation is tested against the hospital's own devices, firmware and network before clinical use.</span></p>
+      </div>
+      <div class="filters">
+        <label for="q" class="note"><span class="th">ค้นหา</span><span class="en">Search</span></label>
+        <input id="q" type="search" placeholder="Carestation, Evita, IntelliVue…">
+        <select id="brand" aria-label="Brand"></select>
+        <select id="status" aria-label="Status">
+          <option value="">All</option>
+          <option value="driver">Driver</option>
+          <option value="candidate">Candidate</option>
+        </select>
+        <span class="note" id="count"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th><span class="th">ผู้ผลิต</span><span class="en">Maker</span></th>
+            <th><span class="th">รุ่น</span><span class="en">Model</span></th>
+            <th><span class="th">ประเภท</span><span class="en">Type</span></th>
+            <th><span class="th">โปรโตคอล</span><span class="en">Protocol</span></th>
+            <th><span class="th">สถานะ</span><span class="en">Status</span></th>
+          </tr></thead>
+          <tbody id="rows"><tr><td colspan="5" class="note"><span class="th">กำลังโหลดรายการเครื่อง…</span><span class="en">Loading device list…</span></td></tr></tbody>
+        </table>
+      </div>
+      <div class="cols-2">
+        <p class="note"><span class="status status--ok"><span class="th">มีไดรเวอร์</span><span class="en">Driver</span></span> <span class="th">FLORA มีไดรเวอร์สำหรับรุ่นนี้แล้ว ยืนยันกับเครื่องจริงระหว่างติดตั้ง</span><span class="en">FLORA has a driver for this model; confirmed on the real device during installation.</span></p>
+        <p class="note"><span class="status status--cand"><span class="th">อยู่ระหว่างตรวจสอบ</span><span class="en">Candidate</span></span> <span class="th">เครื่องรองรับโปรโตคอลที่ใช้ได้ ต้องทดสอบกับเครื่องจริงก่อนยืนยัน</span><span class="en">The device speaks a compatible protocol; needs a real-device test before we confirm.</span></p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<section class="cta-band">
+  <div class="wrap">
+    <h2><span class="th">ไม่เจอรุ่นของคุณ? ส่งรายชื่อเครื่องมาให้เราตรวจสอบ</span><span class="en">Model not listed? Send us your device list to check</span></h2>
+    <a class="btn" href="contact.html"><span class="th">ส่งรายชื่อเครื่อง</span><span class="en">Send device list</span></a>
+  </div>
+</section>
+<footer class="site-footer"></footer>
+<script src="site.js"></script>
+<script>
+(function () {
+  var TYPES = {
+    patient_monitor: ['เครื่องติดตามผู้ป่วย', 'Patient monitor'], anesthesia_machine: ['เครื่องดมยา', 'Anesthesia machine'],
+    ventilator: ['เครื่องช่วยหายใจ', 'Ventilator'], infusion_pump: ['ปั๊มฉีดยา', 'Infusion pump'],
+    docking_station: ['Docking station', 'Docking station'], parameter_module: ['โมดูลวัดค่า', 'Parameter module'],
+    central_station: ['Central station', 'Central station'], pulse_oximeter: ['Pulse oximeter', 'Pulse oximeter'],
+    fetal_monitor: ['เครื่องติดตามทารกในครรภ์', 'Fetal monitor'], bp_monitor: ['เครื่องวัดความดัน', 'BP monitor']
+  };
+  var rows = [], q = document.getElementById('q'), brand = document.getElementById('brand'), status = document.getElementById('status');
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function render() {
+    var en = FLORA.lang() === 'en', t = q.value.trim().toLowerCase(), b = brand.value, s = status.value;
+    var list = rows.filter(function (r) {
+      return (!b || r.m === b) && (!s || r.st === s) && (!t || (r.m + ' ' + r.s + ' ' + r.model + ' ' + r.p).toLowerCase().indexOf(t) >= 0);
+    });
+    document.getElementById('count').textContent = list.length + (en ? ' models' : ' รุ่น');
+    document.getElementById('rows').innerHTML = list.length ? list.map(function (r) {
+      var ty = TYPES[r.c] || [r.c, r.c];
+      var st = r.st === 'driver'
+        ? '<span class="status status--ok">' + (en ? 'Driver' : 'มีไดรเวอร์') + '</span>'
+        : '<span class="status status--cand">' + (en ? 'Candidate' : 'อยู่ระหว่างตรวจสอบ') + '</span>';
+      return '<tr><td>' + esc(r.m) + '</td><td><b>' + esc(r.model) + '</b>' + (r.s && r.s !== r.model ? '<br><span class="note">' + esc(r.s) + '</span>' : '') + '</td><td>' + ty[en ? 1 : 0] + '</td><td>' + esc(r.p) + (r.a ? '<br><span class="note">' + esc(r.a) + '</span>' : '') + '</td><td>' + st + '</td></tr>';
+    }).join('') : '<tr><td colspan="5" class="note">' + (en ? 'No models match. Send us your device list and we will check it.' : 'ไม่พบรุ่นที่ค้นหา ส่งรายชื่อเครื่องมาให้เราตรวจสอบได้') + '</td></tr>';
+  }
+  function fillBrands() {
+    var en = FLORA.lang() === 'en', cur = brand.value;
+    var names = rows.map(function (r) { return r.m; }).filter(function (v, i, a) { return a.indexOf(v) === i; }).sort();
+    brand.innerHTML = '<option value="">' + (en ? 'All brands' : 'ทุกยี่ห้อ') + '</option>' + names.map(function (n) { return '<option>' + esc(n) + '</option>'; }).join('');
+    brand.value = cur;
+    status.options[0].textContent = en ? 'All statuses' : 'ทุกสถานะ';
+    status.options[1].textContent = en ? 'Driver' : 'มีไดรเวอร์';
+    status.options[2].textContent = en ? 'Candidate' : 'อยู่ระหว่างตรวจสอบ';
+  }
+  [q, brand, status].forEach(function (el) { el.addEventListener('input', render); });
+  document.addEventListener('flora:lang', function () { fillBrands(); render(); });
+  fetch('devices.json').then(function (r) { return r.json(); }).then(function (d) { rows = d; fillBrands(); render(); })
+    .catch(function () { document.getElementById('rows').innerHTML = '<tr><td colspan="5" class="note">' + (FLORA.lang() === 'en' ? 'The device list could not load. Refresh the page to try again.' : 'โหลดรายการเครื่องไม่สำเร็จ ลองรีเฟรชหน้านี้อีกครั้ง') + '</td></tr>'; });
+})();
+</script>
+</body>
+</html>
