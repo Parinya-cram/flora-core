@@ -18,7 +18,7 @@ const TEXT = {
     unreachable: "This workstation cannot reach the gateway", retry: "Try again",
     pick: "Choose the devices at this bed", onOther: "now on", sending: "Saving the assignment in Canopy…",
     waiting: "Waiting for the gateway to pick it up on its next check-in (about 20 s)…", applied: "The gateway now sends these devices to this workstation",
-    live: "Waiting for live readings…", liveOk: "Live readings arriving", saveBody: "This workstation will read bedside data from",
+    live: "Waiting for live readings…", liveOk: "Live readings arriving", liveNone: "No live readings from the devices yet — you can still save and check back later.", saveBody: "This workstation will read bedside data from",
     done: "Gateway set up", back: "Back", next: "Next", assign: "Assign", save: "Save", close: "Close", cancel: "Cancel",
   },
   th: {
@@ -30,7 +30,7 @@ const TEXT = {
     unreachable: "เครื่องนี้เชื่อมต่อ Gateway ไม่ได้", retry: "ลองอีกครั้ง",
     pick: "เลือกอุปกรณ์ของเตียงนี้", onOther: "ตอนนี้อยู่ที่", sending: "กำลังบันทึกการกำหนดอุปกรณ์ใน Canopy…",
     waiting: "รอ Gateway รับการตั้งค่าในการเช็กอินครั้งถัดไป (ประมาณ 20 วินาที)…", applied: "Gateway ส่งข้อมูลอุปกรณ์เหล่านี้มาที่เครื่องนี้แล้ว",
-    live: "กำลังรอข้อมูลจริง…", liveOk: "ได้รับข้อมูลจริงแล้ว", saveBody: "เครื่องนี้จะอ่านข้อมูลอุปกรณ์ข้างเตียงจาก",
+    live: "กำลังรอข้อมูลจริง…", liveOk: "ได้รับข้อมูลจริงแล้ว", liveNone: "ยังไม่มีข้อมูลจริงจากอุปกรณ์ — บันทึกได้เลย แล้วค่อยกลับมาดูภายหลัง", saveBody: "เครื่องนี้จะอ่านข้อมูลอุปกรณ์ข้างเตียงจาก",
     done: "ตั้งค่า Gateway เรียบร้อย", back: "ย้อนกลับ", next: "ถัดไป", assign: "กำหนด", save: "บันทึก", close: "ปิด", cancel: "ยกเลิก",
   },
 };
@@ -160,7 +160,9 @@ export default function GatewayWizard({ overview, onClose }: Props) {
   };
 
   const latest = useMemo(() => Object.entries(verify?.latest || {}).slice(0, 18), [verify]);
-  const canNext = [Boolean(url), states[1] === "done", phase === "applied" || !gateway, states[3] === "done"][step];
+  // Step 4 ("ตรวจข้อมูลจริง") only needs the gateway to be reachable — live readings may not exist yet
+  // (device not connected to a patient / case not started), so don't block the save on rows > 0.
+  const canNext = [Boolean(url), states[1] === "done", phase === "applied" || !gateway, Boolean(verify?.reachable)][step];
 
   return <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label={L.title}>
     <div className="flex max-h-[92vh] w-full max-w-3xl flex-col rounded-2xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] shadow-2xl">
@@ -232,7 +234,7 @@ export default function GatewayWizard({ overview, onClose }: Props) {
         </div> : null}
 
         {step === 3 ? <div className="space-y-3">
-          <div className={states[3] === "done" ? "text-emerald-600" : ""}>{states[3] === "done" ? `✓ ${L.liveOk}` : <><Spinner /> {L.live}</>}</div>
+          <div className={states[3] === "done" ? "text-emerald-600" : ""}>{states[3] === "done" ? `✓ ${L.liveOk}` : verify?.reachable ? L.liveNone : <><Spinner /> {L.live}</>}</div>
           <div className="flex flex-wrap gap-2">
             {latest.map(([param, item]) => <span key={param} className="rounded-lg border border-[var(--app-border)] px-2 py-1 font-mono text-xs">
               {param} <b>{String(item.value)}</b>{item.unit ? ` ${item.unit}` : ""}
