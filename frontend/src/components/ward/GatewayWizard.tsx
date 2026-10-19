@@ -234,7 +234,8 @@ export default function GatewayWizard({ overview, onClose }: Props) {
         </div> : null}
 
         {step === 3 ? <div className="space-y-3">
-          <div className={states[3] === "done" ? "text-emerald-600" : ""}>{states[3] === "done" ? `✓ ${L.liveOk}` : verify?.reachable ? L.liveNone : <><Spinner /> {L.live}</>}</div>
+          <div className={states[3] === "done" ? "text-emerald-600" : ""}>{states[3] === "done" ? `✓ ${L.liveOk}` : <><Spinner /> {L.live}</>}</div>
+          {states[3] !== "done" && verify?.reachable ? <div className="text-xs opacity-70">{L.liveNone}</div> : null}
           <div className="flex flex-wrap gap-2">
             {latest.map(([param, item]) => <span key={param} className="rounded-lg border border-[var(--app-border)] px-2 py-1 font-mono text-xs">
               {param} <b>{String(item.value)}</b>{item.unit ? ` ${item.unit}` : ""}
