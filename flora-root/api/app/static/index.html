@@ -151,6 +151,7 @@ function usage(used, max) {
 
 async function load() {
   const data = await (await fetch("api/v1/overview")).json();
+  window.__gwtypes = data.gateway_device_types || [];
   $("ts").textContent = "updated " + new Date(data.server_ts).toLocaleTimeString();
   $("tenants").innerHTML = `<table><tr><th>Tenant</th><th>License</th><th>Leaves</th><th>Gateways</th><th>Gateway devices</th><th>Canopy check-in</th><th>Running releases</th><th></th></tr>${
     data.tenants.map((t) => {
@@ -176,11 +177,18 @@ async function load() {
           <label>Valid days<input name="valid_days" type="number" value="365"></label>
           <fieldset style="flex:1 0 100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:4px 0 0;min-width:0">
             <legend style="color:var(--muted);font-size:12px;padding:0 4px">Device types licensed to this hospital</legend>
-            <div style="display:flex;flex-wrap:wrap;gap:6px 14px">
-              ${(data.gateway_device_types || []).map((dt) => `<label style="display:flex;align-items:center;gap:5px;color:var(--ink);font-size:13px"><input type="checkbox" name="dt_${esc(dt.code)}" style="width:auto" ${(t.device_types || []).includes(dt.code) ? "checked" : ""}>${esc(dt.label || dt.code)}</label>`).join("")}
+            <div id="lic-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+              ${(t.device_types || []).map((c) => licChip(c)).join("")}
             </div>
-            <label style="display:block;margin-top:8px;color:var(--muted);font-size:12px">Custom type codes (comma-separated — e.g. gateway local templates not in a release)
-              <input name="custom_codes" style="width:100%;margin-top:4px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)" placeholder="test2, my-custom-device" value="${esc((t.device_types || []).filter((c) => !(data.gateway_device_types || []).some((d) => d.code === c)).join(", "))}"></label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <select id="lic-select" style="flex:1;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)">
+                <option value="">— pick a device type —</option>
+                ${(data.gateway_device_types || []).map((dt) => `<option value="${esc(dt.code)}">${esc(dt.label || dt.code)} (${esc(dt.code)})</option>`).join("")}
+                <option value="__custom__">+ custom code…</option>
+              </select>
+              <input id="lic-custom" placeholder="custom code" style="display:none;flex:1;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)">
+              <button type="button" class="primary" onclick="addLicType()">Add device type licensed</button>
+            </div>
           </fieldset>
           <button class="primary">Issue new bundle</button> <button type="button" onclick="editing=null;load()">Cancel</button></form>
           <div class="muted">Canopy picks up the new bundle on its next sync; gateways get their share on their next check-in.</div></td></tr>` : ""}`;
@@ -201,6 +209,25 @@ async function load() {
 }
 function edit(id) { editing = id; load(); }
 function detail(id) { detailing = detailing === id ? null : id; load(); }
+function licChip(code) {
+  const label = (window.__gwtypes || []).find((d) => d.code === code)?.label || code;
+  return `<span class="chip" data-code="${esc(code)}" style="display:inline-flex;align-items:center;gap:6px">${esc(label)} <button type="button" title="remove" onclick="this.closest('[data-code]').remove()" style="border:0;background:none;color:var(--bad);cursor:pointer;padding:0;font-size:14px;line-height:1">×</button><input type="hidden" name="dt_${esc(code)}" value="1"></span>`;
+}
+function addLicType() {
+  const sel = document.getElementById("lic-select"), custom = document.getElementById("lic-custom");
+  const code = (sel.value === "__custom__" ? custom.value : sel.value).trim();
+  if (!code) return;
+  const box = document.getElementById("lic-chips");
+  if (!box.querySelector(`[data-code="${CSS.escape(code)}"]`)) box.insertAdjacentHTML("beforeend", licChip(code));
+  sel.value = ""; custom.value = ""; custom.style.display = "none"; sel.focus();
+}
+document.addEventListener("change", (e) => {
+  if (e.target && e.target.id === "lic-select") {
+    const custom = document.getElementById("lic-custom");
+    if (custom) custom.style.display = e.target.value === "__custom__" ? "" : "none";
+    if (e.target.value === "__custom__" && custom) custom.focus();
+  }
+});
 function tenantDetail(t) {
   const u = t.usage || {};
   const gws = u.gateway_detail || [], nodes = u.nodes || [];
