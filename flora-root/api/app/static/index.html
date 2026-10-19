@@ -117,7 +117,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
 const when = (ms) => ms ? new Date(ms).toLocaleString() : "—";
 const ago = (ms) => { if (!ms) return "never"; const s = Math.round((Date.now() - ms) / 1000); return s < 90 ? `${s}s ago` : `${Math.round(s / 60)} min ago`; };
-let editing = null, me = null, auditRows = [];
+let editing = null, detailing = null, me = null, auditRows = [];
 // Every API call: a lost session sends the operator back to the sign-in page.
 const rawFetch = window.fetch.bind(window);
 window.fetch = async (...args) => {
@@ -167,7 +167,8 @@ async function load() {
         <td><span class="${online ? "ok" : "warn"}">${ago(t.last_seen_at)}</span><div class="muted">${esc(t.canopy_version || "")}</div></td>
         <td><span class="chip">channel ${esc(t.release_channel)}</span>${(u.nodes || []).map((n) =>
           `<div><b>${esc(n.node_id)}</b> <code>${esc(n.release_id || "unmanaged")}</code>${n.state && n.state !== "current" ? ` <span class="warn">${esc(n.state)}</span>` : ""}</div>`).join("")}</td>
-        <td><span class="admin-only"><button onclick="edit('${esc(t.tenant_id)}')">Edit license</button> <button class="danger" onclick="revoke('${esc(t.tenant_id)}')">Revoke</button></span></td></tr>
+        <td><button onclick="detail('${esc(t.tenant_id)}')">${detailing === t.tenant_id ? "Hide" : "Details"}</button> <span class="admin-only"><button onclick="edit('${esc(t.tenant_id)}')">Edit license</button> <button class="danger" onclick="revoke('${esc(t.tenant_id)}')">Revoke</button></span></td></tr>
+        ${detailing === t.tenant_id ? `<tr><td colspan="8">${tenantDetail(t)}</td></tr>` : ""}
         ${editing === t.tenant_id ? `<tr><td colspan="8"><form class="lic" onsubmit="return save(event,'${esc(t.tenant_id)}')">
           <label>Max leaves<input name="max_leaves" type="number" value="${t.max_leaves}"></label>
           <label>Max gateways<input name="max_gateways" type="number" value="${t.max_gateways}"></label>
@@ -197,6 +198,21 @@ async function load() {
   $("keys").innerHTML = data.signing_keys.map((k) => `<div><b>${esc(k.key_id)}</b> · Ed25519 · created ${when(k.created_at)}</div><code>${esc(k.public_raw)}</code>`).join("");
 }
 function edit(id) { editing = id; load(); }
+function detail(id) { detailing = detailing === id ? null : id; load(); }
+function tenantDetail(t) {
+  const u = t.usage || {};
+  const gws = u.gateway_detail || [], nodes = u.nodes || [];
+  if (!gws.length && !nodes.length) return `<div class="muted">No fleet detail reported yet — waiting for the hospital's next check-in.</div>`;
+  const gwHtml = gws.map((g) => `
+    <div style="margin:8px 0;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
+      <div><b>${esc(g.site || g.gateway_id)}</b> <span class="muted">${esc(g.gateway_id)} · v${esc(g.version || "?")} · seen ${ago(g.last_seen)}</span></div>
+      ${(g.devices || []).length ? `<table style="margin-top:6px"><tr><th>Device</th><th>Type</th><th>Leaf</th><th>Parser</th></tr>${
+        g.devices.map((d) => `<tr><td>${esc(d.label || d.device_id)}</td><td><code>${esc(d.device_type || "")}</code></td><td>${esc(d.leaf_id || "—")}</td><td>${d.enabled === false ? `<span class="muted">disabled</span>` : `<span class="${d.parser_status === "running" ? "ok" : "warn"}">${esc(d.parser_status || "—")}</span>`}</td></tr>`).join("")
+      }</table>` : `<div class="muted">No devices on this gateway.</div>`}
+    </div>`).join("");
+  const nodeHtml = nodes.length ? `<div class="muted" style="margin-top:6px">Nodes: ${nodes.map((n) => `${esc(n.node_id)} <code>${esc(n.release_id || "unmanaged")}</code>${n.state && n.state !== "current" ? ` <span class="warn">${esc(n.state)}</span>` : ""}`).join(" · ")}</div>` : "";
+  return `<div style="padding:4px 0">${gwHtml || `<div class="muted">No gateways reported.</div>`}${nodeHtml}</div>`;
+}
 async function save(event, id) {
   event.preventDefault();
   const form = new FormData(event.target);

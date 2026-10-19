@@ -339,8 +339,21 @@ def usage() -> dict[str, Any]:
     leaves = canopy_leaves()
     known = gateways()
     devices = sum(len([d for d in gateway["devices"] if d.get("enabled", True)]) for gateway in known)
+    # Per-gateway device detail so Root's fleet console can drill a hospital down to
+    # gateway -> device -> parser (version/status), not just counts.
+    gateway_detail = [{
+        "gateway_id": gateway.get("gateway_id"),
+        "site": (gateway.get("site") or {}).get("display_name") or gateway.get("gateway_id"),
+        "version": gateway.get("version"),
+        "last_seen": gateway.get("last_seen"),
+        "devices": [{"device_id": d.get("device_id"), "device_type": d.get("device_type"),
+                     "label": d.get("label"), "leaf_id": d.get("leaf_id"),
+                     "enabled": d.get("enabled", True), "parser_status": d.get("parser_status")}
+                    for d in (gateway.get("devices") or [])],
+    } for gateway in known]
     return {"leaves": len(leaves), "gateways": len(known), "gateway_devices": devices,
             "leaf_ids": [leaf["leaf_id"] for leaf in leaves],
+            "gateway_detail": gateway_detail,
             "nodes": [{key: node[key] for key in ("node_id", "component", "release_id", "state", "last_seen")}
                       for node in nodes()]}
 
