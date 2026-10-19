@@ -1,8 +1,82 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   approveRelease, getDistributionOverview, holdComponent, mirrorRelease, rootSync,
+  getDistSettings, saveDistSettings,
   type DistributionOverview, type DistributionNode, type ReleaseRow,
 } from "../api/deviceDistributionApi";
+
+// Haber Root/registry config, editable here instead of env/kubectl (user: config via UI, not env).
+const SETTING_FIELDS: { key: string; label: string; placeholder: string }[] = [
+  { key: "root_url", label: "Root URL", placeholder: "http://root-api.flora-root.svc.cluster.local:8000" },
+  { key: "root_registry_url", label: "Root registry URL (mirror source)", placeholder: "http://root-registry.flora-root.svc.cluster.local:5000" },
+  { key: "registry_public", label: "Hospital registry (nodes pull)", placeholder: "172.22.19.81:7205" },
+  { key: "canopy_sync_url", label: "Canopy sync URL", placeholder: "http://sync-api.flora-canopy.svc.cluster.local:8000" },
+  { key: "tenant_id", label: "Tenant ID", placeholder: "hospital-01" },
+  { key: "sync_interval", label: "Root sync interval (s)", placeholder: "15" },
+];
+
+function HaberSettings() {
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [meta, setMeta] = useState<Record<string, { overridden?: boolean }>>({});
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const reload = useCallback(async () => {
+    try {
+      const data = await getDistSettings();
+      const v: Record<string, string> = {}, m: Record<string, { overridden?: boolean }> = {};
+      for (const f of SETTING_FIELDS) {
+        const s = data.settings?.[f.key];
+        v[f.key] = s && s.value != null ? String(s.value) : "";
+        m[f.key] = { overridden: s?.overridden };
+      }
+      setValues(v); setMeta(m);
+    } catch { /* leave blank */ }
+  }, []);
+  useEffect(() => { if (open) void reload(); }, [open, reload]);
+
+  const save = async () => {
+    setSaving(true); setMsg("");
+    try {
+      await saveDistSettings(values);
+      setMsg("Saved · takes effect at once");
+      await reload();
+    } catch (reason) {
+      setMsg(reason instanceof Error ? reason.message : "Save failed");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <section className="mb-5 rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)]">
+      <button type="button" onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between px-4 py-3 text-left">
+        <span className="text-sm font-bold">Registry &amp; Root settings</span>
+        <span className="text-xs text-[var(--app-muted)]">{open ? "hide" : "configure"}</span>
+      </button>
+      {open ? (
+        <div className="border-t border-[var(--app-border)] p-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {SETTING_FIELDS.map((f) => (
+              <label key={f.key} className="text-xs text-[var(--app-muted)]">
+                {f.label} {meta[f.key]?.overridden ? <span className="text-[var(--app-accent)]">· custom</span> : <span>· default</span>}
+                <input value={values[f.key] ?? ""} placeholder={f.placeholder}
+                  onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                  className="mt-1 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-control-bg)] px-2 py-1.5 text-sm text-[var(--app-text)]" />
+              </label>
+            ))}
+          </div>
+          <div className="mt-3 flex items-center gap-3">
+            <button type="button" disabled={saving} onClick={() => void save()}
+              className="rounded-lg border border-[var(--app-accent)] bg-[var(--app-accent)] px-3 py-1.5 text-xs font-bold text-[var(--app-accent-contrast)] disabled:opacity-50">Save settings</button>
+            <span className="text-[11px] text-[var(--app-muted)]">Blank a field to reset it to the env default. Stored in Haber, applied live.</span>
+            {msg ? <span className="text-xs text-[var(--app-muted)]">{msg}</span> : null}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
 
 // Device Distribution console (Canopy admin): the Root -> Canopy -> node image rollout.
 // Root publishes a release -> Haber mirrors it to the hospital registry -> an admin approves
@@ -128,6 +202,8 @@ export default function DeviceDistributionView() {
       </section>
 
       {/* Tier 2 — Releases (mirror → approve) */}
+      <HaberSettings />
+
       <section className="mb-5">
         <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--app-muted)]">Releases — mirror &amp; approve</h2>
         <div className="space-y-4">

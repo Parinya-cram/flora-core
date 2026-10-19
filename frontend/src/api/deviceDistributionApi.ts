@@ -82,3 +82,15 @@ export async function holdComponent(component: string): Promise<unknown> {
 export async function rootSync(): Promise<unknown> {
   return unwrap(await fetch(`${BASE}/root-sync`, { method: "POST", headers: authHeaders() }));
 }
+
+// Haber Root/registry settings, editable from the Device Distribution UI (via the canopy-api -> Haber proxy).
+export type DistSetting = { value?: unknown; overridden?: boolean; set?: boolean; secret?: boolean };
+export type DistSettings = { settings: Record<string, DistSetting> };
+
+export async function getDistSettings(): Promise<DistSettings> {
+  return unwrap(await fetch(`${BASE}/settings`, { headers: authHeaders() }));
+}
+
+export async function saveDistSettings(body: Record<string, unknown>): Promise<unknown> {
+  return unwrap(await fetch(`${BASE}/settings`, { method: "PUT", headers: authHeaders(true), body: JSON.stringify(body) }));
+}

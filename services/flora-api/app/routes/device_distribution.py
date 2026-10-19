@@ -16,7 +16,7 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 # Admin check differs by surface: Canopy sessions (read_token) vs Leaf sessions (auth_leaf).
 if os.getenv("FLORA_API_MODE", "leaf").strip().lower() == "canopy":
@@ -56,6 +56,18 @@ def _haber(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
         raise HTTPException(status_code=code, detail=f"Haber refused the request: {detail or error.reason}") from None
     except Exception as error:  # Haber unreachable
         raise HTTPException(status_code=503, detail=f"Cannot reach Haber ({type(error).__name__})") from None
+
+
+@router.get("/settings")
+def get_settings() -> Any:
+    """Haber's Root/registry config (root_url, root_registry_url, registry_public, ...) so it can be
+    set from the Device Distribution UI instead of env/kubectl."""
+    return _haber("GET", "/api/haber/v1/settings")
+
+
+@router.put("/settings")
+def put_settings(body: dict[str, Any] = Body(...)) -> Any:
+    return _haber("PUT", "/api/haber/v1/settings", body)
 
 
 @router.get("/overview")
