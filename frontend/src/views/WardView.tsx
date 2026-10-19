@@ -133,8 +133,10 @@ export default function WardView({ sessionUser, onOpenCase, onCaseChanged }: Pro
   const sync = data?.sync;
   const failing = (sync?.components || []).filter(item => item.last_error);
   const stale = !sync?.last_ok_at || Date.now() - sync.last_ok_at > Math.max(30, (sync.auto_interval_sec || 10) * 3) * 1000;
+  // Only the devices actually selected (enabled) for this Leaf — unselected ones aren't shown.
   const myDevices = useMemo(() => (data?.gateways || []).flatMap(gateway =>
-    gateway.devices.filter(device => device.leaf_id === data?.leaf.id).map(device => ({ ...device, gateway: gateway.site_name }))), [data]);
+    gateway.devices.filter(device => device.leaf_id === data?.leaf.id && device.enabled !== false)
+      .map(device => ({ ...device, gateway: gateway.site_name }))), [data]);
   const sourceGateway = data?.gateways.find(gateway => gateway.gateway_id === data?.device_source?.gateway_id);
   const location = [data?.workstation.room_name, data?.workstation.bed_name].filter(Boolean).join(" · ");
 
