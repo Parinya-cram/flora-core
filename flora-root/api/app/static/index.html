@@ -173,6 +173,12 @@ async function load() {
           <label>Max gateways<input name="max_gateways" type="number" value="${t.max_gateways}"></label>
           <label>Max gateway devices<input name="max_gateway_devices" type="number" value="${t.max_gateway_devices}"></label>
           <label>Valid days<input name="valid_days" type="number" value="365"></label>
+          <fieldset style="flex:1 0 100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:4px 0 0;min-width:0">
+            <legend style="color:var(--muted);font-size:12px;padding:0 4px">Device types licensed to this hospital</legend>
+            <div style="display:flex;flex-wrap:wrap;gap:6px 14px">
+              ${(data.gateway_device_types || []).map((dt) => `<label style="display:flex;align-items:center;gap:5px;color:var(--ink);font-size:13px"><input type="checkbox" name="dt_${esc(dt.code)}" style="width:auto" ${(t.device_types || []).includes(dt.code) ? "checked" : ""}>${esc(dt.label || dt.code)}</label>`).join("")}
+            </div>
+          </fieldset>
           <button class="primary">Issue new bundle</button> <button type="button" onclick="editing=null;load()">Cancel</button></form>
           <div class="muted">Canopy picks up the new bundle on its next sync; gateways get their share on their next check-in.</div></td></tr>` : ""}`;
     }).join("")}</table>`;
@@ -195,8 +201,11 @@ async function save(event, id) {
   event.preventDefault();
   const form = new FormData(event.target);
   const t = window.tenants[id];
-  const body = { modules: t.modules, device_types: t.device_types };
-  for (const [k, v] of form) body[k] = Number(v);
+  const body = { modules: t.modules, device_types: [] };
+  for (const [k, v] of form) {
+    if (k.startsWith("dt_")) body.device_types.push(k.slice(3));
+    else body[k] = Number(v);
+  }
   const r = await fetch(`api/v1/tenants/${id}/license`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   if (!r.ok) alert(await r.text());
   editing = null; load(); return false;

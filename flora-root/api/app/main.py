@@ -439,8 +439,17 @@ def overview():
         releases = connection.execute(
             "SELECT release_id, component, version, channel, services, jsonb_array_length(device_types) AS device_types, "
             "notes, created_at, withdrawn_at FROM root_release ORDER BY created_at DESC LIMIT 30").fetchall()
+        # Device-type codes an admin can license to a tenant = the catalog the current gateway
+        # release ships (its parsers). Falls back to the demo set before any gateway release exists.
+        gateway_release = connection.execute(
+            "SELECT device_types FROM root_release WHERE component='gateway' AND withdrawn_at IS NULL "
+            "ORDER BY created_at DESC LIMIT 1").fetchone()
+    catalog = (gateway_release["device_types"] if gateway_release and gateway_release["device_types"]
+               else [{"code": code} for code in DEMO_DEVICE_TYPES])
+    gateway_device_types = [{"code": item["code"], "label": item.get("label", item["code"])}
+                            for item in catalog if item.get("code")]
     return {"server_ts": now_ms(), "tenants": tenants, "global_config": config, "signing_keys": keys,
-            "registry": REGISTRY_URL, "releases": releases}
+            "registry": REGISTRY_URL, "releases": releases, "gateway_device_types": gateway_device_types}
 
 
 # ------------------------------------------------------------------ device type catalog
