@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flora Gateway · Monitor</title>
+<style>
+  :root {
+    --bg:#0a0e0d; --panel:#141b19; --panel2:#1b2422; --line:#2a3330; --ink:#e7efec; --muted:#8a9a95;
+    --accent:#2f6f4f; --on:#1dd98b; --off:#f0564b; --warn:#f2b63a;
+    --spo2:#36d6e6; --pr:#4ade80; --hr:#4ade80; --rr:#fde047; --nibp:#e7efec; --temp:#fb923c; --co2:#fbbf24; --ibp:#f87171; --wave:#7fe3b0;
+  }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif }
+  header { display:flex; align-items:center; gap:14px; padding:12px 18px; border-bottom:1px solid var(--line); background:var(--panel) }
+  header h1 { font-size:16px; margin:0; font-weight:600; letter-spacing:.02em }
+  header .sub { color:var(--muted); font-size:12px }
+  header .spacer { flex:1 }
+  header .pill { font-size:12px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:3px 10px }
+  header a { color:var(--muted); text-decoration:none; font-size:12px; border:1px solid var(--line); border-radius:7px; padding:5px 10px }
+  header a:hover { color:var(--ink); border-color:var(--accent) }
+  main { padding:16px 18px 40px }
+  .group { margin-bottom:22px }
+  .group > h2 { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted);
+                margin:0 0 10px; display:flex; align-items:center; gap:8px }
+  .group > h2 .conn { color:var(--ink); font-weight:600 }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:14px }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:10px }
+  .card.off { opacity:.72 }
+  .card .top { display:flex; align-items:flex-start; gap:8px }
+  .card .dot { width:10px; height:10px; border-radius:50%; margin-top:5px; flex:none; background:var(--off) }
+  .card .dot.on { background:var(--on); box-shadow:0 0 8px var(--on) }
+  .card .name { font-weight:600; font-size:15px; line-height:1.25 }
+  .card .meta { color:var(--muted); font-size:11px; margin-top:2px }
+  .card .state { margin-left:auto; font-size:11px; color:var(--muted); text-align:right; white-space:nowrap }
+  .card .state.off { color:var(--off) }
+  .vitals { display:flex; flex-wrap:wrap; gap:8px }
+  .vital { flex:1 1 72px; min-width:72px; background:var(--panel2); border-radius:8px; padding:6px 10px }
+  .vital .k { font-size:11px; color:var(--muted); letter-spacing:.02em }
+  .vital .v { font-size:26px; font-weight:700; font-variant-numeric:tabular-nums; line-height:1.1 }
+  .vital .u { font-size:11px; color:var(--muted); font-weight:400; margin-left:3px }
+  .waves { display:flex; flex-direction:column; gap:6px }
+  .wave { background:#070b0a; border-radius:8px; padding:4px 6px }
+  .wave .wk { font-size:10px; color:var(--muted); margin:2px 2px 0 }
+  .wave canvas { display:block; width:100%; height:48px }
+  .empty { color:var(--muted); font-size:12px; padding:2px }
+  .nodata { color:var(--muted); font-size:12px; text-align:center; padding:40px }
+</style>
+</head>
+<body>
+<header>
+  <h1>Flora Gateway · Monitor</h1>
+  <span class="sub" id="gw"></span>
+  <span class="spacer"></span>
+  <span class="pill" id="count">—</span>
+  <span class="pill" id="clock">—</span>
+  <a href="/">Admin</a>
+</header>
+<main id="root"><div class="nodata">Loading…</div></main>
+<script>
+// Embedded in the admin UI's Monitor tab (/monitor?embed=1): drop the standalone header, the tab supplies it.
+if (new URLSearchParams(location.search).has("embed")) {
+  document.querySelector("header").style.display = "none";   // the admin tab supplies the title; keep the dark wall background
+  document.querySelector("main").style.padding = "12px 14px 24px";
+}
+const API = new URLSearchParams(location.search).get("api") || "";            // "" = same-origin gateway; else a data-server base for testing
+const statusURL = () => `${API}/api/devices/status`;
+const obsURL = (id) => API
+  ? `${API}/api/observations?device_id=${encodeURIComponent(id)}&from=${Date.now()-12000}&to=${Date.now()+1}`
+  : `/api/devices/${encodeURIComponent(id)}/latest?seconds=12`;
+
+// Known numeric vitals -> {label, color, decimals}. Everything else with dense samples is drawn as a waveform.
+const VITALS = {
+  spo2:{l:"SpO₂",c:"--spo2"}, pr:{l:"PR",c:"--pr"}, hr:{l:"HR",c:"--hr"}, rr:{l:"RR",c:"--rr"},
+  temp:{l:"Temp",c:"--temp",d:1}, temperature:{l:"Temp",c:"--temp",d:1},
+  etco2:{l:"EtCO₂",c:"--co2"}, co2:{l:"CO₂",c:"--co2"},
+  nibp_sys:{l:"NIBP sys",c:"--nibp"}, nibp_dia:{l:"NIBP dia",c:"--nibp"}, nibp_map:{l:"NIBP map",c:"--nibp"},
+  cvp:{l:"CVP",c:"--nibp"}, ibp_sys:{l:"ABP sys",c:"--ibp"}, ibp_dia:{l:"ABP dia",c:"--ibp"},
+};
+const VITAL_ORDER = ["spo2","pr","hr","rr","etco2","co2","nibp_sys","nibp_dia","nibp_map","cvp","temp","temperature","ibp_sys","ibp_dia"];
+
+const esc = (s) => String(s==null?"":s).replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+const cssv = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#7fe3b0";
+
+function offText(sec) {
+  if (sec == null) return "no data";
+  sec = Math.floor(sec);
+  if (sec < 60) return `off ${sec}s`;
+  const m = Math.floor(sec/60);
+  if (m < 60) return `off ${m}m`;
+  const h = Math.floor(m/60);
+  return h < 24 ? `off ${h}h` : `off ${Math.floor(h/24)}d`;
+}
+
+function connLabel(pod) {
+  if (!pod) return "Unassigned";
+  const [kind, ...rest] = String(pod).split(".");
+  const tail = rest.join(".");
+  if (kind === "serial") return `Serial · ${tail || "?"}`;
+  if (kind === "tcp" || kind === "socket") return `TCP · ${tail || "?"}`;
+  if (kind === "udp") return `UDP · ${tail || "?"}`;
+  if (kind === "webhook" || kind === "http") return `HTTP · ${tail || "?"}`;
+  return pod;
+}
+
+function drawWave(canvas, pts, color) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth || 300, h = canvas.clientHeight || 48;
+  canvas.width = w*dpr; canvas.height = h*dpr;
+  const ctx = canvas.getContext("2d"); ctx.scale(dpr,dpr); ctx.clearRect(0,0,w,h);
+  if (pts.length < 2) return;
+  let lo = Infinity, hi = -Infinity;
+  for (const p of pts) { if (p<lo) lo=p; if (p>hi) hi=p; }
+  if (hi-lo < 1e-9) { hi=lo+1; lo-=1; }
+  const pad = 4, span = hi-lo;
+  ctx.beginPath(); ctx.lineWidth = 1.5; ctx.strokeStyle = color; ctx.lineJoin="round";
+  pts.forEach((v,i) => {
+    const x = (i/(pts.length-1))*(w-2)+1;
+    const y = h-pad - ((v-lo)/span)*(h-2*pad);
+    i ? ctx.lineTo(x,y) : ctx.moveTo(x,y);
+  });
+  ctx.stroke();
+}
+
+// Per-device latest data cache for smooth redraws.
+async function loadDevice(dev, card) {
+  let rows = [];
+  try { const r = await fetch(obsURL(dev.device_id), {credentials:"same-origin"}); if (r.ok) { const d = await r.json(); rows = Array.isArray(d)?d:(d.rows||[]); } }
+  catch (e) { /* offline */ }
+  const byParam = {};
+  for (const row of rows) (byParam[row.ivy_param] ||= []).push(row);
+  const vitalsBox = card.querySelector(".vitals");
+  const wavesBox = card.querySelector(".waves");
+
+  const vitalEls = [], waveEls = [];
+  const params = Object.keys(byParam);
+  // vitals in a fixed order first, then any other known vital
+  const vitalParams = VITAL_ORDER.filter(p => byParam[p]).concat(params.filter(p => VITALS[p] && !VITAL_ORDER.includes(p)));
+  for (const p of vitalParams) {
+    const series = byParam[p].slice().sort((a,b)=>a.system_ts-b.system_ts);
+    const last = series[series.length-1];
+    const cfg = VITALS[p] || {l:p,c:"--wave"};
+    const val = typeof last.value === "number" ? (cfg.d ? last.value.toFixed(cfg.d) : Math.round(last.value)) : esc(last.value);
+    vitalEls.push(`<div class="vital"><div class="k">${esc(cfg.l)}</div><div class="v" style="color:${cssv(cfg.c)}">${val}<span class="u">${esc(last.unit||"")}</span></div></div>`);
+  }
+  // waveform = any param that is NOT a known vital and has enough points
+  const waveParams = params.filter(p => !VITALS[p] && byParam[p].length >= 8);
+  vitalsBox.innerHTML = vitalEls.length ? vitalEls.join("") : (dev.is_online ? `<div class="empty">waiting for data…</div>` : "");
+  // (re)build wave canvases
+  wavesBox.innerHTML = waveParams.map(p => `<div class="wave"><div class="wk">${esc(p)}</div><canvas data-p="${esc(p)}"></canvas></div>`).join("");
+  for (const p of waveParams) {
+    const series = byParam[p].slice().sort((a,b)=>a.system_ts-b.system_ts).map(r=>Number(r.value)).filter(v=>!Number.isNaN(v));
+    const cv = wavesBox.querySelector(`canvas[data-p="${CSS.escape(p)}"]`);
+    if (cv) drawWave(cv, series, cssv("--wave"));
+  }
+}
+
+function cardHTML(dev) {
+  const on = !!dev.is_online;
+  return `<div class="card ${on?"":"off"}" data-id="${esc(dev.device_id)}">
+    <div class="top">
+      <span class="dot ${on?"on":""}"></span>
+      <div>
+        <div class="name">${esc(dev.label || dev.device_id)}</div>
+        <div class="meta">${esc(dev.device_type||"")}${dev.category?" · "+esc(dev.category):""}</div>
+      </div>
+      <div class="state ${on?"":"off"}">${on?"live":offText(dev.seconds_since_last)}</div>
+    </div>
+    <div class="vitals"></div>
+    <div class="waves"></div>
+  </div>`;
+}
+
+let known = "";
+async function tick() {
+  document.getElementById("clock").textContent = new Date().toLocaleTimeString();
+  let devices = [];
+  try {
+    const r = await fetch(statusURL(), {credentials:"same-origin"});
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json(); devices = d.devices || (Array.isArray(d)?d:[]);
+  } catch (e) {
+    document.getElementById("root").innerHTML = `<div class="nodata">Cannot reach gateway (${esc(e.message)})</div>`;
+    return;
+  }
+  document.getElementById("count").textContent = `${devices.filter(x=>x.is_online).length}/${devices.length} online`;
+
+  // group by connection (pod)
+  const groups = {};
+  for (const dev of devices) (groups[dev.pod || ""] ||= []).push(dev);
+  const order = Object.keys(groups).sort();
+  const signature = JSON.stringify(devices.map(d=>[d.device_id,d.pod,d.is_online]));
+  if (signature !== known) {               // rebuild skeleton only when the device set/online changes
+    known = signature;
+    const root = document.getElementById("root");
+    root.innerHTML = devices.length ? order.map(pod =>
+      `<section class="group"><h2>${esc(connLabel(pod).split(" · ")[0])} · <span class="conn">${esc(connLabel(pod).split(" · ")[1]||"")}</span></h2>
+       <div class="grid">${groups[pod].map(cardHTML).join("")}</div></section>`).join("")
+      : `<div class="nodata">No devices on this gateway</div>`;
+  } else {
+    for (const dev of devices) {            // refresh online state/label in place
+      const card = document.querySelector(`.card[data-id="${CSS.escape(dev.device_id)}"]`);
+      if (!card) continue;
+      card.classList.toggle("off", !dev.is_online);
+      card.querySelector(".dot").classList.toggle("on", !!dev.is_online);
+      const st = card.querySelector(".state");
+      st.textContent = dev.is_online ? "live" : offText(dev.seconds_since_last);
+      st.classList.toggle("off", !dev.is_online);
+    }
+  }
+  // load each device's latest values / waveforms
+  await Promise.all(devices.map(dev => {
+    const card = document.querySelector(`.card[data-id="${CSS.escape(dev.device_id)}"]`);
+    return card ? loadDevice(dev, card) : null;
+  }));
+}
+
+tick();
+setInterval(tick, 2000);
+</script>
+</body>
+</html>
