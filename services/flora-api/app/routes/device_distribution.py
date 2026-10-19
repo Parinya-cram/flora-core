@@ -18,10 +18,14 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from .fleet_control import require_admin
+# Admin check differs by surface: Canopy sessions (read_token) vs Leaf sessions (auth_leaf).
+if os.getenv("FLORA_API_MODE", "leaf").strip().lower() == "canopy":
+    from .fleet_control import require_admin as _require_admin
+else:
+    from .auth_leaf import admin_user as _require_admin
 
 router = APIRouter(prefix="/api/fleet/distribution", tags=["canopy-distribution"],
-                   dependencies=[Depends(require_admin)])
+                   dependencies=[Depends(_require_admin)])
 
 HABER_URL = os.getenv("FLORA_HABER_URL", "http://haber:8000").rstrip("/")
 # Release ids and component names are reflected into the Haber URL path; keep them strict.
