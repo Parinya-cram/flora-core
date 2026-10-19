@@ -1251,12 +1251,6 @@ def index():
     return FileResponse(Path(__file__).parent / "static" / "index.html")
 
 
-@app.get("/monitor")
-def monitor_page():
-    # Full-screen per-device monitor wall (waveforms + vitals grouped by connection).
-    return FileResponse(Path(__file__).parent / "static" / "monitor.html")
-
-
 @app.get("/login")
 def login_page(request: Request):
     if auth.resolve_user(request):

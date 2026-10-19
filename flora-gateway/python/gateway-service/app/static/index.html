@@ -139,7 +139,6 @@
   <nav id="tabs">
     <button data-tab="overview"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Overview</button>
     <button data-tab="devices"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Devices</button>
-    <button data-tab="monitor"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M5 13h3l2-5 3 10 2-5h4"/></svg>Monitor</button>
     <button data-tab="streams"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7c3 0 3 3 6 3s3-3 6-3 3 3 6 3M3 14c3 0 3 3 6 3s3-3 6-3 3 3 6 3"/></svg>Streams</button>
     <button data-tab="alerts"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2zM10 20a2 2 0 0 0 4 0"/></svg>Alerts<span class="badge" id="alert-badge" hidden></span></button>
   </nav>
@@ -191,9 +190,6 @@
     <p class="muted" style="margin-top:0">Live messages this device's parser publishes for the collector, exactly as sent. Collected since the gateway service started.</p>
     <div id="dm-payloads"></div>
   </section>
-</main>
-<main data-panel="monitor" hidden style="padding:0">
-  <iframe src="/monitor?embed=1" title="Monitor wall" style="width:100%;height:calc(100vh - 56px);border:0;display:block"></iframe>
 </main>
 <main data-panel="alerts" hidden>
   <section><div class="head"><h2>Active alerts</h2><span id="alert-delivery" class="muted"></span>
@@ -1031,7 +1027,6 @@ async function pushAlerts() {
 async function render() {
   try {
     if (tab === "overview") { loadSite().catch(() => {}); renderTimeline().catch((e) => console.error(e)); return await renderOverview(); }
-    if (tab === "monitor") return;   // the Monitor tab is a self-refreshing /monitor iframe
     if (tab === "streams") return await renderStreams();
     if (tab === "alerts") return await renderAlerts();
     if (tab === "users") return me.role === "admin" ? await renderUsers() : undefined;
