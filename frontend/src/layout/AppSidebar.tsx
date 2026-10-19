@@ -176,7 +176,7 @@ function SystemMenu({ collapsed, canSettings, activeView, sessionUser, navigate,
         {location ? <div className="truncate text-xs font-semibold">{location}</div> : null}
         <div className="truncate text-[11px] text-[var(--app-muted)]">{sessionUser?.name || sessionUser?.username}</div>
       </div>
-      {surface.code === "canopy" && canSettings ? <button role="menuitem" type="button" onClick={() => choose(() => navigate("distribution"))} className={itemClass}><span className="inline-flex h-5 w-5 items-center justify-center"><DistributionIcon /></span>{t("system.distribution")}</button> : null}
+      {(surface.code === "canopy" || surface.code === "leaf") && canSettings ? <button role="menuitem" type="button" onClick={() => choose(() => navigate("distribution"))} className={itemClass}><span className="inline-flex h-5 w-5 items-center justify-center"><DistributionIcon /></span>{t("system.distribution")}</button> : null}
       {canSettings ? <button role="menuitem" type="button" onClick={() => choose(() => navigate("master"))} className={itemClass}><span className="inline-flex h-5 w-5 items-center justify-center"><GearIcon /></span>{t("system.settings")}</button> : null}
       <button role="menuitem" type="button" onClick={() => choose(() => navigate("account"))} className={itemClass}><span className="inline-flex h-5 w-5 items-center justify-center"><NavIcon name="patient" /></span>{t("topbar.accountSettings")}</button>
       {onLogout ? <button role="menuitem" type="button" onClick={() => choose(onLogout)} className={`${itemClass} mt-1 text-rose-400 hover:bg-rose-500/10`}><span className="inline-flex h-5 w-5 items-center justify-center text-base">⏻</span>{t("topbar.signOut")}</button> : null}

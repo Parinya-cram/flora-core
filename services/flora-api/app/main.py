@@ -115,6 +115,7 @@ if API_MODE == "leaf" and os.getenv("FLORA_LEAF_WRITE_API", "false").lower() == 
     app.include_router(his_router)
     app.include_router(workstation_router)
     app.include_router(terminology_router)
+    app.include_router(device_distribution_router)  # Device Distribution console on the Leaf too (proxies to Haber)
 if API_MODE == "canopy":
     app.include_router(canopy_auth_router)
     app.include_router(canopy_preferences_router)

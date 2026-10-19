@@ -114,6 +114,9 @@ spec:
             - { name: FLORA_DEVICE_INGEST_ENABLED, value: "true" }
             - { name: FLORA_LEAF_SERVICE_SECRET, value: "admin" }
             - { name: FLORA_CANOPY_SYNC_URL, value: "http://sync-api.flora-canopy.svc.cluster.local:8000" }
+            - { name: FLORA_HABER_URL, value: "http://haber.flora-appliance.svc.cluster.local:8000" }
+            - { name: HABER_ADMIN_USERNAME, value: "admin" }
+            - { name: HABER_ADMIN_PASSWORD, value: "admin" }
             - { name: FLORA_SYNC_SHARED_SECRET, value: "admin" }
             - { name: FLORA_LEAF_ID, value: "leaf-or-01" }
             - { name: FLORA_HOSPITAL_ID, value: "hospital-01" }
