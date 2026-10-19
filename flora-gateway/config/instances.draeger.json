@@ -18,6 +18,15 @@
     "enabled": false
   },
   {
+    "device_id": "or-p2500-01",
+    "label": "OR-1 Dräger P2500 (LAN)",
+    "device_type": "draeger-p2500-lan",
+    "pod": "socket.p2500",
+    "leaf_id": "leaf-or-01",
+    "options": {"poll_interval_sec": 1},
+    "enabled": false
+  },
+  {
     "device_id": "or-vista-01",
     "label": "OR-1 Dräger Vista 120 S",
     "device_type": "draeger-vista-120s",

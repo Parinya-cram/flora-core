@@ -101,6 +101,27 @@
   fieldset.conn legend { font-size:12px; color:var(--muted); padding:0 4px }
   .formerror { color:var(--bad); min-height:18px; margin-top:10px; font-size:13px }
   .buttons { display:flex; gap:8px; justify-content:flex-end; margin-top:12px } .buttons button { padding:6px 14px; font-size:13px }
+  .live tr.dev { cursor:pointer } .live tr.dev:hover td { background:var(--chip) } .live tr.dev.sel td { background:var(--chip); box-shadow:inset 0 -1px 0 var(--accent) }
+  .live td { font-size:13px } .live .vals { max-width:520px }
+  .livecards { display:grid; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); gap:10px }
+  .livecard .conn { margin:6px 0 2px; font-size:12px; display:flex; gap:6px; flex-wrap:wrap; align-items:baseline }
+  .port { font:600 12px ui-monospace,Menlo,monospace; padding:1px 7px; border-radius:6px; background:var(--chip); border:1px solid var(--line) }
+  .port.lan { color:var(--series-in) } .port.com { color:var(--series-out) } .port.virt { color:var(--muted); border-style:dashed }
+  .livecard .vals { margin-top:6px; min-height:22px } .livecard .row b { font-size:14px }
+  div.livecard { cursor:pointer } div.livecard:focus-visible { outline:2px solid var(--accent) }
+  .livecard .acts { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; padding-top:8px; border-top:1px solid var(--line) }
+  .livecard .acts .danger { margin-left:auto } .livecard .meta { font-size:12px; color:var(--muted) }
+  .livecard .from { font-size:12px; display:flex; gap:4px; flex-wrap:wrap; align-items:baseline; margin-top:2px }
+  .src { font:12px ui-monospace,Menlo,monospace; padding:1px 7px; border-radius:6px; border:1px solid var(--line) }
+  .nograph { height:36px; margin-top:6px; display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--muted); border:1px dashed var(--line); border-radius:6px }
+  .src.ok { color:var(--ok); border-color:var(--ok) } .src.skip { color:var(--bad); border-color:var(--bad); text-decoration:line-through }
+  .chip.val b { font-weight:600 } .chip.val small { color:var(--muted) }
+  .state { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600 }
+  .state i { width:9px; height:9px; border-radius:50% } .state.live i { background:var(--st-ok) } .state.stale i { background:#fab219 }
+  .state.silent i { background:var(--st-down) } .state.off i { background:var(--st-stopped) }
+  .split { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px } @media (max-width:1100px) { .split { grid-template-columns:minmax(0,1fr) } }
+  .split h3 { font-size:12px; margin:0 0 8px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em }
+  .fields td { font-size:12px; padding:5px 8px } .fields td.num { font-variant-numeric:tabular-nums; white-space:nowrap } .arrow { color:var(--muted) }
   @media (max-width:760px) {
     body { display:block }
     aside { position:sticky; z-index:5; height:auto; flex-direction:row; align-items:center; gap:10px; padding:8px 16px;
@@ -171,7 +192,23 @@
   <section><h2>Logs</h2><div id="logs"></div></section>
 </main>
 <main data-panel="devices" hidden>
-  <section><div class="head"><h2>Installed devices</h2><button class="primary" onclick="editDevice()">Add device</button></div><div id="devices"></div></section>
+  <section><div class="head"><h2>Installed devices</h2><span id="live-note" class="muted" style="margin-left:auto"></span><button class="primary" onclick="editDevice()">Add device</button></div>
+    <div class="legend"><span><span class="state live"><i></i></span>receiving data</span><span><span class="state stale"><i></i></span>raw data in, nothing decoded</span>
+      <span><span class="state silent"><i></i></span>running, no data</span><span><span class="state off"><i></i></span>parser not started</span></div>
+    <div id="live-table"></div></section>
+  <section id="live-detail" hidden>
+    <div class="head" style="flex-wrap:wrap"><h2 id="ld-title"></h2>
+      <span style="margin-left:auto; display:flex; gap:6px; align-items:center">
+        <label class="muted">Raw view <select id="ld-view"><option value="text">text</option><option value="hex">hex</option></select></label>
+        <label class="muted"><select id="ld-dir"><option value="in">from device only</option><option value="">device + gateway replies</option></select></label>
+        <button id="ld-pause" onclick="toggleLivePause()">Pause</button>
+        <button onclick="closeLive()">Close</button></span></div>
+    <div id="ld-sub" class="muted" style="margin:-6px 0 12px"></div>
+    <div class="split">
+      <div><h3>Raw data received</h3><div id="ld-frames"></div></div>
+      <div><h3>Decoded values (raw field → Flora parameter)</h3><div id="ld-fields"></div></div>
+    </div></section>
+  <section id="disabled-section" hidden><div class="head"><h2>Disabled devices</h2><span class="muted" style="margin-left:auto">no parser running · not shown above</span></div><div id="devices"></div></section>
   <section id="device-monitor" hidden>
     <div class="head" style="flex-wrap:wrap"><h2 id="dm-title"></h2>
       <span style="margin-left:auto; display:flex; gap:6px; align-items:center; flex-wrap:wrap">
@@ -304,7 +341,7 @@ async function stopController(name) {
 async function signOut() { await fetch("api/auth/logout", { method: "POST" }); location.href = "/login"; }
 
 // ---------------------------------------------------------------- tabs
-let tab = (location.hash || "#overview").slice(1);
+let tab = (location.hash || "#overview").slice(1).replace(/^live$/, "devices");
 function show(name) {
   tab = document.querySelector(`main[data-panel="${name}"]`) ? name : "overview";
   history.replaceState(null, "", "#" + tab);
@@ -441,10 +478,21 @@ async function loadPods() {
 }
 
 // ---------------------------------------------------------------- devices
-function editDevice(device) {
+// Next free id from a source id: or-monitor-01 -> or-monitor-02 (keeps the zero padding), else <id>-copy, -copy-2, ...
+function nextDeviceId(id) {
+  const taken = new Set(cache.devices.map((d) => d.device_id)), m = id.match(/^(.*?)(\d+)$/);
+  if (m) for (let n = Number(m[2]) + 1; ; n++) { const c = m[1] + String(n).padStart(m[2].length, "0"); if (!taken.has(c)) return c; }
+  for (let n = 1; ; n++) { const c = n === 1 ? `${id}-copy` : `${id}-copy-${n}`; if (!taken.has(c)) return c; }
+}
+function editDevice(device, copyOf) {
   const isNew = !device;
   const typeOptions = cache.types.map((t) => [t.code, `${t.manufacturer_name ? t.manufacturer_name + " · " : ""}${t.label} (${t.code})`]);
-  openForm(isNew ? "Add device" : `Edit ${device.device_id}`, [
+  const start = copyOf ? {
+    ...copyOf, device_id: nextDeviceId(copyOf.device_id), label: copyOf.label ? `${copyOf.label} (copy)` : "",
+    serial_number: "", asset_tag: "", installed_at: Date.now(), enabled: true,
+    options: JSON.parse(JSON.stringify(copyOf.options || {})),
+  } : device || { enabled: true, options: {}, installed_at: Date.now() };
+  openForm(copyOf ? `Duplicate ${copyOf.device_id}` : isNew ? "Add device" : `Edit ${device.device_id}`, [
     { name: "device_id", label: "Device ID", disabled: !isNew, required: true, placeholder: "or2-monitor-01" },
     { name: "label", label: "Name", placeholder: "OR-2 patient monitor" },
     { name: "device_type", label: "Device type", type: "select", options: typeOptions, wide: true },
@@ -458,27 +506,27 @@ function editDevice(device) {
     { name: "options", label: "Parser options (JSON, overrides type defaults)", type: "json", wide: true },
     { name: "notes", label: "Notes", type: "textarea", wide: true },
     { name: "enabled", label: "Enabled (runs a parser container)", type: "check" },
-  ], device || { enabled: true, options: {}, installed_at: Date.now() }, async (values) => {
+  ], start, async (values) => {
     if (isNew) await api("api/instances", "POST", values);
     else { delete values.device_id; await api(`api/instances/${enc(device.device_id)}`, "PUT", values); }
   });
 }
 function renderDevices() {
+  // Enabled devices are the live cards above; this lists only the disabled ones.
   const typeBy = Object.fromEntries(cache.types.map((t) => [t.code, t]));
-  $("devices").innerHTML = cache.devices.length ? `<table><tr><th>Device</th><th>Type / manufacturer</th><th>Serial · asset</th><th>Station · location</th><th>Pod → Leaf</th><th>Installed</th><th>Parser</th><th></th></tr>${cache.devices.map((d) => {
+  const off = cache.devices.filter((d) => !d.enabled);
+  $("disabled-section").hidden = !off.length;
+  $("devices").innerHTML = off.length ? `<table><tr><th>Device</th><th>Type / manufacturer</th><th>Station · location</th><th>Pod → Leaf</th><th></th></tr>${off.map((d) => {
     const t = typeBy[d.device_type] || {};
     return `<tr><td><b>${esc(d.label || d.device_id)}</b><div class="muted"><code>${esc(d.device_id)}</code></div></td>
       <td>${esc(t.label || d.device_type)}<div class="muted">${esc(t.manufacturer_name || "—")}${t.model ? " · " + esc(t.model) : ""}</div></td>
-      <td>${esc(d.serial_number || "—")}<div class="muted">${esc(d.asset_tag || "")}</div></td>
       <td>${esc(d.station || "—")}<div class="muted">${esc(d.location || "")}</div></td>
       <td><code>${esc(d.pod)}</code><div>→ ${esc(d.leaf_id || "unassigned")}</div></td>
-      <td>${day(d.installed_at)}</td>
-      <td>${d.enabled ? "" : `<span class="warn">disabled</span> `}${d.container ? `<span class="${d.container.status === "running" ? "ok" : "warn"}">${esc(d.container.status)}</span>` : `<span class="muted">not started</span>`}</td>
-      <td class="actions"><button onclick="selectDevice('${esc(d.device_id)}')">Monitor</button>
-        <button onclick='editDevice(cache.devices.find((x) => x.device_id === ${JSON.stringify(d.device_id)}))'>Edit</button>
-        <button onclick="act('api/instances/${enc(d.device_id)}/enabled/${!d.enabled}')">${d.enabled ? "Disable" : "Enable"}</button>
+      <td class="actions"><button onclick='editDevice(cache.devices.find((x) => x.device_id === ${JSON.stringify(d.device_id)}))'>Edit</button>
+        <button onclick='editDevice(null, cache.devices.find((x) => x.device_id === ${JSON.stringify(d.device_id)}))'>Duplicate</button>
+        <button onclick="act('api/instances/${enc(d.device_id)}/enabled/true')">Enable</button>
         <button class="danger" onclick="act('api/instances/${enc(d.device_id)}', 'DELETE', 'Remove ${esc(d.device_id)} and stop its parser?')">Remove</button></td></tr>`;
-  }).join("")}</table>` : `<span class="muted">No devices installed yet.</span>`;
+  }).join("")}</table>` : "";
 }
 
 // ---------------------------------------------------------------- device types
@@ -1024,6 +1072,118 @@ async function pushAlerts() {
   render();
 }
 
+// ---------------------------------------------------------------- live data
+const live = { selected: null, paused: false, rows: [] };
+const LIVE_FRESH_MS = 60_000;
+const fmtVal = (v) => v === null || v === undefined ? "—" : typeof v === "number" ? String(Math.round(v * 1000) / 1000) : typeof v === "string" ? v : JSON.stringify(v);
+function liveState(d) {
+  const running = d.enabled && d.container?.status === "running", now = Date.now();
+  if (!running) return ["off", d.enabled ? "parser not running" : "disabled"];
+  if (d.last_value_ts && now - d.last_value_ts < LIVE_FRESH_MS) return ["live", "receiving"];
+  if (d.ingress.last_in_ts && now - d.ingress.last_in_ts < LIVE_FRESH_MS) return ["stale", "raw in, no values"];
+  return ["silent", "no data"];
+}
+function connBadge(c) {
+  if (!c) return '<span class="port virt">pod not in config</span>';
+  const host = location.hostname;
+  if (c.kind === "serial") {
+    if (c.virtual) return `<span class="port virt" title="virtual port inside the container">virtual ${esc(c.path)}</span><span class="muted">${esc(c.line)}</span>`;
+    return `<span class="port com" title="${esc(c.host_path)} on this gateway">${esc(c.port_name || c.host_path)}</span><span class="muted">${esc(c.host_path)} · ${esc(c.line)}</span>`;
+  }
+  if (c.kind === "socket" || c.kind === "webhook") {
+    if (c.remote_host) return `<span class="port lan" title="gateway connects out">TCP → ${esc(c.remote_host)}:${esc(c.container_port)}</span><span class="muted">outbound</span>`;
+    const proto = c.kind === "webhook" ? "HTTP" : (c.transport === "udp" ? "UDP" : "TCP");
+    const ports = c.host_ports?.length ? c.host_ports.map((p) => `${esc(host)}:${esc(p)}`).join(", ") : `not published (container :${esc(c.container_port)})`;
+    return `<span class="port lan" title="LAN port on this gateway">${proto} ${ports}</span><span class="muted">${esc(c.framing || "")}</span>`;
+  }
+  return `<span class="port lan">polls ${esc(c.url || "")}</span>`;
+}
+function deviceActions(id, enabled) {
+  const q = JSON.stringify(id);
+  return `<div class="acts"><button onclick='selectDevice(${q})'>Monitor</button>
+    <button onclick='editDevice(cache.devices.find((x) => x.device_id === ${q}))'>Edit</button>
+    <button title="New device with these settings" onclick='editDevice(null, cache.devices.find((x) => x.device_id === ${q}))'>Duplicate</button>
+    <button onclick="act('api/instances/${enc(id)}/enabled/${!enabled}')">${enabled ? "Disable" : "Enable"}</button>
+    <button class="danger" onclick="act('api/instances/${enc(id)}', 'DELETE', 'Remove ${esc(id)} and stop its parser?')">Remove</button></div>`;
+}
+function graphBlock(d) {
+  const g = d.graph, when = `raw ${esc(ago(d.ingress.last_in_ts))} · value ${esc(ago(d.last_value_ts))}`;
+  if (g.mode === "disabled") return `<div class="nograph">disabled · no graph</div>`;
+  if (g.mode === "no_source_ip") return `<div class="nograph" title="Parser options: {&quot;source_ip&quot;: &quot;&lt;IP&gt;&quot;}">set source_ip to show this device's graph</div><div class="nums">${when}</div>`;
+  const counts = g.mode === "source_ip"
+    ? `${g.frames_in} in from ${esc(d.source_ip)} · ${fmtBytes(g.bytes_in)}`
+    : `${d.ingress.frames_in} in · ${d.ingress.frames_out} out · ${fmtBytes(d.ingress.bytes_in)}`;
+  return `${sparkline(bucket(g.series, 10))}<div class="nums">${counts} · ${when}</div>`;
+}
+function sourcesLine(d) {
+  if (!d.connection || !["socket", "webhook"].includes(d.connection.kind)) return "";
+  const filter = d.source_ip ? `<span class="muted">accepts only <code>${esc(d.source_ip)}</code> ·</span>` : "";
+  if (!d.sources.length) return `<div class="from">${filter}<span class="muted">from: no sender yet</span></div>`;
+  const chips = d.sources.slice(0, 4).map((s) => {
+    const used = !d.source_ip || s.ip === d.source_ip;
+    const tip = `${s.frames} frames · last ${ago(s.last_ts)}${s.peer && !s.peer.startsWith(s.ip) ? ` · via ${s.peer}` : ""}${used ? "" : " · ignored: not this device's source_ip"}`;
+    return `<span class="src ${used ? "ok" : "skip"}" title="${esc(tip)}">${esc(s.ip)}</span><span class="muted">${esc(ago(s.last_ts))}</span>`;
+  }).join(" ");
+  return `<div class="from">${filter}<span class="muted">from:</span> ${chips}</div>`;
+}
+async function renderLive() {
+  const data = await get("api/live");
+  live.rows = data.rows;
+  $("live-note").textContent = `values from the last ${Math.round(data.window_ms / 60000)} min · refreshes every 2 s${live.paused ? " (paused)" : ""}`;
+  const groups = {}, shown = data.rows.filter((d) => d.enabled);
+  for (const d of shown) (groups[d.controller] ||= []).push(d);
+  $("live-table").innerHTML = data.rows.length ? Object.entries(groups).map(([controller, list]) => `<div class="group"><h3>${esc(controller)}-controller</h3>
+    <div class="livecards">${list.map((d) => {
+      const [cls, text] = liveState(d);
+      const vals = d.parameters.map((p) => `<span class="chip val" title="${esc(p.raw_code ?? "")} · ${esc(ago(p.system_ts))}"><small>${esc(p.ivy_param)}</small> <b>${esc(fmtVal(p.value))}</b> <small>${esc(p.unit ?? "")}</small></span>`).join("");
+      const info = cache.devices.find((x) => x.device_id === d.device_id) || {};
+      const where = [info.station, info.location].filter(Boolean).join(" · "), asset = [info.serial_number, info.asset_tag].filter(Boolean).join(" · ");
+      return `<div class="stream livecard ${live.selected === d.device_id ? "sel" : ""}" data-id="${esc(d.device_id)}" tabindex="0" role="button" aria-label="Show raw and decoded data of ${esc(d.label || d.device_id)}">
+        <div class="row"><b>${esc(d.label || d.device_id)}</b><span class="muted"><span class="state ${cls}"><i></i>${esc(text)}</span></span></div>
+        <div class="nums">${esc(d.device_id)} · ${esc(d.device_type)}</div>
+        <div class="conn">${connBadge(d.connection)}<span class="muted"><code>${esc(d.pod)}</code> → ${esc(d.leaf_id || "unassigned")}</span></div>
+        ${sourcesLine(d)}
+        ${graphBlock(d)}
+        <div class="vals">${vals || '<span class="muted" style="font-size:12px">no values in the last 10 min</span>'}</div>
+        ${where || asset || info.installed_at ? `<div class="meta">${esc(where || "")}${asset ? ` · ${esc(asset)}` : ""}${info.installed_at ? ` · installed ${day(info.installed_at)}` : ""}</div>` : ""}
+        ${deviceActions(d.device_id, true)}</div>`;
+    }).join("")}</div></div>`).join("") : `<p class="muted">${data.rows.length ? "No enabled devices — enable one below." : "No devices installed yet."}</p>`;
+  if (live.selected) await renderLiveDetail();
+}
+async function renderLiveDetail() {
+  const data = await get(`api/live/${enc(live.selected)}`), d = data.device;
+  $("live-detail").hidden = false;
+  $("ld-title").textContent = d.label || d.device_id;
+  const source = d.options?.source_ip ? ` · only frames from ${d.options.source_ip}` : "";
+  $("ld-sub").textContent = `${d.device_type} · ${d.pod} → ${d.leaf_id || "unassigned"}${source}`;
+  const view = $("ld-view").value, dir = $("ld-dir").value;
+  const frames = data.frames.filter((f) => !dir || f.direction === dir).slice(0, 25);
+  $("ld-frames").innerHTML = frames.length ? `<table class="frames">${frames.map((f) => {
+    const body = view === "hex" ? showHex(f) : showText(f) ?? showHex(f);
+    const peer = f.meta?.source_ip ? ` · ${esc(f.meta.source_ip)}` : "";
+    return `<tr><td class="muted">${new Date(f.ts).toLocaleTimeString()}<br><span class="key ${f.direction}"></span>${f.direction} · ${fmtBytes(f.size)}${peer}</td>
+      <td class="preview" style="white-space:normal"><pre>${body}${f.truncated ? '\n<span class="muted">… truncated</span>' : ""}</pre></td></tr>`;
+  }).join("")}</table>` : `<p class="muted">No raw frames since gateway-service started${data.monitor?.state && data.monitor.state !== "running" ? ` (stream monitor ${esc(data.monitor.state)})` : ""}.</p>`;
+  $("ld-fields").innerHTML = data.fields.length ? `<table class="fields"><tr><th>Raw field</th><th>Raw value</th><th></th><th>Flora parameter</th><th>Value</th><th>When</th></tr>${data.fields.map((f) => `<tr>
+      <td><code>${esc(f.raw_code ?? "—")}</code>${f.name ? `<br><span class="muted">${esc(f.name)}</span>` : ""}</td>
+      <td class="num">${f.raw_value !== undefined ? `<code>${esc(fmtVal(f.raw_value))}</code>` : '<span class="muted">—</span>'}${f.device_unit ? ` <span class="muted">${esc(f.device_unit)}</span>` : ""}</td>
+      <td class="arrow">→</td>
+      <td>${f.ivy_param ? `<b>${esc(f.ivy_param)}</b>` : '<span class="muted">not mapped</span>'}</td>
+      <td class="num">${f.value !== undefined ? `<b>${esc(fmtVal(f.value))}</b> <span class="muted">${esc(f.unit ?? "")}</span>` : '<span class="muted">—</span>'}</td>
+      <td class="muted">${esc(ago(f.value_ts ?? f.system_ts))}</td></tr>`).join("")}</table>` : '<p class="muted">No decoded values in the last 10 minutes.</p>';
+}
+function toggleLivePause() { live.paused = !live.paused; $("ld-pause").textContent = live.paused ? "Resume" : "Pause"; renderLive().catch(() => {}); }
+function closeLive() { live.selected = null; $("live-detail").hidden = true; renderLive().catch(() => {}); }
+$("live-table").addEventListener("click", (e) => {
+  if (e.target.closest("button")) return;
+  const row = e.target.closest("[data-id]");
+  if (!row) return;
+  live.selected = row.dataset.id;
+  renderLive().then(() => $("live-detail").scrollIntoView({ behavior: "smooth", block: "start" })).catch(() => {});
+});
+$("live-table").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches("div.livecard")) { e.preventDefault(); e.target.click(); } });
+["ld-view", "ld-dir"].forEach((id) => $(id).addEventListener("change", () => live.selected && renderLiveDetail().catch(() => {})));
+
 async function render() {
   try {
     if (tab === "overview") { loadSite().catch(() => {}); renderTimeline().catch((e) => console.error(e)); return await renderOverview(); }
@@ -1032,6 +1192,7 @@ async function render() {
     if (tab === "users") return me.role === "admin" ? await renderUsers() : undefined;
     await loadRegistry();
     ({ devices: renderDevices, types: renderTypes, manufacturers: renderManufacturers })[tab]();
+    if (tab === "devices") await renderLive();
   } catch (error) { if (error.message !== "sign in required") console.error(error); }
 }
 
@@ -1046,6 +1207,7 @@ loadRegistry().catch(() => {});
 show(tab);
 setInterval(() => tab === "overview" && !dialog.open && render(), 5000);
 setInterval(() => tab === "streams" && !dialog.open && render(), 2000);
+setInterval(() => tab === "devices" && !dialog.open && !live.paused && renderLive().catch(() => {}), 2000);
 setInterval(() => tab === "alerts" ? !dialog.open && render() : loadAlertBadge().catch(() => {}), 10000);
 loadAlertBadge().catch(() => {});
 setInterval(() => tab === "devices" && dmon.selected && !dialog.open && renderDeviceMonitor().catch(() => {}), 4000);

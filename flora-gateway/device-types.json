@@ -340,5 +340,31 @@
       "auto_ack": false
     },
     "version": "1"
+  },
+  {
+    "code": "draeger-p2500-lan",
+    "label": "Dräger P2500 (MEDIBUS.X over LAN, TCP)",
+    "category": "anesthesia_machine",
+    "manufacturer": "draeger",
+    "model": "P2500",
+    "protocol": "draeger-medibus",
+    "controller": "socket",
+    "parser": "medibus",
+    "image": "parser",
+    "default_options": {
+      "poll_interval_sec": 1,
+      "response_timeout_sec": 3,
+      "session_timeout_sec": 10
+    },
+    "connection_defaults": {
+      "transport": "tcp",
+      "framing": "raw",
+      "auto_ack": false,
+      "connect_timeout_ms": 3000,
+      "read_timeout_ms": 15000,
+      "reconnect_ms": 3000,
+      "max_frame_bytes": 16384
+    },
+    "version": "1"
   }
 ]

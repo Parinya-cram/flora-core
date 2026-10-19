@@ -10,6 +10,7 @@ import asyncio
 import re
 import json
 import logging
+import time
 import tomllib
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -953,6 +954,194 @@ def device_payloads(device_id: str, after: int = 0, limit: int = 100):
     live = monitor.devices.get(device_id)
     rows = [row for row in (live.recent if live else []) if row["id"] > after][-max(1, min(limit, 300)):]
     return {"rows": rows[::-1], "monitor": monitor.status}
+
+
+# ------------------------------------------------------------------ live data (per device: raw in -> decoded out)
+
+LIVE_WINDOW_MS = 10 * 60_000     # "latest value" lookback for the live table
+
+
+def latest_parameters(device_ids: list[str], since: int) -> dict[str, list[dict[str, Any]]]:
+    rows = db.fetch_all(
+        """SELECT DISTINCT ON (device_id, ivy_param) device_id, ivy_param, raw_code, value, unit, system_ts
+           FROM gateway_observation WHERE device_id = ANY(%s) AND system_ts >= %s
+           ORDER BY device_id, ivy_param, system_ts DESC""", (device_ids, since))
+    result: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        result.setdefault(row["device_id"], []).append(row)
+    return result
+
+
+SERIAL_NAMES = (("/dev/ttyS", "COM", 1), ("/dev/ttyUSB", "USB-serial ", 0), ("/dev/ttyACM", "USB-ACM ", 0))
+
+
+def serial_port_name(host_path: str | None) -> str | None:
+    """/dev/ttyS0 -> COM1; /dev/ttyUSB0 -> USB-serial 0; virtual ttyV* ports have no physical name."""
+    for prefix, label, base in SERIAL_NAMES:
+        if host_path and host_path.startswith(prefix) and host_path[len(prefix):].isdigit():
+            return f"{label}{int(host_path[len(prefix):]) + base}"
+    return None
+
+
+def pod_connections() -> dict[str, dict[str, Any]]:
+    """Where each ingress pod meets the outside: COM/USB port, LAN port on this host, or the URL it polls."""
+    try:
+        config = read_config()
+    except Exception:
+        return {}
+    result: dict[str, dict[str, Any]] = {}
+    for service, section in settings.INGRESS.items():
+        pods = config.get(section, {}).get("pods", [])
+        if not pods:
+            continue
+        wiring = docker_ops.service_wiring(service)
+        for pod in pods:
+            key, info = f"{section}.{pod['id']}", {"kind": section, "enabled": pod.get("enabled", True)}
+            if section == "serial":
+                path = pod.get("path")
+                host = wiring["devices"].get(path)
+                info.update(path=path, host_path=host, port_name=serial_port_name(host),
+                            virtual=host is None, line=f"{pod.get('baud', 9600)} {pod.get('data_bits', 8)}"
+                            f"{str(pod.get('parity', 'none'))[0].upper()}{pod.get('stop_bits', 1)}")
+            elif section in ("socket", "webhook"):
+                transport = pod.get("transport", "tcp" if section == "socket" else "http")
+                proto = "udp" if transport == "udp" else "tcp"
+                info.update(transport=transport, container_port=pod.get("port"), framing=pod.get("framing"),
+                            remote_host=pod.get("remote_host"),
+                            host_ports=wiring["ports"].get(f"{pod.get('port')}/{proto}", []))
+            else:
+                info.update(url=pod.get("url"), interval_ms=pod.get("interval_ms"))
+            result[key] = info
+    return result
+
+
+def frame_sources(frames) -> list[dict[str, Any]]:
+    """Senders seen in a pod's recent inbound frames (monitor IP for relayed IACS), newest first."""
+    sources: dict[str, dict[str, Any]] = {}
+    for frame in frames:
+        ip = frame["meta"].get("source_ip") if frame["direction"] == "in" else None
+        if not ip:
+            continue
+        entry = sources.setdefault(ip, {"ip": ip, "frames": 0, "last_ts": 0, "peer": None})
+        entry["frames"] += 1
+        if frame["ts"] >= entry["last_ts"]:
+            entry.update(last_ts=frame["ts"], peer=frame["meta"].get("peer"))
+    return sorted(sources.values(), key=lambda s: s["last_ts"], reverse=True)
+
+
+def frames_series(frames, window: int = 300) -> list[list[int]]:
+    """Dense per-second [sec, frames_in, bytes_in, frames_out, bytes_out] built from individual frames."""
+    end = int(time.time())
+    start = end - window
+    seconds = {sec: [sec, 0, 0, 0, 0] for sec in range(start, end)}
+    for frame in frames:
+        row = seconds.get(int(frame["ts"] // 1000))
+        if row:
+            offset = 1 if frame["direction"] == "in" else 3
+            row[offset] += 1
+            row[offset + 1] += frame["size"]
+    return list(seconds.values())
+
+
+def device_graph(device: dict[str, Any], connection: dict[str, Any] | None, stream) -> dict[str, Any]:
+    """What a live card charts: nothing for a disabled device; on a LAN pod only the frames from the
+    device's source_ip (none without one, since the pod's traffic may be other monitors'); else the pod."""
+    if not device.get("enabled"):
+        return {"mode": "disabled", "series": []}
+    if connection and connection["kind"] in ("socket", "webhook"):
+        source = (device.get("options") or {}).get("source_ip")
+        if not source:
+            return {"mode": "no_source_ip", "series": []}
+        frames = [f for f in (stream.recent if stream else [])
+                  if f["direction"] == "in" and f["meta"].get("source_ip") == source]
+        return {"mode": "source_ip", "series": frames_series(frames), "frames_in": len(frames),
+                "bytes_in": sum(f["size"] for f in frames)}
+    return {"mode": "pod", "series": stream.series(300) if stream else []}
+
+
+def own_frames(device: dict[str, Any], frames) -> list[dict[str, Any]]:
+    """Ingress frames of the device's pod; on a shared pod only those from its source_ip."""
+    source = (device.get("options") or {}).get("source_ip")
+    return [frame for frame in frames
+            if not source or frame["direction"] != "in" or frame["meta"].get("source_ip") in (None, source)]
+
+
+@app.get("/api/live")
+def live_devices():
+    """Every installed device with its parser, ingress traffic and latest decoded values."""
+    states = docker_ops.parser_states()
+    devices = [db.instance_row(row) for row in db.fetch_all("SELECT * FROM gateway_device_instance ORDER BY device_id")]
+    now = db.now_ms()
+    latest = latest_parameters([d["device_id"] for d in devices], now - LIVE_WINDOW_MS) if devices else {}
+    connections = pod_connections()
+    rows = []
+    for device in devices:
+        stream = monitor.pods.get(device["pod"])
+        frames = own_frames(device, stream.recent) if stream else []
+        last_in = max((f["ts"] for f in frames if f["direction"] == "in"), default=None)
+        output = monitor.devices.get(device["device_id"])
+        params = latest.get(device["device_id"], [])
+        last_value = max((p["system_ts"] for p in params), default=None)
+        rows.append({
+            **{key: device.get(key) for key in ("device_id", "label", "device_type", "pod", "leaf_id", "enabled")},
+            "container": states.get(device["device_id"]),
+            "controller": device["pod"].split(".", 1)[0],
+            "connection": connections.get(device["pod"]),
+            "graph": device_graph(device, connections.get(device["pod"]), stream),
+            "source_ip": (device.get("options") or {}).get("source_ip"),
+            "sources": frame_sources(stream.recent) if stream else [],
+            "ingress": {"frames_in": stream.totals["frames_in"] if stream else 0,
+                        "bytes_in": stream.totals["bytes_in"] if stream else 0,
+                        "frames_out": stream.totals["frames_out"] if stream else 0,
+                        "rate": stream.rate() if stream else None, "last_in_ts": last_in},
+            "output": {"totals": output.totals if output else {"obs": 0, "measurement": 0},
+                       "last_ts": output.last_ts if output else None},
+            "last_value_ts": last_value,
+            "parameters": params,
+        })
+    return {"rows": rows, "now": now, "window_ms": LIVE_WINDOW_MS, "monitor": monitor.status}
+
+
+@app.get("/api/live/{device_id}")
+def live_device(device_id: str, limit: int = 40):
+    """Raw frames the device sent (and the gateway's replies) next to what its parser decoded from them."""
+    row = db.fetch_one("SELECT * FROM gateway_device_instance WHERE device_id=%s", (device_id,))
+    if row is None:
+        raise HTTPException(404, "device not found")
+    device = db.instance_row(row)
+    limit = max(1, min(limit, 200))
+    stream = monitor.pods.get(device["pod"])
+    frames = own_frames(device, stream.recent)[-limit:][::-1] if stream else []
+    # Decoded rows come from the database so they survive a gateway-service restart; newest first.
+    since = db.now_ms() - LIVE_WINDOW_MS
+    observations = db.fetch_all(
+        """SELECT raw_code, ivy_param, value, unit, system_ts FROM gateway_observation
+           WHERE device_id=%s AND system_ts >= %s ORDER BY system_ts DESC, id DESC LIMIT %s""",
+        (device_id, since, limit * 10))
+    try:
+        measurements = db.fetch_all(
+            """SELECT raw_code, raw_value, value, definition, mapping, system_ts FROM gateway_measurement
+               WHERE device_id=%s AND system_ts >= %s ORDER BY system_ts DESC, id DESC LIMIT %s""",
+            (device_id, since, limit * 10))
+    except Exception:  # gateways created before gateway_measurement existed
+        measurements = []
+    # One row per source field: the value as the device sent it -> the Flora parameter it became.
+    fields: dict[str, dict[str, Any]] = {}
+    for m in measurements:
+        definition, mapping = m["definition"] or {}, m["mapping"] or {}
+        fields.setdefault(m["raw_code"], {"raw_code": m["raw_code"], "raw_value": m["raw_value"],
+                                          "device_value": m["value"], "name": definition.get("name"),
+                                          "device_unit": definition.get("unit"),
+                                          "ivy_param": mapping.get("ivy_param"), "system_ts": m["system_ts"]})
+    for o in observations:
+        field = fields.setdefault(o["raw_code"] or o["ivy_param"], {"raw_code": o["raw_code"], "system_ts": o["system_ts"]})
+        if "value" not in field:
+            field.update(ivy_param=o["ivy_param"], value=o["value"], unit=o["unit"], value_ts=o["system_ts"])
+    return {"device": {key: device.get(key) for key in ("device_id", "label", "device_type", "pod", "leaf_id",
+                                                         "enabled", "options")},
+            "frames": frames,
+            "fields": sorted(fields.values(), key=lambda f: (f.get("ivy_param") is None, str(f.get("raw_code")))),
+            "observations": observations[:limit], "now": db.now_ms(), "monitor": monitor.status}
 
 
 # ------------------------------------------------------------------ device commands

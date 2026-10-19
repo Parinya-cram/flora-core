@@ -1,0 +1,813 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>คู่มือการติดตั้งและใช้งาน Flora Gateway</title>
+<style>
+@font-face { font-family: "FloraLatin"; src: url("fonts/NotoSans-Regular.ttf"); font-weight: 400; font-style: normal; }
+@font-face { font-family: "FloraLatin"; src: url("fonts/NotoSans-Bold.ttf"); font-weight: 600 900; font-style: normal; }
+@font-face { font-family: "FloraLatin"; src: url("fonts/NotoSans-Italic.ttf"); font-style: italic; }
+@font-face { font-family: "FloraThai"; src: url("fonts/NotoSansThai-Regular.ttf"); font-weight: 400; }
+@font-face { font-family: "FloraThai"; src: url("fonts/NotoSansThai-Bold.ttf"); font-weight: 600 900; }
+@font-face { font-family: "FloraMono"; src: url("fonts/DejaVuSansMono.ttf"); }
+@font-face { font-family: "FloraMonoThai"; src: url("fonts/TlwgMono.ttf"); }
+@page {
+  size: A4;
+  margin: 22mm 18mm 20mm 18mm;
+  @bottom-center { content: "หน้า " counter(page) " / " counter(pages); font-family: "FloraLatin", "FloraThai", sans-serif; font-size: 8.5pt; color: #64748b; }
+  @top-right { content: string(chapter); font-family: "FloraLatin", "FloraThai", sans-serif; font-size: 8.5pt; color: #64748b; }
+  @top-left { content: "Flora Gateway · คู่มือติดตั้งและใช้งาน"; font-family: "FloraLatin", "FloraThai", sans-serif; font-size: 8.5pt; color: #94a3b8; }
+}
+@page cover { margin: 0; @bottom-center { content: none; } @top-right { content: none; } @top-left { content: none; } }
+@page toc { @top-right { content: "สารบัญ"; } }
+
+:root { --ink: #0f172a; --muted: #475569; --line: #e2e8f0; --brand: #0e7490; --brand2: #ea580c; --soft: #f1f5f9; }
+html { font-family: "FloraLatin", "FloraThai", sans-serif; font-size: 10.2pt; color: var(--ink); line-height: 1.62; }
+body { margin: 0; }
+h1, h2, h3, h4 { font-family: "FloraLatin", "FloraThai", sans-serif; line-height: 1.3; color: #0b3b4a; page-break-after: avoid; }
+h1 { string-set: chapter content(); font-size: 19pt; margin: 0 0 10pt; padding-bottom: 6pt; border-bottom: 2.5pt solid var(--brand); page-break-before: always; }
+h1 .num { color: var(--brand2); margin-right: 6pt; }
+h2 { font-size: 13.2pt; margin: 16pt 0 6pt; color: var(--brand); }
+h3 { font-size: 11.2pt; margin: 12pt 0 4pt; }
+p { margin: 0 0 6pt; }
+ul, ol { margin: 2pt 0 8pt; padding-left: 16pt; }
+li { margin-bottom: 2pt; }
+code, pre, .mono { font-family: "FloraMono", "FloraMonoThai", monospace; }
+code { font-size: 8.6pt; background: var(--soft); padding: 0.5pt 3pt; border-radius: 2pt; color: #9a3412; }
+pre { font-size: 8.3pt; line-height: 1.45; background: #0f172a; color: #e2e8f0; padding: 7pt 9pt; border-radius: 4pt; white-space: pre-wrap; word-break: break-all; page-break-inside: avoid; margin: 4pt 0 9pt; }
+pre .c { color: #94a3b8; font-family: "FloraLatin", "FloraThai", sans-serif; font-size: 8pt; }
+table { width: 100%; border-collapse: collapse; margin: 4pt 0 10pt; font-size: 9.2pt; page-break-inside: auto; }
+th { background: #0b3b4a; color: white; text-align: left; padding: 4pt 6pt; font-weight: 600; }
+td { border-bottom: 0.6pt solid var(--line); padding: 3.5pt 6pt; vertical-align: top; }
+tr:nth-child(even) td { background: #f8fafc; }
+tr { page-break-inside: avoid; }
+.note, .warn, .tip { border-radius: 4pt; padding: 6pt 9pt; margin: 6pt 0 10pt; page-break-inside: avoid; font-size: 9.6pt; }
+.note { background: #ecfeff; border-left: 3pt solid var(--brand); }
+.warn { background: #fff7ed; border-left: 3pt solid var(--brand2); }
+.tip { background: #f0fdf4; border-left: 3pt solid #16a34a; }
+.note b:first-child, .warn b:first-child, .tip b:first-child { display: block; margin-bottom: 1pt; }
+.step { counter-increment: step; position: relative; padding-left: 22pt; margin: 6pt 0; }
+.step::before { content: counter(step); position: absolute; left: 0; top: 0; width: 15pt; height: 15pt; border-radius: 50%; background: var(--brand); color: white; font-size: 8.5pt; text-align: center; line-height: 15pt; font-weight: 700; }
+.steps { counter-reset: step; }
+.small { font-size: 8.8pt; color: var(--muted); }
+.kbd { border: 0.6pt solid #94a3b8; border-radius: 2pt; padding: 0 3pt; font-size: 8.6pt; background: white; }
+figure { margin: 6pt 0 12pt; page-break-inside: avoid; text-align: center; }
+figcaption { font-size: 8.8pt; color: var(--muted); margin-top: 3pt; }
+
+/* cover */
+.cover { page: cover; height: 297mm; position: relative; background: linear-gradient(160deg, #0b3b4a 0%, #0e7490 55%, #155e75 100%); color: white; }
+.cover .inner { position: absolute; left: 22mm; right: 22mm; top: 70mm; }
+.cover .tag { font-size: 10pt; letter-spacing: 3pt; opacity: .8; }
+.cover .title { font-size: 34pt; font-weight: 700; line-height: 1.15; margin: 8pt 0 6pt; }
+.cover .sub { font-size: 15pt; opacity: .92; }
+.cover .bar { width: 50mm; height: 3pt; background: #fb923c; margin: 16pt 0; }
+.cover .meta { position: absolute; left: 22mm; bottom: 26mm; font-size: 10pt; opacity: .9; line-height: 1.8; }
+.cover .meta b { color: #fed7aa; }
+
+/* toc */
+.toc { page: toc; }
+.toc h1 { page-break-before: avoid; string-set: none; }
+.toc ol { list-style: none; padding: 0; }
+.toc li { margin: 0; }
+.toc a { color: var(--ink); text-decoration: none; display: block; padding: 2.2pt 0; border-bottom: 0.5pt dotted #cbd5e1; }
+.toc a::after { content: target-counter(attr(href), page); float: right; color: var(--brand); }
+.toc .l1 > a { font-weight: 600; font-size: 10.6pt; margin-top: 4pt; }
+.toc .l2 a { padding-left: 14pt; font-size: 9.4pt; color: #334155; }
+a { color: var(--brand); }
+</style>
+</head>
+<body>
+
+<!-- ============================== COVER ============================== -->
+<section class="cover">
+  <div class="inner">
+    <div class="tag">ESM SOLUTION · FLORA PLATFORM</div>
+    <div class="title">คู่มือการติดตั้งและใช้งาน<br>Flora Gateway</div>
+    <div class="sub">ระบบเชื่อมต่อเครื่องมือแพทย์ข้างเตียง สู่ Flora Leaf และ Canopy</div>
+    <div class="bar"></div>
+    <div class="sub" style="font-size:11.5pt">ครอบคลุม: การเตรียมเครื่อง · Docker Engine · การตั้งค่า · การเชื่อม Canopy/Leaf<br>การเพิ่มอุปกรณ์ (RS-232 / TCP / HL7) · ตัวจำลองทดสอบ · การดูแลระบบ · การแก้ปัญหา</div>
+  </div>
+  <div class="meta">
+    <b>เครื่องอ้างอิง:</b> Gateway 172.22.1.233 (Ubuntu 24.04, Docker Engine)<br>
+    <b>Canopy / Root / Leaf:</b> 172.22.1.151<br>
+    <b>ฉบับ:</b> ตุลาคม 2026 · โฟลเดอร์ระบบ <span class="mono">/home/esm/flora/flora-core/flora-gateway</span>
+  </div>
+</section>
+
+<!-- ============================== TOC ============================== -->
+<section class="toc">
+<h1>สารบัญ</h1>
+<ol>
+  <li class="l1"><a href="#ch1">1. ภาพรวมของ Flora Gateway</a>
+    <ol><li class="l2"><a href="#ch1-1">1.1 Gateway ทำหน้าที่อะไร</a></li><li class="l2"><a href="#ch1-2">1.2 การไหลของข้อมูล</a></li><li class="l2"><a href="#ch1-3">1.3 แผนผังเครือข่ายของไซต์</a></li></ol></li>
+  <li class="l1"><a href="#ch2">2. ความต้องการของระบบ</a></li>
+  <li class="l1"><a href="#ch3">3. การติดตั้งทีละขั้นตอน</a>
+    <ol><li class="l2"><a href="#ch3-1">3.1 เตรียม Ubuntu</a></li><li class="l2"><a href="#ch3-2">3.2 ติดตั้ง Docker Engine</a></li><li class="l2"><a href="#ch3-3">3.3 ดึงซอร์สโค้ด</a></li><li class="l2"><a href="#ch3-4">3.4 ไฟล์ตั้งค่า .env</a></li><li class="l2"><a href="#ch3-5">3.5 ไฟล์ตั้งค่า pod ของไซต์</a></li><li class="l2"><a href="#ch3-6">3.6 Build และเริ่มระบบ</a></li><li class="l2"><a href="#ch3-7">3.7 ตรวจสอบหลังติดตั้ง</a></li></ol></li>
+  <li class="l1"><a href="#ch4">4. ให้ระบบเริ่มเองอัตโนมัติ</a></li>
+  <li class="l1"><a href="#ch5">5. การเชื่อมต่อ Canopy และไลเซนส์</a></li>
+  <li class="l1"><a href="#ch6">6. การใช้งานหน้า Admin</a>
+    <ol><li class="l2"><a href="#ch6-1">6.1 เข้าสู่ระบบ</a></li><li class="l2"><a href="#ch6-2">6.2 Local templates</a></li><li class="l2"><a href="#ch6-3">6.3 Installed devices</a></li><li class="l2"><a href="#ch6-4">6.4 หน้า Monitor ของ pod</a></li><li class="l2"><a href="#ch6-5">6.5 Alerts</a></li></ol></li>
+  <li class="l1"><a href="#ch7">7. การเพิ่มอุปกรณ์แต่ละประเภท</a>
+    <ol><li class="l2"><a href="#ch7-1">7.1 แนวคิด pod / device / parser</a></li><li class="l2"><a href="#ch7-2">7.2 RS-232 (COM1) map เข้า container</a></li><li class="l2"><a href="#ch7-3">7.3 Dräger MEDIBUS.X</a></li><li class="l2"><a href="#ch7-4">7.4 Temperature / CVP module</a></li><li class="l2"><a href="#ch7-5">7.5 Dräger Vista 120 S (TCP)</a></li><li class="l2"><a href="#ch7-6">7.6 HL7 patient monitor</a></li></ol></li>
+  <li class="l1"><a href="#ch8">8. การเชื่อมต่อ Flora Leaf</a></li>
+  <li class="l1"><a href="#ch9">9. ตัวจำลองสำหรับทดสอบ</a></li>
+  <li class="l1"><a href="#ch10">10. การดูแลระบบประจำวัน</a>
+    <ol><li class="l2"><a href="#ch10-1">10.1 ตรวจสถานะ</a></li><li class="l2"><a href="#ch10-2">10.2 Log การทำงาน (flora-watch)</a></li><li class="l2"><a href="#ch10-3">10.3 สำรองและกู้คืนฐานข้อมูล</a></li><li class="l2"><a href="#ch10-4">10.4 อัปเดตโค้ดและ build ใหม่</a></li><li class="l2"><a href="#ch10-5">10.5 Portainer</a></li></ol></li>
+  <li class="l1"><a href="#ch11">11. การแก้ปัญหา (Troubleshooting)</a></li>
+  <li class="l1"><a href="#ch12">12. ภาคผนวก</a>
+    <ol><li class="l2"><a href="#ch12-1">12.1 Container ทั้งหมดและหน้าที่</a></li><li class="l2"><a href="#ch12-2">12.2 พอร์ตทั้งหมด</a></li><li class="l2"><a href="#ch12-3">12.3 ตำแหน่งไฟล์สำคัญ</a></li><li class="l2"><a href="#ch12-4">12.4 Kafka topics</a></li><li class="l2"><a href="#ch12-5">12.5 Checklist การติดตั้ง</a></li><li class="l2"><a href="#ch12-6">12.6 ย้ายจาก Docker Desktop มา Docker Engine</a></li></ol></li>
+</ol>
+</section>
+
+<!-- ============================== 1 ============================== -->
+<h1 id="ch1"><span class="num">1</span> ภาพรวมของ Flora Gateway</h1>
+
+<h2 id="ch1-1">1.1 Gateway ทำหน้าที่อะไร</h2>
+<p>Flora Gateway คือเครื่องกลางประจำห้องผ่าตัดหรือหอผู้ป่วย ทำหน้าที่ <b>รับข้อมูลจากเครื่องมือแพทย์</b> (monitor, เครื่องดมยา, เครื่องช่วยหายใจ, โมดูลวัดอุณหภูมิ ฯลฯ) ผ่าน protocol เฉพาะของแต่ละยี่ห้อ แล้ว <b>แปลงให้เป็นรูปแบบกลางของ Flora</b> (เช่น <code>hr = 76 /min</code>) จากนั้นเก็บไว้และให้ <b>Flora Leaf</b> (เครื่องประจำเตียง) ดึงไปแสดงผลผ่าน data-api</p>
+<ul>
+  <li>เครื่องมือแพทย์ต่อได้หลายแบบ: <b>RS-232</b> (สาย serial), <b>TCP/UDP</b> (LAN), <b>HTTP</b> (push / poll), <b>HL7 v2</b></li>
+  <li>หนึ่ง gateway รองรับเครื่องหลายตัว และส่งข้อมูลแยกตาม Leaf ที่เป็นเจ้าของเครื่องนั้น</li>
+  <li>การตั้งค่าอุปกรณ์, ไลเซนส์, และการอัปเดต ถูกควบคุมจากส่วนกลางผ่าน <b>Canopy / Haber</b></li>
+</ul>
+
+<h2 id="ch1-2">1.2 การไหลของข้อมูล</h2>
+<figure>
+<svg viewBox="0 0 720 300" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="FloraLatin, sans-serif">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#475569"/></marker></defs>
+  <rect x="5" y="40" width="120" height="200" rx="8" fill="#ecfdf5" stroke="#059669"/>
+  <text x="65" y="62" text-anchor="middle" font-size="12" font-weight="700" fill="#065f46">Medical devices</text>
+  <text x="65" y="92" text-anchor="middle" font-size="10">Dräger MEDIBUS</text>
+  <text x="65" y="112" text-anchor="middle" font-size="10">Vista 120 S</text>
+  <text x="65" y="132" text-anchor="middle" font-size="10">HL7 monitor</text>
+  <text x="65" y="152" text-anchor="middle" font-size="10">Temp/CVP</text>
+  <text x="65" y="172" text-anchor="middle" font-size="10">M540 / P2500</text>
+  <text x="65" y="215" text-anchor="middle" font-size="9" fill="#475569">RS-232 · TCP · UDP · HTTP</text>
+
+  <rect x="160" y="40" width="130" height="200" rx="8" fill="#fff7ed" stroke="#ea580c"/>
+  <text x="225" y="62" text-anchor="middle" font-size="12" font-weight="700" fill="#9a3412">① Controller (Rust)</text>
+  <text x="225" y="92" text-anchor="middle" font-size="10">serial-controller</text>
+  <text x="225" y="112" text-anchor="middle" font-size="10">socket-controller</text>
+  <text x="225" y="132" text-anchor="middle" font-size="10">webhook-controller</text>
+  <text x="225" y="152" text-anchor="middle" font-size="10">feeder-controller</text>
+  <text x="225" y="215" text-anchor="middle" font-size="9" fill="#475569">raw bytes in / out</text>
+
+  <rect x="325" y="110" width="90" height="60" rx="8" fill="#f1f5f9" stroke="#334155"/>
+  <text x="370" y="137" text-anchor="middle" font-size="12" font-weight="700">Kafka</text>
+  <text x="370" y="155" text-anchor="middle" font-size="9" fill="#475569">message bus</text>
+
+  <rect x="325" y="10" width="90" height="70" rx="8" fill="#eef2ff" stroke="#4f46e5"/>
+  <text x="370" y="35" text-anchor="middle" font-size="11" font-weight="700" fill="#3730a3">② Parser</text>
+  <text x="370" y="52" text-anchor="middle" font-size="9">1 container</text>
+  <text x="370" y="66" text-anchor="middle" font-size="9">per device</text>
+
+  <rect x="450" y="40" width="120" height="200" rx="8" fill="#ecfeff" stroke="#0e7490"/>
+  <text x="510" y="62" text-anchor="middle" font-size="12" font-weight="700" fill="#155e75">③ Store / serve</text>
+  <text x="510" y="92" text-anchor="middle" font-size="10">collector → Postgres</text>
+  <text x="510" y="112" text-anchor="middle" font-size="10">server (read API)</text>
+  <text x="510" y="132" text-anchor="middle" font-size="10">kong :7410 data-api</text>
+  <text x="510" y="152" text-anchor="middle" font-size="10">publisher (push)</text>
+
+  <rect x="605" y="90" width="110" height="100" rx="8" fill="#f0f9ff" stroke="#0369a1"/>
+  <text x="660" y="125" text-anchor="middle" font-size="12" font-weight="700" fill="#075985">Flora Leaf</text>
+  <text x="660" y="145" text-anchor="middle" font-size="9">pulls data</text>
+  <text x="660" y="160" text-anchor="middle" font-size="9">via data-api</text>
+
+  <rect x="160" y="255" width="410" height="38" rx="8" fill="#fef2f2" stroke="#b91c1c"/>
+  <text x="365" y="279" text-anchor="middle" font-size="10.5"><tspan font-weight="700" fill="#991b1b">gateway-service :7400</tspan> admin UI · parser lifecycle · Canopy/Haber check-in · license · alerts</text>
+
+  <line x1="125" y1="140" x2="158" y2="140" stroke="#475569" stroke-width="1.6" marker-end="url(#a)"/>
+  <line x1="290" y1="140" x2="323" y2="140" stroke="#475569" stroke-width="1.6" marker-end="url(#a)"/>
+  <text x="306" y="132" text-anchor="middle" font-size="8" fill="#475569">gw.raw</text>
+  <path d="M355,110 L355,82" stroke="#475569" stroke-width="1.6" marker-end="url(#a)"/>
+  <path d="M385,82 L385,108" stroke="#475569" stroke-width="1.6" marker-end="url(#a)"/>
+  <text x="430" y="98" font-size="8" fill="#475569">gw.obs</text>
+  <line x1="415" y1="140" x2="448" y2="140" stroke="#475569" stroke-width="1.6" marker-end="url(#a)"/>
+  <line x1="570" y1="140" x2="603" y2="140" stroke="#475569" stroke-width="1.6" marker-end="url(#a)"/>
+  <path d="M325,160 C300,190 300,190 290,190" stroke="#475569" stroke-width="1.2" stroke-dasharray="3,2" marker-end="url(#a)"/>
+  <text x="305" y="205" font-size="8" fill="#475569">gw.cmd (poll/ACK)</text>
+</svg>
+<figcaption>รูปที่ 1 — ข้อมูลไหลจากเครื่องมือแพทย์ → controller → Kafka → parser → collector/server → kong → Leaf</figcaption>
+</figure>
+<ol>
+  <li><b>Controller</b> เปิดพอร์ตหรือ connection แล้วส่ง bytes ดิบเข้า Kafka topic <code>gw.raw.&lt;pod&gt;</code></li>
+  <li><b>Parser</b> ของ device นั้นอ่านข้อมูลดิบ ตรวจ checksum/โครงสร้าง แปลงเป็น observation แล้วส่งไป <code>gw.obs</code> ถ้าเครื่องต้องถามก่อนตอบ (poll) หรือต้องตอบ ACK parser จะส่งคำสั่งกลับทาง <code>gw.cmd.&lt;pod&gt;</code></li>
+  <li><b>Collector</b> บันทึกลงฐานข้อมูล, <b>server</b> ให้ API อ่านค่า, <b>kong</b> เปิด data-api ที่พอร์ต 7410 แยกตาม Leaf</li>
+  <li><b>Leaf</b> ดึงค่าจาก <code>http://&lt;gateway&gt;:7410/data-api/&lt;leaf-id&gt;/api/observations</code></li>
+</ol>
+
+<h2 id="ch1-3">1.3 แผนผังเครือข่ายของไซต์ (ค่าที่ใช้อยู่)</h2>
+<table>
+<tr><th style="width:30%">ระบบ</th><th style="width:36%">ที่อยู่</th><th>หมายเหตุ</th></tr>
+<tr><td>Flora Canopy (Control room)</td><td><code>https://172.22.1.151:9443</code></td><td>หน้า Operations dashboard, Topology</td></tr>
+<tr><td>Flora Root (cloud control plane)</td><td><code>https://172.22.1.151:8443</code></td><td>ออกไลเซนส์, release</td></tr>
+<tr><td>Flora Leaf (workstation)</td><td><code>https://172.22.1.151:7443</code></td><td>Leaf ID: <code>leaf-or-01</code></td></tr>
+<tr><td>Haber (registry ของ gateway)</td><td><code>http://172.22.1.151:7204</code></td><td>gateway check-in ที่นี่ทุก 20 วินาที</td></tr>
+<tr><td><b>Flora Gateway (หน้า admin)</b></td><td><code>http://172.22.1.233:7400</code></td><td>จัดการอุปกรณ์</td></tr>
+<tr><td><b>Gateway data-api</b></td><td><code>http://172.22.1.233:7410/data-api</code></td><td>ค่าที่ใส่ใน Leaf</td></tr>
+<tr><td>Portainer (ดู Docker)</td><td><code>https://localhost:9443</code> (บน gateway)</td><td>เฉพาะเครื่อง gateway</td></tr>
+</table>
+<div class="note"><b>หมายเหตุ</b>IP ในคู่มือเป็นค่าของไซต์ทดสอบปัจจุบัน หากติดตั้งที่ไซต์อื่นให้แทนด้วย IP จริงของไซต์นั้นทุกจุด</div>
+
+<!-- ============================== 2 ============================== -->
+<h1 id="ch2"><span class="num">2</span> ความต้องการของระบบ</h1>
+<h2>ฮาร์ดแวร์</h2>
+<table>
+<tr><th style="width:28%">รายการ</th><th style="width:30%">ขั้นต่ำ</th><th>แนะนำ / หมายเหตุ</th></tr>
+<tr><td>CPU</td><td>4 core x86_64</td><td>Docker Engine รัน container บนเครื่องโดยตรง ไม่ต้องใช้ VM</td></tr>
+<tr><td>RAM</td><td>8 GB</td><td>gateway ใช้จริงราว 1–1.5 GB (Kafka ~600 MB) ส่วนที่เหลือใช้ร่วมกับ Ubuntu ได้ตามต้องการ</td></tr>
+<tr><td>ดิสก์</td><td>64 GB SSD</td><td>image + build cache ใช้ราว 10 GB, ฐานข้อมูลโตตามจำนวนค่าที่เก็บ</td></tr>
+<tr><td>พอร์ต serial</td><td>RS-232 อย่างน้อย 1 พอร์ต</td><td>เครื่องอ้างอิงมี COM1 (<code>/dev/ttyS0</code>) จริงเพียงพอร์ตเดียว ต้องการมากกว่านี้ใช้ USB-RS232 (FTDI/Prolific) ซึ่งจะเป็น <code>/dev/ttyUSB0</code>, <code>/dev/ttyUSB1</code> …</td></tr>
+<tr><td>เครือข่าย</td><td>LAN 1 พอร์ต</td><td>ต้องเห็น Canopy/Haber และ Leaf; เครื่องมือแพทย์แบบ LAN ต้องเห็น gateway</td></tr>
+<tr><td>สาย RS-232</td><td>Null-modem</td><td>ระหว่าง PC กับ PC/ตัวจำลองต้องเป็น null-modem (ไขว้ TX/RX)</td></tr>
+</table>
+<h2>ซอฟต์แวร์</h2>
+<ul>
+  <li>Ubuntu Desktop 24.04 LTS</li>
+  <li><b>Docker Engine</b> (docker-ce) + Docker Compose plugin — <b>ไม่ใช้ Docker Desktop</b> (เหตุผลดูกรอบด้านล่าง)</li>
+  <li>git, python3 และ <code>python3-serial</code> (pyserial) สำหรับตัวจำลอง</li>
+  <li>ทางเลือก: Tailscale (เข้าระยะไกลแบบปลอดภัย), Portainer (ดู Docker ผ่านเว็บ)</li>
+</ul>
+<div class="note"><b>ทำไมใช้ Docker Engine แทน Docker Desktop</b><ul style="margin:2pt 0 0">
+<li><b>เริ่มตั้งแต่ boot</b> ไม่ต้องมีคน login (Docker Desktop เริ่มหลัง login เท่านั้น)</li>
+<li><b>map พอร์ต serial (<code>/dev/ttyS0</code>) เข้า container ได้ตรง</b> ไม่ต้องใช้โปรแกรม bridge</li>
+<li><b>เห็น IP จริงของเครื่องที่ต่อเข้ามา</b> จึงแยก monitor หลายเครื่องบน pod เดียวกันด้วย <code>source_ip</code> ได้ (Docker Desktop เปลี่ยน IP ต้นทางเป็น <code>172.18.0.1</code> ทั้งหมด)</li>
+<li><b>ใช้ CPU/RAM น้อยกว่ามาก</b> เพราะไม่มี VM คั่น (VM ของ Docker Desktop เคยกิน CPU ~230%)</li>
+<li>ข้อเสีย: ไม่มีหน้าต่าง Docker Desktop ให้ดู — ใช้ <b>Portainer</b> (10.5) หรือคำสั่ง <code>docker</code> แทน</li></ul></div>
+<h2>สิทธิ์และบัญชีที่ต้องใช้</h2>
+<ul>
+  <li>บัญชีผู้ใช้ Ubuntu ที่มีสิทธิ์ sudo (เครื่องอ้างอิงใช้ <code>esm</code>)</li>
+  <li>บัญชี admin ของ gateway (ค่าเริ่มต้น <code>admin / admin</code> — <b>ต้องเปลี่ยนทันทีหลังติดตั้ง</b>)</li>
+  <li>Gateway ID และ token ที่ได้จาก Canopy/Haber (ค่า demo: <code>gateway-hospital-01-a</code>)</li>
+</ul>
+
+<!-- ============================== 3 ============================== -->
+<h1 id="ch3"><span class="num">3</span> การติดตั้งทีละขั้นตอน</h1>
+
+<h2 id="ch3-1">3.1 เตรียม Ubuntu</h2>
+<div class="steps">
+<div class="step">อัปเดตระบบและติดตั้งเครื่องมือพื้นฐาน
+<pre>sudo apt update &amp;&amp; sudo apt -y upgrade
+sudo apt -y install git curl python3 python3-serial</pre></div>
+<div class="step">ให้ผู้ใช้เข้าถึงพอร์ต serial ได้ (กลุ่ม <code>dialout</code>) — กลุ่ม <code>docker</code> จะเพิ่มในหัวข้อ 3.2
+<pre>sudo usermod -aG dialout $USER</pre></div>
+<div class="step">ตรวจว่าเครื่องเห็นพอร์ต serial จริง (บรรทัดที่ <code>uart</code> ไม่ใช่ <code>unknown</code> คือพอร์ตที่มีอยู่จริง)
+<pre>ls -l /dev/ttyS* /dev/ttyUSB* 2>/dev/null
+sudo cat /proc/tty/driver/serial | head -4   <span class="c"># 0: uart:16550A ... = COM1 จริง</span></pre></div>
+<div class="step">ปิดโปรแกรมที่อาจแย่งพอร์ต serial (ModemManager ชอบไปเปิดพอร์ตเพื่อหาโมเด็ม)
+<pre>sudo systemctl disable --now ModemManager</pre></div>
+</div>
+
+<h2 id="ch3-2">3.2 ติดตั้ง Docker Engine</h2>
+<div class="steps">
+<div class="step">เพิ่ม repository ทางการของ Docker และติดตั้ง Docker Engine + Compose plugin
+<pre>sudo apt -y install ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+  https://download.docker.com/linux/ubuntu $(. /etc/os-release; echo $VERSION_CODENAME) stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list &gt; /dev/null
+sudo apt update
+sudo apt -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin</pre></div>
+<div class="step">ให้ Docker เริ่มเองตอน boot และให้ผู้ใช้ใช้คำสั่ง docker ได้โดยไม่ต้อง sudo
+<pre>sudo systemctl enable --now docker containerd
+sudo usermod -aG docker $USER          <span class="c"># แล้ว logout/login ใหม่ 1 ครั้ง</span></pre></div>
+<div class="step">จำกัดขนาด log ของ container ไม่ให้ดิสก์เต็ม (แนะนำ)
+<pre>echo '{"log-driver":"json-file","log-opts":{"max-size":"20m","max-file":"5"}}' \
+  | sudo tee /etc/docker/daemon.json
+sudo systemctl restart docker</pre></div>
+<div class="step">ตรวจการติดตั้ง
+<pre>docker version --format '{{.Server.Version}}'
+docker compose version
+systemctl is-enabled docker containerd     <span class="c"># enabled, enabled</span></pre></div>
+</div>
+<div class="warn"><b>ถ้าเครื่องเคยติดตั้ง Docker Desktop</b>ให้ใช้ context ของ Engine และปิด Docker Desktop ไม่ให้เริ่มเอง (ไม่ต้องถอนการติดตั้ง)
+<pre style="margin-top:4pt">docker context use default
+systemctl --user disable --now docker-desktop</pre>
+container/volume ของ Docker Desktop กับ Engine แยกกันคนละชุด — ย้ายข้อมูลตามหัวข้อ 12.6</div>
+
+<h2 id="ch3-3">3.3 ดึงซอร์สโค้ด</h2>
+<pre>mkdir -p ~/flora &amp;&amp; cd ~/flora
+git clone http://172.22.1.103:8080/esm-solution/flora-esm flora-core
+cd flora-core/flora-gateway</pre>
+<div class="warn"><b>ห้ามย้ายหรือเปลี่ยนชื่อโฟลเดอร์หลังติดตั้ง</b>
+container จำ path ของไฟล์ที่ mount ไว้ ถ้าย้ายโฟลเดอร์ (เช่น เคยเปลี่ยน <code>frola</code> → <code>flora</code>) Docker จะสร้างโฟลเดอร์เปล่าแทนไฟล์เดิม ทำให้ฐานข้อมูล start ไม่ได้และเว็บเปิดไม่ได้ ถ้าจำเป็นต้องย้าย ให้รัน <code>docker compose -p flora-gateway up -d --force-recreate</code> จากตำแหน่งใหม่ทันที</div>
+
+<h2 id="ch3-4">3.4 ไฟล์ตั้งค่า <code>.env</code></h2>
+<p>สร้างไฟล์ <code>flora-gateway/.env</code> (ไม่ถูก commit เข้า git) ค่านี้เป็นค่าเฉพาะของเครื่อง:</p>
+<pre><span class="c"># Gateway host 172.22.1.233 — Canopy/Haber อยู่ที่ 172.22.1.151</span>
+HABER_URL=http://172.22.1.151:7204
+GATEWAY_DATA_API_URL=http://172.22.1.233:7410/data-api
+FLORA_GATEWAY_DATA_API_PORT=7410
+FLORA_GATEWAY_ADMIN_BIND=0.0.0.0
+FLORA_CANOPY_IP=172.22.1.151
+FLORA_GATEWAY_CONFIG_FILE=gateway.site.toml
+FLORA_GATEWAY_SEED_FILE=instances.site.json
+<span class="c"># ตั้งเพิ่มตามที่ Canopy ให้มา (ไม่ใส่ = ใช้ค่า demo)</span>
+<span class="c"># FLORA_GATEWAY_ID=gateway-hospital-01-a</span>
+<span class="c"># HABER_GATEWAY_TOKEN=...</span>
+<span class="c"># HABER_NODE_TOKEN=...</span>
+<span class="c"># GATEWAY_ADMIN_PASSWORD=...   (รหัส admin เริ่มต้น)</span></pre>
+<table>
+<tr><th style="width:34%">ตัวแปร</th><th>ความหมาย</th></tr>
+<tr><td><code>HABER_URL</code></td><td>ที่อยู่ Haber ที่ gateway และ updater ใช้ check-in / ขออัปเดต</td></tr>
+<tr><td><code>GATEWAY_DATA_API_URL</code></td><td>ที่อยู่ data-api ที่ Leaf จะเห็น (แสดงใน wizard ของ Leaf)</td></tr>
+<tr><td><code>FLORA_GATEWAY_DATA_API_PORT</code></td><td>พอร์ต data-api บนเครื่อง (ค่าเริ่มต้น 7410)</td></tr>
+<tr><td><code>FLORA_GATEWAY_ADMIN_BIND</code></td><td><code>0.0.0.0</code> = เปิดหน้า admin ให้เครื่องอื่นใน LAN, ไม่ตั้ง = เฉพาะเครื่องนี้</td></tr>
+<tr><td><code>FLORA_CANOPY_IP</code></td><td>IP ที่ชื่อ <code>canopy.flora.local</code> ชี้ไป (ใช้เมื่อเชื่อม Canopy แบบ HTTPS ด้วย cert ของ <code>*.flora.local</code>)</td></tr>
+<tr><td><code>FLORA_GATEWAY_CONFIG_FILE</code></td><td>ไฟล์ pod ของไซต์ใน <code>config/</code></td></tr>
+<tr><td><code>FLORA_GATEWAY_SEED_FILE</code></td><td>ไฟล์ device เริ่มต้น; ใช้ไฟล์ว่าง <code>[]</code> เพื่อไม่ให้ device ตัวอย่างถูกเพิ่มเอง</td></tr>
+</table>
+
+<h2 id="ch3-5">3.5 ไฟล์ตั้งค่า pod ของไซต์</h2>
+<p>คัดลอกไฟล์ตัวอย่างเป็นไฟล์ของไซต์ แล้วแก้เฉพาะ pod ที่ใช้จริง:</p>
+<pre>cp config/gateway.toml config/gateway.site.toml
+echo '[]' &gt; config/instances.site.json</pre>
+<p>ตัวอย่าง pod ที่ใช้งานในเครื่องอ้างอิง (ส่วนที่สำคัญ):</p>
+<pre>[serial]
+admin_port = 5001
+
+[[serial.pods]]
+id = "COM1"
+<span class="c"># COM1 จริง map เข้า container ด้วย compose.override.yaml — ค่าสายสำหรับ MEDIBUS.X</span>
+path = "/dev/ttyS0"
+baud = 19200
+data_bits = 8
+parity = "even"
+stop_bits = 1
+flow_control = "none"
+rts = true
+dtr = true
+idle_ms = 20
+max_frame_bytes = 16384
+
+[socket]
+admin_port = 5004
+
+[[socket.pods]]
+id = "or-monitor"           <span class="c"># HL7 (MLLP) — พอร์ตบนเครื่อง 7421</span>
+port = 9001
+framing = "mllp"
+auto_ack = true
+
+[[socket.pods]]
+id = "icu-monitor"          <span class="c"># Dräger Vista 120 S (raw) — พอร์ตบนเครื่อง 7422</span>
+port = 9002
+framing = "raw"
+auto_ack = false</pre>
+<p>สร้างไฟล์ <code>compose.override.yaml</code> (ไฟล์เฉพาะเครื่อง ไม่ commit) เพื่อ map พอร์ตจริงเข้า serial-controller — <b>ทุกพอร์ตที่ใช้ใน pod ต้องอยู่ในรายการนี้</b></p>
+<pre><span class="c"># flora-gateway/compose.override.yaml</span>
+services:
+  serial-controller:
+    devices:
+      - /dev/ttyS0:/dev/ttyS0
+    <span class="c">#  - /dev/ttyUSB0:/dev/ttyUSB0      ถ้าเพิ่ม USB-RS232</span></pre>
+<p>ตรวจไฟล์ก่อนใช้งานทุกครั้ง (ไม่แตะฮาร์ดแวร์):</p>
+<pre>python3 scripts/validate_config.py config/gateway.site.toml config/instances.site.json
+<span class="c"># Valid configuration: 8 pods, 0 device instances. No hardware was contacted.</span></pre>
+
+<h2 id="ch3-6">3.6 Build และเริ่มระบบ</h2>
+<pre>cd ~/flora/flora-core/flora-gateway
+docker compose -p flora-gateway build          <span class="c"># ครั้งแรกใช้เวลา ~10–15 นาที (Rust)</span>
+docker compose -p flora-gateway up -d</pre>
+<div class="note"><b>ต้องใช้ <code>-p flora-gateway</code> เสมอ</b>
+ชื่อ project ถูกใช้ตั้งชื่อ network (<code>flora-gateway_default</code>) ที่ gateway-service ใช้สร้าง parser container ถ้าใช้ชื่ออื่น parser จะต่อ Kafka ไม่ได้</div>
+
+<h2 id="ch3-7">3.7 ตรวจสอบหลังติดตั้ง</h2>
+<pre>docker compose -p flora-gateway ps                       <span class="c"># ทุกตัว Up, db/kafka/kong/server = healthy</span>
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:7400/health    <span class="c"># 200</span>
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:7410/data-api/leaf-or-01/health   <span class="c"># 200</span>
+docker logs --tail 20 flora-gateway-gateway-service-1 | grep checkin  <span class="c"># "HTTP/1.1 200 OK"</span></pre>
+<p>จากนั้นเปิด <code>http://172.22.1.233:7400</code> จากเครื่องอื่นใน LAN เข้าสู่ระบบ และ <b>เปลี่ยนรหัส admin ทันที</b></p>
+
+<!-- ============================== 4 ============================== -->
+<h1 id="ch4"><span class="num">4</span> ให้ระบบเริ่มเองอัตโนมัติเมื่อเปิดเครื่อง</h1>
+<p>บน Docker Engine ระบบ gateway เริ่มเองตั้งแต่ boot <b>โดยไม่ต้องมีคน login</b> ลำดับที่เกิดขึ้นคือ</p>
+<ol>
+  <li>systemd เริ่ม <code>containerd</code> และ <code>docker</code> (system service)</li>
+  <li>container ทั้งหมดของ gateway (<code>restart: unless-stopped</code>) และ parser ของแต่ละ device เริ่มตาม</li>
+  <li>service ของผู้ใช้ <code>flora-watch</code> เริ่ม (ต้องเปิด <i>linger</i> ตามข้อ 4.2) และบันทึกว่าเครื่องปิดไปนานเท่าไร</li>
+</ol>
+<h2>4.1 ตรวจว่า Docker เริ่มตอน boot</h2>
+<pre>systemctl is-enabled docker containerd                     <span class="c"># enabled, enabled</span>
+docker inspect -f '{{.Name}} {{.HostConfig.RestartPolicy.Name}}' $(docker ps -q)   <span class="c"># unless-stopped</span></pre>
+<h2>4.2 ให้ service ของผู้ใช้เริ่มโดยไม่ต้อง login (linger)</h2>
+<pre>sudo loginctl enable-linger esm
+loginctl show-user esm -p Linger                <span class="c"># Linger=yes</span>
+systemctl --user enable flora-watch</pre>
+<div class="note"><b>auto-login ไม่จำเป็นแล้ว</b>auto-login เคยใช้เพื่อให้ Docker Desktop เริ่ม เมื่อใช้ Docker Engine + linger จะปิด auto-login ได้ (ปลอดภัยกว่า) โดยแก้ <code>/etc/gdm3/custom.conf</code> ให้ <code>AutomaticLoginEnable = false</code></div>
+<h2>4.3 ทดสอบ</h2>
+<p>รีบูตเครื่อง ปล่อยไว้ที่หน้า login (ไม่ต้อง login) รอ ~1 นาที แล้วเปิด <code>http://172.22.1.233:7400</code> จากเครื่องอื่น จากนั้น login เข้าเครื่องเพื่อดู log</p>
+<pre>python3 ~/flora/flora-core/flora-gateway/scripts/flora_watch.py --summary 1</pre>
+
+<h1 id="ch5"><span class="num">5</span> การเชื่อมต่อ Canopy และไลเซนส์</h1>
+<h2>5.1 ลิงก์ไปยัง Canopy / Haber</h2>
+<p>gateway check-in ไปที่ Haber ทุก ~20 วินาที เพื่อรายงานสถานะ, รับไลเซนส์, รับ catalog ของประเภทเครื่อง และรับการตั้งค่าที่ Canopy สั่ง ค่าที่บันทึกในหน้า admin (ส่วน <b>Canopy link</b>) จะใช้แทนค่าใน <code>.env</code></p>
+<table>
+<tr><th style="width:32%">รูปแบบที่อยู่</th><th>ใช้เมื่อ</th></tr>
+<tr><td><code>http://172.22.1.151:7204</code></td><td>เชื่อม Haber ตรง (แนะนำ ใช้ได้ทันที)</td></tr>
+<tr><td><code>https://canopy.flora.local:9443</code></td><td>ผ่าน edge ของ Canopy แบบ HTTPS — ต้องติดตั้ง cert ของ Canopy (5.2) และ edge ต้องส่ง <code>/api/haber/</code> ไปที่ Haber</td></tr>
+<tr><td><code>http://100.x.x.x:7204</code></td><td>ผ่าน Tailscale (เมื่ออยู่คนละเครือข่าย)</td></tr>
+</table>
+<h2>5.2 ติดตั้ง cert ของ Canopy (กรณี HTTPS ใช้ self-signed)</h2>
+<pre>echo | openssl s_client -connect 172.22.1.151:9443 -showcerts 2>/dev/null \
+  | awk '/BEGIN CERT/,/END CERT/' &gt; certs/canopy-trust.pem
+echo "SSL_CERT_FILE=/etc/flora/certs/canopy-trust.pem" &gt; certs/trust.env
+docker compose -p flora-gateway up -d gateway-service updater</pre>
+<div class="note"><b>ทำไมต้องใช้ชื่อ canopy.flora.local</b>cert ของ Canopy ออกให้ <code>*.flora.local</code> ไม่ได้ออกให้ IP จึงต้องเรียกด้วยชื่อ ซึ่ง compose ชี้ชื่อนี้ไปที่ <code>FLORA_CANOPY_IP</code> ให้แล้ว</div>
+<h2>5.3 ไลเซนส์</h2>
+<p>ไลเซนส์ออกโดย <b>Flora Root</b> ส่งผ่าน Canopy มายัง gateway กำหนด <b>จำนวน device สูงสุด</b> และ <b>ประเภท device ที่อนุญาต</b> (<code>allowed_types</code>) การเพิ่ม device ประเภทที่ไม่อยู่ในไลเซนส์จะได้ข้อความ <code>device type ... is not licensed</code></p>
+<p>เพิ่มประเภทเครื่องในไลเซนส์ (ทำที่ Root — ต้องระบุค่าเดิมทั้งหมดด้วย เพราะเป็นการออกไลเซนส์ใหม่ทั้งชุด):</p>
+<pre>curl -sk -u &lt;root-admin&gt;:&lt;password&gt; -H 'content-type: application/json' -X PUT \
+  https://172.22.1.151:8443/api/v1/tenants/hospital-01/license \
+  --data '{"modules":["leaf","canopy","gateway"],"max_leaves":4,"max_gateways":2,
+  "max_gateway_devices":8,"device_types":["hl7-patient-monitor","json-anesthesia-machine",
+  "http-ventilator","serial-temp-module","draeger-medibus","draeger-vista-120s",
+  "draeger-iacs-m540"],"valid_days":365}'</pre>
+<p>ภายใน ~1 นาที gateway จะได้ไลเซนส์ใหม่ ตรวจได้ที่หน้า admin หรือ</p>
+<pre>curl -s -u admin:&lt;password&gt; http://127.0.0.1:7400/api/license</pre>
+<div class="warn"><b>ก่อนแก้ไลเซนส์</b>อ่านค่าปัจจุบันจาก Root ก่อนเสมอ (<code>GET /api/v1/overview</code>) แล้วคงค่าเดิมไว้ เพิ่มเฉพาะที่ต้องการ และตรวจว่า Canopy ของไซต์ใช้ Root ตัวไหน (ดูจาก <code>bundle_id</code> ที่ gateway ได้รับ)</div>
+
+<!-- ============================== 6 ============================== -->
+<h1 id="ch6"><span class="num">6</span> การใช้งานหน้า Admin</h1>
+<h2 id="ch6-1">6.1 เข้าสู่ระบบ</h2>
+<ul>
+  <li>เปิด <code>http://172.22.1.233:7400</code> (จากเครื่อง gateway ใช้ <code>http://localhost:7400</code>)</li>
+  <li>ผู้ใช้เริ่มต้น <code>admin</code> / <code>admin</code> → เปลี่ยนรหัสที่เมนูผู้ใช้ทันที</li>
+  <li>เพิ่มผู้ใช้อื่นได้ (role admin = จัดการ template/ผู้ใช้ได้)</li>
+</ul>
+<h2 id="ch6-2">6.2 Device templates (ประเภทเครื่อง)</h2>
+<p>template บอกว่าเครื่องรุ่นหนึ่งใช้ controller, parser, ค่าสาย (connection defaults) และ parser options อะไร มี 2 แหล่ง:</p>
+<table>
+<tr><th style="width:24%">แหล่ง</th><th>รายละเอียด</th></tr>
+<tr><td><b>From Canopy</b></td><td>มาจาก catalog ของ Canopy/release แก้ได้เฉพาะ manufacturer, model, description, connection defaults</td></tr>
+<tr><td><b>Local templates</b></td><td>สร้างเองที่ gateway สำหรับเครื่องที่ Canopy ยังไม่มี ต้องใช้ parser image ที่ Canopy ส่งมาและ parser ที่อยู่ใน image นั้น และ <b>ประเภทต้องอยู่ในไลเซนส์</b> จึงจะเพิ่ม device ได้ ถ้า Canopy ส่ง type รหัสเดียวกันมาภายหลัง ของ Canopy จะแทนที่</td></tr>
+</table>
+<p>การสร้าง Local template: กด <b>Add local template</b> แล้วกรอก</p>
+<table>
+<tr><th style="width:26%">ช่อง</th><th>ตัวอย่าง (MEDIBUS.X)</th></tr>
+<tr><td>Code</td><td><code>draeger-medibus</code></td></tr>
+<tr><td>Label / Manufacturer / Model</td><td>Dräger MEDIBUS.X (RS-232 numeric data) / Drägerwerk AG</td></tr>
+<tr><td>Category / Protocol</td><td><code>ventilator</code> / <code>draeger-medibus</code></td></tr>
+<tr><td>Controller / Parser</td><td><code>serial</code> / <code>medibus</code></td></tr>
+<tr><td>Connection defaults</td><td>19200, 8 data bits, parity even, 1 stop, flow none, RTS on, DTR on, idle 20 ms, max frame 16384</td></tr>
+<tr><td>Default parser options</td><td><code>{"poll_interval_sec":1,"response_timeout_sec":3,"session_timeout_sec":10}</code></td></tr>
+</table>
+
+<h2 id="ch6-3">6.3 Installed devices (อุปกรณ์ที่ติดตั้ง)</h2>
+<p>กด <b>Add device</b> หรือ <b>Edit</b> แล้วกรอก</p>
+<table>
+<tr><th style="width:28%">ช่อง</th><th>ความหมาย</th></tr>
+<tr><td>Device ID</td><td>รหัสถาวร ห้ามซ้ำ เช่น <code>or-medibus-01</code> (แก้ภายหลังไม่ได้)</td></tr>
+<tr><td>Name</td><td>ชื่อที่แสดงใน Leaf / Canopy / alert</td></tr>
+<tr><td>Device type</td><td>template ที่ใช้</td></tr>
+<tr><td>Serial number, Asset tag, Station, Location, Installed on</td><td>ข้อมูลครุภัณฑ์ (แสดงใน Topology ของ Canopy)</td></tr>
+<tr><td>Leaf workstation</td><td>Leaf ที่จะเห็นข้อมูลเครื่องนี้ เช่น <code>leaf-or-01</code> (ต้องมี route ใน kong)</td></tr>
+<tr><td>Connection pod</td><td><code>&lt;controller&gt;.&lt;pod-id&gt;</code> ต้องตรงกับ pod ใน <code>gateway.site.toml</code> เช่น <code>serial.COM1</code>, <code>socket.icu-monitor</code></td></tr>
+<tr><td>Parser options (JSON)</td><td>ค่าที่ทับค่าเริ่มต้นของ template เว้น <code>{}</code> ได้</td></tr>
+<tr><td>Enabled</td><td>เปิด = gateway สร้าง parser container ให้; ปิด = หยุด parser (alert ของเครื่องนี้จะปิดเอง)</td></tr>
+</table>
+<p>ปุ่มในแต่ละแถว: <b>Monitor</b> (ดูข้อมูลเข้า-ออกสด), <b>Edit</b>, <b>Disable/Enable</b>, <b>Remove</b> การเปลี่ยน type, pod หรือ options จะ restart parser ของเครื่องนั้นให้อัตโนมัติ</p>
+
+<h2 id="ch6-4">6.4 หน้า Monitor ของ pod</h2>
+<p>การ์ด pod (เช่น <code>serial.COM1</code>) แสดง</p>
+<ul>
+  <li><b>รายชื่อ device</b> = device ที่ <i>ตั้งค่า</i> ให้ใช้ pod นี้ (รวมตัวที่ปิดอยู่) <b>ไม่ได้แปลว่าตรวจพบเครื่อง</b> — RS-232 ไม่มีสัญญาณบอกว่ามีสายเสียบ</li>
+  <li><b>เส้นสีส้ม (out)</b> = คำสั่งที่ gateway ส่งไปเครื่อง เช่น poll, handshake — ส่งออกเสมอแม้ไม่มีเครื่อง</li>
+  <li><b>เส้นสีน้ำเงิน (in)</b> = ข้อมูลที่เครื่องส่งกลับ — ถ้าแบนที่ 0 แปลว่าไม่มีเครื่องตอบ</li>
+  <li>ตาราง <b>Payloads</b> แสดงข้อมูลดิบแต่ละ frame (เลือกดูแบบ text/hex, in/out ได้)</li>
+</ul>
+<div class="tip"><b>วิธีบอกว่าเครื่องต่ออยู่จริง</b>มี frame <b>in</b> เข้ามา และ device ขึ้น <b>online</b> ใน Installed devices / data-api</div>
+
+<h2 id="ch6-5">6.5 Alerts</h2>
+<ul>
+  <li>device ที่ <b>เปิดอยู่</b> แต่ไม่มีข้อมูล 2 รอบติด (~1 นาที) → alert <b>Critical: No data from …</b> และส่งไป Canopy</li>
+  <li><b>Acknowledge</b> = บันทึกว่ารับทราบ alert ยังไม่ปิด; alert ปิดเองเมื่อมีข้อมูลเข้า หรือ device ถูกปิด/ลบ</li>
+  <li>controller ล่ม → <b>Controller down</b>; ต่อ Canopy ไม่ได้ → <b>Canopy connection lost</b></li>
+</ul>
+
+<!-- ============================== 7 ============================== -->
+<h1 id="ch7"><span class="num">7</span> การเพิ่มอุปกรณ์แต่ละประเภท</h1>
+<h2 id="ch7-1">7.1 แนวคิด pod / device / parser</h2>
+<table>
+<tr><th style="width:18%">คำ</th><th>ความหมาย</th><th style="width:30%">กำหนดที่</th></tr>
+<tr><td><b>Pod</b></td><td>ช่องทางเชื่อมต่อหนึ่งช่อง: พอร์ต serial หนึ่งพอร์ต หรือพอร์ต TCP หนึ่งพอร์ต พร้อมรูปแบบการตัด frame</td><td><code>config/gateway.site.toml</code> (แก้แล้วต้อง restart controller)</td></tr>
+<tr><td><b>Device</b></td><td>เครื่องมือแพทย์หนึ่งเครื่อง ผูกกับ pod หนึ่งตัวและ Leaf หนึ่งตัว</td><td>หน้า admin → Installed devices</td></tr>
+<tr><td><b>Parser</b></td><td>โปรแกรมแปลง protocol ของเครื่อง 1 container ต่อ 1 device</td><td>เลือกผ่าน device type</td></tr>
+</table>
+<div class="warn"><b>กฎสำคัญ</b><ul style="margin:2pt 0 0">
+<li>พอร์ตจริง 1 พอร์ต เปิดได้โดย pod เดียว</li>
+<li>เครื่องแบบ <b>poll</b> (MEDIBUS, temp module) ห้ามมี device ที่เปิดอยู่มากกว่า 1 ตัวบน pod เดียวกัน — poll จะชนกันและค่าถูกบันทึกซ้ำ</li>
+<li>framing ของ pod ต้องตรงกับ protocol: HL7 = <code>mllp</code>, binary (Vista) = <code>raw</code></li></ul></div>
+
+<h2 id="ch7-2">7.2 RS-232 (COM1) map เข้า container</h2>
+<p>บน Docker Engine พอร์ต serial ของเครื่อง map เข้า serial-controller ได้ตรงผ่าน <code>compose.override.yaml</code> ค่าความเร็ว/parity/RTS/DTR กำหนดที่ pod ใน <code>gateway.site.toml</code></p>
+<pre>เครื่องมือแพทย์ ── สาย RS-232 ── COM1 (/dev/ttyS0) ── serial-controller ── pod serial.COM1</pre>
+<h3>เปลี่ยนค่าสายหรือพอร์ต</h3>
+<div class="steps">
+<div class="step">แก้ pod <code>COM1</code> ใน <code>config/gateway.site.toml</code> (เช่น <code>baud</code>, <code>parity</code>, <code>rts</code>, <code>dtr</code>)</div>
+<div class="step">ถ้าใช้พอร์ตใหม่ (เช่น <code>/dev/ttyUSB0</code>) เพิ่มใน <code>compose.override.yaml</code> ด้วย</div>
+<div class="step">ตรวจ config แล้ว restart เฉพาะ serial-controller (ถ้าแก้ override ต้องใช้ <code>up -d</code>)
+<pre>python3 scripts/validate_config.py config/gateway.site.toml config/instances.site.json
+docker compose -p flora-gateway up -d serial-controller
+curl -s http://127.0.0.1:7401/status | python3 -m json.tool    <span class="c"># connected: true, last_error: null</span></pre></div>
+</div>
+<div class="tip"><b>ใช้ชื่อพอร์ต USB ที่ไม่เปลี่ยน</b>ชื่อ <code>/dev/ttyUSB0</code> อาจสลับกันเมื่อเสียบหลายตัว ใช้ชื่อถาวรจาก <code>ls -l /dev/serial/by-id/</code> แทนทั้งใน override และใน pod</div>
+
+<h2 id="ch7-3">7.3 Dräger MEDIBUS.X</h2>
+<table>
+<tr><th style="width:30%">หัวข้อ</th><th>ค่า</th></tr>
+<tr><td>Device type / parser</td><td><code>draeger-medibus</code> / <code>medibus</code> (ต้องอยู่ในไลเซนส์)</td></tr>
+<tr><td>สาย</td><td>Null-modem เข้า COM1 ของ gateway</td></tr>
+<tr><td>ค่าสาย (pod COM1)</td><td>19200, 8E1, ไม่มี flow control, RTS และ DTR เปิด</td></tr>
+<tr><td>Pod</td><td><code>serial.COM1</code></td></tr>
+<tr><td>Options</td><td><code>{"poll_interval_sec":1,"response_timeout_sec":3,"session_timeout_sec":10}</code></td></tr>
+</table>
+<p>การทำงาน: parser ส่ง <code>ESC Q</code> (เริ่มการสื่อสาร) → <code>ESC R</code> (ขอ ID) → วน poll หน้า <code>$</code> (ค่าวัด), <code>+</code> (ค่าวัดหน้า 2), <code>)</code> (ค่าที่ตั้งในเครื่อง) ทุกวินาที ทุก frame มี checksum ถ้าเครื่องเงียบเกิน timeout จะเริ่ม handshake ใหม่เอง ค่าที่ได้ เช่น RR, FiO2, etCO2, Ppeak/Pplat/Pmean/PEEP (แปลง mbar → cmH2O), MVe, VTe, SpO2, HR, flow O2/Air/N2O, agent</p>
+
+<h2 id="ch7-4">7.4 Temperature / CVP module</h2>
+<table>
+<tr><th style="width:30%">หัวข้อ</th><th>ค่า</th></tr>
+<tr><td>Device type / parser</td><td><code>serial-temp-module</code> / <code>ascii_kv</code></td></tr>
+<tr><td>ค่าสาย (pod COM1)</td><td>9600, 8N1, ไม่มี flow control (<code>parity = "none"</code>, ไม่ตั้ง rts/dtr)</td></tr>
+<tr><td>Options</td><td><code>{"codes":{"TEMP":"temperature","CVP":"cvp"},"units":{"temperature":"Cel","cvp":"mmHg"},"poll_command":"?\\r\\n","poll_interval_sec":5}</code></td></tr>
+<tr><td>รูปแบบข้อมูล</td><td>gateway ส่ง <code>?\r\n</code> เครื่องตอบ <code>TEMP=36.8;CVP=12\r\n</code></td></tr>
+</table>
+<div class="warn"><b>สลับ COM1 ระหว่าง MEDIBUS กับ temp module</b>มีพอร์ตจริงพอร์ตเดียว ให้ทำครบ 3 ข้อ: (1) ปิด device เดิม (2) แก้ค่าสายของ pod COM1 แล้ว restart serial-controller (3) เปิด device ใหม่บน <code>serial.COM1</code></div>
+
+<h2 id="ch7-5">7.5 Dräger Vista 120 S (TCP, CMS link)</h2>
+<table>
+<tr><th style="width:30%">หัวข้อ</th><th>ค่า</th></tr>
+<tr><td>Device type / parser</td><td><code>draeger-vista-120s</code> / <code>draeger_vista_s</code></td></tr>
+<tr><td>Pod</td><td><code>socket.icu-monitor</code> — <b>framing <code>raw</code>, auto_ack ปิด</b> (พอร์ตบนเครื่อง <b>7422</b>) หรือ pod <code>socket.vista</code> พอร์ต 9500</td></tr>
+<tr><td>ตั้งค่าที่ monitor</td><td>ที่อยู่ CMS (central station) = <code>172.22.1.233</code> พอร์ต <code>7422</code></td></tr>
+<tr><td>Options</td><td><code>{"min_interval_sec":1}</code>; ถ้าหลายเครื่องใช้ pod เดียวกันให้ใส่ <code>{"source_ip":"&lt;IP monitor&gt;","min_interval_sec":1}</code> ทุก device</td></tr>
+</table>
+<p>การทำงาน: monitor ต่อ TCP เข้า gateway → parser ส่ง greeting 16 bytes → monitor ส่ง frame ชนิด <code>0x51</code> (vitals) ต่อเนื่อง ค่าที่ได้: HR, RR, NIBP sys/dia/mean, SpO2, PR, Temp ค่า <code>-1000.0</code> หมายถึงไม่มีค่า (ถอดสาย sensor)</p>
+<h3>หลายเครื่องบน pod เดียว (แยกด้วย source_ip)</h3>
+<table>
+<tr><th>Device ID</th><th>Pod</th><th>Parser options</th></tr>
+<tr><td><code>vista-bed-1</code></td><td><code>socket.icu-monitor</code></td><td><code>{"source_ip":"172.22.1.51","min_interval_sec":1}</code></td></tr>
+<tr><td><code>vista-bed-2</code></td><td><code>socket.icu-monitor</code></td><td><code>{"source_ip":"172.22.1.52","min_interval_sec":1}</code></td></tr>
+</table>
+<p>ดู IP ที่ gateway เห็นจริงจากข้อมูลดิบใน Kafka (ค่า <code>source_ip</code> ใน meta):</p>
+<pre>docker exec flora-gateway-kafka-1 /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 --topic gw.raw.socket.icu-monitor --max-messages 1
+<span class="c"># "meta": {"peer": "172.22.1.51:50312", "source_ip": "172.22.1.51", ...}</span></pre>
+<div class="warn"><b>source_ip ต้องตรงกับ IP ที่ gateway เห็น</b>ถ้า IP ไม่ตรง parser จะทิ้งข้อมูลทั้งหมด (pod มี frame เข้า แต่ device ไม่มีค่า และ monitor ไม่ได้รับ greeting) ใช้ได้กับ <code>draeger_vista_s</code>, <code>iacs_m540</code>, <code>hidro_hl7</code> เท่านั้น — <code>hl7v2</code> ไม่รองรับ ให้ใช้ 1 pod ต่อ 1 เครื่อง <br>หมายเหตุ: บน Docker Desktop ทุก connection จะเห็นเป็น <code>172.18.0.1</code> จึงใช้ source_ip ไม่ได้</div>
+<div class="note"><b>UDP beacon</b>Vista จริงหา CMS ผ่าน UDP broadcast ซึ่งออกจาก Docker bridge network ไม่ได้ จึงตั้งที่อยู่ CMS ในเครื่อง monitor เอง</div>
+
+<h2 id="ch7-6">7.6 HL7 patient monitor (IHE PCD-01)</h2>
+<table>
+<tr><th style="width:30%">หัวข้อ</th><th>ค่า</th></tr>
+<tr><td>Device type / parser</td><td><code>hl7-patient-monitor</code> / <code>hl7v2</code></td></tr>
+<tr><td>Pod</td><td><code>socket.or-monitor</code> — framing <code>mllp</code>, auto_ack เปิด (พอร์ตบนเครื่อง <b>7421</b>)</td></tr>
+<tr><td>ตั้งค่าที่ monitor / interface engine</td><td>ส่ง HL7 ORU^R01 แบบ MLLP ไปที่ <code>172.22.1.233:7421</code></td></tr>
+<tr><td>Options</td><td><code>{"timezone":"Asia/Bangkok"}</code></td></tr>
+</table>
+
+<!-- ============================== 8 ============================== -->
+<h1 id="ch8"><span class="num">8</span> การเชื่อมต่อ Flora Leaf</h1>
+<h2>8.1 ข้อกำหนดฝั่ง Leaf</h2>
+<ul>
+  <li>Leaf ต้องตั้ง <code>FLORA_LEAF_ID</code> (เช่น <code>leaf-or-01</code>) ในไฟล์ <code>.env</code> ของ Leaf ถ้าว่าง wizard จะแจ้ง error <code>string_too_short ... leaf_id</code></li>
+  <li>Leaf ID ต้องมี route ใน <code>flora-gateway/kong/kong.yaml</code> (มีให้แล้ว: <code>leaf-or-01</code>, <code>leaf-icu-01</code>)</li>
+</ul>
+<h2>8.2 Bedside gateway wizard ใน Leaf</h2>
+<div class="steps">
+<div class="step"><b>Choose gateway</b> — เลือก gateway (<code>gateway-hospital-01-a</code>)</div>
+<div class="step"><b>Test connection</b> — ใส่ data-api base <code>http://172.22.1.233:7410/data-api</code> แล้วทดสอบ</div>
+<div class="step"><b>Assign devices</b> — เลือกเครื่องที่อยู่เตียงนี้ (Canopy จะส่งการกำหนดไปยัง gateway ในการ check-in ครั้งถัดไป)</div>
+<div class="step"><b>Check live data</b> — ตรวจว่ามีค่าเข้ามาจริง</div>
+<div class="step"><b>Save</b></div>
+</div>
+<h2>8.3 ตรวจจากฝั่ง gateway</h2>
+<pre>curl -s http://172.22.1.233:7410/data-api/leaf-or-01/api/devices/status | python3 -m json.tool | head -40
+<span class="c"># แต่ละเครื่องมี is_online, seconds_since_last, latest_observation</span></pre>
+<h2>8.4 เพิ่ม Leaf ใหม่ใน kong</h2>
+<pre><span class="c"># kong/kong.yaml — คัดลอก block ของ leaf-or-01 แล้วเปลี่ยนชื่อ/paths/querystring เป็น leaf ใหม่</span>
+docker compose -p flora-gateway restart kong</pre>
+
+<!-- ============================== 9 ============================== -->
+<h1 id="ch9"><span class="num">9</span> ตัวจำลองสำหรับทดสอบ</h1>
+<p>ใช้ทดสอบระบบเมื่อยังไม่มีเครื่องจริง ทุกไฟล์อยู่ใน <code>flora-gateway/scripts/</code> และรันได้บน Windows/Linux (ต้องมี Python 3; ตัวจำลอง serial ต้องมี <code>pip install pyserial</code>)</p>
+<table>
+<tr><th style="width:24%">ไฟล์</th><th style="width:26%">จำลองเครื่อง</th><th>คำสั่ง</th></tr>
+<tr><td><code>medibus_sim.py</code></td><td>Dräger MEDIBUS.X (RS-232)</td><td><code>python medibus_sim.py --port COM3</code></td></tr>
+<tr><td><code>temp_module_sim.py</code></td><td>Temp/CVP module (RS-232)</td><td><code>python temp_module_sim.py --port COM3</code></td></tr>
+<tr><td><code>vista_s_sim.py</code></td><td>Dräger Vista 120 S (TCP)</td><td><code>python vista_s_sim.py --host 172.22.1.233 --port 7422</code></td></tr>
+</table>
+<h2>9.1 ตัวจำลอง RS-232</h2>
+<ul>
+  <li>รันบน <b>อีกเครื่องหนึ่ง</b> แล้วต่อสาย <b>null-modem</b> เข้า COM1 ของ gateway (บน gateway เองใช้ไม่ได้เพราะ COM1 ถูก serial-controller ใช้อยู่)</li>
+  <li>ค่าสายต้องตรงกับ pod COM1 (MEDIBUS 19200 8E1 / temp 9600 8N1)</li>
+  <li>หน้าจอตัวจำลองต้องเห็น <code>RX ICC</code> (MEDIBUS) หรือ <code>RX '?'</code> (temp) ทุกรอบ poll; ถ้าเห็นแต่ <i>"nothing yet (check cable/port)"</i> = สาย/พอร์ตไม่ถูก</li>
+  <li>ตัวเลือก: <code>--list</code> แสดงพอร์ต, <code>--fixed</code> ค่าคงที่, <code>--print</code> แสดง frame โดยไม่เปิดพอร์ต</li>
+</ul>
+<h2>9.2 ตัวจำลอง Vista 120 S</h2>
+<ul>
+  <li>ต่อ TCP เข้า gateway ได้รับ greeting แล้วส่ง vitals ทุก 1 วินาที, NIBP เปลี่ยนทุก 60 วินาที</li>
+  <li>ตัวเลือก: <code>--noise</code> (ปน message ชนิดอื่น), <code>--no-spo2</code>, <code>--no-temp</code>, <code>--no-nibp</code> (จำลองถอด sensor)</li>
+  <li>หลุดการเชื่อมต่อจะต่อใหม่เองทุก 3 วินาที</li>
+</ul>
+<pre>10:19:51 connected; greeting 100002000000d5a9d907080e113b2605 (16 bytes, matches the CMS greeting)
+10:19:51 TX   78 B  HR=76 RR=14 NIBPs=132 NIBPd=76 NIBPm=95 SpO2=98 PR=76 T1=36.8</pre>
+
+<!-- ============================== 10 ============================== -->
+<h1 id="ch10"><span class="num">10</span> การดูแลระบบประจำวัน</h1>
+<h2 id="ch10-1">10.1 ตรวจสถานะ</h2>
+<pre>cd ~/flora/flora-core/flora-gateway
+docker compose -p flora-gateway ps                       <span class="c"># container หลัก</span>
+docker ps --filter name=flora-gw-parser                  <span class="c"># parser ของแต่ละ device</span>
+curl -s http://127.0.0.1:7401/status | python3 -m json.tool   <span class="c"># serial pods</span>
+curl -s http://127.0.0.1:7404/status | python3 -m json.tool   <span class="c"># socket pods</span>
+docker logs -f flora-gateway-gateway-service-1            <span class="c"># log หน้า admin / check-in</span>
+docker logs -f flora-gw-parser-or-medibus-01              <span class="c"># log parser ของเครื่อง</span>
+uptime; docker stats --no-stream                          <span class="c"># ภาระเครื่อง</span>
+systemctl status docker --no-pager | head -5               <span class="c"># Docker Engine</span></pre>
+
+<h2 id="ch10-2">10.2 Log การทำงาน (flora-watch)</h2>
+<p>service <code>flora-watch</code> บันทึกตลอดเวลา: เครื่องปิด/รีบูต, container start/die/restart/oom, healthcheck, และ endpoint (admin, data-api, serial-controller) ล่ม/กลับมา เก็บไว้ 90 วันที่ <code>~/.local/state/flora/uptime/YYYY-MM-DD.log</code></p>
+<pre>python3 ~/flora/flora-core/flora-gateway/scripts/flora_watch.py --summary 7   <span class="c"># สรุป 7 วัน</span>
+tail -f ~/.local/state/flora/uptime/$(date +%F).log                           <span class="c"># ดูสด</span>
+grep -hE "die|restart|oom|unhealthy|down|off" ~/.local/state/flora/uptime/*.log</pre>
+<table>
+<tr><th style="width:28%">บรรทัดตัวอย่าง</th><th>ความหมาย</th></tr>
+<tr><td><code>MONITOR start host was off/rebooted ... (off 3d16h)</code></td><td>เครื่องปิดไปนานเท่าไร</td></tr>
+<tr><td><code>CONTAINER die flora-gateway-server-1 exit=137</code></td><td>container หยุด/ถูก kill</td></tr>
+<tr><td><code>CONTAINER health flora-gateway-kafka-1 unhealthy</code></td><td>healthcheck ไม่ผ่าน</td></tr>
+<tr><td><code>ENDPOINT down data-api ... HTTP 502</code> → <code>up after 30s down</code></td><td>Leaf ดึงข้อมูลไม่ได้ช่วงไหน นานเท่าไร</td></tr>
+<tr><td><code>DOCKER down</code> / <code>up</code></td><td>Docker Engine หยุด/กลับมา (เช่น <code>systemctl restart docker</code>)</td></tr>
+</table>
+
+<h2 id="ch10-3">10.3 สำรองและกู้คืนฐานข้อมูล</h2>
+<p>ฐานข้อมูลเก็บ device, template, ผู้ใช้, ไลเซนส์, ลิงก์ Canopy, alert และค่าที่วัด สำรองก่อนทุกการเปลี่ยนแปลงใหญ่</p>
+<pre>mkdir -p ~/flora-backups
+docker exec flora-gateway-gateway-db-1 pg_dump -U flora_gateway -d flora_gateway -Fc \
+  &gt; ~/flora-backups/flora_gateway-$(date +%Y%m%d-%H%M).dump
+cp .env config/gateway.site.toml ~/flora-backups/</pre>
+<p>กู้คืน:</p>
+<pre>docker exec -i flora-gateway-gateway-db-1 pg_restore -U flora_gateway -d flora_gateway \
+  --clean --if-exists --no-owner &lt; ~/flora-backups/flora_gateway-YYYYMMDD-HHMM.dump
+docker compose -p flora-gateway restart gateway-service</pre>
+
+<h2 id="ch10-4">10.4 อัปเดตโค้ดและ build ใหม่ (คงค่าเดิม)</h2>
+<div class="steps">
+<div class="step">สำรองฐานข้อมูลและไฟล์ตั้งค่า (10.3)</div>
+<div class="step">ดึงโค้ดใหม่ แล้วตรวจว่า <code>.env</code>, <code>config/gateway.site.toml</code>, <code>config/instances.site.json</code> ยังอยู่
+<pre>cd ~/flora/flora-core &amp;&amp; git pull
+cd flora-gateway &amp;&amp; git status --short</pre></div>
+<div class="step">ตรวจ config และ build (ระบบเดิมยังทำงานระหว่าง build)
+<pre>python3 scripts/validate_config.py config/gateway.site.toml config/instances.site.json
+docker compose -p flora-gateway build</pre></div>
+<div class="step">เริ่มด้วย image ใหม่ และ <b>ลบ parser container เก่า</b> ให้ gateway-service สร้างใหม่จาก image ใหม่
+<pre>docker compose -p flora-gateway up -d
+docker rm -f $(docker ps -aq --filter name=flora-gw-parser)</pre></div>
+<div class="step">ตรวจตามหัวข้อ 3.7 และดู <code>flora_watch.py --summary 1</code></div>
+</div>
+<div class="warn"><b>ทำไมต้องลบ parser เก่า</b>parser container อ้าง image ID เดิม เมื่อ build parser ใหม่ image เดิมถูกแทนที่ gateway-service จะ check-in ไม่ได้ (<code>404 ... No such image</code>) จนกว่าจะสร้าง parser ใหม่</div>
+
+<h2 id="ch10-5">10.5 Portainer (หน้าเว็บดู Docker)</h2>
+<p>ใช้แทนหน้าต่าง Docker Desktop ดู container, log, สถานะ และ restart ได้ ติดตั้งครั้งเดียว:</p>
+<pre>docker volume create portainer_data
+docker run -d --name portainer --restart=always -p 127.0.0.1:9443:9443 \
+  -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer-ce:lts</pre>
+<ul>
+<li>เปิด <code>https://localhost:9443</code> แล้ว <b>สร้างบัญชี admin ภายใน 5 นาที</b> (เกินเวลาให้ <code>docker restart portainer</code> แล้วสร้างใหม่)</li>
+<li>เปิดได้เฉพาะเครื่อง gateway เพราะ Portainer มีสิทธิ์เทียบเท่า root</li>
+<li><b>ไม่ควรแก้ค่าหรือลบ container ของ gateway ใน Portainer</b> เพราะ compose/updater จะเขียนทับ</li>
+</ul>
+
+<h1 id="ch11"><span class="num">11</span> การแก้ปัญหา (Troubleshooting)</h1>
+<table>
+<tr><th style="width:27%">อาการ</th><th style="width:33%">สาเหตุที่พบบ่อย</th><th>วิธีแก้</th></tr>
+<tr><td>เปิดเว็บ 7400/7410 ไม่ได้ หลังรีสตาร์ต</td><td>gateway-db start ไม่ได้ เพราะโฟลเดอร์โปรเจกต์ถูกย้าย (Docker สร้างโฟลเดอร์เปล่าแทนไฟล์ SQL)</td><td>รัน <code>docker compose -p flora-gateway up -d --force-recreate</code> จากโฟลเดอร์ปัจจุบัน; ดู <code>docker inspect ... .State.Error</code></td></tr>
+<tr><td><b>502 Bad Gateway</b></td><td>ตัวกลาง (kong, Cloudflare tunnel, edge ของ Canopy) ติดต่อปลายทางไม่ได้: เครื่องปิด, กำลัง restart, server ล่ม</td><td>ดู <code>flora_watch.py --summary</code> ในช่วงเวลาที่เจอ; ตรวจ <code>docker compose ps</code></td></tr>
+<tr><td>Monitor มีแต่ <b>out</b> ไม่มี <b>in</b></td><td>ไม่มีเครื่อง/ตัวจำลองตอบ, สายไม่ใช่ null-modem, ค่าสายของ pod ไม่ตรงกับเครื่อง</td><td>ตรวจสาย, ค่า baud/parity ใน pod, <code>curl -s http://127.0.0.1:7401/status</code></td></tr>
+<tr><td><code>Device or resource busy</code> / <code>No such file</code> ที่ serial pod</td><td>มี 2 pod หรือโปรแกรมอื่นเปิดพอร์ตเดียวกัน (ModemManager); หรือพอร์ตไม่ได้อยู่ใน <code>compose.override.yaml</code></td><td>ให้เหลือ pod เดียวต่อพอร์ต, ปิด ModemManager, เพิ่มพอร์ตใน override แล้ว <code>up -d serial-controller</code></td></tr>
+<tr><td>device ใช้ pod HL7 แต่ข้อมูลไม่เข้า (เช่น Vista)</td><td>framing ไม่ตรง (mllp vs raw)</td><td>แก้ pod เป็น <code>framing = "raw"</code>, <code>auto_ack = false</code> แล้ว restart socket-controller</td></tr>
+<tr><td><code>device type ... is not licensed</code></td><td>ประเภทเครื่องไม่อยู่ในไลเซนส์</td><td>เพิ่มใน allowed_types ที่ Root (5.3)</td></tr>
+<tr><td><code>CERTIFICATE_VERIFY_FAILED: self-signed</code></td><td>Canopy ใช้ cert ที่ออกเอง</td><td>ติดตั้ง cert และใช้ชื่อ <code>canopy.flora.local</code> (5.2) หรือใช้ <code>http://...:7204</code></td></tr>
+<tr><td>check-in ได้ <code>403 Flora Canopy is read-only</code></td><td>edge ของ Canopy ส่ง <code>/api/haber/</code> ไปที่ canopy-api แทน Haber</td><td>แก้ nginx ของ Canopy หรือใช้ <code>http://&lt;canopy&gt;:7204</code></td></tr>
+<tr><td>check-in <code>404 No such image</code></td><td>parser container อ้าง image เก่าหลัง build</td><td><code>docker rm -f $(docker ps -aq --filter name=flora-gw-parser)</code></td></tr>
+<tr><td>Kafka <b>unhealthy</b>, เครื่องช้า, load สูง</td><td>RAM ไม่พอ, healthcheck ของ Kafka เปิด Java ทุก 10 วินาที</td><td>ดู <code>uptime</code>, <code>docker stats</code>; ปิดโปรแกรมที่ไม่ใช้; (ทางเลือก) เปลี่ยน healthcheck เป็น <code>nc -z localhost 9092</code></td></tr>
+<tr><td>Leaf wizard: <code>string_too_short ... leaf_id</code></td><td>Leaf ไม่ได้ตั้ง <code>FLORA_LEAF_ID</code></td><td>ตั้งใน <code>.env</code> ของ Leaf แล้ว <code>docker compose up -d</code></td></tr>
+<tr><td>Canopy: Needs attention = 1</td><td>Leaf ยังไม่ได้กำหนดตำแหน่ง (unassigned) หรือ config ยังไม่ sync</td><td>กำหนดตำแหน่งให้ Leaf ใน Canopy</td></tr>
+<tr><td>Alert <i>No data from …</i> ค้าง</td><td>device เปิดอยู่แต่ไม่มีเครื่องจริง (เช่น device ตัวอย่าง)</td><td>Disable device ที่ไม่ใช้ แล้ว alert ปิดเองใน ~30 วินาที</td></tr>
+<tr><td>ตัวจำลอง TCP: <code>WinError 10053 ... aborted</code></td><td>gateway หรือ Docker restart / เครื่องโหลดหนัก</td><td>ตัวจำลองต่อใหม่เอง; ตรวจ flora-watch ในเวลานั้น</td></tr>
+<tr><td>ไม่เห็น container ใน Docker Desktop / <code>docker ps</code> ว่าง</td><td>CLI ชี้ไปที่ Docker Desktop (คนละ engine กับระบบ)</td><td><code>docker context use default</code>; ดูผ่าน Portainer</td></tr>
+<tr><td>pod มี frame เข้า แต่ device ไม่มีค่า (Vista/M540)</td><td><code>source_ip</code> ใน options ไม่ตรงกับ IP ที่ gateway เห็น</td><td>ดู <code>source_ip</code> ใน meta ของ <code>gw.raw.&lt;pod&gt;</code> (7.5) แล้วแก้ options หรือเอา source_ip ออกถ้ามีเครื่องเดียว</td></tr>
+<tr><td><code>permission denied ... docker.sock</code></td><td>ผู้ใช้ยังไม่อยู่กลุ่ม docker หรือยังไม่ login ใหม่</td><td><code>sudo usermod -aG docker $USER</code> แล้ว logout/login</td></tr>
+</table>
+
+<!-- ============================== 12 ============================== -->
+<h1 id="ch12"><span class="num">12</span> ภาคผนวก</h1>
+<h2 id="ch12-1">12.1 Container ทั้งหมดและหน้าที่</h2>
+<table>
+<tr><th style="width:30%">Container</th><th>หน้าที่</th><th style="width:22%">ถ้าล่ม</th></tr>
+<tr><td>serial-controller</td><td>พอร์ต RS-232 (map จาก <code>/dev/ttyS0</code>) อ่าน/เขียนข้อมูล</td><td>เครื่อง serial ทั้งหมดหยุด</td></tr>
+<tr><td>socket-controller</td><td>TCP/UDP (HL7 MLLP, raw, UDP relay)</td><td>เครื่อง LAN หยุด</td></tr>
+<tr><td>webhook-controller</td><td>รับ HTTP POST จากเครื่อง</td><td>เครื่องแบบ push หยุด</td></tr>
+<tr><td>feeder-controller</td><td>ดึง HTTP API ของเครื่องเป็นระยะ</td><td>เครื่องแบบ poll HTTP หยุด</td></tr>
+<tr><td>flora-gw-parser-&lt;device&gt;</td><td>แปลง protocol ของ device นั้น</td><td>device นั้นหยุด</td></tr>
+<tr><td>parser-image</td><td>build image ของ parser แล้วจบ (Exited 0 = ปกติ)</td><td>—</td></tr>
+<tr><td>kafka</td><td>ท่อข้อความกลางทุกตัว</td><td><b>ทั้งระบบหยุด</b></td></tr>
+<tr><td>gateway-db</td><td>PostgreSQL: ค่าวัด, device, ผู้ใช้, ไลเซนส์</td><td><b>ทั้งระบบหยุด</b></td></tr>
+<tr><td>collector</td><td>บันทึกค่าลงฐานข้อมูล</td><td>ค่าใหม่ไม่ถูกเก็บ (รอในคิว)</td></tr>
+<tr><td>server</td><td>API อ่านค่า</td><td>Leaf ได้ 502</td></tr>
+<tr><td>kong</td><td>data-api :7410 แยกตาม Leaf</td><td>Leaf ดึงไม่ได้</td></tr>
+<tr><td>publisher</td><td>push ค่าไประบบปลายทาง (ถ้าตั้ง)</td><td>เฉพาะปลายทาง push</td></tr>
+<tr><td>gateway-service</td><td>หน้า admin :7400, จัดการ parser, check-in, ไลเซนส์, alert</td><td>เข้า admin ไม่ได้ (ข้อมูลยังไหล)</td></tr>
+<tr><td>updater</td><td>อัปเดต gateway ตาม release ที่อนุมัติใน Canopy</td><td>ไม่ได้รับอัปเดต</td></tr>
+</table>
+
+<h2 id="ch12-2">12.2 พอร์ตทั้งหมดบนเครื่อง gateway</h2>
+<table>
+<tr><th style="width:16%">พอร์ต</th><th style="width:18%">เปิดให้</th><th>ใช้ทำอะไร</th></tr>
+<tr><td>7400</td><td>LAN</td><td>หน้า admin (gateway-service)</td></tr>
+<tr><td>7410</td><td>LAN</td><td>data-api (kong) สำหรับ Leaf</td></tr>
+<tr><td>7421</td><td>LAN</td><td>HL7 MLLP → pod <code>socket.or-monitor</code></td></tr>
+<tr><td>7422</td><td>LAN</td><td>pod <code>socket.icu-monitor</code> (ตอนนี้ raw สำหรับ Vista 120 S)</td></tr>
+<tr><td>7423</td><td>LAN</td><td>webhook pod <code>webhook.or-anesthesia</code></td></tr>
+<tr><td>9500</td><td>LAN</td><td>pod <code>socket.vista</code> (ถ้าเพิ่มใน config)</td></tr>
+<tr><td>2051</td><td>LAN</td><td>Dräger IACS relay (M540) → <code>socket.m540-relay</code></td></tr>
+<tr><td>7401–7406</td><td>เฉพาะเครื่อง</td><td>สถานะ controller / collector / publisher (<code>/status</code>)</td></tr>
+<tr><td>7412 / 7414</td><td>เฉพาะเครื่อง</td><td>PostgreSQL / Kafka</td></tr>
+<tr><td>7430 / 7431</td><td>เฉพาะเครื่อง</td><td>พอร์ตเสมือน ttyV0 / ttyV1 (สำหรับตัวจำลองแบบ TCP, ไม่ได้ใช้กับ COM1 แล้ว)</td></tr>
+<tr><td>9443</td><td>เฉพาะเครื่อง</td><td>Portainer</td></tr>
+</table>
+
+<h2 id="ch12-3">12.3 ตำแหน่งไฟล์สำคัญ</h2>
+<table>
+<tr><th style="width:52%">ไฟล์ / โฟลเดอร์</th><th>คืออะไร</th></tr>
+<tr><td><code>~/flora/flora-core/flora-gateway/</code></td><td>โฟลเดอร์ระบบ (รัน compose ที่นี่)</td></tr>
+<tr><td><code>.env</code></td><td>ค่าเฉพาะเครื่อง (3.4)</td></tr>
+<tr><td><code>config/gateway.site.toml</code></td><td>pod ของไซต์ (3.5)</td></tr>
+<tr><td><code>config/instances.site.json</code></td><td>seed ของ device (<code>[]</code>)</td></tr>
+<tr><td><code>certs/canopy-trust.pem</code>, <code>certs/trust.env</code></td><td>cert ของ Canopy (5.2)</td></tr>
+<tr><td><code>kong/kong.yaml</code></td><td>route data-api ต่อ Leaf</td></tr>
+<tr><td><code>compose.override.yaml</code></td><td>map พอร์ต serial จริงเข้า container (เฉพาะเครื่อง)</td></tr>
+<tr><td><code>scripts/flora_watch.py</code></td><td>ตัวเก็บ log การทำงาน</td></tr>
+<tr><td><code>scripts/*_sim.py</code></td><td>ตัวจำลองเครื่องมือแพทย์</td></tr>
+<tr><td><code>scripts/validate_config.py</code></td><td>ตรวจไฟล์ config</td></tr>
+<tr><td><code>~/.config/systemd/user/flora-watch.service</code></td><td>service ตัวเก็บ log</td></tr>
+<tr><td><code>~/.local/state/flora/uptime/</code></td><td>log การทำงานรายวัน</td></tr>
+<tr><td><code>~/flora-backups/</code></td><td>ไฟล์สำรองฐานข้อมูลและ config</td></tr>
+<tr><td><code>/etc/docker/daemon.json</code></td><td>ค่า Docker Engine (ขนาด log)</td></tr>
+</table>
+
+<h2 id="ch12-4">12.4 Kafka topics</h2>
+<table>
+<tr><th style="width:26%">Topic</th><th style="width:34%">จาก → ถึง</th><th>เนื้อหา</th></tr>
+<tr><td><code>gw.raw.&lt;pod&gt;</code></td><td>controller → parser</td><td>ข้อมูลดิบ (RawFrame)</td></tr>
+<tr><td><code>gw.cmd.&lt;pod&gt;</code></td><td>parser / gateway-service → controller</td><td>bytes ที่จะเขียนไปเครื่อง (poll, ACK)</td></tr>
+<tr><td><code>gw.obs</code></td><td>parser → collector, publisher</td><td>observation (<code>ivy_param</code> = พารามิเตอร์ของ Flora)</td></tr>
+<tr><td><code>gw.measurements</code></td><td>parser Dräger → collector</td><td>ค่าดั้งเดิมของเครื่องพร้อมนิยาม</td></tr>
+<tr><td><code>gw.logs</code></td><td>ทุกตัว → collector</td><td>log</td></tr>
+</table>
+
+<h2 id="ch12-5">12.5 Checklist การติดตั้ง</h2>
+<table>
+<tr><th style="width:7%">✓</th><th>รายการ</th></tr>
+<tr><td>☐</td><td>Ubuntu อัปเดตแล้ว, ผู้ใช้อยู่กลุ่ม dialout, ปิด ModemManager</td></tr>
+<tr><td>☐</td><td>Docker Engine ติดตั้ง, <code>docker</code>/<code>containerd</code> enabled, ผู้ใช้อยู่กลุ่ม docker</td></tr>
+<tr><td>☐</td><td>โค้ดอยู่ที่ <code>~/flora/flora-core</code> (ไม่ย้ายภายหลัง)</td></tr>
+<tr><td>☐</td><td><code>.env</code>, <code>gateway.site.toml</code>, <code>instances.site.json</code> ครบ และ validate ผ่าน</td></tr>
+<tr><td>☐</td><td><code>docker compose -p flora-gateway up -d</code> ทุกตัว healthy</td></tr>
+<tr><td>☐</td><td>เปลี่ยนรหัส admin แล้ว</td></tr>
+<tr><td>☐</td><td>check-in Canopy ได้ 200 OK, ไลเซนส์ valid, ประเภทเครื่องครบ</td></tr>
+<tr><td>☐</td><td><code>compose.override.yaml</code> map COM1, pod COM1 connected, ค่าสายตรงกับเครื่อง</td></tr>
+<tr><td>☐</td><td>เพิ่ม device, pod ถูกต้อง, เห็นข้อมูล <b>in</b> และ device online</td></tr>
+<tr><td>☐</td><td>Leaf ตั้ง FLORA_LEAF_ID, wizard ผ่านครบ 5 ขั้น</td></tr>
+<tr><td>☐</td><td>linger เปิด, flora-watch enabled, ทดสอบรีบูต (ไม่ login) แล้วระบบขึ้นเอง</td></tr>
+<tr><td>☐</td><td>flora-watch ทำงาน, สำรองฐานข้อมูลครั้งแรกแล้ว</td></tr>
+</table>
+<h2 id="ch12-6">12.6 ย้ายจาก Docker Desktop มา Docker Engine</h2>
+<p>สำหรับเครื่องที่เคยติดตั้งด้วย Docker Desktop (ข้อมูลไม่หาย ระบบหยุดราว 3–5 นาที)</p>
+<div class="steps">
+<div class="step">ติดตั้ง Docker Engine และเพิ่มกลุ่ม docker (3.2) แล้ว build image ใน Engine ก่อน (ระบบเดิมยังทำงาน)
+<pre>cd ~/flora/flora-core/flora-gateway
+docker --context default compose -p flora-gateway build</pre></div>
+<div class="step">สำรองฐานข้อมูลจาก Docker Desktop และไฟล์ตั้งค่า
+<pre>docker --context desktop-linux exec flora-gateway-gateway-db-1 \
+  pg_dump -U flora_gateway -d flora_gateway -Fc &gt; ~/flora-backups/to-engine.dump
+cp .env config/gateway.site.toml ~/flora-backups/</pre></div>
+<div class="step">หยุดระบบบน Docker Desktop และ bridge ของ COM1 (ถ้ามี)
+<pre>docker --context desktop-linux rm -f $(docker --context desktop-linux ps -aq --filter name=flora-gw-parser)
+docker --context desktop-linux compose -p flora-gateway down
+systemctl --user disable --now flora-com1-bridge</pre></div>
+<div class="step">แก้ pod COM1 เป็น <code>/dev/ttyS0</code> พร้อมค่าสาย (3.5) และสร้าง <code>compose.override.yaml</code></div>
+<div class="step">start ฐานข้อมูลบน Engine แล้ว restore
+<pre>docker context use default
+docker compose -p flora-gateway up -d gateway-db
+docker exec -i flora-gateway-gateway-db-1 pg_restore -U flora_gateway -d flora_gateway \
+  --clean --if-exists --no-owner &lt; ~/flora-backups/to-engine.dump</pre></div>
+<div class="step">start ทั้งหมด แล้วปิด Docker Desktop
+<pre>docker compose -p flora-gateway up -d
+systemctl --user disable --now docker-desktop
+systemctl --user restart flora-watch</pre></div>
+<div class="step">ตรวจตาม 3.7, เปิด linger (4.2), ติดตั้ง Portainer (10.5) และทดสอบรีบูต</div>
+</div>
+<p class="small">คู่มือนี้จัดทำจากการตั้งค่าจริงของเครื่อง gateway 172.22.1.233 · ค่าที่เป็นรหัสผ่าน/token ไม่ได้แสดงในเอกสาร</p>
+
+</body>
+</html>
