@@ -55,6 +55,7 @@ export type GatewayDevice = {
   label?: string | null;
   enabled?: boolean;
   status?: string;
+  parser_status?: string | null;
   is_online?: boolean;
   last_seen_ts?: number | null;
 };

@@ -21,7 +21,7 @@ const TEXT = {
     recent: "Recent cases on this Leaf", syncNow: "Sync now", syncing: "Syncing…", auto: "Auto-sync every", sec: "s",
     lastSync: "Last sync with Canopy", never: "never", offline: "Canopy unreachable — showing local data",
     started: "Started", handedTo: "Handed over to", from: "Continued from", noCaseShort: "No active case",
-    lastSeen: "seen", confirmTitle: "Take over this case?", moveDevices: "Also move this bed's devices to this workstation",
+    lastSeen: "seen", devOffline: "offline", offlineFor: "offline for", confirmTitle: "Take over this case?", moveDevices: "Also move this bed's devices to this workstation",
     confirmBody: "Canopy moves the case here and the other workstation locks its copy when it next connects. Entries made there after its last sync are not included.",
     confirm: "Take over", cancel: "Cancel", copyAge: "Canopy copy is", old: "old", noCopy: "Canopy has no complete copy yet",
     busyHere: "Discharge the case on this workstation first",
@@ -34,7 +34,7 @@ const TEXT = {
     recent: "เคสล่าสุดบนเครื่องนี้", syncNow: "Sync ตอนนี้", syncing: "กำลัง sync…", auto: "Sync อัตโนมัติทุก", sec: "วินาที",
     lastSync: "Sync กับ Canopy ล่าสุด", never: "ยังไม่เคย", offline: "เชื่อมต่อ Canopy ไม่ได้ — แสดงข้อมูลในเครื่อง",
     started: "เริ่ม", handedTo: "ส่งต่อให้", from: "รับต่อจาก", noCaseShort: "ไม่มีเคส",
-    lastSeen: "ล่าสุด", confirmTitle: "รับเคสนี้มาทำต่อ?", moveDevices: "ย้ายอุปกรณ์ของเตียงนั้นมาที่เครื่องนี้ด้วย",
+    lastSeen: "ล่าสุด", devOffline: "ออฟไลน์", offlineFor: "ออฟไลน์มาแล้ว", confirmTitle: "รับเคสนี้มาทำต่อ?", moveDevices: "ย้ายอุปกรณ์ของเตียงนั้นมาที่เครื่องนี้ด้วย",
     confirmBody: "Canopy จะย้ายเคสมาที่เครื่องนี้ และเครื่องเดิมจะล็อกเคสเมื่อเชื่อมต่อครั้งถัดไป ข้อมูลที่บันทึกที่เครื่องเดิมหลัง sync ครั้งล่าสุดจะไม่ถูกนำมา",
     confirm: "รับเคส", cancel: "ยกเลิก", copyAge: "สำเนาใน Canopy อายุ", old: "", noCopy: "Canopy ยังไม่มีสำเนาเคสที่สมบูรณ์",
     busyHere: "ต้อง discharge เคสบนเครื่องนี้ก่อน",
@@ -136,8 +136,16 @@ export default function WardView({ sessionUser, onOpenCase, onCaseChanged }: Pro
   // Only the devices actually selected (enabled) for this Leaf — unselected ones aren't shown.
   const myDevices = useMemo(() => (data?.gateways || []).flatMap(gateway =>
     gateway.devices.filter(device => device.leaf_id === data?.leaf.id && device.enabled !== false)
-      .map(device => ({ ...device, gateway: gateway.site_name }))), [data]);
+      .map(device => ({ ...device, gateway: gateway.site_name, gatewayOnline: gateway.online, gatewayLastSeen: gateway.last_seen }))), [data]);
   const sourceGateway = data?.gateways.find(gateway => gateway.gateway_id === data?.device_source?.gateway_id);
+  const sinceText = (ms: number) => {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    return h < 24 ? `${h}h` : `${Math.floor(h / 24)}d`;
+  };
   const location = [data?.workstation.room_name, data?.workstation.bed_name].filter(Boolean).join(" · ");
 
   return <main className="min-h-full bg-[var(--app-bg)] px-4 py-4 sm:px-6 lg:px-8">
@@ -213,9 +221,15 @@ export default function WardView({ sessionUser, onOpenCase, onCaseChanged }: Pro
             {data?.device_source ? <>{sourceGateway?.site_name || data.device_source.gateway_id || "Gateway"} · <code>{data.device_source.data_api_url}</code></> : L.noSource}
           </div>
           {myDevices.length ? <ul className="flex flex-wrap gap-2">
-            {myDevices.map(device => <li key={device.device_id} className="rounded-lg border border-[var(--app-border)] px-2 py-1 text-xs">
-              {device.label || device.device_id} <span className="text-[var(--app-muted)]">· {device.device_type}</span>
-            </li>)}
+            {myDevices.map(device => {
+              const online = device.gatewayOnline && (device.parser_status ? device.parser_status === "running" : true);
+              const offMs = device.gatewayLastSeen ? Date.now() - device.gatewayLastSeen : null;
+              return <li key={device.device_id} className="flex items-center gap-1.5 rounded-lg border border-[var(--app-border)] px-2 py-1 text-xs">
+                <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: online ? "#1d9e75" : "#e24b4a" }} />
+                {device.label || device.device_id} <span className="text-[var(--app-muted)]">· {device.device_type}</span>
+                {!online ? <span className="text-[var(--app-muted)]">· {(!device.gatewayOnline && offMs != null) ? `${L.offlineFor} ${sinceText(offMs)}` : (device.parser_status || L.devOffline)}</span> : null}
+              </li>;
+            })}
           </ul> : <div className="text-sm text-[var(--app-muted)]">{L.none}</div>}
         </Card>
       </div>
