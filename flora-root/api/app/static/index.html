@@ -179,6 +179,8 @@ async function load() {
             <div style="display:flex;flex-wrap:wrap;gap:6px 14px">
               ${(data.gateway_device_types || []).map((dt) => `<label style="display:flex;align-items:center;gap:5px;color:var(--ink);font-size:13px"><input type="checkbox" name="dt_${esc(dt.code)}" style="width:auto" ${(t.device_types || []).includes(dt.code) ? "checked" : ""}>${esc(dt.label || dt.code)}</label>`).join("")}
             </div>
+            <label style="display:block;margin-top:8px;color:var(--muted);font-size:12px">Custom type codes (comma-separated — e.g. gateway local templates not in a release)
+              <input name="custom_codes" style="width:100%;margin-top:4px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)" placeholder="test2, my-custom-device" value="${esc((t.device_types || []).filter((c) => !(data.gateway_device_types || []).some((d) => d.code === c)).join(", "))}"></label>
           </fieldset>
           <button class="primary">Issue new bundle</button> <button type="button" onclick="editing=null;load()">Cancel</button></form>
           <div class="muted">Canopy picks up the new bundle on its next sync; gateways get their share on their next check-in.</div></td></tr>` : ""}`;
@@ -220,8 +222,10 @@ async function save(event, id) {
   const body = { modules: t.modules, device_types: [] };
   for (const [k, v] of form) {
     if (k.startsWith("dt_")) body.device_types.push(k.slice(3));
+    else if (k === "custom_codes") String(v).split(",").map((s) => s.trim()).filter(Boolean).forEach((c) => body.device_types.push(c));
     else body[k] = Number(v);
   }
+  body.device_types = [...new Set(body.device_types)];
   const r = await fetch(`api/v1/tenants/${id}/license`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   if (!r.ok) alert(await r.text());
   editing = null; load(); return false;
