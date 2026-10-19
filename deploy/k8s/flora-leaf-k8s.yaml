@@ -101,6 +101,7 @@ spec:
         - name: leaf-api
           image: flora-canopy-canopy-api:latest   # same flora-api source, mode=leaf
           imagePullPolicy: Never
+          command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]   # no --reload in k8s (watchfiles fd exhaustion)
           env:
             - { name: FLORA_DATABASE_URL, value: "postgresql://flora_app:admin@leaf-db:5432/flora" }
             - { name: FLORA_API_ENV, value: "development" }

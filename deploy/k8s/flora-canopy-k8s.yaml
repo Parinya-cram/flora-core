@@ -86,6 +86,7 @@ spec:
         - name: canopy-api
           image: flora-canopy-canopy-api:latest
           imagePullPolicy: Never
+          command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]   # no --reload in k8s (watchfiles fd exhaustion)
           env:
             - { name: FLORA_DATABASE_URL, value: "postgresql://flora_view:admin@canopy-db:5432/flora" }
             - { name: FLORA_API_ENV, value: "development" }
@@ -95,7 +96,7 @@ spec:
             - { name: FLORA_BOOTSTRAP_ADMIN_USERNAME, value: "admin" }
             - { name: FLORA_BOOTSTRAP_ADMIN_PASSWORD, value: "admin" }
             - { name: FLORA_BOOTSTRAP_ADMIN_NAME, value: "Administrator" }
-            - { name: FLORA_HABER_URL, value: "http://haber.flora-canopy.svc.cluster.local:8000" }
+            - { name: FLORA_HABER_URL, value: "http://haber.flora-appliance.svc.cluster.local:8000" }
             - { name: HABER_ADMIN_USERNAME, value: "admin" }
             - { name: HABER_ADMIN_PASSWORD, value: "admin" }
           ports: [ { containerPort: 8000 } ]
@@ -135,6 +136,7 @@ spec:
         - name: sync-api
           image: flora-canopy-canopy-api:latest
           imagePullPolicy: Never
+          command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]   # no --reload in k8s
           env:
             - { name: FLORA_DATABASE_URL, value: "postgresql://flora_sync:admin@canopy-db:5432/flora" }
             - { name: FLORA_API_ENV, value: "development" }
