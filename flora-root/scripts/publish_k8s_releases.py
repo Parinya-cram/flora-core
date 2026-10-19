@@ -89,8 +89,8 @@ def main() -> None:
         for key, image in services.items():
             repo = f"flora/{component}/{key}"
             remote = f"{REGISTRY}/{repo}:{VERSION}"
-            sh("nerdctl", "-n", "k8s.io", "tag", image, remote)
-            sh("nerdctl", "-n", "k8s.io", "push", "--insecure-registry", remote)
+            sh("sudo", "nerdctl", "-n", "k8s.io", "tag", image, remote)
+            sh("sudo", "nerdctl", "-n", "k8s.io", "push", "--insecure-registry", remote)
             pinned[key] = {"repository": repo, "digest": pushed_digest(repo, VERSION), "tag": VERSION}
         release = {"component": component, "version": VERSION, "channel": CHANNEL,
                    "services": pinned, "notes": f"k8s build {TAG}"}

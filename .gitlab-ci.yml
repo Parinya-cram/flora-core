@@ -151,6 +151,6 @@ deploy-k8s:
     - kubectl -n flora-appliance rollout status deploy/haber --timeout=300s
     - kubectl -n flora-leaf   rollout status deploy/leaf-sync-worker --timeout=300s
     - echo "publish these images to root-registry + register canopy/leaf releases so Haber's mirror can pull them"
-    - sudo python3 flora-root/scripts/publish_k8s_releases.py "$TAG" || echo "publish-releases step failed (non-fatal)"
+    - python3 flora-root/scripts/publish_k8s_releases.py "$TAG" || echo "publish-releases step failed (non-fatal)"
   rules:
     - if: $CI_COMMIT_BRANCH == "device-distribution"
