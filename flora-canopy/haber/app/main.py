@@ -261,6 +261,7 @@ async def mirror_releases() -> None:
     done = {key for key, row in mirror_rows().items() if row["status"] == "ready"}
     pending = [release for release in manifest["releases"] if release["release_id"] not in done]
     if not pending:
+        STATE["mirror"].update(error=None)   # everything mirrored; clear any stale error from a withdrawn release
         return
     mirror = Mirror(ROOT_REGISTRY_URL or manifest["registry"], REGISTRY_URL)
     STATE["mirror"].update(status="running", error=None)
