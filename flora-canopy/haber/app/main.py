@@ -362,9 +362,9 @@ def usage() -> dict[str, Any]:
         "site": (gateway.get("site") or {}).get("display_name") or gateway.get("gateway_id"),
         "version": gateway.get("version"),
         "last_seen": gateway.get("last_seen"),
-        "devices": [{"device_id": d.get("device_id"), "device_type": d.get("device_type"),
-                     "label": d.get("label"), "leaf_id": d.get("leaf_id"),
-                     "enabled": d.get("enabled", True), "parser_status": d.get("parser_status")}
+        "devices": [{key: d.get(key) for key in ("device_id", "device_type", "label", "leaf_id", "pod", "station",
+                                                 "location", "serial_number", "asset_tag", "parser_status", "live")}
+                    | {"enabled": d.get("enabled", True)}
                     for d in (gateway.get("devices") or [])],
     } for gateway in known]
     return {"leaves": len(leaves), "gateways": len(known), "gateway_devices": devices,

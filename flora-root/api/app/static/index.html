@@ -93,6 +93,29 @@
   .inst .btns { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px } .inst .note { font-size:12px; color:var(--muted) }
   .inst .once { border:1px solid var(--accent); border-radius:10px; padding:12px 14px; margin:10px 0 }
   .inst .cmd { display:block; padding:8px 10px; background:var(--chip); border-radius:6px; user-select:all; white-space:pre-wrap; word-break:break-all }
+  /* Hospital drill-down: hospital -> ward -> bed (Leaf) -> devices, and each gateway. */
+  .crumbs { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:0 0 14px; font-size:13px }
+  .crumbs a { color:var(--accent); cursor:pointer; text-decoration:none } .crumbs a:hover { text-decoration:underline }
+  .crumbs span.sep { color:var(--muted) }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:16px }
+  .stat { border:1px solid var(--line); border-radius:12px; padding:10px 14px; background:var(--panel) }
+  .stat b { display:block; font-size:22px; line-height:1.2 } .stat span { color:var(--muted); font-size:12px }
+  .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; margin-bottom:18px }
+  .card { border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:var(--panel); cursor:pointer; transition:border-color .15s, transform .15s }
+  .card:hover { border-color:var(--accent); transform:translateY(-1px) } .card.static { cursor:default; transform:none }
+  .card h4 { margin:0 0 2px; font-size:15px; display:flex; justify-content:space-between; gap:8px; align-items:center }
+  .card .sub { color:var(--muted); font-size:12px } .card .row { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px }
+  .sec { font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:6px 0 8px }
+  .st { display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border-radius:999px; font-size:12px; font-weight:600; white-space:nowrap }
+  .st::before { content:""; width:7px; height:7px; border-radius:50% ; background:currentColor }
+  .st.ok { color:var(--ok); background:color-mix(in srgb, var(--ok) 14%, transparent) }
+  .st.idle { color:#3b82f6; background:color-mix(in srgb, #3b82f6 14%, transparent) }
+  .st.bad { color:var(--bad); background:color-mix(in srgb, var(--bad) 14%, transparent) }
+  .st.off { color:var(--muted); background:var(--chip) }
+  .devlist { display:grid; gap:4px; margin-top:8px } .devlist div { display:flex; justify-content:space-between; gap:8px; font-size:12px; align-items:center }
+  table.dev td, table.dev th { font-size:13px } table.dev .muted { font-size:12px }
+  .panel2 { border:1px solid var(--line); border-radius:12px; padding:12px 16px; background:var(--panel); margin-bottom:14px; display:flex; gap:24px; flex-wrap:wrap }
+  .panel2 div span { display:block; color:var(--muted); font-size:12px }
 </style>
 </head>
 <body>
@@ -308,7 +331,7 @@ async function withdraw(id) {
 // Root sees each hospital as one cluster: its appliance (Haber) is the only member that reaches Root;
 // Canopy, Leafs and gateways talk to each other on the hospital LAN. Data: the appliance's heartbeat.
 let topoTenant = null;
-function topoOpen(id) { topoTenant = id; installForm = null; installResult = null; renderTopology(); loadInstalls(); }
+function topoOpen(id) { topoTenant = id; topoAt = { level: "hospital" }; installForm = null; installResult = null; renderTopology(); loadInstalls(); }
 const isOnline = (ms) => ms && Date.now() - ms < 90000;
 function tNode(x, y, w, h, title, sub, cls = "", ok = null) {
   return `<g class="node ${cls}" transform="translate(${x},${y})"><rect width="${w}" height="${h}" rx="8"/>
@@ -351,47 +374,113 @@ function renderTopology() {
   });
   box.innerHTML = `<div class="topo"><svg style="max-width:${width * 1.15}px;margin:0 auto" viewBox="0 0 ${width} ${120 + rows * (ch + 40)}">${svg}</svg>${legend}</div>`;
 }
-function siteTopology(t) {
-  const u = t.usage || {}, gws = u.gateway_detail || [], nodes = u.nodes || [];
-  const leaves = (u.leaf_detail && u.leaf_detail.length) ? u.leaf_detail : (u.leaf_ids || []).map((id) => ({ leaf_id: id }));
-  const known = new Set(leaves.map((l) => l.leaf_id));
-  gws.forEach((g) => (g.devices || []).forEach((d) => { if (d.leaf_id && !known.has(d.leaf_id)) { known.add(d.leaf_id); leaves.push({ leaf_id: d.leaf_id }); } }));
-  const rel = (id) => nodes.find((n) => n.node_id === id)?.release_id || "";
-  const dot = (ok) => `<span class="dotc ${ok ? "ok" : "off"}"></span>`;
-  const devLine = (d) => `<div class="dev">${dot(d.enabled !== false && d.parser_status === "running")}<span>${esc(d.label || d.device_id)}</span>
-    <code class="muted">${esc(d.device_type || "")}</code><span class="muted">${esc(d.enabled === false ? "disabled" : d.parser_status || "—")}</span></div>`;
-  // per bed: the gateways whose devices are assigned to it, with those devices
-  const bedGateways = (leafId) => gws.map((g) => ({ g, devs: (g.devices || []).filter((d) => (d.leaf_id || null) === leafId) })).filter((x) => x.devs.length);
-  const gwBlock = ({ g, devs }) => `<div class="gw"><div>${dot(isOnline(g.last_seen))} <b>${esc(g.site || g.gateway_id)}</b>
-    <span class="muted">gateway · v${esc(g.version || "?")} · seen ${esc(ago(g.last_seen))}</span></div>${devs.map(devLine).join("")}</div>`;
-  const bedCard = (l) => {
-    const linked = bedGateways(l.leaf_id);
-    return `<div class="bed"><div style="display:flex;justify-content:space-between;gap:8px"><div>${dot(isOnline(l.last_seen))}
-      <b>${esc(l.bed || l.name || l.leaf_id)}</b>${l.room ? ` <span class="muted">· ${esc(l.room)}</span>` : ""}</div>
-      <span class="muted">Leaf ${esc(l.leaf_id)}</span></div>
-      <div class="muted" style="font-size:12px">${esc(rel(l.leaf_id) || "unmanaged")} · seen ${esc(ago(l.last_seen))} · ${linked.length} gateway · ${linked.reduce((n, x) => n + x.devs.length, 0)} devices</div>
-      ${linked.map(gwBlock).join("") || `<div class="muted" style="font-size:12px;margin-top:4px">No gateway device on this bed.</div>`}</div>`;
-  };
-  const wards = new Map();
-  leaves.forEach((l) => { const key = l.ward_key || l.ward || "—"; if (!wards.has(key)) wards.set(key, { name: l.ward || "Not in a ward", beds: [] }); wards.get(key).beds.push(l); });
-  const unassigned = gws.map((g) => ({ g, devs: (g.devices || []).filter((d) => !d.leaf_id) })).filter((x) => x.devs.length);
-  const wardHtml = [...wards.values()].map((w) => `<div class="ward"><header><b>${esc(w.name)}</b>
-      <span class="muted">${w.beds.length} bed · ${w.beds.reduce((n, l) => n + bedGateways(l.leaf_id).length, 0)} gateway link</span></header>
-      ${w.beds.map(bedCard).join("")}</div>`).join("")
-    + (unassigned.length ? `<div class="ward"><header><b>Not assigned to a bed</b><span class="muted">gateway devices</span></header>
-      <div class="bed">${unassigned.map(gwBlock).join("")}</div></div>` : "");
-  return `<p><button onclick="topoOpen(null)">‹ All hospitals</button></p>
-  <div class="layers">
-    <div class="chain">
-      <div class="lvl"><span class="lvl-label">Control plane</span><b>Flora iCIS Root</b></div><span class="net">- - internet - -›</span>
-      <div class="lvl"><span class="lvl-label">Appliance</span><b>${dot(isOnline(t.last_seen_at))} Haber</b><span class="muted">seen ${esc(ago(t.last_seen_at))}</span></div><span class="arrow">→</span>
-      <div class="lvl"><span class="lvl-label">Canopy · ${esc(t.tenant_id)}</span><b>${esc(t.name)}</b><span class="muted">${esc([t.canopy_version, rel("canopy")].filter(Boolean).join(" · ") || "—")}</span></div>
-    </div>
-    <div class="lvl-label">Wards → beds (Leaf) → gateways → devices</div>
-    <div class="wards">${wardHtml || `<span class="muted">No Leaf reported yet — waiting for the appliance's next check-in.</span>`}</div>
-  </div>
-  <div class="legend" style="display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:10px"><span>${dot(true)} seen &lt; 90 s / parser running</span><span>${dot(false)} not seen / parser not running</span></div>`;
+// Drill-down position inside a hospital: {level: "hospital" | "ward" | "bed" | "gateway", ward, leaf, gateway}
+let topoAt = { level: "hospital" };
+const jsq = (v) => esc(JSON.stringify(String(v ?? "")));   // a JS string literal safe inside onclick="…"
+function topoGo(at) { topoAt = at; renderTopology(); window.scrollTo({ top: 0 }); }
+const LIVE_STATE = {
+  receiving: ["ok", "receiving data"], standby: ["idle", "connected · not in use"], connected: ["idle", "connected · sends nothing"],
+  plugged_in: ["idle", "plugged in · no reply yet"], unplugged: ["bad", "unplugged / off"], connection_lost: ["bad", "connection lost"],
+  not_connected: ["bad", "never connected"], parser_down: ["bad", "parser stopped"], port_error: ["bad", "port error"], disabled: ["off", "disabled"],
+};
+function devState(d) {
+  if (d.enabled === false) return { cls: "off", label: "disabled", group: "off" };
+  const live = d.live || {};
+  if (live.state && LIVE_STATE[live.state]) {
+    const [cls, label] = LIVE_STATE[live.state];
+    return { cls, label, group: cls, detail: live.detail };
+  }
+  return d.parser_status === "running" ? { cls: "ok", label: "parser running", group: "ok", detail: "this gateway does not report live device state yet" }
+    : { cls: "bad", label: `parser ${d.parser_status || "absent"}`, group: "bad" };
 }
+const lastHeard = (d) => (d.live && (d.live.last_value_ts || d.live.last_in_ts)) || null;
+const chip = (st) => `<span class="st ${st.cls}" title="${esc(st.detail || "")}">${esc(st.label)}</span>`;
+const onlineChip = (ms, word = "online") => isOnline(ms) ? `<span class="st ok">${word}</span>` : `<span class="st bad">offline · ${esc(ago(ms))}</span>`;
+function siteModel(t) {
+  const u = t.usage || {}, gws = u.gateway_detail || [], nodes = u.nodes || [];
+  const leaves = (u.leaf_detail && u.leaf_detail.length ? u.leaf_detail : (u.leaf_ids || []).map((id) => ({ leaf_id: id }))).map((l) => ({ ...l }));
+  const devices = gws.flatMap((g) => (g.devices || []).map((d) => ({ ...d, gateway: g })));
+  const known = new Set(leaves.map((l) => l.leaf_id));
+  devices.forEach((d) => { if (d.leaf_id && !known.has(d.leaf_id)) { known.add(d.leaf_id); leaves.push({ leaf_id: d.leaf_id }); } });
+  leaves.forEach((l) => { l.devices = devices.filter((d) => d.leaf_id === l.leaf_id); l.release = nodes.find((n) => n.node_id === l.leaf_id)?.release_id; });
+  const wards = new Map();
+  leaves.forEach((l) => { const key = l.ward || "Not in a ward"; if (!wards.has(key)) wards.set(key, { name: key, beds: [] }); wards.get(key).beds.push(l); });
+  return { gws, leaves, devices, wards: [...wards.values()], loose: devices.filter((d) => !d.leaf_id), canopyRelease: nodes.find((n) => n.node_id === "canopy")?.release_id };
+}
+function counts(devs) {
+  const c = { ok: 0, idle: 0, bad: 0, off: 0 };
+  devs.forEach((d) => c[devState(d).group]++);
+  return c;
+}
+const countChips = (c) => ["ok", "idle", "bad", "off"].filter((k) => c[k]).map((k) =>
+  `<span class="st ${k}">${c[k]} ${({ ok: "receiving", idle: "not in use", bad: "problem", off: "disabled" })[k]}</span>`).join(" ");
+function deviceTable(devs, withBed) {
+  if (!devs.length) return `<div class="muted">No devices.</div>`;
+  return `<table class="dev"><tr><th>Device</th><th>Status</th><th>Last data</th>${withBed ? "<th>Bed (Leaf)</th>" : ""}<th>Gateway · port</th><th>Where</th></tr>${devs.map((d) => {
+    const st = devState(d), heard = lastHeard(d);
+    return `<tr><td><b>${esc(d.label || d.device_id)}</b><div class="muted"><code>${esc(d.device_type || "")}</code> · ${esc(d.device_id)}</div></td>
+      <td>${chip(st)}${st.detail ? `<div class="muted">${esc(st.detail)}</div>` : ""}</td>
+      <td>${heard ? `${esc(ago(heard))}<div class="muted">${esc(when(heard))}</div>` : `<span class="muted">—</span>`}</td>
+      ${withBed ? `<td>${d.leaf_id ? `<a onclick="topoGo({level:'bed',leaf:${jsq(d.leaf_id)}})" style="cursor:pointer;color:var(--accent)">${esc(d.leaf_id)}</a>` : `<span class="muted">not on a bed</span>`}</td>` : ""}
+      <td><a onclick="topoGo({level:'gateway',gateway:${jsq(d.gateway.gateway_id)}})" style="cursor:pointer;color:var(--accent)">${esc(d.gateway.site || d.gateway.gateway_id)}</a><div class="muted">${esc(d.pod || "")}</div></td>
+      <td>${esc([d.station, d.location].filter(Boolean).join(" · ") || "—")}${d.serial_number || d.asset_tag ? `<div class="muted">${esc([d.serial_number && "S/N " + d.serial_number, d.asset_tag && "asset " + d.asset_tag].filter(Boolean).join(" · "))}</div>` : ""}</td></tr>`;
+  }).join("")}</table>`;
+}
+function siteTopology(t) {
+  const m = siteModel(t), at = topoAt;
+  const crumbs = [`<a onclick="topoOpen(null)">All hospitals</a>`, `<a onclick="topoGo({level:'hospital'})">${esc(t.name)}</a>`];
+  const bedOf = (id) => m.leaves.find((l) => l.leaf_id === id);
+  let body = "";
+  if (at.level === "ward") {
+    const w = m.wards.find((x) => x.name === at.ward) || { name: at.ward, beds: [] };
+    crumbs.push(`<span>${esc(w.name)}</span>`);
+    body = `<div class="stats"><div class="stat"><b>${w.beds.length}</b><span>beds (Leaf)</span></div>
+        <div class="stat"><b>${w.beds.filter((l) => isOnline(l.last_seen)).length}</b><span>online now</span></div>
+        <div class="stat"><b>${w.beds.reduce((n, l) => n + l.devices.length, 0)}</b><span>devices</span></div></div>
+      <div class="cards">${w.beds.map((l) => `<div class="card" onclick="topoGo({level:'bed',leaf:${jsq(l.leaf_id)}})">
+        <h4>${esc(l.bed || l.name || l.leaf_id)} ${onlineChip(l.last_seen)}</h4>
+        <div class="sub">${esc([l.room, "Leaf " + l.leaf_id].filter(Boolean).join(" · "))} · seen ${esc(ago(l.last_seen))}</div>
+        <div class="devlist">${l.devices.map((d) => `<div><span>${esc(d.label || d.device_id)}</span>${chip(devState(d))}</div>`).join("") || `<div class="muted">No devices on this bed</div>`}</div></div>`).join("")}</div>`;
+  } else if (at.level === "bed") {
+    const l = bedOf(at.leaf) || { leaf_id: at.leaf, devices: [] };
+    crumbs.push(`<a onclick="topoGo({level:'ward',ward:${jsq(l.ward || "Not in a ward")}})">${esc(l.ward || "Not in a ward")}</a>`, `<span>${esc(l.bed || l.leaf_id)}</span>`);
+    body = `<div class="panel2"><div><span>Bed</span><b>${esc(l.bed || "—")}</b></div><div><span>Room</span><b>${esc(l.room || "—")}</b></div>
+        <div><span>Leaf</span><b>${esc(l.leaf_id)}</b></div><div><span>Status</span>${onlineChip(l.last_seen)}</div>
+        <div><span>Last seen</span><b>${esc(when(l.last_seen))}</b></div><div><span>Release</span><b>${esc(l.release || "unmanaged")}</b></div></div>
+      <div class="sec">Devices on this bed</div>${deviceTable(l.devices, false)}`;
+  } else if (at.level === "gateway") {
+    const g = m.gws.find((x) => x.gateway_id === at.gateway) || { gateway_id: at.gateway, devices: [] };
+    crumbs.push(`<span>Gateway ${esc(g.site || g.gateway_id)}</span>`);
+    const devs = m.devices.filter((d) => d.gateway.gateway_id === g.gateway_id);
+    body = `<div class="panel2"><div><span>Gateway</span><b>${esc(g.gateway_id)}</b></div><div><span>Status</span>${onlineChip(g.last_seen)}</div>
+        <div><span>Last check-in</span><b>${esc(when(g.last_seen))}</b></div><div><span>Version</span><b>${esc(g.version || "?")}</b></div>
+        <div><span>Devices</span>${countChips(counts(devs)) || "—"}</div></div>
+      <div class="sec">Every device on this gateway</div>${deviceTable(devs, true)}`;
+  } else {
+    const c = counts(m.devices);
+    body = `<div class="panel2"><div><span>Hospital</span><b>${esc(t.name)}</b></div><div><span>Appliance</span>${onlineChip(t.last_seen_at)}</div>
+        <div><span>Canopy</span><b>${esc(t.canopy_version || "—")}</b></div><div><span>Release</span><b>${esc(m.canopyRelease || "—")}</b></div></div>
+      <div class="stats"><div class="stat"><b>${m.wards.length}</b><span>wards</span></div>
+        <div class="stat"><b>${m.leaves.filter((l) => isOnline(l.last_seen)).length}/${m.leaves.length}</b><span>beds online</span></div>
+        <div class="stat"><b>${m.gws.filter((g) => isOnline(g.last_seen)).length}/${m.gws.length}</b><span>gateways online</span></div>
+        <div class="stat"><b>${c.ok}</b><span>devices receiving</span></div><div class="stat"><b>${c.idle}</b><span>connected · not in use</span></div>
+        <div class="stat"><b>${c.bad}</b><span>devices with a problem</span></div></div>
+      <div class="sec">Wards</div>
+      <div class="cards">${m.wards.map((w) => { const dc = counts(w.beds.flatMap((l) => l.devices));
+        return `<div class="card" onclick="topoGo({level:'ward',ward:${jsq(w.name)}})"><h4>${esc(w.name)} <span class="sub">${w.beds.filter((l) => isOnline(l.last_seen)).length}/${w.beds.length} online</span></h4>
+          <div class="sub">${w.beds.map((l) => esc(l.bed || l.leaf_id)).join(" · ")}</div><div class="row">${countChips(dc) || `<span class="sub">no devices</span>`}</div></div>`; }).join("")}
+        ${m.loose.length ? `<div class="card" onclick="topoGo({level:'gateway',gateway:${jsq(m.loose[0].gateway.gateway_id)}})"><h4>Not on a bed</h4>
+          <div class="sub">gateway devices not assigned to any bed</div><div class="row">${countChips(counts(m.loose))}</div></div>` : ""}</div>
+      <div class="sec">Gateways</div>
+      <div class="cards">${m.gws.map((g) => `<div class="card" onclick="topoGo({level:'gateway',gateway:${jsq(g.gateway_id)}})">
+        <h4>${esc(g.site || g.gateway_id)} ${onlineChip(g.last_seen)}</h4><div class="sub">v${esc(g.version || "?")} · check-in ${esc(ago(g.last_seen))}</div>
+        <div class="row">${countChips(counts(m.devices.filter((d) => d.gateway.gateway_id === g.gateway_id))) || `<span class="sub">no devices</span>`}</div></div>`).join("") || `<div class="muted">No gateway reported.</div>`}</div>`;
+  }
+  const panel = $("installPanel"); if (panel) panel.hidden = at.level !== "hospital";   // installs belong to the hospital page
+  return `<div class="crumbs">${crumbs.join(`<span class="sep">›</span>`)}</div>${body}
+    <div class="legend" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">${chip({ cls: "ok", label: "receiving data" })}${chip({ cls: "idle", label: "connected · not in use" })}${chip({ cls: "bad", label: "problem / offline" })}${chip({ cls: "off", label: "disabled" })}</div>`;
+}
+
 // ---------------------------------------------------------------- add hospital
 function toggleAddHospital() { const f = $("addHospital"); f.hidden = !f.hidden; if (!f.hidden) f.tenant_id.focus(); }
 async function addHospital(event) {

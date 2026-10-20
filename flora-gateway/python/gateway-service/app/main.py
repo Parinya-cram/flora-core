@@ -353,9 +353,25 @@ async def haber_checkin() -> dict[str, Any]:
         return {}
     # Full device configuration so Canopy can show what each gateway feeds and how it is set up.
     states = await asyncio.to_thread(docker_ops.parser_states)
+    # Each device's live state (receiving / standby / unplugged …) and when it was last heard, so Canopy and
+    # Root can show it down to the bed. Best effort: a failure here never blocks the check-in.
+    try:
+        live = {row["device_id"]: row for row in (await asyncio.to_thread(live_devices))["rows"]}
+    except Exception as error:  # noqa: BLE001
+        log.warning("live device state for check-in failed: %s", error)
+        live = {}
+    def live_state(device_id: str) -> dict[str, Any] | None:
+        row = live.get(device_id)
+        if not row:
+            return None
+        status = row.get("status") or {}
+        return {"state": status.get("state"), "detail": status.get("detail"), "since": status.get("since"),
+                "last_in_ts": (row.get("ingress") or {}).get("last_in_ts") or status.get("last_in_ts"),
+                "last_value_ts": row.get("last_value_ts")}
     instances = [
         {**row, "options": masked_options(row.get("options") or {}),
-         "parser_status": (states.get(row["device_id"]) or {}).get("status") or "absent"}
+         "parser_status": (states.get(row["device_id"]) or {}).get("status") or "absent",
+         "live": live_state(row["device_id"])}
         for row in db.fetch_all(
             """SELECT device_id, device_type, leaf_id, pod, enabled, label, options, serial_number,
                       asset_tag, station, location, installed_at, notes, updated_at
