@@ -171,7 +171,7 @@ deploy-k8s:
     - sudo nerdctl -n k8s.io build -t flora-gateway-rust:$TAG flora-gateway/rust
     - sudo nerdctl -n k8s.io build -t flora-gateway-service:$TAG flora-gateway/python/gateway-service
     - sudo nerdctl -n k8s.io build -t flora-gateway-parser:$TAG flora-gateway/python/device-medical-service
-    - for image in apache/kafka:3.9.1 postgres:17.6-alpine kong:3.9 nginx:1.27-alpine; do sudo nerdctl -n k8s.io pull -q docker.io/$(echo $image | grep -q / || echo library/)$image; done
+    - for image in apache/kafka:3.9.1 postgres:17.6-alpine kong:3.9 nginx:1.27-alpine registry:3; do sudo nerdctl -n k8s.io pull -q docker.io/$(echo $image | grep -q / || echo library/)$image; done
     - echo "roll out new images"
     - kubectl apply -f deploy/k8s/flora-leaf-sync-worker.yaml
     - kubectl -n flora-canopy set image deploy/canopy-api canopy-api=flora-canopy-canopy-api:$TAG
@@ -193,4 +193,18 @@ deploy-k8s:
     - echo "publish these images to root-registry + register canopy/leaf releases so Haber's mirror can pull them"
     - python3 flora-root/scripts/publish_k8s_releases.py "$TAG" || echo "publish-releases step failed (non-fatal)"
   rules:
+    - if: $SITE_TEST          # an on-demand install test never redeploys the pilot
+      when: never
     - if: $CI_COMMIT_BRANCH == "device-distribution"
+
+# On demand (API/manual with SITE_TEST=install|cleanup): install a whole hospital site on the pilot
+# cluster in sitetest-* namespaces with the real site installer, then remove it again.
+site-install-test:
+  stage: deploy
+  tags: [flora-k8s]
+  needs: []
+  resource_group: flora-k8s-cluster
+  script:
+    - sh scripts/install-test/site.sh
+  rules:
+    - if: $SITE_TEST

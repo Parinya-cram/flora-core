@@ -105,7 +105,8 @@ spec:
             - { name: ROOT_SEED_DEMO, value: "true" }
             - { name: ROOT_DEMO_TENANT_ID, value: "hospital-01" }
             - { name: ROOT_DEMO_TENANT_KEY, value: "root-tenant-demo-key" }
-            - { name: ROOT_REGISTRY_URL, value: "http://root-registry:5000" }
+            - { name: ROOT_REGISTRY_URL, value: "http://172.22.19.81:7105" }   # as hospital servers reach it (site installs pull here)
+            - { name: ROOT_PUBLIC_URL, value: "https://172.22.19.81:8443" }    # Root as hospitals reach it (handed out at site install)
           ports: [ { containerPort: 8000 } ]
           readinessProbe:
             httpGet: { path: /health, port: 8000 }

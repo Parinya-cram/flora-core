@@ -35,7 +35,10 @@ PASSWORD = os.getenv("ROOT_ADMIN_PASSWORD", "admin")
 
 # component -> {release service key: containerd image built by deploy-k8s}
 PUBLISH = {
-    "canopy": {"api": f"flora-canopy-canopy-api:{TAG}", "haber": f"flora-canopy-haber:{TAG}"},
+    # Everything a hospital site server (Canopy + appliance) runs (flora-root static/install/site.yaml).
+    "canopy": {"api": f"flora-canopy-canopy-api:{TAG}", "haber": f"flora-canopy-haber:{TAG}",
+               "web": f"flora-canopy-canopy-web:{TAG}", "db": f"flora-db:{TAG}",
+               "registry": "docker.io/library/registry:3", "edge": "docker.io/library/nginx:1.27-alpine"},
     # Everything a Leaf machine installed from the appliance runs (flora-haber app/install/leaf/compose.yaml).
     "leaf": {"api": f"flora-canopy-canopy-api:{TAG}", "sync": f"flora-leaf-sync-worker:{TAG}",
              "web": f"flora-leaf-leaf-web:{TAG}", "db": f"flora-db:{TAG}", "updater": f"flora-updater:{TAG}"},

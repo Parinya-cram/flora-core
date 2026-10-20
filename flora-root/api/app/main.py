@@ -30,7 +30,7 @@ from typing import Any
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi import Body, Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
@@ -161,7 +161,7 @@ auth.install(app, pool, [
     r"/health", r"/api/v1/keys", r"/api/v1/tenants/[^/]+/(bundle|heartbeat|releases)",  # Canopy, tenant key auth
     r"/api/auth/status",                                                                # login page status panel
     r"/api/v1/tenants/[^/]+/installs/(pending|[^/]+/report)",                           # appliance, tenant key auth
-    r"/api/v1/install/redeem",                                                          # new site server, one-time code
+    r"/api/v1/install/redeem", r"/install/site\.sh", r"/install/files/site/site\.yaml",  # new site server, one-time code
 ])
 app.include_router(auth.router)
 require_admin = auth.require_admin  # signed-in admin operator, or Root CI with x-root-key / Basic
@@ -520,6 +520,19 @@ def report_install(tenant_id: str, install_id: str, body: InstallReport, request
     if not row:
         raise HTTPException(409, "install is not open")
     return {"ok": True}
+
+
+@app.get("/install/site.sh")
+def site_installer(request: Request):
+    """The hospital site installer (Canopy + appliance); the code it needs comes from Root > Topology."""
+    root_url = ROOT_PUBLIC_URL or str(request.base_url).rstrip("/")
+    text = (Path(__file__).parent / "static" / "install" / "site.sh").read_text().replace("__ROOT_URL__", root_url)
+    return PlainTextResponse(text, media_type="text/x-shellscript")
+
+
+@app.get("/install/files/site/site.yaml")
+def site_manifest():
+    return PlainTextResponse((Path(__file__).parent / "static" / "install" / "site.yaml").read_text())
 
 
 class RedeemIn(BaseModel):
