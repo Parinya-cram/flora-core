@@ -354,6 +354,8 @@ def usage() -> dict[str, Any]:
     } for gateway in known]
     return {"leaves": len(leaves), "gateways": len(known), "gateway_devices": devices,
             "leaf_ids": [leaf["leaf_id"] for leaf in leaves],
+            "leaf_detail": [{key: leaf.get(key) for key in ("leaf_id", "name", "ward_key", "ward", "room", "bed", "last_seen")}
+                            for leaf in leaves],
             "gateway_detail": gateway_detail,
             "nodes": [{key: node[key] for key in ("node_id", "component", "release_id", "state", "last_seen")}
                       for node in nodes()]}

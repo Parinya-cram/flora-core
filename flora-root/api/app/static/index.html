@@ -77,6 +77,18 @@
   .topo .cluster > rect { fill:var(--chip); stroke:var(--line); stroke-dasharray:5 4 } .topo .cluster.click { cursor:pointer }
   .topo .cluster.click:hover > rect { stroke:var(--accent) } .topo .dot.ok { fill:var(--ok) } .topo .dot.off { fill:var(--warn) }
   .topo .legend { display:flex; gap:16px; flex-wrap:wrap; color:var(--muted); font-size:12px; margin-top:8px }
+  /* Hospital topology as layers: Canopy -> ward -> bed (Leaf) -> gateway -> device. */
+  .layers { display:grid; gap:10px } .chain { display:flex; align-items:center; gap:8px; flex-wrap:wrap }
+  .chain .lvl { border:1px solid var(--line); border-radius:10px; padding:8px 12px; background:var(--panel) }
+  .chain .lvl b { display:block } .chain .arrow { color:var(--muted) } .chain .net { color:var(--warn); font-size:12px }
+  .lvl-label { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted) }
+  .wards { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px; border-left:2px solid var(--line); padding-left:12px }
+  .ward { border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:var(--chip) }
+  .ward > header { all:unset; display:flex; justify-content:space-between; gap:8px; align-items:baseline; margin-bottom:8px }
+  .bed { border:1px solid var(--line); border-radius:10px; padding:8px 10px; background:var(--panel); margin-top:8px }
+  .bed .gw { margin:6px 0 0 10px; padding-left:10px; border-left:2px solid var(--accent) }
+  .bed .dev { display:flex; gap:6px; align-items:center; margin:3px 0 0 10px; font-size:12px }
+  .dotc { width:8px; height:8px; border-radius:50%; display:inline-block; flex:none } .dotc.ok { background:var(--ok) } .dotc.off { background:var(--warn) }
 </style>
 </head>
 <body>
@@ -101,7 +113,16 @@
   </div>
 </nav>
 <main>
-  <section data-tab="tenants"><h2>Tenants</h2><div id="tenants">Loading…</div></section>
+  <section data-tab="tenants"><h2 style="display:flex;justify-content:space-between;align-items:center">Tenants
+      <button class="primary admin-only" type="button" onclick="toggleAddHospital()">+ Add hospital</button></h2>
+    <form id="addHospital" class="op" hidden onsubmit="return addHospital(event)">
+      <label>Code<input name="tenant_id" required pattern="[a-z0-9-]{3,40}" placeholder="kcmh" title="3–40 lowercase letters, digits, -"></label>
+      <label style="flex:1 1 320px">Hospital name (full, Thai + English)<input name="name" required placeholder="โรงพยาบาล… (… Hospital)"></label>
+      <label>Region<input name="region" placeholder="th-bkk"></label>
+      <button class="primary">Create hospital</button> <button type="button" onclick="toggleAddHospital()">Cancel</button>
+    </form>
+    <div id="newHospital"></div>
+    <div id="tenants">Loading…</div></section>
   <section data-tab="topology"><h2 id="topoTitle">Topology</h2><div id="topology">Loading…</div></section>
   <section data-tab="releases"><h2>Releases</h2><div id="releases"></div>
     <div class="muted" style="margin-top:8px">Root CI builds every image and pushes it to <code id="registry"></code>, then publishes a release
@@ -327,46 +348,63 @@ function renderTopology() {
 }
 function siteTopology(t) {
   const u = t.usage || {}, gws = u.gateway_detail || [], nodes = u.nodes || [];
-  const leafIds = [...new Set([...(u.leaf_ids || []), ...gws.flatMap((g) => (g.devices || []).map((d) => d.leaf_id).filter(Boolean))])];
+  const leaves = (u.leaf_detail && u.leaf_detail.length) ? u.leaf_detail : (u.leaf_ids || []).map((id) => ({ leaf_id: id }));
+  const known = new Set(leaves.map((l) => l.leaf_id));
+  gws.forEach((g) => (g.devices || []).forEach((d) => { if (d.leaf_id && !known.has(d.leaf_id)) { known.add(d.leaf_id); leaves.push({ leaf_id: d.leaf_id }); } }));
   const rel = (id) => nodes.find((n) => n.node_id === id)?.release_id || "";
-  const W = 980, nw = 190, nh = 46, dh = 22;
-  const leafY = 250, leafX = (i) => 40 + i * (nw + 16);
-  // gateways stacked in the right column, each with its devices listed under it
-  let gy = 140, gwSvg = "", edges = "";
-  const leafPos = Object.fromEntries(leafIds.map((id, i) => [id, { x: leafX(i % 3) + nw / 2, y: leafY + Math.floor(i / 3) * 70 }]));
-  gws.forEach((g) => {
-    const gx = W - nw - 40, devs = g.devices || [];
-    gwSvg += tNode(gx, gy, nw, nh, g.site || g.gateway_id, `gateway · v${g.version || "?"}`, "", isOnline(g.last_seen));
-    edges += tEdge(W / 2, 108, gx + nw / 2, gy);
-    devs.forEach((d, j) => {
-      const y = gy + nh + 6 + j * (dh + 4);
-      gwSvg += `<g class="node" transform="translate(${gx + 14},${y})"><rect width="${nw - 14}" height="${dh}" rx="5"/>
-        <circle class="dot ${d.enabled !== false && d.parser_status === "running" ? "ok" : "off"}" cx="10" cy="${dh / 2}" r="3.5"/>
-        <text x="20" y="15" font-size="11">${esc((d.label || d.device_id).slice(0, 24))}</text><title>${esc(d.label || d.device_id)} · ${esc(d.device_type || "")} · ${esc(d.parser_status || "")}</title></g>`;
-      const leaf = leafPos[d.leaf_id];
-      if (leaf) edges += `<path class="edge data" d="M${gx + 14},${y + dh / 2} C${gx - 120},${y + dh / 2} ${leaf.x + 120},${leaf.y + nh / 2} ${leaf.x + nw / 2},${leaf.y + nh / 2}"/>`;
-    });
-    gy += nh + 16 + devs.length * (dh + 4);
-  });
-  let leafSvg = "";
-  leafIds.forEach((id, i) => {
-    const p = leafPos[id];
-    leafSvg += tNode(p.x - nw / 2, p.y, nw, nh, id, `Leaf · ${rel(id) || "unmanaged"}`);
-    edges += tEdge(40 + nw / 2, 186, p.x, p.y);
-  });
-  const H = Math.max(gy, leafY + Math.ceil(leafIds.length / 3) * 70) + 30;
-  const svg = `
-    ${tNode(W / 2 - 110, 0, 220, 40, "Flora iCIS Root", "", "root")}
-    ${tEdge(W / 2, 40, W / 2, 62, "net")}
-    <g class="cluster" transform="translate(10,52)"><rect width="${W - 20}" height="${H - 52}" rx="14"/>
-      <text x="16" y="22" font-weight="700">Cluster · ${esc(t.tenant_id)}</text><text class="sub" x="16" y="38">${esc(t.name)} · hospital LAN</text></g>
-    ${edges}
-    ${tNode(W / 2 - nw / 2, 62, nw, nh, "Appliance (Haber)", `seen ${ago(t.last_seen_at)}`, "", isOnline(t.last_seen_at))}
-    ${tEdge(W / 2, 108, 40 + nw / 2, 140)}
-    ${tNode(40, 140, nw, nh, "Canopy", [t.canopy_version || "—", rel("canopy")].filter(Boolean).join(" · "))}
-    ${leafSvg}${gwSvg}
-    ${!gws.length && !leafIds.length ? `<text class="sub" x="40" y="230">No Leaf or gateway reported yet — waiting for the appliance's next check-in.</text>` : ""}`;
-  return `<p><button onclick="topoOpen(null)">‹ All hospitals</button></p><div class="topo"><svg viewBox="0 0 ${W} ${H}">${svg}</svg>${legend}</div>`;
+  const dot = (ok) => `<span class="dotc ${ok ? "ok" : "off"}"></span>`;
+  const devLine = (d) => `<div class="dev">${dot(d.enabled !== false && d.parser_status === "running")}<span>${esc(d.label || d.device_id)}</span>
+    <code class="muted">${esc(d.device_type || "")}</code><span class="muted">${esc(d.enabled === false ? "disabled" : d.parser_status || "—")}</span></div>`;
+  // per bed: the gateways whose devices are assigned to it, with those devices
+  const bedGateways = (leafId) => gws.map((g) => ({ g, devs: (g.devices || []).filter((d) => (d.leaf_id || null) === leafId) })).filter((x) => x.devs.length);
+  const gwBlock = ({ g, devs }) => `<div class="gw"><div>${dot(isOnline(g.last_seen))} <b>${esc(g.site || g.gateway_id)}</b>
+    <span class="muted">gateway · v${esc(g.version || "?")} · seen ${esc(ago(g.last_seen))}</span></div>${devs.map(devLine).join("")}</div>`;
+  const bedCard = (l) => {
+    const linked = bedGateways(l.leaf_id);
+    return `<div class="bed"><div style="display:flex;justify-content:space-between;gap:8px"><div>${dot(isOnline(l.last_seen))}
+      <b>${esc(l.bed || l.name || l.leaf_id)}</b>${l.room ? ` <span class="muted">· ${esc(l.room)}</span>` : ""}</div>
+      <span class="muted">Leaf ${esc(l.leaf_id)}</span></div>
+      <div class="muted" style="font-size:12px">${esc(rel(l.leaf_id) || "unmanaged")} · seen ${esc(ago(l.last_seen))} · ${linked.length} gateway · ${linked.reduce((n, x) => n + x.devs.length, 0)} devices</div>
+      ${linked.map(gwBlock).join("") || `<div class="muted" style="font-size:12px;margin-top:4px">No gateway device on this bed.</div>`}</div>`;
+  };
+  const wards = new Map();
+  leaves.forEach((l) => { const key = l.ward_key || l.ward || "—"; if (!wards.has(key)) wards.set(key, { name: l.ward || "Not in a ward", beds: [] }); wards.get(key).beds.push(l); });
+  const unassigned = gws.map((g) => ({ g, devs: (g.devices || []).filter((d) => !d.leaf_id) })).filter((x) => x.devs.length);
+  const wardHtml = [...wards.values()].map((w) => `<div class="ward"><header><b>${esc(w.name)}</b>
+      <span class="muted">${w.beds.length} bed · ${w.beds.reduce((n, l) => n + bedGateways(l.leaf_id).length, 0)} gateway link</span></header>
+      ${w.beds.map(bedCard).join("")}</div>`).join("")
+    + (unassigned.length ? `<div class="ward"><header><b>Not assigned to a bed</b><span class="muted">gateway devices</span></header>
+      <div class="bed">${unassigned.map(gwBlock).join("")}</div></div>` : "");
+  return `<p><button onclick="topoOpen(null)">‹ All hospitals</button></p>
+  <div class="layers">
+    <div class="chain">
+      <div class="lvl"><span class="lvl-label">Control plane</span><b>Flora iCIS Root</b></div><span class="net">- - internet - -›</span>
+      <div class="lvl"><span class="lvl-label">Appliance</span><b>${dot(isOnline(t.last_seen_at))} Haber</b><span class="muted">seen ${esc(ago(t.last_seen_at))}</span></div><span class="arrow">→</span>
+      <div class="lvl"><span class="lvl-label">Canopy · ${esc(t.tenant_id)}</span><b>${esc(t.name)}</b><span class="muted">${esc([t.canopy_version, rel("canopy")].filter(Boolean).join(" · ") || "—")}</span></div>
+    </div>
+    <div class="lvl-label">Wards → beds (Leaf) → gateways → devices</div>
+    <div class="wards">${wardHtml || `<span class="muted">No Leaf reported yet — waiting for the appliance's next check-in.</span>`}</div>
+  </div>
+  <div class="legend" style="display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:10px"><span>${dot(true)} seen &lt; 90 s / parser running</span><span>${dot(false)} not seen / parser not running</span></div>`;
+}
+// ---------------------------------------------------------------- add hospital
+function toggleAddHospital() { const f = $("addHospital"); f.hidden = !f.hidden; if (!f.hidden) f.tenant_id.focus(); }
+async function addHospital(event) {
+  event.preventDefault();
+  const body = Object.fromEntries(new FormData(event.target));
+  if (!body.region) delete body.region;
+  const r = await fetch("api/v1/tenants", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (!r.ok) { alert((await r.json().catch(() => ({}))).detail || `Could not create (${r.status})`); return false; }
+  const made = await r.json();
+  event.target.reset(); event.target.hidden = true;
+  // The appliance key is shown once: Root keeps only its hash.
+  $("newHospital").innerHTML = `<div style="margin:0 0 14px;padding:12px 14px;border:1px solid var(--accent);border-radius:10px">
+    <b>${esc(made.tenant_id)} created</b> · license <code>${esc(made.bundle_id)}</code>
+    <div class="muted" style="margin:6px 0">Appliance key — shown once, copy it now. The hospital's appliance (Haber) uses it with tenant id <code>${esc(made.tenant_id)}</code> to reach Root.</div>
+    <code style="display:block;padding:8px;background:var(--chip);border-radius:6px;user-select:all">${esc(made.api_key)}</code>
+    <div style="margin-top:8px"><button type="button" onclick="navigator.clipboard.writeText('${esc(made.api_key)}')">Copy key</button>
+    <button type="button" onclick="$('newHospital').innerHTML=''">Done</button></div></div>`;
+  load(); return false;
 }
 // ---------------------------------------------------------------- operators + audit
 async function loadOperators() {

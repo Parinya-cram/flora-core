@@ -29,10 +29,19 @@ def leaves(database: Connection = Depends(connection)) -> dict[str, Any]:
     """The hospital's Leaf nodes (id, name, hospital, last-seen ms). Lets Haber build its
     overview/usage without reading canopy-db directly (so Haber can run as its own stack)."""
     rows = database.execute(
-        "SELECT leaf_id, coalesce(canopy_display_name, display_name) AS name, hospital_id, "
-        "extract(epoch FROM last_seen_at)*1000 AS last_seen FROM sync_leaf_node ORDER BY leaf_id").fetchall()
+        """SELECT n.leaf_id, coalesce(nullif(n.canopy_display_name, ''), n.display_name) AS name, n.hospital_id,
+                  extract(epoch FROM n.last_seen_at)*1000 AS last_seen,
+                  u.unit_key AS ward_key, u.unit_name AS ward, room.name AS room, bed.name AS bed
+           FROM sync_leaf_node n
+           LEFT JOIN canopy_leaf_unit u ON u.leaf_id = n.leaf_id
+           LEFT JOIN canopy_leaf_assignment a ON a.leaf_id = n.leaf_id
+           LEFT JOIN canopy_location bed ON bed.id = a.bed_location_id
+           LEFT JOIN canopy_location room ON room.id = bed.parent_id
+           ORDER BY n.leaf_id""").fetchall()
+    # Ward / room / bed let Root's topology draw Canopy -> ward -> bed (Leaf) -> gateway -> device.
     return {"leaves": [{"leaf_id": r["leaf_id"], "name": r["name"], "hospital_id": r["hospital_id"],
-                        "last_seen": int(r["last_seen"] or 0)} for r in rows]}
+                        "last_seen": int(r["last_seen"] or 0), "ward_key": r["ward_key"], "ward": r["ward"],
+                        "room": r["room"], "bed": r["bed"]} for r in rows]}
 
 
 # ---------------------------------------------------------------- ward exchange
