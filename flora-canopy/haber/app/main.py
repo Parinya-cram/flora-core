@@ -167,7 +167,8 @@ def current_settings() -> dict[str, Any]:
 # ------------------------------------------------------------------ Root sync
 
 def verify(envelope: dict[str, Any], keys: dict[str, str]) -> dict[str, Any]:
-    public = keys.get(envelope.get("key_id", ""))
+    # A pinned Root key (FLORA_ROOT_PUBLIC_KEY, set by the site installer) is trusted whatever its key id.
+    public = keys.get(envelope.get("key_id", "")) or keys.get("pinned")
     if not public:
         raise ValueError(f"unknown signing key {envelope.get('key_id')}")
     try:
@@ -238,7 +239,7 @@ def verified(name: str) -> dict[str, Any] | None:
     if not envelope:
         return None
     try:
-        return verify(envelope, kv_get("root_keys") or {})
+        return verify(envelope, ({"pinned": PINNED_KEY} if PINNED_KEY else {}) | (kv_get("root_keys") or {}))
     except ValueError:
         return None
 
