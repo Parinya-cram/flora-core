@@ -14,13 +14,12 @@ import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, type PDFImage, type PDFPage } from "pdf-lib";
 import notoThai from "@fontsource-variable/noto-sans-thai/files/noto-sans-thai-thai-wght-normal.woff2?inline";
 import notoLatin from "@fontsource-variable/noto-sans-thai/files/noto-sans-thai-latin-wght-normal.woff2?inline";
-import { resolvePaper } from "../core/layout";
+import { printContext, resolvePaper } from "../core/layout";
 import type { FontEntry, FormDefinition, JsonValue, RecordData, StyleEntry } from "../core/types";
 import { evaluateRecord } from "../logic/evaluate";
 import type { LookupTables } from "../logic/lookup";
 import { denied as deniedFields } from "../logic/permission";
 import { formStyle, registries } from "../ui/formStyle";
-import { thaiDate } from "../ui/renderUtils";
 import { layoutPdf, type Measure, type Op, type Tone } from "./pdfLayout";
 
 export type FormPdfInput = {
@@ -28,6 +27,8 @@ export type FormPdfInput = {
   value?: RecordData;
   recordId?: string;
   printedAt?: string;
+  /** Who prints it (the default footer's "Printed … · name"). */
+  printedBy?: string;
   styles?: StyleEntry[];
   fonts?: FontEntry[];
   /** Flora role codes: fields the user may not view are left out (omitted = no filtering). */
@@ -47,7 +48,7 @@ const hex = (value: string) => {
 /** Shaded title bars and table headers. */
 const FILL_COLOR = rgb(0.9, 0.91, 0.93);
 /** Characters the bundled fonts lack, written with ones they have. */
-const SUBSTITUTE: Record<string, string> = { "₀": "0", "₁": "1", "₂": "2", "₃": "3", "⁰": "0", "¹": "1", "²": "2", "³": "3", "–": "-", "—": "-", "…": "...", "≥": ">=", "≤": "<=", "→": "->", "✓": "/", "✗": "x" };
+const SUBSTITUTE: Record<string, string> = { "₀": "0", "₁": "1", "₂": "2", "₃": "3", "⁰": "0", "¹": "1", "²": "2", "³": "3", "–": "-", "—": "-", "…": "...", "≥": ">=", "≤": "<=", "→": "->", "✓": "/", "✗": "x", "µ": "u", "μ": "u" };
 
 const bytesOf = (dataUrl: string) => {
   const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
@@ -93,6 +94,12 @@ const runWidth = (run: Run, size: number, bold = false) => {
 };
 
 export async function buildFormPdf(input: FormPdfInput): Promise<Uint8Array> {
+  return (await buildFormPdfInfo(input)).bytes;
+}
+
+/** The PDF with how it came out: the number of pages and the density scale used (1 = normal; below 1 = compact or
+ * shrunk to fit one page) — what the designer shows as "fits one A4 page". */
+export async function buildFormPdfInfo(input: FormPdfInput): Promise<{ bytes: Uint8Array; pages: number; scale: number }> {
   const { definition } = input;
   const regs = registries(input.styles, input.fonts);
   const style = formStyle(definition, regs);
@@ -109,7 +116,7 @@ export async function buildFormPdf(input: FormPdfInput): Promise<Uint8Array> {
   const columns = typeof style.tokens.columns === "number" ? style.tokens.columns : 2;
   const layout = layoutPdf({
     definition, data: evaluation.data as Record<string, JsonValue>, paper: resolvePaper(definition, style.tokens),
-    context: { title: definition.title, form_id: definition.form_id, version: definition.schema_version, date: input.printedAt ?? thaiDate(), record_id: input.recordId },
+    context: printContext(definition, evaluation.data as Record<string, JsonValue>, { recordId: input.recordId, date: input.printedAt, printedBy: input.printedBy, language: input.language }),
     hidden: new Set(evaluation.hidden), denied, styleColumns: columns, measure, language: input.language,
   });
 
@@ -123,7 +130,7 @@ export async function buildFormPdf(input: FormPdfInput): Promise<Uint8Array> {
   pdf.setCreator("Flora FormDev");
   pdf.setProducer("Flora FormDev (pdf-lib)");
   pdf.setLanguage("th-TH");
-  return await pdf.save();
+  return { bytes: await pdf.save(), pages: layout.pages.length, scale: layout.scale ?? 1 };
 }
 
 async function draw(pdf: PDFDocument, page: PDFPage, op: Op, fonts: Fonts, images: Map<string, PDFImage>) {

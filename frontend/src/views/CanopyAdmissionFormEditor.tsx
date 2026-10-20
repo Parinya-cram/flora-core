@@ -10,6 +10,7 @@ import type { FormDataSource, FormSaveState } from "./FormView";
 import { AdmissionStatusBadge } from "./CanopyAdmissionStatusBadge";
 
 const FormView = lazy(() => import("./FormView"));
+const AdmissionWorkflowForms = lazy(() => import("../components/workflow/AdmissionWorkflowForms"));
 
 type Props = {
   admission: Admission;
@@ -109,6 +110,8 @@ export default function CanopyAdmissionFormEditor({ admission, onClose, onChange
             allowedTabs={CANOPY_TABLET_FORM_TABS}
             onSaveStateChange={handleSaveState}
           />
+          {/* Form Studio forms of the admission's workflow: they continue at the bedside as the case's forms. */}
+          <AdmissionWorkflowForms admissionId={admissionId} readOnly={readOnly} />
         </Suspense>
       </div>
     </div>

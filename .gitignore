@@ -58,3 +58,6 @@ backup/
 
 # PowerPoint/Office temp lock files
 ~$*
+
+# Step report of scripts/test-form-flow.sh
+e2e-form-flow.json

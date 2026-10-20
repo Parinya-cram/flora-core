@@ -12,9 +12,9 @@ from psycopg import Connection, errors
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
-from .. import workflows
+from .. import hospital_profile, workflows
 from ..database import connection
-from .sync_ingest import DEVICE_FIELDS, require_sync_secret
+from .sync_ingest import DEVICE_FIELDS, require_protocol, require_sync_secret
 
 router = APIRouter(prefix="/api/sync/v1", tags=["leaf-canopy-ward"], dependencies=[Depends(require_sync_secret)])
 ONLINE_MS = 60_000
@@ -30,6 +30,7 @@ class WardExchange(BaseModel):
     leaf_id: str = Field(min_length=1, max_length=120)
     hospital_id: str | None = None
     released_ack: list[int] = Field(default_factory=list, max_length=200)
+    protocol_version: int = Field(default=1, ge=1, le=1000)
 
 
 def ward_leaf_ids(database: Connection, leaf_id: str, hospital_id: str | None) -> tuple[dict[str, Any] | None, list[str]]:
@@ -46,6 +47,7 @@ def ward_leaf_ids(database: Connection, leaf_id: str, hospital_id: str | None) -
 
 @router.post("/ward")
 def ward(payload: WardExchange, database: Connection = Depends(connection)) -> dict[str, Any]:
+    require_protocol(database, payload.leaf_id, payload.protocol_version)
     current = now_ms()
     with database.transaction():
         if payload.released_ack:
@@ -86,6 +88,8 @@ def ward(payload: WardExchange, database: Connection = Depends(connection)) -> d
         "handovers": handovers,
         # Workflow Studio: published workflows of this ward and their pinned Form Studio forms.
         "workflows": workflows.leaf_delivery(database, unit["key"] if unit else None),
+        # The hospital's name and logo for printed reports and forms (hospital_profile.py).
+        "hospital_profile": hospital_profile.delivery(database),
         "server_ts": current,
     }
 

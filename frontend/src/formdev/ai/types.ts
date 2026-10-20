@@ -76,10 +76,10 @@ export type TemplateWithIssues = { template: Template; issues: DescribedIssue[] 
 
 export type GenerateResult = TemplateWithIssues & { inspection: Inspection; usage: AiReport["usage"] };
 
-/** One document as sent to the server. */
-export type UploadFile = { name: string; data: string; page_images?: string[] };
-
-export type GenerateRequest = { files: UploadFile[]; instructions?: string; form_id?: string; title?: string };
+/** A file uploaded once, as it is (POST /api/formdev/uploads), then used by its id (a SHA-256). */
+export type Upload = { id: string; name: string; size: number; media_type: string; kind: string; pages: number | null; uploaded_at: number };
+export type UploadResult = { upload: Upload; file: InspectedFile };
+export type GenerateRequest = { uploads: string[]; instructions?: string; form_id?: string; title?: string };
 
 /** Where Flora Leaf shows a workflow form: the Workflow Studio phase and the built-in tab it follows. */
 export const PLACEMENT_KEY = "flora.leaf_placement";

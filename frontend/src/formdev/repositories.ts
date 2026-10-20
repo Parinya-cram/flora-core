@@ -204,7 +204,7 @@ export class RecordRepository {
     return record;
   }
 
-  private async change(recordId: string, kind: "update" | "submit" | "delete", data: RecordData | null, expectedVersion: number): Promise<LocalRecord> {
+  private async change(recordId: string, kind: "update" | "submit" | "delete", data: RecordData | null, expectedVersion: number, reason?: string): Promise<LocalRecord> {
     const current = await this.get(recordId);
     if (current.version !== expectedVersion) throw new FormDevError("version_conflict", "The record changed on this device; reload it");
     if (current.status === "deleted") throw new FormDevError("record_deleted", "Deleted records cannot be changed");
@@ -218,15 +218,16 @@ export class RecordRepository {
     };
     const op: SyncOp = {
       op_id: this.newId(), kind, record_id: recordId, form_id: current.form_id, schema_version: current.schema_version,
-      base_version: current.version, data: nextData, status, client_updated_at: at,
+      base_version: current.version, data: nextData, status, client_updated_at: at, ...(reason ? { reason } : {}),
     };
     await this.local.writeRecordAndEnqueue(record, expectedVersion, this.queueItem(op));
     return record;
   }
 
-  /** Save a draft (or amend a submitted record) while offline or online. */
-  update(recordId: string, data: RecordData, expectedVersion: number) {
-    return this.change(recordId, "update", data, expectedVersion);
+  /** Save a draft (or amend a submitted record) while offline or online. `reason`: why a record filled on Flora Leaf
+   * is changed (required by the server for those records). */
+  update(recordId: string, data: RecordData, expectedVersion: number, reason?: string) {
+    return this.change(recordId, "update", data, expectedVersion, reason);
   }
 
   submit(recordId: string, data: RecordData, expectedVersion: number) {

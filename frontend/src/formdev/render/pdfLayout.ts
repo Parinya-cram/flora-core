@@ -11,13 +11,15 @@
  * repeat_on_pages header / footer are drawn on every page (the content flows between them).
  */
 import { asRepeatField } from "../core/blocks";
-import { containerColumns, fillTemplate, formColumns, placeField, type PrintContext, type ResolvedPaper } from "../core/layout";
+import { autoPlace, containerColumns, defaultFooter, fillTemplate, formColumns, placeField, type PrintContext, type ResolvedPaper } from "../core/layout";
 import type { CategoryDefinition, FieldDefinition, FileValue, FormDefinition, JsonValue, MatrixValue, SectionDefinition, SignatureValue, TimelineValue } from "../core/types";
 import { chartShapes, markerPath } from "../leaf/chartGeometry";
 import { asTimeline, cellLabel, eventColumn, rowInfo, SERIES, timeLabel, timelineConfig } from "../leaf/timeline";
-import { fieldKey, matrixCell, matrixTotals, OTHER_KEY } from "../core/validate";
+import { fieldKey, matrixCell, matrixTotals, OTHER_KEY, STATIC_TYPES } from "../core/validate";
 import { cellText, optionText, printedText } from "./printValues";
 import { encodeBarcode } from "./barcode";
+import { printedRows, resolveColumns } from "../core/caseBlocks";
+import { logoSource } from "../core/hospital";
 
 export const MM = 72 / 25.4;
 export type Measure = (text: string, size: number, bold?: boolean) => number;
@@ -44,8 +46,9 @@ export type LayoutInput = {
 
 /** The smallest printed type (pt): below it small print is hard to read on paper and on scans. */
 export const MIN_FONT = 5.5;
-/** Print densities (paper.density): the scale of type, rows and spacing. fit_page tries these from the largest down
- * and keeps the first that fits one page; the smallest is the compact floor. */
+/** Print densities (paper.density): the scale of type, rows and spacing. fit_page tries FIT_SCALES from the largest down
+ * and keeps the first that fits one page; when none does it uses the smallest (0.74, below compact) and continues on
+ * more pages. Type never goes below MIN_FONT at any scale. */
 export const DENSITY_SCALE = { normal: 1, compact: 0.8 } as const;
 export const FIT_SCALES = [1, 0.93, 0.86, 0.8, 0.74] as const;
 
@@ -200,6 +203,8 @@ function valueBlock(ctx: Ctx, field: FieldDefinition, value: JsonValue | undefin
     }
     case "matrix":
       return matrixTable(ctx, field, value, width);
+    case "case_block":
+      return caseBlockTable(ctx, field, value, width);
     case "timeline":
       return stack(timelineBlocks(ctx, field, value, width).map(block => ({ ...block, breakBefore: false })));
     case "checkbox":
@@ -254,7 +259,8 @@ function printedBlock(ctx: Ctx, field: FieldDefinition, data: Record<string, Jso
   const align = field.align ?? (field.type === "logo" ? "left" : "center");
   if (field.type === "logo") {
     const h = (field.height_mm ?? 14) * MM;
-    return { height: h, draw: (x, y) => (field.src ? [{ kind: "image", x, y, w: width, h, data: field.src, align }] : []) };
+    const src = logoSource(field.src);
+    return { height: h, draw: (x, y) => (src ? [{ kind: "image", x, y, w: width, h, data: src, align }] : []) };
   }
   const code = encodeBarcode(field.symbology, field.source ? data[field.source] : undefined);
   const barHeight = (field.height_mm ?? 10) * MM;
@@ -266,7 +272,19 @@ function printedBlock(ctx: Ctx, field: FieldDefinition, data: Record<string, Jso
       draw: (x, y) => [{ kind: "rect", x, y, w: width, h: barHeight + caption }, { kind: "text", x: x + 1.5 * MM, y: y + size + 1 * MM, size, text: field.label, tone: "muted" }],
     };
   }
-  const module = Math.min(MAX_MODULE, Math.max(Math.min(MIN_MODULE, width / code.width), width / code.width));
+  const module = Math.min(MAX_MODULE, width / code.width);
+  if (module < MIN_MODULE) {
+    // Bars thinner than MIN_MODULE do not scan reliably: print the value as text in a frame instead (and say why),
+    // rather than a barcode that looks right but cannot be read.
+    return {
+      height: barHeight + caption,
+      draw: (x, y) => [
+        { kind: "rect", x, y, w: width, h: barHeight + caption },
+        { kind: "text", x: x + 1.5 * MM, y: y + size + 1 * MM, size, text: code.text },
+        { kind: "text", x: x + 1.5 * MM, y: y + 2 * size + 2 * MM, size: Math.max(MIN_FONT, size * 0.8), text: `${field.label}: too narrow to scan, widen the field`, tone: "muted" },
+      ],
+    };
+  }
   const total = code.width * module;
   const textWidth = ctx.measure(code.text, size);
   return {
@@ -284,9 +302,94 @@ function printedBlock(ctx: Ctx, field: FieldDefinition, data: Record<string, Jso
 
 const visible = (ctx: Ctx, path: string, node: string) => !ctx.hidden.has(path) && !ctx.denied.has(node);
 
+/** A field's printed cell: its label (unless it carries its own) above its value or element. */
+function fieldCell(ctx: Ctx, field: FieldDefinition, data: Record<string, JsonValue>, columns: number, cellWidth: number, prefix: string): Block {
+  const key = fieldKey(field);
+  if (STATIC_TYPES.has(field.type)) return staticBlock(ctx, field, cellWidth);
+  const label = field.type === "checkbox" || field.type === "switch" || PRINTED.has(field.type) ? null
+    : textLines(ctx, `${field.label}${field.unit && field.type !== "decimal" && field.type !== "number" && field.type !== "integer" ? ` (${field.unit})` : ""}${field.required ? " *" : ""}`, M.size.label, cellWidth, "muted");
+  const body = PRINTED.has(field.type) ? printedBlock(ctx, field, data, cellWidth) : field.type === "group"
+    ? stack(fieldRows(ctx, field.fields ?? [], data, containerColumns({ columns: field.columns }, columns), cellWidth, "grid", prefix), 1.5 * MM)
+    : valueBlock(ctx, field, data[key], (data[OTHER_KEY] as Record<string, JsonValue> | undefined)?.[key] as string | undefined, cellWidth);
+  return stack(label ? [label, body] : [body], 1);
+}
+
+/** A heading (bold, larger), a paragraph (its content) or a dividing line. */
+function staticBlock(ctx: Ctx, field: FieldDefinition, width: number): Block {
+  if (field.type === "divider") {
+    const h = 2.4 * MM;
+    return { height: h, draw: (x, y) => [{ kind: "line", x1: x, y1: y + h / 2, x2: x + width, y2: y + h / 2, width: 0.6, color: "#94a3b8" }] };
+  }
+  const align = field.align === "center" ? "center" : "left";
+  if (field.type === "paragraph") return textLines(ctx, field.content ?? "", M.size.value, width, "text", false, align);
+  const size = M.size.value * (field.level === 1 ? 1.45 : field.level === 3 ? 1.05 : 1.2);
+  return textLines(ctx, field.label, size, width, "text", true, align);
+}
+
+/** Does this field list place fields on rows of its own (row, or a field covering several rows)? */
+const placesRows = (fields: FieldDefinition[]) => fields.some(field => field.layout?.row !== undefined || (field.layout?.row_span ?? 1) > 1);
+
+/**
+ * A field list on a two-dimensional grid (the designer's free placement): fields with row and col sit where they are
+ * put, the others fill the next free cells in order, as a CSS grid does. Each grid row is as tall as its tallest
+ * one-row cell; a cell covering several rows makes its last row taller if it needs more. Rows tied together by such
+ * a cell print as one block (never split across pages); full-width tables and timelines end the grid and follow it.
+ */
+function gridRows(ctx: Ctx, fields: FieldDefinition[], data: Record<string, JsonValue>, columns: number, width: number, prefix: string): Block[] {
+  const colWidth = (width + M.colGap) / columns;
+  const out: Block[] = [];
+  let pending: Array<{ field: FieldDefinition; span: number; col?: number; row?: number; rows: number }> = [];
+  const place = () => {
+    if (!pending.length) return;
+    const placed = autoPlace(pending.map(item => ({ span: item.span, rows: item.rows, col: item.col, row: item.row })), columns);
+    const cells = pending.map((item, index) => ({ ...placed[index],
+      block: fieldCell(ctx, item.field, data, columns, placed[index].span * colWidth - M.colGap, prefix) }));
+    pending = [];
+    const last = Math.max(...cells.map(cell => cell.row + cell.rows - 1));
+    const heights = Array.from({ length: last + 1 }, () => 0);
+    for (const cell of cells) if (cell.rows === 1) heights[cell.row] = Math.max(heights[cell.row], cell.block.height);
+    for (const cell of [...cells].filter(item => item.rows > 1).sort((a, b) => a.row - b.row)) {
+      const covered = heights.slice(cell.row, cell.row + cell.rows).reduce((sum, h) => sum + h, 0) + (cell.rows - 1) * M.gap;
+      if (covered < cell.block.height) heights[cell.row + cell.rows - 1] += cell.block.height - covered;
+    }
+    // Bands: rows joined by a cell covering several rows stay together.
+    let start = 1;
+    while (start <= last) {
+      let end = start;
+      for (let r = start; r <= end; r += 1) for (const cell of cells) if (cell.row === r) end = Math.max(end, cell.row + cell.rows - 1);
+      const rows = Array.from({ length: end - start + 1 }, (_, i) => start + i).filter(r => heights[r] > 0 || cells.some(cell => cell.row <= r && r < cell.row + cell.rows));
+      if (rows.length) {
+        const offsets = new Map<number, number>();
+        let y = 0;
+        for (const r of rows) { offsets.set(r, y); y += heights[r] + M.gap; }
+        const bandCells = cells.filter(cell => cell.row >= start && cell.row <= end);
+        out.push({ height: y - M.gap, draw: (x, top) => bandCells.flatMap(cell => cell.block.draw(x + (cell.col - 1) * colWidth, top + (offsets.get(cell.row) ?? 0))) });
+      }
+      start = end + 1;
+    }
+  };
+  for (const field of fields) {
+    const key = fieldKey(field);
+    const placement = placeField(field, "print", columns, ctx.styleColumns, "grid", fields.length);
+    if (placement.hidden || !visible(ctx, `$.data.${prefix}${key}`, key)) continue;
+    if (placement.pageBreak === "before") { place(); out.push({ height: 0, breakBefore: true, draw: () => [] }); }
+    if (field.type === "repeat" || field.type === "timeline") {
+      place();
+      out.push(...(field.type === "repeat" ? repeatTable(ctx, field, Array.isArray(data[key]) ? data[key] as Array<Record<string, JsonValue>> : [], width)
+        : timelineBlocks(ctx, field, data[key], width)));
+    } else {
+      pending.push({ field, span: Math.min(placement.span, columns), col: placement.col, row: placement.row, rows: placement.rowSpan ?? 1 });
+    }
+    if (placement.pageBreak === "after") { place(); out.push({ height: 0, breakAfter: true, draw: () => [] }); }
+  }
+  place();
+  return out;
+}
+
 /** Rows of a field list on its grid; repeat fields become full-width tables (each table row its own block). */
 function fieldRows(ctx: Ctx, fields: FieldDefinition[], data: Record<string, JsonValue>, columns: number, width: number, containerType: "grid" | "row" | "column" = "grid", prefix = "", boxed = false): Block[] {
   if (boxed) return boxedRows(ctx, fields, data, columns, width, containerType, prefix);
+  if (containerType === "grid" && placesRows(fields)) return gridRows(ctx, fields, data, columns, width, prefix);
   const colWidth = (width + M.colGap) / columns;
   const out: Block[] = [];
   let row: Array<{ start: number; span: number; block: Block }> = [];
@@ -322,13 +425,7 @@ function fieldRows(ctx: Ctx, fields: FieldDefinition[], data: Record<string, Jso
     const span = Math.min(placement.span, columns);
     let start = placement.col ?? cursor;
     if (start < cursor || start + span - 1 > columns) { flush(); start = placement.col ?? 1; }
-    const cellWidth = span * colWidth - M.colGap;
-    const label = field.type === "checkbox" || field.type === "switch" || PRINTED.has(field.type) ? null
-      : textLines(ctx, `${field.label}${field.unit && field.type !== "decimal" && field.type !== "number" && field.type !== "integer" ? ` (${field.unit})` : ""}${field.required ? " *" : ""}`, M.size.label, cellWidth, "muted");
-    const body = PRINTED.has(field.type) ? printedBlock(ctx, field, data, cellWidth) : field.type === "group"
-      ? stack(fieldRows(ctx, field.fields ?? [], data, containerColumns({ columns: field.columns }, columns), cellWidth, "grid", prefix), 1.5 * MM)
-      : valueBlock(ctx, field, data[key], (data[OTHER_KEY] as Record<string, JsonValue> | undefined)?.[key] as string | undefined, cellWidth);
-    row.push({ start, span, block: stack(label ? [label, body] : [body], 1) });
+    row.push({ start, span, block: fieldCell(ctx, field, data, columns, span * colWidth - M.colGap, prefix) });
     cursor = start + span;
     if (placement.pageBreak === "after") { breakAfterRow = true; flush(); }
   }
@@ -442,6 +539,9 @@ function boxedRows(ctx: Ctx, fields: FieldDefinition[], data: Record<string, Jso
     } else if (field.type === "matrix") {
       content = matrixTable(ctx, field, data[key], w);
       frame = false;
+    } else if (field.type === "case_block") {
+      content = stack([titleBar(ctx, field.label, w, M.box.value + 0.5), caseBlockTable(ctx, field, data[key], w)]);
+      frame = false;
     } else if (field.type === "timeline") {
       flush();
       out.push(...timelineBlocks(ctx, field, data[key], width).map(block => ({ ...block, gapAfter: block.gapAfter ?? M.gap })));
@@ -468,7 +568,8 @@ function matrixTable(ctx: Ctx, field: FieldDefinition, value: JsonValue | undefi
   const data = (value && typeof value === "object" && !Array.isArray(value) ? value : {}) as MatrixValue;
   const totals = matrixTotals(field, data);
   const cols = field.cols ?? [];
-  const first = Math.min(width * 0.32, 60 * MM);
+  // The row names' column: as wide as on the paper when the form says (label_width), else about a third.
+  const first = field.label_width ? width * field.label_width / 100 : Math.min(width * 0.32, 60 * MM);
   const each = cols.length ? (width - first) / cols.length : width - first;
   const size = M.box.value;
   const pad = 0.9 * MM * M.k;
@@ -499,6 +600,32 @@ function matrixTable(ctx: Ctx, field: FieldDefinition, value: JsonValue | undefi
     }
   }
   return stack(rows);
+}
+
+/** case_block: a bordered table of the case's rows at the form's column widths (percent of the block), up to
+ * max_rows, then empty ruled rows up to min_rows; the header row is shaded. Rows the limit leaves out are counted
+ * under the table, so the paper never silently drops data. */
+function caseBlockTable(ctx: Ctx, field: FieldDefinition, value: JsonValue | undefined, width: number): Block {
+  const columns = resolveColumns(field, ctx.language);
+  if (!columns.length) return textLines(ctx, field.label, M.size.label, width, "muted");
+  const { rows, more } = printedRows(field, value);
+  const body = rows.length ? rows : [{}];
+  const size = M.size.table;
+  const pad = 0.9 * MM * M.k;
+  const widths = columns.map(column => width * column.width / 100);
+  const lefts = widths.map((_, index) => widths.slice(0, index).reduce((sum, w) => sum + w, 0));
+  const tableRow = (cells: string[], bold: boolean, fill: boolean): Block => {
+    const blocks = cells.map((text, index) => textLines(ctx, text, size, Math.max(1, widths[index] - 2 * pad), "text", bold));
+    const height = Math.max(5 * MM * M.k, ...blocks.map(block => block.height + 2 * pad));
+    return {
+      height, gapAfter: 0,
+      draw: (x, y) => blocks.flatMap((block, index) => [{ kind: "rect" as const, x: x + lefts[index], y, w: widths[index], h: height, fill }, ...block.draw(x + lefts[index] + pad, y + pad)]),
+    };
+  };
+  const header = field.show_header === false ? null : tableRow(columns.map(column => column.label), true, true);
+  const lines = body.map(row => tableRow(columns.map(column => row[column.key] ?? ""), false, false));
+  const note = more ? textLines(ctx, ctx.language?.startsWith("en") ? `+${more} more not printed` : `อีก ${more} รายการไม่ได้พิมพ์`, M.size.label, width, "muted") : null;
+  return stack([...(header ? [header] : []), ...lines, ...(note ? [note] : [])]);
 }
 
 // Timeline (Flora Leaf events, trend chart, parameter table) --------------------------------------------
@@ -780,8 +907,9 @@ function layoutAt(input: LayoutInput, scale: number): PdfLayout & { scale: numbe
     if (pageFooter) ops.push(...pageFooter.draw(left, bottom - pageFooter.height));
   });
 
-  // Bands: header / footer slots, {page}/{pages}; a page number at the bottom right when no footer is set.
-  const footer = paper.footer ?? { right: "{page}/{pages}" };
+  // Bands: header / footer slots, {page}/{pages}; a form without a footer gets the default one (the patient, when
+  // and by whom printed, the page number) so every page says whose record it is.
+  const footer = paper.footer ?? defaultFooter(input.context);
   pages.forEach((ops, index) => {
     const context = { ...input.context, page: index + 1, pages: pages.length };
     for (const [config, baseline] of [[paper.header, top / 2 + M.size.band / 2], [footer, bottom + (height - bottom) / 2 + M.size.band / 2]] as const) {

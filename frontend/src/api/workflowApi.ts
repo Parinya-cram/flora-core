@@ -20,6 +20,11 @@ export type WorkflowFormRef = {
   hint?: string;
   /** tab: a data-entry tab on Leaf (default); report: printed from Reports only, filled from the case's data. */
   display?: WorkflowFormDisplay;
+  /** Several copies per case (e.g. one per transfusion or per procedure): the first keeps the form's id, the next are
+   * "<form_id>~2", "<form_id>~3"... (case_forms.INSTANCE_KEY). */
+  repeatable?: boolean;
+  /** Most copies of a repeatable form (2-99; none: up to 99). */
+  max_instances?: number;
 };
 export type WorkflowFormDisplay = "tab" | "report";
 
@@ -156,8 +161,20 @@ export type LeafWorkflowOption = {
 export const listLeafWorkflows = () =>
   leafJson<{ rows?: LeafWorkflowOption[]; syncedAt?: string | null }>(`${CASE_BASE}/workflows`).then(data => ({ rows: data.rows || [], syncedAt: data.syncedAt ?? null }));
 
-export type CaseWorkflowFormRecord = { data: RecordData; status: "draft" | "completed"; updatedAt?: string | null };
-export type CaseWorkflowForm = { definition: FormDefinition; record: CaseWorkflowFormRecord | null };
+/** Who changed a field last: on a Leaf, or in Canopy (an amendment, with its reason). */
+export type CaseFormAuthor = { by: string; at: number; via: "leaf" | "canopy"; leaf_id?: string; reason?: string };
+/** Canopy's receipt for the copy it last took: stored in Form Studio, kept as a draft, not stored (issues say why),
+ * or waiting for files; "pending" until the first exchange. `current`: Canopy has the form as it is now. */
+export type CaseFormSync = {
+  state: "pending" | "stored" | "kept_as_draft" | "not_stored" | "waiting_files";
+  issues: Array<{ path: string; code: string; message: string }>; at?: number | null; recordId?: string | null; current: boolean;
+};
+export type CaseWorkflowFormRecord = {
+  data: RecordData; status: "draft" | "completed"; updatedAt?: number | string | null; updatedBy?: string | null;
+  createdAt?: number | null; createdBy?: string | null; authors?: Record<string, CaseFormAuthor>; sync?: CaseFormSync;
+};
+/** A form of the case; a further copy of a repeatable form also names the form it copies (`of`) and its number. */
+export type CaseWorkflowForm = { definition: FormDefinition; record: CaseWorkflowFormRecord | null; of?: string; instance?: number };
 export type CaseWorkflow = { workflow: WorkflowDefinition | null; forms: Record<string, CaseWorkflowForm> };
 
 export const getCaseWorkflow = (caseId: number) =>
@@ -172,12 +189,59 @@ export const getReportTemplates = (caseId: number) =>
   leafJson<{ templates?: ReportTemplate[]; syncedAt?: number | null }>(`${CASE_BASE}/${caseId}/report-templates`)
     .then(data => ({ templates: data.templates || [], syncedAt: data.syncedAt ?? null }));
 
-export const patchCaseWorkflowForm = (caseId: number, formId: string, patch: RecordData, status?: "draft" | "completed") =>
-  leafJson<{ definition?: FormDefinition; record?: CaseWorkflowFormRecord }>(`${CASE_BASE}/${caseId}/workflow-forms/${encodeURIComponent(formId)}`, {
+/** A save the Leaf refused: completing a form Form Studio would not accept (422 with the field issues). */
+export class CaseFormRefused extends Error {
+  readonly issues: Array<{ path: string; code: string; message: string }>;
+  constructor(message: string, issues: Array<{ path: string; code: string; message: string }>) {
+    super(message);
+    this.issues = issues;
+  }
+}
+
+/** `reason`: why a completed form is changed or reopened (an amendment; the Leaf refuses it without one). */
+export async function patchCaseWorkflowForm(caseId: number, formId: string, patch: RecordData, status?: "draft" | "completed", reason?: string) {
+  const response = await fetch(`${CASE_BASE}/${caseId}/workflow-forms/${encodeURIComponent(formId)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ patch, ...(status ? { status } : {}) }),
+    body: JSON.stringify({ patch, ...(status ? { status } : {}), ...(reason ? { reason } : {}) }),
   });
+  const data = await response.json().catch(() => ({}));
+  if (response.status === 422 && Array.isArray((data as { issues?: unknown }).issues)) {
+    const body = data as { error?: string; issues: Array<{ path: string; code: string; message: string }> };
+    throw new CaseFormRefused(body.error || "The form is not complete", body.issues);
+  }
+  if (!response.ok) throw new Error(errorMessage(data, response.status));
+  return data as { definition?: FormDefinition; record?: CaseWorkflowFormRecord };
+}
+
+/** Sign a signature field with the drawing and the signer's signing PIN (the Leaf checks it and locks the field). */
+export async function signCaseWorkflowForm(caseId: number, formId: string, input: { field: string; data: string; pin: string; reason?: string }) {
+  const response = await fetch(`${CASE_BASE}/${caseId}/workflow-forms/${encodeURIComponent(formId)}/sign`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(errorMessage(data, response.status));
+  return data as { record?: CaseWorkflowFormRecord };
+}
+
+/** Attach a workflow to an open case, or change it (forms already filled keep their version). */
+export const attachCaseWorkflow = (caseId: number, workflowId: string) =>
+  leafJson<Partial<CaseWorkflow>>(`${CASE_BASE}/${caseId}/workflow`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workflow_id: workflowId }),
+  }).then(data => ({ workflow: data.workflow ?? null, forms: data.forms || {} }) as CaseWorkflow);
+
+/** Files of file / image fields: stored on the Leaf (by SHA-256) before the form refers to them. */
+export async function putCaseFormFile(caseId: number, sha256: string, bytes: ArrayBuffer, mime: string): Promise<void> {
+  const response = await fetch(`${CASE_BASE}/${caseId}/workflow-forms-files/${sha256}`, {
+    method: "PUT", headers: { "Content-Type": mime || "application/octet-stream" }, body: bytes,
+  });
+  if (!response.ok) throw new Error(errorMessage(await response.json().catch(() => ({})), response.status));
+}
+
+export async function getCaseFormFile(caseId: number, sha256: string): Promise<Blob | null> {
+  const response = await fetch(`${CASE_BASE}/${caseId}/workflow-forms-files/${sha256}`);
+  return response.ok ? await response.blob() : null;
+}
 
 // ---------------------------------------------------------------- itemize (billing) templates
 

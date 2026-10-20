@@ -218,6 +218,9 @@ class RouteOrder(unittest.TestCase):
         self.patches.enter_context(mock.patch.object(rt, "storage", lambda connection: nullcontext(self.fd)))
         self.patches.enter_context(mock.patch.object(rt, "principal_for", self.principal_for))
         self.patches.enter_context(mock.patch.object(formdev_query, "read_token", lambda request: {"sub": request.headers.get("x-test-user", "1")}))
+        # No account registry here: the account middleware (app/account_middleware.py) would wait on a database.
+        from app import account_middleware
+        self.patches.enter_context(mock.patch.object(account_middleware, "resolve", lambda path, headers: None))
 
     def tearDown(self):
         self.patches.close()

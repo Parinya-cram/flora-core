@@ -8,8 +8,10 @@ import type { FontEntry, FormDefinition, RecordData, StyleEntry } from "../core/
 import type { LookupTables } from "../logic/lookup";
 
 type Props = {
-  definition: FormDefinition; value: RecordData; recordId?: string; roles?: string[]; isAdmin?: boolean; lookups?: LookupTables;
+  definition: FormDefinition; value: RecordData; recordId?: string; printedBy?: string; roles?: string[]; isAdmin?: boolean; lookups?: LookupTables;
   styles?: StyleEntry[]; fonts?: FontEntry[]; language?: string;
+  /** Told after each build: pages printed and the density scale used (1 = normal). */
+  onInfo?: (info: { pages: number; scale: number }) => void;
 };
 export type PdfPreviewHandle = { print: () => void };
 
@@ -17,7 +19,9 @@ const PdfPreview = forwardRef<PdfPreviewHandle, Props>(function PdfPreview(props
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState("");
   const frame = useRef<HTMLIFrameElement>(null);
-  const { definition, value, recordId, roles, isAdmin, lookups, styles, fonts, language } = props;
+  const { definition, value, recordId, printedBy, roles, isAdmin, lookups, styles, fonts, language } = props;
+  const onInfo = useRef(props.onInfo);
+  useEffect(() => { onInfo.current = props.onInfo; });
 
   useImperativeHandle(ref, () => ({ print: () => frame.current?.contentWindow?.print() }), []);
 
@@ -25,9 +29,10 @@ const PdfPreview = forwardRef<PdfPreviewHandle, Props>(function PdfPreview(props
     let cancelled = false;
     let made: string | null = null;
     const timer = setTimeout(() => {
-      void import("../render/formPdf").then(({ buildFormPdf }) => buildFormPdf({ definition, value, recordId, roles, isAdmin, lookups, styles, fonts, language }))
-        .then(bytes => {
+      void import("../render/formPdf").then(({ buildFormPdfInfo }) => buildFormPdfInfo({ definition, value, recordId, printedBy, roles, isAdmin, lookups, styles, fonts, language }))
+        .then(({ bytes, pages, scale }) => {
           if (cancelled) return;
+          onInfo.current?.({ pages, scale });
           made = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" }));
           setUrl(made);
           setError("");
@@ -39,7 +44,7 @@ const PdfPreview = forwardRef<PdfPreviewHandle, Props>(function PdfPreview(props
       clearTimeout(timer);
       if (made) setTimeout(() => URL.revokeObjectURL(made as string), 1000);
     };
-  }, [definition, value, recordId, roles, isAdmin, lookups, styles, fonts, language]);
+  }, [definition, value, recordId, printedBy, roles, isAdmin, lookups, styles, fonts, language]);
 
   if (error) return <div role="alert" className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-600">{error}</div>;
   return url

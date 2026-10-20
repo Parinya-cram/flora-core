@@ -4,6 +4,7 @@ import {
   WORKSTATION_CONTEXT_STORAGE_KEY,
   type WorkstationContext,
 } from "../api/workstationApi";
+import { getSurfaceInfo } from "../edition/config";
 
 const FALLBACK_CONTEXT: WorkstationContext = {
   hospitalName: "",
@@ -32,6 +33,9 @@ function readCachedContext(): WorkstationContext {
 }
 
 function loadContext() {
+  // The workstation (its bed, and date and time formats) is a Leaf's own setting: Canopy has no such route and
+  // keeps the defaults, rather than asking for it and getting 404 on every page.
+  if (getSurfaceInfo().code !== "leaf") return Promise.resolve(readCachedContext());
   if (!pendingRequest) {
     pendingRequest = getWorkstationContext()
       .then(context => {

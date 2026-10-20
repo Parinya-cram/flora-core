@@ -25,10 +25,14 @@ from typing import Any
 
 from .. import ai_service
 from ..workflows import PHASES, SECTION_IDS, SECTIONS
-from . import field_types
+from . import case_blocks, field_types
 from .definition import (CONDITION_OPERATORS, FORM_ID, FORMAT, PAGE_BANDS, PRINT_STYLES, REPEAT_VIEWS, TIMELINE_PARTS, TIMELINE_SERIES, Issue,
                          fields as definition_fields, parse_json_strict)
 from .documents import SourceFile
+
+from ..concepts import CONCEPTS as _CONCEPTS
+
+CONCEPT_KEYS = [concept["key"] for concept in _CONCEPTS]
 
 MAX_REPAIRS = 2
 MAX_TOKENS = int(os.getenv("FORMDEV_AI_MAX_TOKENS", "32000"))
@@ -73,12 +77,12 @@ FORMAT ({FORMAT}). Top level:
 Section: {{"id":"snake_case","title":"...","description"?,"print_style"?:{"|".join(PRINT_STYLES)},"hide_title"?:true,
  "repeat_on_pages"?:{"|".join(PAGE_BANDS)} (top-level sections only: a patient header / signature footer on every page),
  "page_break"?:"before|after|avoid","fields":[...],"sections"?:[nested sections],"visibility"?:{{"when":condition}}}}
-Field: {{"id":"snake_case unique in the whole form","type":"<type>","label":"text as printed","layout":{{"span":1-24}},
+Field: {{"id":"variable name (see NAMES)","type":"<type>","label":"text as printed","label_en"?:"English","layout":{{"span":1-24,"row"?,"col"?,"row_span"?}},
  "required"?:true,"description"?,"unit"?,"placeholder"?,"indexed"?:true,"visibility"?:{{"when":condition}}, ...type properties}}
 Field types and their own properties (any other property is an error):
 {_field_types_table()}
 Common properties for every value field: id, label, description, required, readonly, hidden, layout, visibility, indexed.
-Options (select, radio, multiselect): "options":[{{"value":"snake_case","label":"as printed"}}]; an "Other ......" choice is
+Options (select, radio, multiselect): "options":[{{"value":"snake_case","label":"as printed","label_en"?:"English"}}]; an "Other ......" choice is
  {{"value":"other","label":"Other","has_input":true}}; "option_columns":1-6 lays check boxes out in columns like the paper.
  Use radio for one choice shown as boxes, select for long lists, multiselect for "tick all that apply".
 checkbox: one yes/no box. integer / decimal (with "decimals") / number: "min", "max", "unit". date, time, datetime: no
@@ -94,18 +98,40 @@ calculated: "formula" over other field ids, e.g. "weight / ((height / 100) ^ 2)"
 barcode: prints another field's value as bars, e.g. {{"id":"hn_barcode","type":"barcode","label":"HN barcode","source":"hn","symbology":"i2of5",
  "height_mm":8}} where the paper has a patient barcode or a sticker box (i2of5 = digits, as Flora Leaf's HN; code128 for values with letters).
 logo: a picture kept in the form ("src" data URL). Never invent one: leave the hospital logo out, the author adds it in the designer.
+case_block (REPORT COMPONENT): a table Flora Leaf fills with the case's own records when the form is printed as a report
+ (nobody types into it). Use it where the paper has a printed table of case data — a list of diagnoses or operations,
+ drugs given, fluids / blood, outputs, lab results, events, the care team, billing items, scores — instead of a repeat:
+ {{"id":"medications_table","type":"case_block","label":"ยาที่ให้","label_en":"Medications given","block":"medications",
+ "block_columns":[{{"key":"time","width":15}},{{"key":"name","width":45}},{{"key":"dose","width":25}},{{"key":"note","width":15}}],
+ "min_rows":5,"max_rows":15,"layout":{{"span":24}}}}. block is one of the blocks below; block_columns lists some of that
+ block's column keys in the paper's order with "width" = percent of the table as measured on the paper (they add to 100),
+ and "label" when the paper's heading differs; min_rows = the ruled rows printed on the paper (left empty to write on
+ when the case has fewer), max_rows = the most that fit. Blocks (key=default width %):
+{case_blocks.catalog_text()}
 Condition: {{"field":"field_id","operator":one of {", ".join(CONDITION_OPERATORS)},"value"?}} or {{"and":[...]}} / {{"or":[...]}}.
 
+ONE PAGE. A report printed from Flora Leaf should fit the paper it copies: when the paper is one page, keep it one page
+(paper.density "fit_page" shrinks the type when needed) and size case_block rows (min_rows / max_rows) to the space the
+paper gives each table; the proportions of a row are its spans (span 12 of 24 = half the width).
+
 LAYOUT LIKE THE PAPER. 24 grid columns per row; give every field layout.span so items that share a line on paper share a
-row (spans on one line add up to 24). Use print_style "boxed" for bordered blocks, a header section with
-repeat_on_pages "header" for patient details printed on every page, and a footer section for signatures. Keep the order
-of the paper. Keep labels exactly as printed (Thai stays Thai; keep both languages when the paper has both, e.g.
-"น้ำหนัก / Weight"). Units go in "unit", not in the label.
+row (spans on one line add up to 24). A tall item beside several lines (a photo, a body diagram, a box of notes) takes
+layout {{"row":r,"col":c,"span":s,"row_span":n}} and the items beside it take their own row and col. Printed headings
+inside a section are "heading" fields (level 1-3), printed instructions "paragraph" fields (content), rules "divider"
+fields. Use print_style "boxed" for bordered blocks, a header section with repeat_on_pages "header" for patient details
+printed on every page, and a footer section for signatures. Keep the order of the paper. Keep labels exactly as printed
+in "label" (Thai stays Thai) and give the English in "label_en" (and "title_en" for sections) — never both languages in
+one label. Units go in "unit", not in the label.
+
+NAMES (the variable-name standard). An id is English lower snake_case and says what the value is, never the input type
+(not text_2, date, field_1): pain_score, assessor_name, consent_date. A field holding case data gets "bind" and is named
+after it: {", ".join(CONCEPT_KEYS)} (e.g. bind "patient.weight_kg" → id "patient_weight_kg"). A vague name (date, time,
+name, note, other) gets its section's name first: consent_date, witness_name.
 
 RULES.
 - Capture every fillable item: blanks, check boxes, tables, scores, signatures, dates and times. Do not invent items that
-  are not in the documents; do not drop any. Static text (instructions, legends) goes in a section or field description.
-- Ids: lower snake_case English (transliterate Thai meaningfully, e.g. "blood_pressure"), unique across the form.
+  are not in the documents; do not drop any. Printed text (instructions, legends) becomes paragraph fields.
+- Ids follow NAMES and are unique across the form.
 - Patient identifiers: an HN field is {{"id":"hn","type":"text","required":true,"indexed":true}} and the form gets
   "extensions":{{"flora.subject_field":"hn"}}. Index (indexed:true) only key fields people search by (HN, AN, dates).
 - Mark required only what the paper marks as required (*, "ต้องกรอก") or what is plainly essential (HN).
@@ -128,8 +154,25 @@ ANSWER with exactly two blocks and nothing else:
 List every fillable item of the documents in coverage, in paper order."""
 
 
-def _request_text(files: list[SourceFile], instructions: str, form_id: str | None, title: str | None) -> str:
-    parts = ["Build the form from the documents above."]
+def _request_text(files: list[SourceFile], instructions: str, form_id: str | None, title: str | None,
+                  start: dict[str, Any] | None = None, focus: list[str] | None = None, measured: bool = False) -> str:
+    """What the author asks: build from the documents, build from a description alone, or change an existing form
+    (start), possibly only the fields they selected (focus)."""
+    parts = ["Build the form from the documents above." if files else "Change the form below as the author asks." if start
+             else "Build the form the author describes below (there are no documents)."]
+    if start is not None and measured:
+        # A draft the reading tools made from the pages (reading/): the paper's layout measured, its content to check.
+        parts.append(f"\n--- a draft the tools read from the pages above (OCR, ruled lines, tables): every item's place and size "
+                     f"(layout), the tables, the paper and the bordered sections (print_style) are measured from the paper ---\n"
+                     + json.dumps(start, ensure_ascii=False)
+                     + "\nLook at the pages and correct what the tools misread: labels (keep the printed wording, give label_en), field "
+                       "types, options, table columns and rows, units, section titles; add what is missing and remove what is not "
+                       "a field. Keep each item's id and layout, the paper and print_style, so the form looks like the document.")
+    elif start is not None:
+        parts.append(f"\n--- the current {FORMAT} form ---\n" + json.dumps(start, ensure_ascii=False)
+                     + "\nKeep every id, label, option value and layout the author does not ask to change, so its records stay valid.")
+        if focus:
+            parts.append("The author selected these fields; the instructions are about them: " + ", ".join(focus))
     for source in files:
         if source.text:
             parts.append(f"\n--- {source.name} ({source.kind}, extracted text) ---\n{source.text}")
@@ -206,10 +249,16 @@ def needs_page_images(config: dict[str, Any]) -> bool:
 class Conversation:
     """One build's exchange with the AI service (the first request, then corrections)."""
 
-    def __init__(self, config: dict[str, Any], files: list[SourceFile], text: str):
+    def __init__(self, config: dict[str, Any], files: list[SourceFile], text: str, *, system: str | None = None,
+                 content: list[dict[str, Any]] | None = None, end_tag: str = "</form_json>"):
+        """system / content / end_tag let other AI steps share this client (reading/refine.py: line crops and a
+        compact JSON instead of whole documents, answered between its own tags)."""
         self.config = config
         self.openai = config.get("api_format") == "openai"
-        content = _openai_content(files, text) if self.openai else _anthropic_content(files, text)
+        self.system = system or SYSTEM_PROMPT
+        self.end_tag = end_tag
+        if content is None:
+            content = _openai_content(files, text) if self.openai else _anthropic_content(files, text)
         self.messages: list[dict[str, Any]] = [{"role": "user", "content": content}]
         self.max_tokens = MAX_TOKENS
         self.usage = {"input_tokens": 0, "output_tokens": 0, "requests": 0}
@@ -225,7 +274,7 @@ class Conversation:
         import anthropic
 
         client = ai_service.anthropic_client(self.config, timeout=TIMEOUT_S)
-        system = [{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}]
+        system = [{"type": "text", "text": self.system, "cache_control": {"type": "ephemeral"}}]
         try:
             try:
                 with client.messages.stream(model=self.config["model"], max_tokens=self.max_tokens, system=system, messages=self.messages) as stream:
@@ -253,7 +302,7 @@ class Conversation:
         self.usage["output_tokens"] += reply.usage.output_tokens or 0
         self.messages.append({"role": "assistant", "content": reply.content})
         text = "".join(block.text for block in reply.content if getattr(block, "type", "") == "text")
-        if reply.stop_reason == "max_tokens" and "</form_json>" not in text:
+        if reply.stop_reason == "max_tokens" and self.end_tag not in text:
             raise BuildError("The form is too large for one answer from this AI model; split the documents and build them one at a time.")
         return text
 
@@ -264,7 +313,7 @@ class Conversation:
             raise BuildError("The AI service host is not configured.")
         body = json.dumps({"model": self.config["model"], "max_tokens": self.max_tokens, "temperature": 0, "stream": True,
                            "stream_options": {"include_usage": True},
-                           "messages": [{"role": "system", "content": SYSTEM_PROMPT}, *self.messages]}).encode("utf-8")
+                           "messages": [{"role": "system", "content": self.system}, *self.messages]}).encode("utf-8")
         headers = {"Content-Type": "application/json", "Accept": "text/event-stream, application/json", "User-Agent": ai_service.USER_AGENT}
         if self.config.get("api_key"):
             headers["Authorization"] = f"Bearer {self.config['api_key']}"
@@ -282,14 +331,18 @@ class Conversation:
                     raise BuildError("The AI service rejected the request (check the API key).") from error
                 if error.code in {502, 503, 504, 520, 522, 524}:
                     raise BuildError(f"The AI service did not answer in time ({error.code}); it may be busy or the documents too large — try again or with fewer pages.") from error
+                if error.code in {521, 523, 530}:
+                    # Cloudflare: the AI server or the tunnel to it is down (e.g. error 1033), not this request.
+                    raise BuildError(f"The AI server cannot be reached right now ({error.code}: its host or tunnel is down); try again later.") from error
                 detail = error.read(300).decode("utf-8", "replace").strip()
-                raise BuildError(f"The AI service returned an error ({error.code}){': ' + detail if detail else ''}; check that the model reads images.") from error
+                hint = "; check that the model reads images" if 400 <= error.code < 500 else ""
+                raise BuildError(f"The AI service returned an error ({error.code}){': ' + detail if detail else ''}{hint}.") from error
             except (OSError, ValueError) as error:
                 raise BuildError(f"Cannot reach the AI service ({type(error).__name__}).") from error
             self.usage["input_tokens"] += int(usage.get("prompt_tokens") or 0)
             self.usage["output_tokens"] += int(usage.get("completion_tokens") or 0)
             text = re.sub(r"<think>.*?</think>\s*", "", text, flags=re.S)
-            if finish == "length" and "</form_json>" not in text:
+            if finish == "length" and self.end_tag not in text:
                 raise BuildError("The form is too large for one answer from this AI model; split the documents and build them one at a time.")
             self.messages.append({"role": "assistant", "content": text})
             return text
@@ -398,14 +451,15 @@ def clean_report(report: Any, definition: dict[str, Any]) -> dict[str, Any]:
 
 
 def build(config: dict[str, Any], files: list[SourceFile], *, instructions: str = "", form_id: str | None = None, title: str | None = None,
-          validate: Callable[[dict[str, Any]], list[dict[str, Any]]]) -> dict[str, Any]:
+          validate: Callable[[dict[str, Any]], list[dict[str, Any]]], start: dict[str, Any] | None = None, focus: list[str] | None = None,
+          measured: bool = False) -> dict[str, Any]:
     """Ask the model for a definition and its report; correct validation problems up to MAX_REPAIRS times.
 
     Returns {definition, report, issues, attempts, usage, model}. Raises BuildError when no definition came back."""
     if not (config.get("model") or "").strip():
         raise BuildError("The AI service is not configured (Canopy → Account → AI service).")
     started = time.monotonic()
-    conversation = Conversation(config, files, _request_text(files, instructions, form_id, title))
+    conversation = Conversation(config, files, _request_text(files, instructions, form_id, title, start, focus, measured))
     definition: dict[str, Any] | None = None
     report: Any = None
     issues: list[dict[str, Any]] = []

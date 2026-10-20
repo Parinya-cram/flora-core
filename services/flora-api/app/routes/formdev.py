@@ -17,6 +17,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Body, Depends, Query, Request
 from fastapi.responses import Response
 
+from .. import case_forms
 from ..formdev import FormDevServices
 from ..formdev.attachments import INLINE_TYPES, MAX_BYTES as MAX_ATTACHMENT_BYTES, refs as attachment_refs
 from ..formdev.definition import Issue, describe_issues, parse_json_strict
@@ -310,6 +311,34 @@ def _record_access(request: Request, fd: FormDevServices, record_id: str) -> tup
     return record, view
 
 
+@router.get("/leaf-links")
+def leaf_links(request: Request, form_id: str, fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
+    """Records of `form_id` that are Flora Leaf case forms: {record_id: {hn, case, Leaf, receipt, pending to Leaf}}. The
+    designer's record views show the patient and ask for a reason before changing one (an amendment, app/case_forms.py)."""
+    principal = principal_for(request, request.state.formdev_connection)
+    view = _form_view(fd, principal, form_id, f"Form '{form_id}' not found", "form_not_found")
+    connection = request.state.formdev_connection
+    if not view.readable or not case_forms.available(connection):
+        return {"links": {}}
+    return {"links": case_forms.links(connection, form_id)}
+
+
+@router.get("/leaf-links/{record_id}")
+def leaf_link(request: Request, record_id: str, fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
+    """The Leaf case form behind a record: who changed each field and every amendment made in Canopy (newest first)."""
+    principal = principal_for(request, request.state.formdev_connection)
+    record = fd.records.get(record_id)
+    view = _form_view(fd, principal, record["form_id"], f"Record '{record_id}' not found", "record_not_found")
+    connection = request.state.formdev_connection
+    row = connection.execute("SELECT * FROM canopy_case_form WHERE record_id=%s", (record_id,)).fetchone() \
+        if view.can_see(record) and case_forms.available(connection) else None
+    if row is None:
+        raise FormDevError("not_leaf_form", "This record is not a Flora Leaf case form", 404)
+    link = case_forms.public(row)
+    link.pop("data")
+    return {"link": link, "amendments": case_forms.amendments(connection, row)}
+
+
 @router.get("/records/{record_id}")
 def get_record(request: Request, record_id: str, as_version: int | None = Query(default=None, ge=1), fd: FormDevServices = Depends(formdev)) -> dict[str, Any]:
     _, view = _record_access(request, fd, record_id)
@@ -353,5 +382,8 @@ def sync(request: Request, body: Any = Body(...), user: dict = Depends(read_toke
             return view.mask_row(record)
         return {key: record.get(key) for key in ("record_id", "form_id", "schema_version", "status", "version", "updated_at")}
 
-    acks = fd.sync.apply(ops, username(user), protected=hidden_fields(fd, principal, access), locked=locked, allows=allows, present=present)
+    # Records that are Flora Leaf case forms change by amendment (with a reason), merged back to the Leaf field by field.
+    linked = case_forms.amender(request.state.formdev_connection)
+    acks = fd.sync.apply(ops, username(user), protected=hidden_fields(fd, principal, access), locked=locked, allows=allows,
+                         present=present, linked=linked)
     return {"acks": acks, "server_time": int(time.time() * 1000)}

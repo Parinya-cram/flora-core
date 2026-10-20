@@ -73,13 +73,23 @@ x-leaf-sync: &leaf-sync
     FLORA_SYNC_INTERVAL_SECONDS: "10"
   restart: unless-stopped
 
+# Container logs are capped (Docker's default json-file log grows without limit and has filled servers): at most
+# FLORA_LOG_MAX_FILES files of FLORA_LOG_MAX_SIZE each per container, the oldest dropped first.
+x-flora-logging: &flora-logging
+  driver: json-file
+  options:
+    max-size: "${FLORA_LOG_MAX_SIZE:-10m}"
+    max-file: "${FLORA_LOG_MAX_FILES:-3}"
+
 services:
   flora-leaf-2-db:
+    logging: *flora-logging
     <<: *leaf-db
     ports: ["${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_LEAF_2_DB_PORT:-6902}:5432"]
     volumes: ["flora_leaf_2_data:/var/lib/postgresql/data"]
 
   flora-leaf-2-api:
+    logging: *flora-logging
     <<: *leaf-api
     environment:
       <<: *leaf-api-environment
@@ -92,6 +102,7 @@ services:
       flora-sync-api: {condition: service_healthy}
 
   flora-leaf-2:
+    logging: *flora-logging
     <<: *leaf-web
     environment:
       <<: *leaf-web-environment
@@ -104,6 +115,7 @@ services:
       flora-leaf-2-api: {condition: service_healthy}
 
   flora-leaf-2-sync:
+    logging: *flora-logging
     <<: *leaf-sync
     environment:
       <<: *leaf-sync-environment
@@ -115,11 +127,13 @@ services:
       flora-sync-api: {condition: service_healthy}
 
   flora-leaf-3-db:
+    logging: *flora-logging
     <<: *leaf-db
     ports: ["${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_LEAF_3_DB_PORT:-6912}:5432"]
     volumes: ["flora_leaf_3_data:/var/lib/postgresql/data"]
 
   flora-leaf-3-api:
+    logging: *flora-logging
     <<: *leaf-api
     environment:
       <<: *leaf-api-environment
@@ -132,6 +146,7 @@ services:
       flora-sync-api: {condition: service_healthy}
 
   flora-leaf-3:
+    logging: *flora-logging
     <<: *leaf-web
     environment:
       <<: *leaf-web-environment
@@ -144,6 +159,7 @@ services:
       flora-leaf-3-api: {condition: service_healthy}
 
   flora-leaf-3-sync:
+    logging: *flora-logging
     <<: *leaf-sync
     environment:
       <<: *leaf-sync-environment
@@ -155,11 +171,13 @@ services:
       flora-sync-api: {condition: service_healthy}
 
   flora-leaf-4-db:
+    logging: *flora-logging
     <<: *leaf-db
     ports: ["${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_LEAF_4_DB_PORT:-6922}:5432"]
     volumes: ["flora_leaf_4_data:/var/lib/postgresql/data"]
 
   flora-leaf-4-api:
+    logging: *flora-logging
     <<: *leaf-api
     environment:
       <<: *leaf-api-environment
@@ -172,6 +190,7 @@ services:
       flora-sync-api: {condition: service_healthy}
 
   flora-leaf-4:
+    logging: *flora-logging
     <<: *leaf-web
     environment:
       <<: *leaf-web-environment
@@ -184,6 +203,7 @@ services:
       flora-leaf-4-api: {condition: service_healthy}
 
   flora-leaf-4-sync:
+    logging: *flora-logging
     <<: *leaf-sync
     environment:
       <<: *leaf-sync-environment

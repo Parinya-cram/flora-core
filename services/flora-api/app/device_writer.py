@@ -178,8 +178,24 @@ class DeviceWriter:
             self._audit(database, case, url, minute, 0, 0, "failed", str(error))
             raise
 
-    @staticmethod
-    def _audit(database, case, url, minute, raw, written, status, detail):
+    # The audit is the import's provenance, not a heartbeat: an empty fetch or the same failure again (a device or the
+    # Vector service offline: every minute, for every active case) is written once an hour, a change at once; rows
+    # older than AUDIT_KEEP_DAYS are deleted. Without this the table grew by a row per case per minute, for ever.
+    AUDIT_REPEAT_MS = 3600 * 1000
+    AUDIT_KEEP_DAYS = int(os.getenv("FLORA_DEVICE_AUDIT_KEEP_DAYS", "30"))
+    _audit_last: dict[int, tuple[str, str | None, int]] = {}
+    _audit_pruned = 0
+
+    @classmethod
+    def _audit(cls, database, case, url, minute, raw, written, status, detail):
+        now = int(time.time() * 1000)
+        last = cls._audit_last.get(case["id"])
+        if status in ("empty", "failed") and last and last[0] == status and last[1] == detail and now - last[2] < cls.AUDIT_REPEAT_MS:
+            return
+        cls._audit_last[case["id"]] = (status, detail, now)
+        if now - cls._audit_pruned > cls.AUDIT_REPEAT_MS:
+            cls._audit_pruned = now
+            database.execute("DELETE FROM case_device_ingest_audit WHERE created_at < %s", (now - cls.AUDIT_KEEP_DAYS * 86400 * 1000,))
         database.execute("""INSERT INTO case_device_ingest_audit(case_id,hn,source_service,source_endpoint,fetch_mode,
           minute_ts,from_ts,to_ts,raw_row_count,written_row_count,status,detail_json,created_at)
           VALUES (%s,%s,'vector',%s,'minute',%s,%s,%s,%s,%s,%s,%s,%s)""",

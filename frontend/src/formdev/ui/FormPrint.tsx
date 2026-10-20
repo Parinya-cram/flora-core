@@ -6,17 +6,18 @@
  */
 import { useMemo, type CSSProperties, type ReactNode } from "react";
 import { asRepeatField } from "../core/blocks";
-import { fieldKey, OTHER_KEY } from "../core/validate";
+import { fieldKey, OTHER_KEY, STATIC_TYPES } from "../core/validate";
 import { conditionTrue, evaluateRecord } from "../logic/evaluate";
 import type { LookupTables } from "../logic/lookup";
 import { denied as deniedFields } from "../logic/permission";
-import { containerColumns, fillTemplate, formColumns, gridArea, pageCss, placeField, resolvePaper, sheetsOf, type PrintContext, type ResolvedPaper } from "../core/layout";
+import { containerColumns, defaultFooter, fillTemplate, formColumns, gridArea, pageCss, placeField, printContext, resolvePaper, sheetsOf, type PrintContext, type ResolvedPaper } from "../core/layout";
 import type { ResolvedStyle } from "../core/styles";
 import type { CategoryDefinition, ContainerLayout, FieldDefinition, FileValue, FontEntry, FormDefinition, JsonValue, PaperBand, RecordData, SectionDefinition, SignatureValue, StyleEntry } from "../core/types";
 import { formStyle, gridCss, registries, rootCss, sectionCss, typeCss, type Registries } from "./formStyle";
-import { thaiDate } from "./renderUtils";
 import { cellText, optionText, printedText } from "../render/printValues";
 import PrintedElement from "./PrintedElement";
+import CaseBlockTable from "./CaseBlockTable";
+import StaticElement from "./StaticElement";
 
 type Props = {
   definition: FormDefinition;
@@ -24,6 +25,8 @@ type Props = {
   recordId?: string;
   /** Text for {date}; defaults to today in Thai (Buddhist era) format. */
   printedAt?: string;
+  /** Who prints it (shown in the default footer). */
+  printedBy?: string;
   styles?: StyleEntry[];
   fonts?: FontEntry[];
   /** The user's Flora role codes (Phase 2.8): fields they may not view are left out. Omitted = no filtering. */
@@ -110,6 +113,8 @@ function PrintField({ field, data, columns, style, ctx, containerType, siblings 
     </div>;
   }
   if (field.type === "logo" || field.type === "barcode") return <div data-field={field.id} style={css}><PrintedElement field={field} data={data} /></div>;
+  if (field.type === "case_block") return <div data-field={field.id} style={css}><CaseBlockTable field={field} value={data[fieldKey(field)]} title={field.label} /></div>;
+  if (STATIC_TYPES.has(field.type)) return <div data-field={field.id} style={css}><StaticElement field={field} text={field.label} css={typeCss(own, ctx.regs, "label")} /></div>;
   const value = data[fieldKey(field)];
   if (field.type === "repeat") {
     return <div data-field={fieldKey(field)} style={css}>{label}<RepeatTable field={field} items={Array.isArray(value) ? (value as Array<Record<string, JsonValue>>) : []} style={own} ctx={ctx} /></div>;
@@ -189,7 +194,7 @@ const PRINT_MEDIA = `@media print {
   .fd-band, .fd-sheet-label { display: none !important; }
 }`;
 
-export default function FormPrint({ definition, value = {}, recordId, printedAt, styles, fonts, roles, isAdmin = false, lookups }: Props) {
+export default function FormPrint({ definition, value = {}, recordId, printedAt, printedBy, styles, fonts, roles, isAdmin = false, lookups }: Props) {
   const regs = useMemo(() => registries(styles, fonts), [styles, fonts]);
   const style = useMemo(() => formStyle(definition, regs), [definition, regs]);
   // Print the record as the engine evaluates it: calculated values, hidden fields left out (Phase 2).
@@ -198,7 +203,7 @@ export default function FormPrint({ definition, value = {}, recordId, printedAt,
   const ctx: Ctx = { regs, hidden: new Set(evaluation.hidden), top: evaluation.data, denied };
   const paper = resolvePaper(definition, style.tokens);
   const sheets = sheetsOf(definition.sections);
-  const base: PrintContext = { title: definition.title, form_id: definition.form_id, version: definition.schema_version, date: printedAt ?? thaiDate(), record_id: recordId };
+  const base: PrintContext = printContext(definition, evaluation.data as Record<string, unknown>, { recordId, date: printedAt, printedBy });
   const columns = formColumns(definition);
   const fontStack = regs.fonts.stack(typeof style.tokens.fontId === "string" ? style.tokens.fontId : undefined);
   const width = paper.width_mm ?? 210;
@@ -214,7 +219,7 @@ export default function FormPrint({ definition, value = {}, recordId, printedAt,
         <div style={{ display: "grid", gap: "4mm" }}>
           {sheet.map(section => <PrintSection key={section.id} section={section} data={evaluation.data} columns={columns} style={style} ctx={ctx} depth={1} />)}
         </div>
-        <Band band={paper.footer} edge="bottom" paper={paper} context={context} style={style} ctx={ctx} />
+        <Band band={paper.footer ?? defaultFooter(base)} edge="bottom" paper={paper} context={context} style={style} ctx={ctx} />
       </div>;
     })}
   </div>;

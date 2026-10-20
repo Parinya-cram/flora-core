@@ -57,10 +57,31 @@ ALTER TABLE canopy_admission
   ADD COLUMN IF NOT EXISTS recovery_in_at bigint,
   ADD COLUMN IF NOT EXISTS discharged_at bigint,
   ADD COLUMN IF NOT EXISTS updated_by text;
-DO $$ BEGIN
-  ALTER TABLE canopy_admission ADD CONSTRAINT canopy_admission_journey_state_check CHECK (journey_state IN
-    ('booked','assigned','in_or','awaiting_recovery','assigned_recovery','in_recovery','discharged','cancelled'));
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+ALTER TABLE canopy_admission
+  ADD COLUMN IF NOT EXISTS move_in_requested_at bigint,
+  ADD COLUMN IF NOT EXISTS move_in_requested_by text,
+  -- Ward desk requests the Leaf carries out (move out of the OR room, discharge out of the OR ward).
+  ADD COLUMN IF NOT EXISTS move_out_requested_at bigint,
+  ADD COLUMN IF NOT EXISTS move_out_requested_by text,
+  ADD COLUMN IF NOT EXISTS discharge_requested_at bigint,
+  ADD COLUMN IF NOT EXISTS discharge_requested_by text,
+  -- The OR room's Leaf after the case moved on to recovery: its late reports are not a conflict.
+  ADD COLUMN IF NOT EXISTS handed_from_leaf_id text;
+
+-- Leaf: where the case is in the OR ward, and how it ended.
+ALTER TABLE cases
+  ADD COLUMN IF NOT EXISTS or_stage text,
+  ADD COLUMN IF NOT EXISTS discharge_reason text,
+  ADD COLUMN IF NOT EXISTS discharge_destination text,
+  ADD COLUMN IF NOT EXISTS discharge_note text;
+-- or_recovery: recovering in the OR room itself (Start Recovery recorded there); it can still move out later.
+ALTER TABLE cases DROP CONSTRAINT IF EXISTS cases_or_stage_check;
+ALTER TABLE cases ADD CONSTRAINT cases_or_stage_check CHECK (or_stage IS NULL OR or_stage IN ('or','or_recovery','recovery'));
+-- postponed / no_show / miscreate: closed like cancelled (miscreate = booked by mistake, left out of reports).
+ALTER TABLE canopy_admission DROP CONSTRAINT IF EXISTS canopy_admission_journey_state_check;
+ALTER TABLE canopy_admission ADD CONSTRAINT canopy_admission_journey_state_check CHECK (journey_state IN
+  ('booked','assigned','in_or','awaiting_recovery','assigned_recovery','in_recovery','discharged',
+   'cancelled','postponed','no_show','miscreate'));
 CREATE INDEX IF NOT EXISTS canopy_admission_schedule_idx ON canopy_admission (room_location_id, scheduled_at);
 
 -- Existing admissions get the state their status implies.
@@ -85,6 +106,17 @@ CREATE TABLE IF NOT EXISTS canopy_session_event (
   created_at bigint NOT NULL
 );
 CREATE INDEX IF NOT EXISTS canopy_session_event_admission ON canopy_session_event (admission_id, at);
+
+-- Booking the schedule and moving patients are separate duties (OR admin vs ward nurses).
+INSERT INTO auth_permission(code,display_name,category,risk_level,created_at,updated_at) VALUES
+ ('or.schedule','Book and change the OR schedule','Clinical','normal',1760313600000,1760313600000),
+ ('or.journey','Assign beds and move patients in / out of the OR ward','Clinical','normal',1760313600000,1760313600000)
+ON CONFLICT(code) DO UPDATE SET display_name=excluded.display_name,category=excluded.category,updated_at=excluded.updated_at;
+INSERT INTO auth_role_permission(role_code,permission_code,created_at)
+SELECT role.code, permission.code, 1760313600000 FROM auth_role role
+  CROSS JOIN (VALUES ('or.schedule'), ('or.journey')) AS permission(code)
+WHERE role.code IN ('system_admin','clinical_admin') OR (role.code = 'clinician' AND permission.code = 'or.journey')
+ON CONFLICT DO NOTHING;
 
 DO $$ BEGIN
   GRANT SELECT, INSERT, UPDATE, DELETE ON canopy_or_type, canopy_or_equipment TO flora_view;

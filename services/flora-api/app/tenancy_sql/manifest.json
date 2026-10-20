@@ -66,6 +66,11 @@
  "0084-scoring.sql",
  "0085-staff-sync.sql",
  "0087-formdev-template.sql",
+ "0090-case-form-exchange.sql",
+ "0091-leaf-sync-state.sql",
+ "0092-form-review-signing-hospital.sql",
+ "0093-repeatable-case-forms.sql",
+ "0094-case-documents.sql",
  "0071-io-catalog-sync.sql",
  "0079-ai-studio-dashboard.sql"
 ]

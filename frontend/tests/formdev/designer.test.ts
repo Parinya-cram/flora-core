@@ -83,14 +83,22 @@ describe("designer model", () => {
     expect(definition.sections[0].fields.map(field => field.id)).toEqual(["text", copy.id]);
   });
 
-  it("places on the 12-column grid within bounds, per device", () => {
+  it("places on the form's own grid within bounds, per device", () => {
     const ref = { list: FIELDS, index: 0 };
-    let definition = placeOnGrid(blank(), ref, { span: 4, col: 11 });
+    // A new form has 24 columns.
+    let definition = placeOnGrid(blank(), ref, { span: 4, col: 23 });
+    expect(fieldAt(definition, ref)!.layout).toEqual({ span: 4, col: 21 });
+    definition = placeOnGrid(definition, ref, { span: 30, col: null });
+    expect(fieldAt(definition, ref)!.layout).toEqual({ span: 24 });
+    definition = placeOnGrid(definition, ref, { span: 6 }, "tablet");
+    expect(fieldAt(definition, ref)!.layout).toEqual({ span: 24, responsive: { tablet: { span: 6 } } });
+    expect(issues(definition)).toEqual([]);
+    // A form made on 12 columns keeps them.
+    const twelve = { ...blank(), layout: { type: "grid" as const, columns: 12 } };
+    definition = placeOnGrid(twelve, ref, { span: 4, col: 11 });
     expect(fieldAt(definition, ref)!.layout).toEqual({ span: 4, col: 9 });
     definition = placeOnGrid(definition, ref, { span: 20, col: null });
     expect(fieldAt(definition, ref)!.layout).toEqual({ span: 12 });
-    definition = placeOnGrid(definition, ref, { span: 6 }, "tablet");
-    expect(fieldAt(definition, ref)!.layout).toEqual({ span: 12, responsive: { tablet: { span: 6 } } });
     expect(issues(definition)).toEqual([]);
   });
 
@@ -220,8 +228,10 @@ describe("designer screens render", async () => {
       styleColumns: 2, getDrag: () => null, setDrag: noop, onSelect: noop, onDrop: noop, onResize: noop, onFieldAction: noop, onSectionAction: noop }));
     expect((html.match(/data-card/g) ?? []).length).toBe(allFields(definition).length);
     expect(html).toContain("ข้อมูลผู้ป่วย");
-    expect(html).toContain('title="ทำสำเนา"');
-    expect(html).toContain("cursor-ew-resize");
+    expect(html).toContain('title="ทำสำเนา (Ctrl+D)"');
+    // width, height and both at once (the two-dimensional grid), and each card's variable name
+    for (const handle of ["cursor-ew-resize", "cursor-ns-resize", "cursor-nwse-resize"]) expect(html).toContain(handle);
+    expect(html).toContain('title="ชื่อตัวแปร">hn</code>');
   });
 
   it("inspectors render for every field of a template and for the form and a section", () => {

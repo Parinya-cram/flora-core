@@ -24,11 +24,11 @@ const REST_ENDPOINTS: Array<[string, string]> = [
   ["GET /me", "The key itself: name, scopes, ward limit"],
   ["GET /wards", "Wards the key may read"],
   ["GET /cases?ward&status&hn&since&until&limit&offset", "Search cases"],
-  ["GET /cases/{id}", "Case summary"],
+  ["GET /cases/{id}", "Case summary, with its data by concept (patient.weight_kg, case.asa...)"],
   ["GET /cases/{id}/vitals?parameters&interval&since&until", "Vital signs (vitals:read)"],
   ["GET /cases/{id}/events", "Case events"],
   ["GET /cases/{id}/medications", "Medications"],
-  ["GET /cases/{id}/forms", "Clinical forms (forms:read)"],
+  ["GET /cases/{id}/forms", "Clinical forms and concepts (forms:read)"],
   ["GET /admissions", "Admissions (admissions:read)"],
   ["POST /admissions", "Create an admission (admissions:write)"],
 ];

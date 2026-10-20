@@ -143,6 +143,27 @@ export async function patchAdmissionForm(
   return request(`/${encodeURIComponent(id)}/form`, { method: "PATCH", body: JSON.stringify({ patch }) });
 }
 
+/** A Workflow Studio form of the admission's workflow, with what was filled here or at the bedside. */
+export type AdmissionWorkflowForm = {
+  ref: import("./workflowApi").WorkflowFormRef;
+  definition: import("../formdev/core/types").FormDefinition;
+  record: {
+    data: Record<string, import("../formdev/core/types").JsonValue>; status: "draft" | "completed"; leafId: string | null;
+    authors: Record<string, import("./workflowApi").CaseFormAuthor>; recordState: string; pendingToLeaf: boolean; updatedAt: number;
+  } | null;
+};
+
+export async function getAdmissionWorkflowForms(id: string): Promise<{ workflowId: string | null; workflowName: string | null; editable: boolean; forms: AdmissionWorkflowForm[] }> {
+  return request(`/${encodeURIComponent(id)}/workflow-forms`);
+}
+
+/** Changed fields of an admission's workflow form; `reason` when a field filled at the bedside is changed (an amendment). */
+export async function patchAdmissionWorkflowForm(id: string, formId: string, patch: Record<string, unknown>, reason?: string): Promise<{ record: AdmissionWorkflowForm["record"] }> {
+  return request(`/${encodeURIComponent(id)}/workflow-forms/${encodeURIComponent(formId)}`, {
+    method: "PATCH", body: JSON.stringify({ patch, ...(reason ? { reason } : {}) }),
+  });
+}
+
 /** Short local date/time for admission cards (time only when `timeOnly`). */
 export function formatAdmissionTime(ms: number | null | undefined, timeOnly = false): string {
   if (!ms || !Number.isFinite(ms)) return "";

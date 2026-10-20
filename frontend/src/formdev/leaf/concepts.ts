@@ -45,6 +45,16 @@ export const CONCEPTS: Concept[] = [
   { key: "lab.plt", th: "Platelet", en: "Platelet", kind: "number", aliases: ["plt", "platelet"] },
 ];
 
+/** Where the Leaf's record draft keeps each concept today (caseData.ts reads them; the Canopy twin is
+ * services/flora-api/app/concepts.py DRAFT_KEYS, checked against formdev/spec/fixtures/concepts.json). */
+export const DRAFT_KEYS: Record<string, string> = {
+  "patient.hn": "hn", "patient.an": "an", "patient.id_card": "idCard", "patient.dob": "dob", "patient.age_years": "ageY",
+  "patient.sex": "sex", "patient.weight_kg": "weightKg", "patient.height_cm": "heightCm", "case.asa": "asa",
+  "case.diagnosis": "diagnosis", "case.operation": "operation", "case.type": "emergency",
+  "anesthesia.technique": "anesthesiaTypes", "pacu.arrival": "pacuArrivalTime", "pacu.discharge": "pacuDischargeTime",
+  "pacu.destination": "postoperativeDestination",
+};
+
 export const CONCEPT_BY_KEY = new Map(CONCEPTS.map(concept => [concept.key, concept]));
 const BY_ALIAS = new Map(CONCEPTS.flatMap(concept => concept.aliases.map(alias => [alias, concept.key] as const)));
 

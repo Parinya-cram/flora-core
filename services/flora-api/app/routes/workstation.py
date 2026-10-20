@@ -4,7 +4,7 @@ from zoneinfo import available_timezones
 
 from ..clinical import text
 from ..database import connection
-from .auth_leaf import current_user, now_ms, require_permission
+from .auth_leaf import current_user, now_ms, require_permission, service_only
 
 router = APIRouter(prefix="/api/workstation", tags=["workstation"])
 
@@ -28,6 +28,22 @@ def response(row: dict) -> dict:
 def context(database: Connection = Depends(connection)) -> dict:
     row = database.execute("SELECT * FROM workstation_context WHERE id=1").fetchone()
     return response(row)
+
+
+@router.get("/hospital-profile")
+def get_hospital_profile(database: Connection = Depends(connection)) -> dict:
+    """The hospital's name and logo received from Canopy (empty until one is set there)."""
+    from .. import hospital_profile
+
+    return hospital_profile.leaf_get(database)
+
+
+@router.put("/hospital-profile")
+def put_hospital_profile(payload: dict = Body(...), _: dict = Depends(service_only), database: Connection = Depends(connection)) -> dict:
+    """Called by the sync worker with the profile of the ward exchange."""
+    from .. import hospital_profile
+
+    return hospital_profile.leaf_put(database, payload)
 
 
 @router.put("/context/control-plane")

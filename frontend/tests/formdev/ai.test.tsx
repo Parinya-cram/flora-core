@@ -3,7 +3,6 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { RestApiAdapter } from "../../src/formdev";
-import { base64 } from "../../src/formdev/ai/files";
 import { suggestedPlacement, withPlacement } from "../../src/formdev/ai/placement";
 import TemplateLibrary from "../../src/formdev/ai/TemplateLibrary";
 import { PLACEMENT_KEY } from "../../src/formdev/ai/types";
@@ -12,41 +11,52 @@ import { pacuForm } from "../../src/formdev/designer/templates";
 import { DEFAULT_FONTS, DEFAULT_STYLES } from "../../src/formdev/registry/defaults";
 import { orderCaseTabs, type WorkflowFormTab } from "../../src/components/workflow/caseWorkflow";
 
-type Call = { url: string; method: string; body: unknown; signal: AbortSignal | null };
+type Call = { url: string; method: string; body: unknown; raw: BodyInit | null; contentType: string | null; signal: AbortSignal | null };
 
 function recording(body: unknown, calls: Call[]) {
   return (async (input: RequestInfo | URL, init?: RequestInit) => {
-    calls.push({ url: String(input), method: init?.method ?? "GET", body: init?.body ? JSON.parse(String(init.body)) : undefined, signal: init?.signal ?? null });
+    const raw = init?.body ?? null;
+    const contentType = (init?.headers as Record<string, string> | undefined)?.["Content-Type"] ?? null;
+    calls.push({ url: String(input), method: init?.method ?? "GET", body: typeof raw === "string" ? JSON.parse(raw) : undefined, raw, contentType, signal: init?.signal ?? null });
     return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
   }) as typeof fetch;
 }
 
-const tab = (formId: string, afterSection: string | null): WorkflowFormTab => ({ formId, title: formId, required: false, phase: "any", afterSection, hint: "" });
+const tab = (formId: string, afterSection: string | null): WorkflowFormTab => ({ formId, title: formId, required: false, phase: "any", afterSection, hint: "",
+  status: "empty", sync: null, synced: false });
 
 describe("AI builder and template library: client", () => {
-  it("sends documents to /ai/generate and template changes to /templates", async () => {
+  it("sends documents to /ai/generate by upload id and template changes to /templates", async () => {
     const calls: Call[] = [];
     const api = new RestApiAdapter({ baseUrl: "http://canopy.local", fetch: recording({ template: {}, issues: [] }, calls) });
-    await api.aiGenerate({ files: [{ name: "pacu.pdf", data: "JVBERi0=" }], instructions: "bilingual", form_id: "pacu_record" });
+    await api.aiGenerate({ uploads: ["a".repeat(64)], instructions: "bilingual", form_id: "pacu_record" });
     await api.updateTemplate("pacu_record", { version: 3, status: "reviewed" });
     await api.formFromTemplate("pacu_record", "pacu_v2", "PACU");
     expect(calls.map(call => `${call.method} ${new URL(call.url).pathname}`)).toEqual([
       "POST /api/formdev/ai/generate", "PUT /api/formdev/templates/pacu_record", "POST /api/formdev/templates/pacu_record/forms"]);
-    expect(calls[0].body).toEqual({ files: [{ name: "pacu.pdf", data: "JVBERi0=" }], instructions: "bilingual", form_id: "pacu_record" });
+    expect(calls[0].body).toEqual({ uploads: ["a".repeat(64)], instructions: "bilingual", form_id: "pacu_record" });
     expect(calls[2].body).toEqual({ form_id: "pacu_v2", title: "PACU" });
   });
 
-  it("encodes large files to base64 in chunks", () => {
-    const bytes = new Uint8Array(200_000).map((_, index) => index % 251);
-    const decoded = Uint8Array.from(atob(base64(bytes)), char => char.charCodeAt(0));
-    expect(decoded).toEqual(bytes);
+  it("uploads a file as it is (the body is the file, no base64), then reads it by id", async () => {
+    const calls: Call[] = [];
+    const api = new RestApiAdapter({ baseUrl: "http://canopy.local", fetch: recording({ upload: { id: "b".repeat(64) }, file: {}, job: { id: "j1" } }, calls) });
+    const pdf = new Blob([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d])], { type: "application/pdf" });
+    const { upload } = await api.upload(pdf, "แบบฟอร์ม ก.pdf");
+    await api.startReading({ upload: upload.id, ai: true, title: "แบบฟอร์ม ก" });
+    const sent = new URL(calls[0].url);
+    expect(`${calls[0].method} ${sent.pathname}`).toBe("POST /api/formdev/uploads");
+    expect(sent.searchParams.get("name")).toBe("แบบฟอร์ม ก.pdf");
+    expect(calls[0].raw).toBe(pdf);
+    expect(calls[0].contentType).toBe("application/pdf");
+    expect(calls[1].body).toEqual({ upload: "b".repeat(64), ai: true, title: "แบบฟอร์ม ก" });
   });
 
   it("renders the library while it loads", () => {
     const api = new RestApiAdapter({ fetch: recording({ rows: [] }, []) });
     const html = renderToString(createElement(TemplateLibrary, { remote: api, online: true, language: "th", onEdit: () => undefined, onFormCreated: () => undefined }));
     expect(html).toContain("คลังแม่แบบ");
-    expect(html).toContain("สร้างจากเอกสารด้วย AI");
+    expect(html).toContain("สร้างจากเอกสาร / สแกน");
   });
 });
 

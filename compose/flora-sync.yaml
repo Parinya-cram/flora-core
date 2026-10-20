@@ -1,5 +1,14 @@
+# Container logs are capped (Docker's default json-file log grows without limit and has filled servers): at most
+# FLORA_LOG_MAX_FILES files of FLORA_LOG_MAX_SIZE each per container, the oldest dropped first.
+x-flora-logging: &flora-logging
+  driver: json-file
+  options:
+    max-size: "${FLORA_LOG_MAX_SIZE:-10m}"
+    max-file: "${FLORA_LOG_MAX_FILES:-3}"
+
 services:
   flora-sync-api:
+    logging: *flora-logging
     build:
       context: ../services/flora-api
     environment:
@@ -22,6 +31,7 @@ services:
     restart: unless-stopped
 
   flora-leaf-sync:
+    logging: *flora-logging
     build:
       context: ../services/flora-sync-worker
     environment:

@@ -77,23 +77,52 @@ test-api:
   tags: [flora-dev]
   # Runs as root inside an ephemeral container: deps install into the container's own
   # site-packages (not the mounted source), and PYTHONDONTWRITEBYTECODE keeps the mount clean.
-  # Covers the SQLite-backed formdev + AI-builder suites (no external database needed).
+  # Covers the SQLite-backed formdev + AI-builder suites (no external database needed), and reading documents into
+  # forms: the Noto fonts draw the synthetic Thai form and the OCR models are fetched as the API image fetches them
+  # (pinned, SHA256-checked), so those tests run here instead of being skipped.
   script:
     - >
       docker run --rm
       -e HOME=/tmp -e PYTHONPATH=/app/services/flora-api -e PYTHONDONTWRITEBYTECODE=1
+      -e FLORA_OCR_MODELS=/tmp/flora-ocr -e PYTHAINLP_DATA=/tmp/pythainlp-data
       -v "$CI_PROJECT_DIR:/app"
       -w /app/services/flora-api
       python:3.13-slim
-      sh -c "pip install --quiet --no-cache-dir -r requirements.txt pytest && python -m pytest tests/formdev -q"
+      sh -c "apt-get update -qq && apt-get install -y -qq --no-install-recommends fonts-noto-core >/dev/null
+      && pip install --quiet --no-cache-dir -r requirements.txt pytest
+      && python scripts/fetch_ocr_models.py /tmp/flora-ocr
+      && python -m pytest tests/formdev tests/test_case_forms_merge.py -q"
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
     - if: $CI_COMMIT_BRANCH
 
-# TODO (follow-up): add a DB-backed job for tests/test_leaf_writes.py and tests/test_scoring.py.
-# They need a disposable PostgreSQL (database name ending in _test) with the schema loaded;
-# scripts/test-leaf-writes.sh does this against the dev stack. In CI it needs a dedicated
-# postgres service built from Dockerfile.postgres.dev, so it is wired separately.
+test-db:
+  stage: test
+  tags: [flora-dev]
+  # PostgreSQL-backed API tests (Leaf writes, case forms, Leaf sync, hospital profile, case documents) on a throwaway database server
+  # built as a new install builds it (every script of Dockerfile.postgres.dev), with its own network and API image;
+  # scripts/ci-test-db.sh removes all three afterwards and never touches the dev stack.
+  script:
+    - sh scripts/ci-test-db.sh
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH
+
+test-worker:
+  stage: test
+  tags: [flora-dev]
+  # The sync worker's own rules (snapshot history, Canopy refusing an old protocol), without servers.
+  script:
+    - >
+      docker run --rm
+      -e HOME=/tmp -e PYTHONDONTWRITEBYTECODE=1
+      -v "$CI_PROJECT_DIR:/app"
+      -w /app/services/flora-sync-worker
+      python:3.13-slim
+      sh -c "pip install --quiet --no-cache-dir -r requirements.txt && python -m unittest discover -s tests"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH
 
 # ---------------------------------------------------------------- deploy
 deploy-dev:

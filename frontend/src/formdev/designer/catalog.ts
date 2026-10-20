@@ -6,6 +6,7 @@ import type { CalculatorDefinition, FieldDefinition, FieldType, FormDefinition, 
 import { instantiateTemplate } from "../logic/calculators";
 import { CALCULATOR_TEMPLATES } from "../registry/defaults";
 import { emptyForm, newField, uniqueName } from "./model";
+import { CASE_BLOCK_IDS, CASE_BLOCKS } from "../core/caseBlocks";
 import { PAPER_TEMPLATES } from "./templates";
 
 export type Lang = "th" | "en";
@@ -42,9 +43,17 @@ export const PALETTE: PaletteGroup[] = [
     { type: "matrix", icon: "▤", th: "ตารางคะแนน (แถว × คอลัมน์)", en: "Score table (rows × columns)", hintTh: "Aldrete score, คะแนนตามเวลา", hintEn: "Aldrete score, scores over time" },
     { type: "timeline", icon: "📈", th: "กราฟ + ตาราง Timeline (Flora Leaf)", en: "Timeline chart + table (Flora Leaf)", hintTh: "สัญญาณชีพตามเวลา, เหตุการณ์", hintEn: "Vitals over time, events" },
   ] },
+  { th: "หัวข้อและข้อความ", en: "Headings and text", items: [
+    { type: "heading", icon: "H", th: "หัวข้อ", en: "Heading", hintTh: "ชื่อหัวข้อในฟอร์ม", hintEn: "A title inside the form" },
+    { type: "paragraph", icon: "≡", th: "ข้อความอธิบาย", en: "Text / instructions", hintTh: "คำชี้แจง, หมายเหตุพิมพ์", hintEn: "Instructions, printed notes" },
+    { type: "divider", icon: "—", th: "เส้นคั่น", en: "Divider", hintTh: "แบ่งส่วนด้วยเส้น", hintEn: "A dividing line" },
+  ] },
   { th: "ส่วนหัวกระดาษ", en: "Document header", items: [
     { type: "logo", icon: "🏥", th: "โลโก้โรงพยาบาล", en: "Hospital logo", hintTh: "รูปที่พิมพ์ทุกครั้ง", hintEn: "A picture printed on the form" },
     { type: "barcode", icon: "▌▌", th: "บาร์โค้ด", en: "Barcode", hintTh: "HN / AN ของผู้ป่วย", hintEn: "Patient HN / AN" },
+  ] },
+  { th: "รายงาน (ข้อมูลเคส Flora Leaf)", en: "Report (Flora Leaf case data)", items: [
+    { type: "case_block", icon: "📋", th: "ตารางข้อมูลเคส", en: "Case data table", hintTh: "การวินิจฉัย, ยา, Lab, ค่าใช้จ่าย…", hintEn: "Diagnoses, drugs, labs, billing…" },
   ] },
   { th: "ไฟล์และลายเซ็น", en: "Files and signature", items: [
     { type: "image", icon: "🖼", th: "รูปภาพ", en: "Image", hintTh: "ภาพแผล, ฟิล์ม", hintEn: "Wound photo" },
@@ -57,6 +66,13 @@ const ITEMS = new Map(PALETTE.flatMap(group => group.items).map(item => [item.ty
 export const typeName = (type: string, lang: Lang) => { const item = ITEMS.get(type as FieldType); return item ? tr(lang, item.th, item.en) : type; };
 export const typeIcon = (type: string) => ITEMS.get(type as FieldType)?.icon ?? "□";
 
+/** A report component of one block: its title, all of its columns at their usual widths, three ruled rows at least. */
+export function caseBlockField(block: keyof typeof CASE_BLOCKS, used: Set<string>, lang: Lang): FieldDefinition {
+  const spec = CASE_BLOCKS[block];
+  return { id: uniqueName(`${block}_table`, used), type: "case_block", label: tr(lang, spec.th, spec.en), ...(lang === "th" ? { label_en: spec.en } : {}), block,
+    block_columns: spec.columns.map(column => ({ key: column.key, width: column.width })), min_rows: 3, max_rows: 15, layout: { span: 12 } };
+}
+
 /** A palette field with labels in the designer's language. */
 export function paletteField(type: FieldType, used: Set<string>, lang: Lang): FieldDefinition {
   return newField(type, used, typeName(type, lang), { option: n => tr(lang, `ตัวเลือก ${n}`, `Option ${n}`), child: tr(lang, "รายการ", "Item") });
@@ -65,7 +81,11 @@ export function paletteField(type: FieldType, used: Set<string>, lang: Lang): Fi
 // Ready-made blocks ----------------------------------------------------------------------------
 
 export type Block = { fields: FieldDefinition[]; calculators: CalculatorDefinition[] };
-export type BlockItem = { id: string; icon: string; th: string; en: string; hintTh: string; hintEn: string; needsLookup?: string; build: (used: Set<string>, lang: Lang) => Block };
+export type BlockItem = {
+  id: string; icon: string; th: string; en: string; hintTh: string; hintEn: string; needsLookup?: string; build: (used: Set<string>, lang: Lang) => Block;
+  /** report: a report component (case_block) listed under "Report components". */
+  group?: "report";
+};
 
 const template = (id: string) => CALCULATOR_TEMPLATES.find(item => item.template_id === id)!;
 const options = (lang: Lang, items: Array<[string, string, string]>) => items.map(([value, th, en]) => ({ value, label: tr(lang, th, en) }));
@@ -159,6 +179,12 @@ export const BLOCKS: BlockItem[] = [
       { id: uniqueName("recorded_at", used), type: "datetime", label: tr(lang, "วันเวลาที่บันทึก", "Recorded at"), layout: { span: 6 } },
       { id: uniqueName("recorder_signature", used), type: "signature", label: tr(lang, "ลายเซ็น", "Signature"), layout: { span: 12 } },
     ] }) },
+  // Report components: one per kind of case data, printed from Flora Leaf with the case's own rows.
+  ...CASE_BLOCK_IDS.map((block): BlockItem => ({
+    id: `case_${block}`, icon: "📋", th: CASE_BLOCKS[block].th, en: CASE_BLOCKS[block].en, group: "report",
+    hintTh: CASE_BLOCKS[block].columns.map(column => column.th).join(" · "), hintEn: CASE_BLOCKS[block].columns.map(column => column.en).join(" · "),
+    build: (used, lang) => ({ calculators: [], fields: [caseBlockField(block, used, lang)] }),
+  })),
 ];
 
 // Labels for the inspector ---------------------------------------------------------------------
@@ -200,10 +226,23 @@ export const PATTERNS: Array<{ id: string; th: string; en: string; rules: Record
   { id: "digits", th: "ตัวเลขเท่านั้น", en: "Digits only", rules: { numeric: true } },
 ];
 
-export const WIDTHS: Array<{ span: number; th: string; en: string }> = [
-  { span: 12, th: "เต็มแถว", en: "Full" }, { span: 9, th: "3/4", en: "3/4" }, { span: 8, th: "2/3", en: "2/3" },
-  { span: 6, th: "ครึ่ง", en: "Half" }, { span: 4, th: "1/3", en: "1/3" }, { span: 3, th: "1/4", en: "1/4" },
+/** Width presets as fractions of the grid (12 or 24 columns, or a container's own). */
+export const WIDTHS: Array<{ part: number; th: string; en: string }> = [
+  { part: 1, th: "เต็มแถว", en: "Full" }, { part: 3 / 4, th: "3/4", en: "3/4" }, { part: 2 / 3, th: "2/3", en: "2/3" },
+  { part: 1 / 2, th: "ครึ่ง", en: "Half" }, { part: 1 / 3, th: "1/3", en: "1/3" }, { part: 1 / 4, th: "1/4", en: "1/4" }, { part: 1 / 6, th: "1/6", en: "1/6" },
 ];
+export const widthSpan = (part: number, columns: number) => Math.max(1, Math.round(columns * part));
+
+/** Ready-made blocks are written for 12 columns: their widths scaled to a grid of `columns`. */
+export function scaleSpans(fields: FieldDefinition[], columns: number, from = 12): FieldDefinition[] {
+  if (columns === from) return fields;
+  return fields.map(field => {
+    const next = { ...field };
+    if (next.layout?.span) next.layout = { ...next.layout, span: Math.max(1, Math.min(columns, Math.round(next.layout.span * columns / from))) };
+    if (next.fields) next.fields = scaleSpans(next.fields, columns, from);
+    return next;
+  });
+}
 
 // Starting points ----------------------------------------------------------------------------------
 
@@ -237,7 +276,7 @@ export function starterForm(starter: Starter, formId: string, title: string, lan
       fields.push(...built.fields);
       calculators.push(...built.calculators);
     }
-    return { id: uniqueName("section", used), title: tr(lang, spec.th, spec.en), fields };
+    return { id: uniqueName("section", used), title: tr(lang, spec.th, spec.en), fields: scaleSpans(fields, 24) };
   });
   const definition: FormDefinition = { ...blank, sections };
   if (calculators.length) definition.calculators = calculators;

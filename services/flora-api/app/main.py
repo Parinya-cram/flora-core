@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from psycopg import Connection
 
+from . import access_log
 from .bootstrap_admin import ensure_bootstrap_admin
 from .database import close_pool, connection, open_pool, pool
 from . import tenancy
@@ -16,6 +17,7 @@ from .routes.cases_read import router as cases_read_router
 from .routes.auth_canopy import router as canopy_auth_router
 from .routes.auth_leaf import router as leaf_auth_router
 from .routes.cases_lifecycle import router as cases_lifecycle_router
+from .routes.leaf_sync import router as leaf_sync_router
 from .routes.clinical_write import router as clinical_write_router
 from .routes.catalog_write import router as catalog_write_router
 from .routes.io_write import router as io_write_router
@@ -63,8 +65,10 @@ from .routes.terminology import router as terminology_router
 from .routes.formdev import router as formdev_router
 from .routes.formdev_query import router as formdev_query_router
 from .routes.formdev_ai import router as formdev_ai_router
+from .routes.formdev_reading import router as formdev_reading_router
 from .routes.workflows import router as workflows_router
 from .routes.case_workflow import router as case_workflow_router
+from .routes.case_documents import router as case_documents_router
 from .routes import formdev_runtime
 from .formdev.errors import FormDevError
 
@@ -108,6 +112,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 API_MODE = os.getenv("FLORA_API_MODE", "leaf").strip().lower()
+access_log.install()
 if API_MODE in {"leaf", "canopy"}:
     app.include_router(cases_read_router)
 if API_MODE == "leaf" and os.getenv("FLORA_LEAF_WRITE_API", "false").lower() == "true":
@@ -122,6 +127,8 @@ if API_MODE == "leaf" and os.getenv("FLORA_LEAF_WRITE_API", "false").lower() == 
     app.include_router(staff_sync_leaf_router)  # before catalog_write's /staff/* routes
     app.include_router(or_leaf_router)
     app.include_router(case_workflow_router)
+    app.include_router(case_documents_router)
+    app.include_router(leaf_sync_router)
     app.include_router(cases_lifecycle_router)
     app.include_router(clinical_write_router)
     app.include_router(catalog_write_router)
@@ -157,6 +164,7 @@ if API_MODE == "canopy":
     app.include_router(formdev_router)
     app.include_router(formdev_query_router)
     app.include_router(formdev_ai_router)
+    app.include_router(formdev_reading_router)
     app.include_router(billing_templates_router)  # before workflows: /billing-templates is not a workflow id
     app.include_router(scores_canopy_router)  # before workflows: /scores is not a workflow id
     app.include_router(workflows_router)
@@ -188,6 +196,9 @@ async def enforce_canopy_read_only(request: Request, call_next):
         formdev_write = formdev_write or request.url.path.startswith("/api/ai-studio/")
         # Platform console (account management; platform administrators only).
         formdev_write = formdev_write or request.url.path.startswith("/api/platform/")
+        # Review of case forms (form.review / form.approve, checked by the route) and the hospital's name and logo.
+        formdev_write = formdev_write or (request.url.path.startswith("/api/fleet/cases/") and request.url.path.endswith("/review"))
+        formdev_write = formdev_write or request.url.path == "/api/fleet/hospital-profile"
         if request.url.path not in {"/api/auth/login", "/api/auth/logout"} and not request.url.path.startswith("/api/fleet/control") and not canopy_preference_write and not report_generation and not formdev_write:
             return JSONResponse(
                 status_code=403,

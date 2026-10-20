@@ -1,5 +1,6 @@
 import AiServiceTab from "../components/AiServiceTab";
 import ApiKeysTab from "../components/ApiKeysTab";
+import HospitalProfileTab from "../components/HospitalProfileTab";
 import { useEffect, useMemo, useState } from "react";
 import type { CaseStatus } from "../api/caseApi";
 import type { AuthUser } from "../auth/useAuth";
@@ -46,7 +47,7 @@ import {
   readLocalSmartContrast,
 } from "../utils/chartPreferences";
 
-type ManageTab = "user" | "location" | "datetime" | "language" | "scheme" | "ai" | "api" | "chart" | "terminology" | "staff" | "database" | "license";
+type ManageTab = "user" | "location" | "datetime" | "language" | "scheme" | "hospital" | "ai" | "api" | "chart" | "terminology" | "staff" | "database" | "license";
 
 type Props = {
   caseStatus: CaseStatus;
@@ -59,6 +60,7 @@ const tabLabel: Record<ManageTab, string> = {
   datetime: "Date & time",
   language: "Language",
   scheme: "Scheme",
+  hospital: "Hospital",
   ai: "AI service",
   api: "API & MCP",
   chart: "Chart layout",
@@ -899,7 +901,7 @@ export default function ManageView({ caseStatus, sessionUser }: Props) {
       const tabs: ManageTab[] = surface.code === "leaf" || isAdmin ? ["user"] : [];
       if (canConfigure) {
         if (surface.code === "leaf") tabs.push("location", "datetime");
-        else tabs.push("language", "scheme");
+        else tabs.push("language", "scheme", "hospital");
         tabs.push("ai");
       }
       if (isCanopyAdmin) tabs.push("api");
@@ -946,6 +948,8 @@ export default function ManageView({ caseStatus, sessionUser }: Props) {
           <AppearanceTab section="language" />
         ) : activeTab === "scheme" ? (
           <AppearanceTab section="scheme" />
+        ) : activeTab === "hospital" ? (
+          <HospitalProfileTab />
         ) : activeTab === "chart" ? (
           <ChartParameterTab sessionUser={sessionUser} />
         ) : activeTab === "terminology" ? (

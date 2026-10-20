@@ -8,6 +8,8 @@ import type { ClinicalTimelineRow, ClinicalTimelineValues } from "../components/
 import VitalSignsTrendChart from "../components/vitals/VitalSignsTrendChart";
 import HeaderCard from "../components/case/HeaderCard";
 import CanopyCaseDetailPanel, { type CanopyCasePanel } from "./CanopyCaseDetailPanel";
+import CaseFormsReview from "../components/workflow/CaseFormsReview";
+import CaseDocumentsReview from "../components/workflow/CaseDocumentsReview";
 import { BASE_IVY_ROWS, makeFallbackLabel, ROW_META } from "./clinical-chart/constants";
 import { getAutoHideEmptyParametersStorageKey, readAutoHideEmptyParametersForUser, readStoredUsername } from "./clinical-chart/storage";
 import { hasMeaningfulTimelineValue } from "./clinical-chart/utils";
@@ -355,7 +357,10 @@ export default function CanopyCaseChartView({ entry, data, onBack, onRefresh, re
           <ClinicalTimelineGrid readOnly displaySection="vitals" columns={axis} ivyRows={vitalRows} rowsAfterEvent={rowsAfterEvent} values={combinedValues} nowTs={nowTs} scrollLeft={scrollLeft} viewportWidth={viewportWidth} colWidth={colWidth} labelColWidth={labelWidth} />
         </div>
       </div>
-      </> : activePanel === "chart" ? <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-dashed border-amber-500/40 bg-amber-500/5 p-8 text-center"><div className="max-w-xl"><div className="text-lg font-bold text-[var(--app-text)]">Detailed clinical record not migrated</div><p className="mt-2 text-sm text-[var(--app-muted)]">This historical case is searchable by patient and procedure, but only its case index is available in Canopy PostgreSQL. Backfill the clinical domains before using its chart or report.</p></div></div> : <div className="min-h-0 flex-1 overflow-y-auto rounded-xl bg-[var(--app-bg)] p-1"><CanopyCaseDetailPanel panel={activePanel} snapshot={snapshot} entry={entry} /></div>}
+      </> : activePanel === "chart" ? <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-dashed border-amber-500/40 bg-amber-500/5 p-8 text-center"><div className="max-w-xl"><div className="text-lg font-bold text-[var(--app-text)]">Detailed clinical record not migrated</div><p className="mt-2 text-sm text-[var(--app-muted)]">This historical case is searchable by patient and procedure, but only its case index is available in Canopy PostgreSQL. Backfill the clinical domains before using its chart or report.</p></div></div> : <div className="min-h-0 flex-1 overflow-y-auto rounded-xl bg-[var(--app-bg)] p-1">
+        {/* Workflow Studio forms filled at the bedside, read-only with who changed what (Form Studio holds the records). */}
+        {activePanel === "forms" && entry.global_case_id ? <div className="mb-4"><CaseDocumentsReview globalCaseId={entry.global_case_id} /><CaseFormsReview globalCaseId={entry.global_case_id} /></div> : null}
+        <CanopyCaseDetailPanel panel={activePanel} snapshot={snapshot} entry={entry} /></div>}
     </div>
   );
 }

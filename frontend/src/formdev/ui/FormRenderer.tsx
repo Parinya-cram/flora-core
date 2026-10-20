@@ -6,7 +6,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { asRepeatField, repeatKey } from "../core/blocks";
-import { fieldKey, OTHER_KEY } from "../core/validate";
+import { fieldKey, OTHER_KEY, STATIC_TYPES } from "../core/validate";
 import { conditionTrue, evaluateRecord } from "../logic/evaluate";
 import type { LookupTables, OfferedOption } from "../logic/lookup";
 import { fieldPermissions, formAllows, type FieldGrant } from "../logic/permission";
@@ -18,6 +18,9 @@ import { FIELD_INPUTS } from "./inputRegistry";
 import { changeRecord, errorsByPath } from "./renderUtils";
 import { formStyle, gridCss, inputCss, registries, rootCss, sectionCss, typeCss, type Registries } from "./formStyle";
 import PrintedElement from "./PrintedElement";
+import CaseBlockTable from "./CaseBlockTable";
+import StaticElement from "./StaticElement";
+import { blockTitle, fieldLabel, localized } from "../core/labels";
 
 type Props = {
   definition: FormDefinition;
@@ -47,6 +50,8 @@ type Ctx = {
   grants: Record<string, FieldGrant> | null;
   /** Options offered now for fields whose options are dynamic, by data path (Phase 2.3). */
   options: Record<string, OfferedOption[]>;
+  /** UI language: labels and titles in English when the form has them (core/labels.ts). */
+  language?: string;
 };
 /** node: the logic-model prefix of keys in this scope ("" for the form, "meds." inside a repeat's items). */
 type Scope = { data: Record<string, JsonValue>; path: string; node: string; set: (key: string, value: JsonValue) => void };
@@ -81,31 +86,36 @@ function FieldBlock({ field, scope, columns, style, ctx, containerType, siblings
   const grant = grantOf(ctx, `${scope.node}${key}`);
   if (field.type === "group" ? !anyViewable(field.fields, scope.node, ctx) : !grant.view) return null;
   const own = ctx.regs.styles.apply(style, field.style);
-  const label = field.unit ? `${field.label} (${field.unit})` : field.label;
+  const text = fieldLabel(field, ctx.language);
+  const label = field.unit ? `${text} (${field.unit})` : text;
   const required = field.required === true || field.validation?.required === true;
   const disabled = ctx.readOnly || field.readonly === true || field.type === "calculated" || field.derive !== undefined || !grant.edit;
   const path = scope.path ? `${scope.path}.${key}` : key;
   const error = ctx.errors.get(path);
   const labelEl = <span style={{ ...typeCss(own, ctx.regs, "label"), display: "block", marginBottom: "1mm" }}>
-    {field.label}{field.unit ? ` (${field.unit})` : ""}{required ? <span style={{ color: "#e11d48" }}> *</span> : null}
+    {text}{field.unit ? ` (${field.unit})` : ""}{required ? <span style={{ color: "#e11d48" }}> *</span> : null}
   </span>;
   let body: ReactNode;
   if (field.type === "group") {
     const inner = containerColumns({ columns: field.columns }, columns);
     body = <fieldset style={{ border: "0.3mm solid #e2e8f0", borderRadius: "1.5mm", padding: "2mm", margin: 0 }}>
-      <legend style={typeCss(own, ctx.regs, "label")}>{field.label}</legend>
+      <legend style={typeCss(own, ctx.regs, "label")}>{text}</legend>
       <FieldGrid fields={field.fields ?? []} scope={scope} columns={inner} style={own} ctx={ctx} />
     </fieldset>;
   } else if (field.type === "logo" || field.type === "barcode") {
     body = <PrintedElement field={field} data={scope.data} />;
+  } else if (field.type === "case_block") {
+    body = <CaseBlockTable field={field} value={scope.data[key]} language={ctx.language} title={text} />;
+  } else if (STATIC_TYPES.has(field.type)) {
+    body = <StaticElement field={field} text={text} css={typeCss(own, ctx.regs, "label")} />;
   } else if (field.type === "repeat") {
-    body = <><span style={{ ...typeCss(own, ctx.regs, "label"), display: "block", marginBottom: "1mm" }}>{field.label}</span>
+    body = <><span style={{ ...typeCss(own, ctx.regs, "label"), display: "block", marginBottom: "1mm" }}>{text}</span>
       {field.view === "table" && tableColumnsOk(field)
         ? <RepeatTable field={field} scope={scope} style={own} ctx={ctx} />
         : <RepeatItems field={field} scope={scope} columns={containerColumns({ columns: field.columns }, columns)} style={own} ctx={ctx} />}</>;
   } else {
     const Input = FIELD_INPUTS[field.type];
-    const shown = offeredField(field, ctx.options[`$.data.${dataPath}`], scope.data[key]);
+    const shown = localized(offeredField(field, ctx.options[`$.data.${dataPath}`], scope.data[key]), ctx.language);
     body = <label style={{ display: "block" }}>
       {labelEl}
       {Input ? <Input field={shown} value={scope.data[key]} disabled={disabled} css={inputCss(own, ctx.regs)} label={label} onChange={next => scope.set(key, next)} /> : null}
@@ -294,7 +304,7 @@ function SectionBlock({ section, scope, columns, style, ctx, depth }: { section:
   const inner = containerColumns(section.layout, columns);
   const Heading = depth === 1 ? "h3" : "h4";
   return <section data-section={section.id} style={{ ...sectionCss(own), display: "grid", gap: "3mm" }}>
-    {section.hide_title ? null : <Heading style={{ ...typeCss(own, ctx.regs, "section"), margin: 0 }}>{section.title}</Heading>}
+    {section.hide_title ? null : <Heading style={{ ...typeCss(own, ctx.regs, "section"), margin: 0 }}>{blockTitle(section, ctx.language)}</Heading>}
     {section.description ? <p style={{ margin: 0, fontSize: "9pt", color: "#64748b" }}>{section.description}</p> : null}
     <BlockFields block={section} scope={scope} columns={inner} style={own} ctx={ctx} />
     {(section.categories ?? []).map(category => <CategoryBlock key={category.id} category={category} scope={scope} columns={inner} style={own} ctx={ctx} />)}
@@ -307,7 +317,7 @@ function CategoryBlock({ category, scope, columns, style, ctx }: { category: Cat
   if (!blockShown(category, ctx) || !blockViewable(category, ctx)) return null;
   const own = ctx.regs.styles.apply(style, category.style);
   return <div data-category={category.id} style={{ display: "grid", gap: "2mm", borderLeft: "0.6mm solid #cbd5e1", paddingLeft: "3mm" }}>
-    {category.hide_title ? null : <div style={{ ...typeCss(own, ctx.regs, "label"), fontWeight: 700 }}>{category.title}</div>}
+    {category.hide_title ? null : <div style={{ ...typeCss(own, ctx.regs, "label"), fontWeight: 700 }}>{blockTitle(category, ctx.language)}</div>}
     {category.description ? <p style={{ margin: 0, fontSize: "9pt", color: "#64748b" }}>{category.description}</p> : null}
     <BlockFields block={category} scope={scope} columns={containerColumns(category.layout, columns)} style={own} ctx={ctx} />
   </div>;
@@ -343,7 +353,7 @@ export default function FormRenderer({ definition, value, issues = [], readOnly 
   const grants = useMemo(() => (roles ? fieldPermissions(definition, roles, isAdmin) : null), [definition, roles, isAdmin]);
   const ctx: Ctx = {
     regs, mode: current, readOnly: readOnly || context === "detail", errors: errorsByPath(issues, language), context, hidden: new Set(evaluation.hidden), top: data, grants,
-    options: evaluation.options,
+    options: evaluation.options, language,
   };
   if (roles && !formAllows(definition, "view", roles, isAdmin)) {
     return <div role="alert" style={{ padding: "4mm", color: "#b91c1c" }}>{language === "th" ? "คุณไม่มีสิทธิ์ดูแบบฟอร์มนี้" : "You may not view this form."}</div>;

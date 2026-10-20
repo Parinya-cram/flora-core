@@ -19,7 +19,7 @@ from psycopg import Connection
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
-from .. import api_keys, directory, phi_mask
+from .. import api_keys, concepts, directory, phi_mask
 from ..database import connection
 from .canopy_admissions import AdmissionInput, _public as admission_public, _target_check
 from .fleet_read import _chart_summary, _compact_vitals, _number, _patient_name, _record, _rows
@@ -164,7 +164,7 @@ def case(case_id: str, request: Request, key: dict = Depends(api_key), database:
     patient = _record(_record(snapshot.get("patient")).get("row"))
     latest, _ = _compact_vitals(snapshot, 1)
     chart = _chart_summary(snapshot, patient)
-    return {**_summary(row), "latest_vitals": latest, "chart": chart,
+    return {**_summary(row), "latest_vitals": latest, "chart": chart, "concepts": _concepts(snapshot),
             "procedures": _rows(snapshot.get("procedures")), "diagnoses": _rows(snapshot.get("diagnosis")),
             "allergies": _rows(snapshot.get("allergies")), "staff": _rows(snapshot.get("staff"))}
 
@@ -222,8 +222,15 @@ def medications(case_id: str, request: Request, key: dict = Depends(api_key), da
 @router.get("/cases/{case_id}/forms")
 def forms(case_id: str, request: Request, key: dict = Depends(api_key), database: Connection = Depends(connection)) -> dict[str, Any]:
     row = _load_case(database, key, case_id, request, "forms:read")
-    form = _record(_record(row.get("snapshot")).get("forms"))
-    return {"case_id": case_id, "updated_at": form.get("updated_at"), "fields": _record(form.get("draft"))}
+    snapshot = _record(row.get("snapshot"))
+    form = _record(snapshot.get("forms"))
+    return {"case_id": case_id, "updated_at": form.get("updated_at"), "fields": _record(form.get("draft")), "concepts": _concepts(snapshot)}
+
+
+def _concepts(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """The case's data by concept (app/concepts.py): {"patient.weight_kg": 70.5, "case.asa": "2E", ...}, the same names
+    whatever form or record key holds them (patient identifiers are masked like every other field)."""
+    return {key: item["value"] for key, item in concepts.from_snapshot(snapshot, directory.now_ms()).items()}
 
 
 class ApiAdmissionInput(AdmissionInput):

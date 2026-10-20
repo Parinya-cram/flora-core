@@ -51,6 +51,8 @@ export type AuthApiUser = {
   authSource?: string;
   wardAccess?: WardAccess;
   hasAdminPin?: boolean;
+  /** A signing PIN is set (it confirms signatures drawn in forms on Flora Leaf). */
+  hasSignPin?: boolean;
 };
 
 export type AuthRole = {
@@ -208,6 +210,7 @@ function parseAuthUser(user: Partial<AuthApiUser> | undefined): AuthApiUser {
     mustChangePassword: user.mustChangePassword === true && user.authSource !== "ldap",
     wardAccess: parseWardAccess(user.wardAccess ?? (user as Record<string, unknown>).ward_access),
     hasAdminPin: user.hasAdminPin === true || (user as Record<string, unknown>).has_admin_pin === true,
+    hasSignPin: user.hasSignPin === true,
   };
 }
 
@@ -681,6 +684,17 @@ export async function setOwnAdminPin(currentPassword: string, pin: string | null
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(apiErrorMessage(data, `update admin PIN failed (${res.status})`));
+}
+
+/** Your signing PIN (4-8 digits), or null to clear it; confirmed with your current password. */
+export async function setOwnSignPin(currentPassword: string, pin: string | null): Promise<void> {
+  const res = await fetch(`${BASE}/self/sign-pin`, {
+    method: "PUT",
+    headers: buildAuthHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ current_password: currentPassword, pin }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(apiErrorMessage(data, `update signing PIN failed (${res.status})`));
 }
 
 export async function getLdapStatus(): Promise<{ enabled: boolean }> {
