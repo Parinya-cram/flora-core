@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import hmac
 import json
 import logging
@@ -30,7 +31,7 @@ import httpx
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from . import basic_auth
@@ -52,6 +53,8 @@ COMPONENTS = ("canopy", "leaf", "gateway")
 # Canopy keeps every gateway's configuration and can hand one back (clone / restore).
 CANOPY_SYNC_URL = os.getenv("FLORA_CANOPY_SYNC_URL", "").rstrip("/")
 SYNC_SECRET = os.getenv("FLORA_SYNC_SHARED_SECRET", "")
+# Canopy sync URL as a Leaf on the hospital LAN reaches it (handed to new Leafs at install).
+CANOPY_SYNC_PUBLIC = os.getenv("FLORA_CANOPY_SYNC_PUBLIC_URL", "").rstrip("/")
 SYNC_INTERVAL = int(os.getenv("HABER_ROOT_SYNC_SEC", "20"))
 DB_PATH = os.getenv("HABER_DB_PATH", "/data/haber.db")
 # Config that an admin can change at runtime from the Settings UI. The env value above is the
@@ -60,6 +63,7 @@ DB_PATH = os.getenv("HABER_DB_PATH", "/data/haber.db")
 SETTINGS_KEYS = {
     "root_url": ("ROOT_URL", str), "root_registry_url": ("ROOT_REGISTRY_URL", str),
     "registry_public": ("REGISTRY_PUBLIC", str), "canopy_sync_url": ("CANOPY_SYNC_URL", str),
+    "canopy_sync_public": ("CANOPY_SYNC_PUBLIC", str),
     "tenant_id": ("TENANT_ID", str), "tenant_key": ("TENANT_KEY", str),
     "sync_interval": ("SYNC_INTERVAL", int),
 }
@@ -199,6 +203,13 @@ async def sync_root() -> None:
             releases = response.json()
             verify(releases, keys)
             kv_set("releases", releases)
+        response = await client.get(f"{ROOT_URL}/api/v1/tenants/{TENANT_ID}/installs/pending", headers=headers)
+        if response.status_code != 404:  # older Root without installs
+            response.raise_for_status()
+            planned = response.json()
+            verify(planned, keys)
+            kv_set("installs", planned)
+        await flush_install_reports(client, headers)
         STATE["root"].update(status="ok", error=None, last_sync=now_ms(), verified=True)
         await client.post(f"{ROOT_URL}/api/v1/tenants/{TENANT_ID}/heartbeat", headers=headers, json={
             "canopy_version": "1.2.2", "bundle_id": bundle["bundle_id"], "usage": usage()})
@@ -211,6 +222,10 @@ async def root_loop() -> None:
         except Exception as error:
             STATE["root"].update(status="offline", error=str(error))
             log.warning("root sync failed: %s", error)
+        try:
+            await place_new_leaves()   # LAN work: runs even while Root is unreachable
+        except Exception as error:
+            log.warning("leaf placement failed: %s", error)
         await asyncio.sleep(SYNC_INTERVAL)
 
 
@@ -378,6 +393,7 @@ app = FastAPI(title="Flora Canopy Haber", lifespan=lifespan)
 basic_auth.install(app, "Canopy Haber", "HABER", [
     r"/health", r"/api/haber/v1/gateways/[^/]+/(checkin|alerts|activity)",  # gateways, token auth
     r"/api/haber/v1/root-keys", r"/api/haber/v1/nodes/[^/]+/(desired|report)",  # flora-updater, token auth
+    r"/install/(leaf|gateway)\.sh", r"/api/haber/v1/install/(claim|report)",   # new LAN machines, one-time code
 ])
 
 
@@ -722,6 +738,7 @@ def overview():
         "releases": release_overview(),
         "nodes": nodes(),
         "adopted": adopted_types(),
+        "installs": install_overview(),
     }
 
 
@@ -738,6 +755,181 @@ def release_overview() -> dict[str, Any]:
                   "mirror": mirrors.get(release["release_id"], {"status": "pending"})}
                  for release in (manifest["releases"] if manifest else [])],
     }
+
+
+# ------------------------------------------------------------------ installs (planned at Root)
+# Root plans each Leaf / gateway and gives the operator a one-time code. Haber keeps Root's signed list of
+# open installs (code hashes only), so a machine on the hospital LAN installs from here even while the
+# internet is down: it trades the code for its node settings, Haber remembers the claim, places a new Leaf
+# on its bed in Canopy once that Leaf first syncs, and reports every step back to Root.
+
+INSTALL_KINDS = {"leaf", "gateway"}
+
+
+def install_plans() -> list[dict[str, Any]]:
+    planned = verified("installs")
+    return (planned or {}).get("installs") or []
+
+
+def install_states() -> dict[str, dict[str, Any]]:
+    return kv_get("install_state") or {}
+
+
+def save_install_state(install_id: str, **changes: Any) -> dict[str, Any]:
+    states = install_states()
+    state = {**states.get(install_id, {}), **changes, "updated_at": now_ms()}
+    if "status" in changes:
+        state["reported"] = False      # Root hears about every status change
+    states[install_id] = state
+    kv_set("install_state", states)
+    return state
+
+
+def plan_for_code(code: str, kind: str | None = None) -> dict[str, Any] | None:
+    digest = hashlib.sha256(code.strip().upper().encode()).hexdigest()
+    for plan in install_plans():
+        if hmac.compare_digest(plan["code_hash"], digest) and (kind is None or plan["kind"] == kind) and plan["expires_at"] > now_ms():
+            return plan
+    return None
+
+
+async def flush_install_reports(client: httpx.AsyncClient, headers: dict[str, str]) -> None:
+    for install_id, state in install_states().items():
+        if state.get("reported") or state.get("status") not in {"claimed", "installed", "failed"}:
+            continue
+        detail = {key: state.get(key) for key in ("hostname", "ip", "placed", "placement_error", "error") if state.get(key) is not None}
+        response = await client.post(f"{ROOT_URL}/api/v1/tenants/{TENANT_ID}/installs/{install_id}/report", headers=headers,
+                                     json={"status": state["status"], "detail": detail})
+        if response.status_code in (200, 409):   # 409: Root already closed it (revoked / done)
+            _mark_reported(install_id)
+
+
+def _mark_reported(install_id: str) -> None:
+    states = install_states()
+    if install_id in states:
+        states[install_id]["reported"] = True
+        kv_set("install_state", states)
+
+
+async def place_new_leaves() -> None:
+    """Put a newly installed Leaf on the bed Root planned, once Canopy knows the Leaf (after its first sync)."""
+    if not CANOPY_SYNC_URL or not SYNC_SECRET:
+        return
+    plans = {plan["install_id"]: plan for plan in install_plans()} | (kv_get("install_plan_copy") or {})
+    waiting = [(install_id, plans[install_id]) for install_id, state in install_states().items()
+               if install_id in plans and plans[install_id]["kind"] == "leaf" and state.get("status") in {"claimed", "installed"}
+               and not state.get("placed") and plans[install_id].get("bed")]
+    if not waiting:
+        return
+    known = {leaf["leaf_id"] for leaf in canopy_leaves()}
+    headers = {"authorization": f"Bearer {SYNC_SECRET}"}
+    async with httpx.AsyncClient(timeout=5) as client:
+        for install_id, plan in waiting:
+            if plan["node_id"] not in known:
+                continue                     # not synced yet; try again next cycle
+            response = await client.post(f"{CANOPY_SYNC_URL}/api/sync/v1/locations", headers=headers, json={"leaf_id": plan["node_id"]})
+            response.raise_for_status()
+            bed_id = find_bed(response.json().get("locations") or [], plan)
+            if bed_id is None:
+                save_install_state(install_id, placement_error=f"no bed '{plan.get('bed')}' in ward '{plan.get('ward')}' in Canopy — assign it in Canopy")
+                continue
+            response = await client.post(f"{CANOPY_SYNC_URL}/api/sync/v1/leaves/{plan['node_id']}/location", headers=headers,
+                                         json={"bed_location_id": bed_id})
+            response.raise_for_status()
+            save_install_state(install_id, placed=bed_id, placement_error=None, reported=False)
+            log.info("placed leaf %s on bed %s", plan["node_id"], bed_id)
+
+
+def find_bed(locations: list[dict[str, Any]], plan: dict[str, Any]) -> int | None:
+    """The bed named in the plan, under its room and ward when those are given (names compared case-insensitively)."""
+    same = lambda a, b: str(a or "").strip().casefold() == str(b or "").strip().casefold()
+    by_id = {row["id"]: row for row in locations}
+    def ancestors(row: dict[str, Any]) -> list[dict[str, Any]]:
+        chain, parent = [], by_id.get(row.get("parent_id"))
+        while parent:
+            chain.append(parent)
+            parent = by_id.get(parent.get("parent_id"))
+        return chain
+    for row in locations:
+        if row["kind"] != "bed" or not same(row["name"], plan.get("bed")):
+            continue
+        up = ancestors(row)
+        if plan.get("room") and not any(r["kind"] == "room" and same(r["name"], plan["room"]) for r in up):
+            continue
+        if plan.get("ward") and not any(r["kind"] == "care_unit" and same(r["name"], plan["ward"]) for r in up):
+            continue
+        return row["id"]
+    return None
+
+
+class InstallClaim(BaseModel):
+    code: str
+    kind: str
+    hostname: str | None = None
+
+
+@app.post("/api/haber/v1/install/claim")
+def install_claim(body: InstallClaim, request: Request):
+    """A new LAN machine trades its one-time code for its node settings. The same machine may claim again
+    (a retried install) until the code expires; another machine may not."""
+    if body.kind not in INSTALL_KINDS:
+        raise HTTPException(422, "kind is leaf or gateway")
+    plan = plan_for_code(body.code, body.kind)
+    if plan is None:
+        raise HTTPException(403, "invalid, used or expired install code (or this appliance has not synced it from Root yet)")
+    state = install_states().get(plan["install_id"], {})
+    if state.get("status") in {"installed", "failed"} or (state.get("hostname") and body.hostname and state["hostname"] != body.hostname):
+        raise HTTPException(409, f"this code was already used by {state.get('hostname') or 'another machine'}")
+    copies = kv_get("install_plan_copy") or {}
+    copies[plan["install_id"]] = plan            # keep the plan after Root closes it (placement still needs it)
+    kv_set("install_plan_copy", copies)
+    save_install_state(plan["install_id"], status="claimed", hostname=body.hostname,
+                       ip=request.client.host if request.client else None, claimed_at=now_ms())
+    haber_url = str(request.base_url).rstrip("/")
+    node = {"install_id": plan["install_id"], "kind": plan["kind"], "node_id": plan["node_id"], "label": plan.get("label"),
+            "ward": plan.get("ward"), "room": plan.get("room"), "bed": plan.get("bed"),
+            "haber_url": haber_url, "registry": REGISTRY_PUBLIC, "tenant_id": TENANT_ID}
+    if plan["kind"] == "leaf":
+        node |= {"node_token": NODE_TOKEN, "canopy_sync_url": CANOPY_SYNC_PUBLIC, "sync_secret": SYNC_SECRET}
+    else:
+        node |= {"gateway_token": GATEWAY_TOKEN, "node_token": NODE_TOKEN}
+    return node
+
+
+class InstallResult(BaseModel):
+    code: str
+    status: str
+    error: str | None = None
+
+
+@app.post("/api/haber/v1/install/report")
+def install_report(body: InstallResult):
+    if body.status not in {"installed", "failed"}:
+        raise HTTPException(422, "status is installed or failed")
+    digest = hashlib.sha256(body.code.strip().upper().encode()).hexdigest()
+    plans = list((kv_get("install_plan_copy") or {}).values()) + install_plans()
+    plan = next((p for p in plans if hmac.compare_digest(p["code_hash"], digest)), None)
+    if plan is None or install_states().get(plan["install_id"], {}).get("status") != "claimed":
+        raise HTTPException(409, "no claimed install for this code")
+    save_install_state(plan["install_id"], status=body.status, error=body.error, finished_at=now_ms())
+    return {"ok": True}
+
+
+def install_overview() -> list[dict[str, Any]]:
+    plans = {plan["install_id"]: plan for plan in install_plans()} | (kv_get("install_plan_copy") or {})
+    states = install_states()
+    return [{key: plan.get(key) for key in ("install_id", "kind", "node_id", "label", "ward", "room", "bed", "expires_at")}
+            | {key: states.get(install_id, {}).get(key) for key in ("status", "hostname", "placed", "placement_error", "reported")}
+            for install_id, plan in plans.items()]
+
+
+@app.get("/install/{kind}.sh")
+def install_script(kind: str, request: Request):
+    if kind not in INSTALL_KINDS:
+        raise HTTPException(404, "no such installer")
+    return PlainTextResponse((Path(__file__).parent / "install" / "node.sh").read_text()
+                             .replace("__HABER_URL__", str(request.base_url).rstrip("/")).replace("__KIND__", kind),
+                             media_type="text/x-shellscript")
 
 
 @app.get("/health")
