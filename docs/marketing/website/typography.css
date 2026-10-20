@@ -1,0 +1,10 @@
+/* Thai marks extend farther above and below the glyph body than Latin text.
+   Give display headings enough leading so vowels and tone marks never collide. */
+html[lang="th"] h1,
+html[lang="th"] h2{
+  line-height:1.38;
+  letter-spacing:-.015em;
+}
+html[lang="th"] h3{line-height:1.35;letter-spacing:-.01em}
+html[lang="th"] .hero h1{line-height:1.34}
+@media(max-width:560px){html[lang="th"] h1,html[lang="th"] h2{line-height:1.42}}

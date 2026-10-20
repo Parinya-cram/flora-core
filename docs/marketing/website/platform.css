@@ -1,0 +1,25 @@
+.platform-nav{position:sticky;top:72px;z-index:30;background:rgba(251,253,251,.92);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+body[data-page="platform"] .page-hero>.wrap>.eyebrow{
+  margin-bottom:clamp(1.35rem,2vw,2rem);
+}
+.platform-nav .wrap{display:flex;gap:8px;padding:12px 0;overflow:auto;scrollbar-width:none}.platform-nav a{white-space:nowrap;padding:8px 14px;border-radius:99px;background:var(--mist);font-size:.82rem;font-weight:600}.platform-nav a:hover{background:var(--ink);color:white}
+.flow-map{margin-top:52px;display:grid;grid-template-columns:repeat(9,auto);align-items:center;gap:8px}.flow-node{padding:16px;border:1px solid rgba(8,37,31,.14);border-radius:18px;background:rgba(255,255,255,.7);min-width:110px}.flow-node b,.flow-node small{display:block}.flow-node small{color:var(--muted)}.flow-arrow{color:var(--green);font-size:1.4rem;animation:pulse 1.8s ease-in-out infinite}@keyframes pulse{50%{transform:translateX(5px);opacity:.45}}
+.platform-chapter{scroll-margin-top:145px;padding:clamp(75px,10vw,125px) 0;border-bottom:1px solid var(--line)}.chapter-grid{display:grid;grid-template-columns:minmax(240px,.75fr) minmax(0,1.25fr);gap:clamp(35px,8vw,110px)}.chapter-label{position:sticky;top:155px;align-self:start}.chapter-index{font:500 .75rem "IBM Plex Mono";color:var(--green);letter-spacing:.1em;text-transform:uppercase}.chapter-label h2{font-size:clamp(3rem,6vw,5.5rem);margin:.2em 0}.chapter-label .role{color:var(--muted)}.chapter-body>p{font-size:1.15rem;color:var(--muted);margin:0 0 28px}
+.feature-list{display:grid;gap:10px}.feature{display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start;padding:18px;border-radius:18px;background:var(--mist)}.feature:before{content:"✓";width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#d8f4e8;color:var(--green);font-weight:700}.feature p{margin:0}.chapter-link{display:inline-flex;margin-top:24px;color:var(--green);font-weight:700}.studio-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:15px}.studio-card{padding:25px;border-radius:22px;background:var(--mist);border:1px solid transparent;transition:.3s}.studio-card:hover{background:white;border-color:var(--line);box-shadow:var(--shadow);transform:translateY(-4px)}.status{display:inline-block;margin-top:10px;padding:4px 9px;border-radius:99px;background:#e6f4ee;color:var(--green);font-size:.72rem;font-weight:700}
+
+/* Root uses a dark background, so give every text layer an explicit accessible contrast. */
+#root .chapter-index{color:#55e4dc}
+#root .chapter-label h2{color:#fff}
+#root .chapter-label .role{color:#b8d7dd}
+#root .chapter-body>p{color:#d6e8ec}
+#root .feature{background:#f2fbfc}
+#root .feature p{color:#183247;font-weight:500}
+#root .feature:before{background:#d9f7f1;color:#008e88}
+
+/* Keep the closing call-to-action at the same visual scale as the other pages. */
+body[data-page="platform"] .cta-band h2{
+  font-size:clamp(1.75rem,3vw,2.8rem);
+  line-height:1.3!important;
+  max-width:680px;
+}
+@media(max-width:850px){.flow-map{grid-template-columns:1fr}.flow-arrow{transform:rotate(90deg);justify-self:center}.chapter-grid{grid-template-columns:1fr}.chapter-label{position:static}.studio-grid{grid-template-columns:1fr}}

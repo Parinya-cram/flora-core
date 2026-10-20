@@ -1,0 +1,66 @@
+/* Large displays keep the expressive scale. Notebook displays use a denser type rhythm. */
+@media (min-width: 1001px) and (max-width: 1439px) {
+  body { font-size: 15px; }
+
+  .wrap { width: min(1120px, calc(100% - 56px)); }
+  .site-header .wrap { height: 72px; }
+  .brand img { height: 42px; }
+  .nav { gap: 3px; }
+  .nav a, .lang-toggle { padding: 8px 8px; font-size: .76rem; }
+  .nav .nav-cta { padding: 10px 13px; }
+
+  .figma-hero {
+    min-height: calc(100vh - 72px);
+    min-height: calc(100svh - 72px);
+    padding-top: clamp(32px, 4vh, 52px);
+    padding-bottom: clamp(32px, 4vh, 52px);
+  }
+
+  .figma-hero > .wrap { width: min(1220px, calc(100% - 48px)); }
+  .figma-hero-grid {
+    grid-template-columns: minmax(390px, .92fr) minmax(500px, 1.08fr);
+    gap: clamp(38px, 4.5vw, 68px);
+  }
+  .figma-hero h1 { font-size: clamp(3.35rem, 4.7vw, 4.25rem); margin-bottom: 20px; }
+  .figma-hero-copy > p { font-size: clamp(.98rem, 1.2vw, 1.08rem); line-height: 1.65; }
+  .figma-hero .kicker { margin-bottom: 17px; }
+  .figma-hero .actions { margin-top: 22px; }
+  .hero-proof { margin-top: 22px; font-size: .82rem; }
+  .figma-hero-grid > .product-preview { width: 106%; transform: scale(1); }
+  .preview-body { padding: 18px; }
+  .preview-cards article { min-height: 116px; }
+
+  .section { padding: clamp(72px, 7.5vw, 100px) 0; }
+  .section-head { margin-bottom: 38px; }
+  .section-head h2 { font-size: clamp(2.45rem, 3.6vw, 3.25rem); }
+  .page-hero { padding: 44px 0 70px; }
+  .page-hero h1 { font-size: clamp(3.2rem, 5vw, 4.5rem); }
+  .page-hero .lede { font-size: 1.05rem; }
+  .chapter-label h2 { font-size: clamp(3rem, 5vw, 4.5rem); }
+  .audience-card h3, .flow-copy h3 { font-size: clamp(1.45rem, 2.1vw, 2rem); }
+  .visual-band { min-height: 580px; }
+
+  .why-flora { padding: clamp(76px, 7vw, 100px) 0; }
+  .why-lead { column-gap: clamp(45px, 6vw, 80px); margin-bottom: clamp(55px, 6vw, 78px); }
+  .why-lead h2 { font-size: clamp(2.65rem, 3.45vw, 3.3rem); }
+  .why-lead > p { font-size: 1rem; line-height: 1.7; }
+  .continuity-flow article { min-height: 176px; padding: 26px 0; grid-template-columns: 68px minmax(0, 1fr) minmax(150px, auto); }
+  .flow-rail { left: 33px; }
+  .flow-index { width: 68px; height: 68px; }
+  .flow-copy p { font-size: .94rem; line-height: 1.65; }
+  .why-outcome { margin-top: 38px; }
+  .why-outcome > span { min-height: 82px; padding: 18px 22px; font-size: .9rem; }
+}
+
+@media (min-width: 1001px) and (max-width: 1180px) {
+  .figma-hero-grid { grid-template-columns: minmax(360px, .9fr) minmax(440px, 1.1fr); gap: 32px; }
+  .figma-hero h1 { font-size: clamp(3rem, 4.8vw, 3.55rem); }
+  .figma-hero-grid > .product-preview { width: 100%; }
+  .why-lead { grid-template-columns: minmax(0, 1fr) minmax(280px, .72fr); }
+  .why-lead h2 { font-size: clamp(2.5rem, 3.9vw, 2.95rem); }
+}
+
+@media (max-width: 1000px) {
+  .section-head h2 { font-size: clamp(2.35rem, 7vw, 3.6rem); }
+  .page-hero h1 { font-size: clamp(2.65rem, 8vw, 4.4rem); }
+}

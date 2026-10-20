@@ -1,0 +1,8 @@
+.device-legend{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 26px}.legend-card{padding:18px;border-radius:18px;background:white;border:1px solid var(--line);display:flex;gap:13px;align-items:flex-start}.legend-card p{margin:0;color:var(--muted);font-size:.9rem}.evidence{display:inline-flex;align-items:center;padding:5px 10px;border-radius:99px;font-size:.7rem;font-weight:700;white-space:nowrap}.evidence--driver{background:#d8f4e8;color:#08624c}.evidence--candidate{background:#fff0cc;color:#865b00}.device-item{display:flex;flex-direction:column;gap:6px}.device-item .evidence{align-self:flex-start;margin-top:9px}.device-meta{color:var(--muted);font-size:.82rem}.device-count{align-self:center;color:var(--muted);font-size:.85rem}.device-toolbar select{min-width:170px}@media(max-width:650px){.device-legend{grid-template-columns:1fr}.device-toolbar>*{width:100%}}
+
+/* Keep the device-story copy readable across bright equipment and displays. */
+.visual-band:after{background:linear-gradient(90deg,rgba(3,28,22,.96) 0%,rgba(3,28,22,.84) 38%,rgba(3,28,22,.38) 64%,rgba(3,28,22,.08) 100%),linear-gradient(0deg,rgba(3,28,22,.68),transparent 70%)}
+.visual-band .wrap{padding-top:70px}
+.visual-band h2{max-width:660px;text-shadow:0 3px 20px rgba(0,0,0,.72)}
+.visual-band .chip{background:rgba(3,28,22,.72);border-color:rgba(255,255,255,.48);box-shadow:0 6px 18px rgba(0,0,0,.18);backdrop-filter:blur(8px)}
+@media(max-width:700px){.visual-band:after{background:linear-gradient(0deg,rgba(3,28,22,.96) 0%,rgba(3,28,22,.72) 72%,rgba(3,28,22,.2) 100%)}.visual-band .wrap{padding-top:160px}}
