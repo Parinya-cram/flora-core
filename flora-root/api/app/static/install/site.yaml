@@ -28,7 +28,7 @@ spec:
       containers:
         - name: canopy-db
           image: __IMG_DB__
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           env:
             - { name: POSTGRES_DB, value: flora }
             - { name: POSTGRES_USER, value: flora_admin }
@@ -61,12 +61,12 @@ spec:
     metadata: { labels: { app: canopy-api } }
     spec:
       initContainers:
-        - { name: wait-for-db, image: __IMG_DB__, imagePullPolicy: IfNotPresent,
+        - { name: wait-for-db, image: __IMG_DB__, imagePullPolicy: Never,
             command: ["sh", "-c", "until pg_isready -h canopy-db -p 5432; do sleep 2; done"] }
       containers:
         - name: canopy-api
           image: __IMG_API__
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           command: ["sh", "-c", "export FLORA_DATABASE_URL=postgresql://flora_view:$DB_VIEW@canopy-db:5432/flora; exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
           env:
             - { name: DB_VIEW, valueFrom: { secretKeyRef: { name: site, key: db-view } } }
@@ -99,12 +99,12 @@ spec:
     metadata: { labels: { app: sync-api } }
     spec:
       initContainers:
-        - { name: wait-for-db, image: __IMG_DB__, imagePullPolicy: IfNotPresent,
+        - { name: wait-for-db, image: __IMG_DB__, imagePullPolicy: Never,
             command: ["sh", "-c", "until pg_isready -h canopy-db -p 5432; do sleep 2; done"] }
       containers:
         - name: sync-api
           image: __IMG_API__
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           command: ["sh", "-c", "export FLORA_DATABASE_URL=postgresql://flora_sync:$DB_SYNC@canopy-db:5432/flora; exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
           env:
             - { name: DB_SYNC, valueFrom: { secretKeyRef: { name: site, key: db-sync } } }
@@ -131,7 +131,7 @@ spec:
       containers:
         - name: canopy-web
           image: __IMG_WEB__
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           env: [ { name: API_UPSTREAM, value: "http://canopy-api:8000" } ]
           ports: [ { containerPort: 80 } ]
 ---
@@ -174,7 +174,7 @@ spec:
       containers:
         - name: edge
           image: __IMG_EDGE__
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           ports: [ { containerPort: 443, hostPort: __CANOPY_PORT__ } ]
           volumeMounts:
             - { name: conf, mountPath: /etc/nginx/conf.d }
@@ -201,7 +201,7 @@ spec:
       containers:
         - name: registry
           image: __IMG_REGISTRY__
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           env:
             - { name: REGISTRY_STORAGE_DELETE_ENABLED, value: "true" }
             - { name: OTEL_TRACES_EXPORTER, value: none }
@@ -232,7 +232,7 @@ spec:
       containers:
         - name: haber
           image: __IMG_HABER__
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           env:
             - { name: FLORA_TENANT_ID, value: "__TENANT__" }
             - { name: FLORA_ROOT_URL, value: "__ROOT_URL__" }

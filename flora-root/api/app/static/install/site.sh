@@ -72,13 +72,21 @@ img() { printf '%s\n' "$IMAGES" | sed -n "s/^$1 //p"; }
 echo "release $(img RELEASE)"
 
 say "4/8 Pulling images into this server's container runtime"
+# Each image is pulled once by digest and kept under a local name (flora-site/<service>:<release>); the
+# cluster runs those local names only (imagePullPolicy: Never), so it never needs to reach a registry.
+RELEASE_ID=$(img RELEASE)
 for key in API WEB DB HABER REGISTRY EDGE; do
-  ref=$(img $key)
-  if command -v k3s >/dev/null && [ "$KUBECTL" = "k3s kubectl" ]; then $SUDO k3s ctr -n k8s.io images pull --plain-http "$ref" >/dev/null
-  elif command -v nerdctl >/dev/null; then $SUDO nerdctl -n k8s.io pull -q --insecure-registry "$ref" >/dev/null
-  else $SUDO ctr -n k8s.io images pull --plain-http "$ref" >/dev/null; fi || fail "cannot pull $ref"
-  echo "  $key ok"
+  ref=$(img $key); local_ref="flora-site/$(echo $key | tr 'A-Z' 'a-z'):$RELEASE_ID"
+  if command -v k3s >/dev/null && [ "$KUBECTL" = "k3s kubectl" ]; then
+    $SUDO k3s ctr -n k8s.io images pull --plain-http "$ref" >/dev/null && $SUDO k3s ctr -n k8s.io images tag --force "$ref" "docker.io/$local_ref" >/dev/null
+  elif command -v nerdctl >/dev/null; then
+    $SUDO nerdctl -n k8s.io pull -q --insecure-registry "$ref" >/dev/null && $SUDO nerdctl -n k8s.io tag "$ref" "$local_ref"
+  else
+    $SUDO ctr -n k8s.io images pull --plain-http "$ref" >/dev/null && $SUDO ctr -n k8s.io images tag --force "$ref" "docker.io/$local_ref" >/dev/null
+  fi || fail "cannot pull $ref"
+  echo "  $key ok ($local_ref)"
 done
+img() { case "$1" in RELEASE) printf '%s\n' "$RELEASE_ID" ;; *) echo "flora-site/$(echo $1 | tr 'A-Z' 'a-z'):$RELEASE_ID" ;; esac; }
 
 say "5/8 Secrets and certificate (generated here, kept in this cluster)"
 for ns in "$P-canopy" "$P-appliance"; do
