@@ -371,7 +371,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell app-theme-scope h-screen font-sans flex flex-col">
+    <div className="app-shell app-theme-scope h-[calc(100dvh/var(--app-zoom,1))] font-sans flex flex-col">
       <TopBar
         setActiveView={setActiveView}
         sessionUser={user}
