@@ -238,7 +238,7 @@ spec:
           imagePullPolicy: Never
           env:
             - { name: FLORA_TENANT_ID, value: "__TENANT__" }
-            - { name: FLORA_ROOT_URL, value: "__ROOT_URL__" }
+            - { name: FLORA_ROOT_URL, value: "__ROOT_API__" }
             - { name: FLORA_ROOT_TENANT_KEY, valueFrom: { secretKeyRef: { name: site, key: tenant-key } } }
             - { name: FLORA_ROOT_PUBLIC_KEY, value: "__ROOT_PUBLIC_KEY__" }
             - { name: FLORA_ROOT_REGISTRY_URL, value: "__ROOT_REGISTRY__" }

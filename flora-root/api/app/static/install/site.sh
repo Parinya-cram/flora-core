@@ -122,7 +122,7 @@ rm -rf "$TMP"
 say "6/8 Installing Canopy and the appliance ($P-canopy, $P-appliance)"
 curl $K "$ROOT/install/files/site/site.yaml" | sed \
   -e "s#__P__#$P#g" -e "s#__TENANT__#$TENANT#g" -e "s#__IP__#$IP#g" -e "s#__CANOPY_PORT__#$CANOPY_PORT#g" \
-  -e "s#__HABER_PORT__#$HABER_PORT#g" -e "s#__REGISTRY_PORT__#$REGISTRY_PORT#g" -e "s#__ROOT_URL__#$ROOT_URL#g" \
+  -e "s#__HABER_PORT__#$HABER_PORT#g" -e "s#__REGISTRY_PORT__#$REGISTRY_PORT#g" -e "s#__ROOT_API__#$ROOT_URL#g" \
   -e "s#__ROOT_PUBLIC_KEY__#$ROOT_KEY#g" -e "s#__ROOT_REGISTRY__#$ROOT_REGISTRY#g" \
   -e "s#__IMG_API__#$(img API)#g" -e "s#__IMG_WEB__#$(img WEB)#g" -e "s#__IMG_DB__#$(img DB)#g" \
   -e "s#__IMG_HABER__#$(img HABER)#g" -e "s#__IMG_REGISTRY__#$(img REGISTRY)#g" \
