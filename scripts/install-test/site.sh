@@ -30,6 +30,8 @@ cleanup)
     BEGIN; DELETE FROM root_checkin WHERE tenant_id = '"'"'site-test'"'"';
     DELETE FROM root_license WHERE tenant_id = '"'"'site-test'"'"';
     DELETE FROM root_tenant WHERE tenant_id = '"'"'site-test'"'"'; COMMIT;"'
+  for ref in $(sudo -n nerdctl -n k8s.io images --format '{{.Repository}}:{{.Tag}}' | grep '^flora-site/' || true); do
+    sudo -n nerdctl -n k8s.io rmi -f "$ref" >/dev/null 2>&1 || true; done
   for ref in $(sudo -n nerdctl -n k8s.io images --format '{{.Repository}}@{{.Digest}}' | grep '^172.22.19.81:7105/' || true); do
     sudo -n nerdctl -n k8s.io rmi -f "$ref" >/dev/null 2>&1 || true; done
   echo "site test removed" ;;
