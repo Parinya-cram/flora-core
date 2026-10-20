@@ -33,5 +33,13 @@ cleanup)
   for ref in $(sudo -n nerdctl -n k8s.io images --format '{{.Repository}}@{{.Digest}}' | grep '^172.22.19.81:7105/' || true); do
     sudo -n nerdctl -n k8s.io rmi -f "$ref" >/dev/null 2>&1 || true; done
   echo "site test removed" ;;
-*) echo "set SITE_TEST=install or SITE_TEST=cleanup" >&2; exit 2 ;;
+inspect)
+  # What the site installer left in containerd (the cluster's image store) and how the kubelet sees it.
+  sudo -n nerdctl -n k8s.io images --format '{{.Repository}}:{{.Tag}} {{.ID}} {{.Platform}} {{.Size}}' | grep -E 'flora-site|nginx|registry:' || true
+  for img in flora-site/edge flora-site/registry; do
+    echo "--- $img"; sudo -n nerdctl -n k8s.io image inspect "$(sudo -n nerdctl -n k8s.io images --format '{{.Repository}}:{{.Tag}}' | grep "$img" | head -1)" \
+      --format '{{.RepoTags}} {{.Os}}/{{.Architecture}}' 2>&1 | head -3
+  done
+  kubectl -n sitetest-canopy get pods -o wide ;;
+*) echo "set SITE_TEST=install, cleanup or inspect" >&2; exit 2 ;;
 esac
