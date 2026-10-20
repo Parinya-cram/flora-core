@@ -207,6 +207,8 @@ services:
     volumes:
       - ./certs:/etc/flora/certs:ro
       - ./config:/config
+      # Kong routes: the admin page offers the Leafs that have a data-api route.
+      - ./kong:/kong:ro
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "${FLORA_GATEWAY_ADMIN_BIND:-127.0.0.1}:${FLORA_GATEWAY_ADMIN_PORT:-7400}:8000"

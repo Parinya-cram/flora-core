@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>คู่มือการติดตั้ง Flora Gateway</title>
+<style>
+@font-face { font-family: "FloraLatin"; src: url("fonts/NotoSans-Regular.ttf"); font-weight: 400; font-style: normal; }
+@font-face { font-family: "FloraLatin"; src: url("fonts/NotoSans-Bold.ttf"); font-weight: 600 900; font-style: normal; }
+@font-face { font-family: "FloraLatin"; src: url("fonts/NotoSans-Italic.ttf"); font-style: italic; }
+@font-face { font-family: "FloraThai"; src: url("fonts/NotoSansThai-Regular.ttf"); font-weight: 400; }
+@font-face { font-family: "FloraThai"; src: url("fonts/NotoSansThai-Bold.ttf"); font-weight: 600 900; }
+@font-face { font-family: "FloraMono"; src: url("fonts/DejaVuSansMono.ttf"); }
+@font-face { font-family: "FloraMonoThai"; src: url("fonts/TlwgMono.ttf"); }
+@page {
+  size: A4;
+  margin: 22mm 18mm 20mm 18mm;
+  @bottom-center { content: "หน้า " counter(page) " / " counter(pages); font-family: "FloraLatin", "FloraThai", sans-serif; font-size: 8.5pt; color: #64748b; }
+  @top-right { content: string(chapter); font-family: "FloraLatin", "FloraThai", sans-serif; font-size: 8.5pt; color: #64748b; }
+  @top-left { content: "Flora Gateway · คู่มือการติดตั้ง"; font-family: "FloraLatin", "FloraThai", sans-serif; font-size: 8.5pt; color: #94a3b8; }
+}
+@page cover { margin: 0; @bottom-center { content: none; } @top-right { content: none; } @top-left { content: none; } }
+@page toc { @top-right { content: "สารบัญ"; } }
+
+:root { --ink: #0f172a; --muted: #475569; --line: #e2e8f0; --brand: #0e7490; --brand2: #ea580c; --soft: #f1f5f9; }
+html { font-family: "FloraLatin", "FloraThai", sans-serif; font-size: 10.2pt; color: var(--ink); line-height: 1.62; }
+body { margin: 0; }
+h1, h2, h3, h4 { font-family: "FloraLatin", "FloraThai", sans-serif; line-height: 1.3; color: #0b3b4a; page-break-after: avoid; }
+h1 { string-set: chapter content(); font-size: 19pt; margin: 0 0 10pt; padding-bottom: 6pt; border-bottom: 2.5pt solid var(--brand); page-break-before: always; }
+h1 .num { color: var(--brand2); margin-right: 6pt; }
+h2 { font-size: 13.2pt; margin: 16pt 0 6pt; color: var(--brand); }
+h3 { font-size: 11.2pt; margin: 12pt 0 4pt; }
+p { margin: 0 0 6pt; }
+ul, ol { margin: 2pt 0 8pt; padding-left: 16pt; }
+li { margin-bottom: 2pt; }
+code, pre, .mono { font-family: "FloraMono", "FloraMonoThai", monospace; }
+code { font-size: 8.6pt; background: var(--soft); padding: 0.5pt 3pt; border-radius: 2pt; color: #9a3412; }
+pre { font-size: 8.3pt; line-height: 1.45; background: #0f172a; color: #e2e8f0; padding: 7pt 9pt; border-radius: 4pt; white-space: pre-wrap; word-break: break-all; page-break-inside: avoid; margin: 4pt 0 9pt; }
+pre .c { color: #94a3b8; font-family: "FloraLatin", "FloraThai", sans-serif; font-size: 8pt; }
+table { width: 100%; border-collapse: collapse; margin: 4pt 0 10pt; font-size: 9.2pt; page-break-inside: auto; }
+th { background: #0b3b4a; color: white; text-align: left; padding: 4pt 6pt; font-weight: 600; }
+td { border-bottom: 0.6pt solid var(--line); padding: 3.5pt 6pt; vertical-align: top; }
+tr:nth-child(even) td { background: #f8fafc; }
+tr { page-break-inside: avoid; }
+.note, .warn, .tip { border-radius: 4pt; padding: 6pt 9pt; margin: 6pt 0 10pt; page-break-inside: avoid; font-size: 9.6pt; }
+.note { background: #ecfeff; border-left: 3pt solid var(--brand); }
+.warn { background: #fff7ed; border-left: 3pt solid var(--brand2); }
+.tip { background: #f0fdf4; border-left: 3pt solid #16a34a; }
+.note b:first-child, .warn b:first-child, .tip b:first-child { display: block; margin-bottom: 1pt; }
+.step { counter-increment: step; position: relative; padding-left: 22pt; margin: 6pt 0; }
+.step::before { content: counter(step); position: absolute; left: 0; top: 0; width: 15pt; height: 15pt; border-radius: 50%; background: var(--brand); color: white; font-size: 8.5pt; text-align: center; line-height: 15pt; font-weight: 700; }
+.steps { counter-reset: step; }
+.small { font-size: 8.8pt; color: var(--muted); }
+.kbd { border: 0.6pt solid #94a3b8; border-radius: 2pt; padding: 0 3pt; font-size: 8.6pt; background: white; }
+figure { margin: 6pt 0 12pt; page-break-inside: avoid; text-align: center; }
+figcaption { font-size: 8.8pt; color: var(--muted); margin-top: 3pt; }
+
+/* cover */
+.cover { page: cover; height: 297mm; position: relative; background: linear-gradient(160deg, #0b3b4a 0%, #0e7490 55%, #155e75 100%); color: white; }
+.cover .inner { position: absolute; left: 22mm; right: 22mm; top: 70mm; }
+.cover .tag { font-size: 10pt; letter-spacing: 3pt; opacity: .8; }
+.cover .title { font-size: 34pt; font-weight: 700; line-height: 1.15; margin: 8pt 0 6pt; }
+.cover .sub { font-size: 15pt; opacity: .92; }
+.cover .bar { width: 50mm; height: 3pt; background: #fb923c; margin: 16pt 0; }
+.cover .meta { position: absolute; left: 22mm; bottom: 26mm; font-size: 10pt; opacity: .9; line-height: 1.8; }
+.cover .meta b { color: #fed7aa; }
+
+/* toc */
+.toc { page: toc; }
+.toc h1 { page-break-before: avoid; string-set: none; }
+.toc ol { list-style: none; padding: 0; }
+.toc li { margin: 0; }
+.toc a { color: var(--ink); text-decoration: none; display: block; padding: 2.2pt 0; border-bottom: 0.5pt dotted #cbd5e1; }
+.toc a::after { content: target-counter(attr(href), page); float: right; color: var(--brand); }
+.toc .l1 > a { font-weight: 600; font-size: 10.6pt; margin-top: 4pt; }
+.toc .l2 a { padding-left: 14pt; font-size: 9.4pt; color: #334155; }
+a { color: var(--brand); }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <div class="inner">
+    <div class="tag">ESM SOLUTION · FLORA PLATFORM</div>
+    <div class="title">คู่มือการติดตั้ง<br>Flora Gateway</div>
+    <div class="sub">Ubuntu (Docker Engine) และ Windows 10 / 11 · ใช้พอร์ตจริงเท่านั้น</div>
+    <div class="bar"></div>
+    <div class="sub" style="font-size:11.5pt">ครอบคลุม: การเตรียมเครื่อง · ติดตั้ง Docker · ตั้งค่า .env และพอร์ต · port-guard<br>เริ่มระบบอัตโนมัติ · เชื่อม Canopy / ไลเซนส์ / Leaf · อัปเดต · แก้ปัญหาการติดตั้ง</div>
+  </div>
+  <div class="meta">
+    <b>ไฟล์ที่ใช้:</b> <span class="mono">compose.production.yaml</span> (Linux) · <span class="mono">compose.windows.yaml</span> + <span class="mono">windows\*.ps1</span> (Windows)<br>
+    <b>ตัวอย่างในคู่มือ:</b> Gateway 172.22.1.233 · Canopy/Haber/Root 172.22.19.81<br>
+    <b>ฉบับ:</b> ตุลาคม 2026 · ใช้คู่กับ "คู่มือการติดตั้งและใช้งาน Flora Gateway"
+  </div>
+</section>
+
+<section class="toc">
+<h1>สารบัญ</h1>
+<ol>
+  <li class="l1"><a href="#c1">1. ภาพรวมและการเลือกแพลตฟอร์ม</a></li>
+  <li class="l1"><a href="#c2">2. สิ่งที่ต้องเตรียมก่อนติดตั้ง</a></li>
+  <li class="l1"><a href="#c3">3. ติดตั้งบน Ubuntu (Docker Engine)</a>
+    <ol><li class="l2"><a href="#c3-1">3.1 เตรียมเครื่อง</a></li><li class="l2"><a href="#c3-2">3.2 ติดตั้ง Docker Engine</a></li><li class="l2"><a href="#c3-3">3.3 ดึงโค้ด</a></li><li class="l2"><a href="#c3-4">3.4 ตั้งค่า .env</a></li><li class="l2"><a href="#c3-5">3.5 ตั้งค่าพอร์ตจริง</a></li><li class="l2"><a href="#c3-6">3.6 Certificate สำหรับ HTTPS</a></li><li class="l2"><a href="#c3-7">3.7 Build และเริ่มระบบ</a></li><li class="l2"><a href="#c3-8">3.8 เริ่มเองเมื่อเปิดเครื่อง</a></li></ol></li>
+  <li class="l1"><a href="#c4">4. ติดตั้งบน Windows 10 / 11</a>
+    <ol><li class="l2"><a href="#c4-1">4.1 ติดตั้งซอฟต์แวร์</a></li><li class="l2"><a href="#c4-2">4.2 ดึงโค้ดและตั้งค่า .env</a></li><li class="l2"><a href="#c4-3">4.3 ตั้งค่าพอร์ต COM จริง</a></li><li class="l2"><a href="#c4-4">4.4 Certificate และ Firewall</a></li><li class="l2"><a href="#c4-5">4.5 Build และเริ่มระบบ</a></li><li class="l2"><a href="#c4-6">4.6 เริ่มเองเมื่อ login</a></li></ol></li>
+  <li class="l1"><a href="#c5">5. ตรวจสอบหลังติดตั้ง</a></li>
+  <li class="l1"><a href="#c6">6. เชื่อม Canopy, ไลเซนส์ และ Leaf</a></li>
+  <li class="l1"><a href="#c7">7. อัปเดตโค้ดและสำรองข้อมูล</a></li>
+  <li class="l1"><a href="#c8">8. แก้ปัญหาการติดตั้ง</a></li>
+  <li class="l1"><a href="#c9">9. ภาคผนวก</a>
+    <ol><li class="l2"><a href="#c9-1">9.1 ตัวอย่าง .env</a></li><li class="l2"><a href="#c9-2">9.2 พอร์ตที่ต้องเปิด</a></li><li class="l2"><a href="#c9-3">9.3 ไฟล์ที่เกี่ยวข้อง</a></li><li class="l2"><a href="#c9-4">9.4 Checklist</a></li></ol></li>
+</ol>
+</section>
+
+<!-- ============================================================ 1 -->
+<h1 id="c1"><span class="num">1</span> ภาพรวมและการเลือกแพลตฟอร์ม</h1>
+<p>Flora Gateway รับข้อมูลจากเครื่องมือแพทย์ (RS-232 และ LAN) แปลงเป็นค่ากลางของ Flora แล้วให้ Flora Leaf ดึงไปแสดงผล คู่มือนี้ติดตั้งแบบ <b>ใช้งานจริง</b> โดยมีเงื่อนไขสำคัญ:</p>
+<div class="warn"><b>เงื่อนไข: พอร์ตจริงเท่านั้น</b>
+ไม่มีพอร์ต serial เสมือน (<code>/dev/ttyV*</code>, TCP bridge 7430/7431), ไม่มีเครื่องจำลอง (simulator) และมีด่าน <b>port-guard</b> ตรวจ config ทุกครั้งก่อนเริ่มระบบ ถ้าพบพอร์ตเสมือนหรือพอร์ตที่ไม่มีอยู่จริง ระบบจะไม่ยอมเริ่ม</div>
+
+<h2>เลือกแพลตฟอร์ม</h2>
+<table>
+<tr><th style="width:22%">หัวข้อ</th><th style="width:39%">Ubuntu 24.04 (แนะนำ)</th><th>Windows 10 / 11</th></tr>
+<tr><td>Docker</td><td>Docker Engine (systemd)</td><td>Docker Desktop (WSL2)</td></tr>
+<tr><td>ไฟล์ compose</td><td><code>compose.production.yaml</code></td><td><code>compose.windows.yaml</code></td></tr>
+<tr><td>ไฟล์ config</td><td><code>config/gateway.site.toml</code> (<code>/dev/ttyS0</code>…)</td><td><code>config/gateway.windows.toml</code> (<code>COM1</code>…)</td></tr>
+<tr><td>serial-controller</td><td>รันใน Docker, map พอร์ตจริงเข้า container</td><td><b>รันบน Windows โดยตรง</b> (Docker Desktop ส่ง COM เข้า container ไม่ได้)</td></tr>
+<tr><td>ตรวจพอร์ตจริง</td><td>port-guard ตรวจว่าเป็นอุปกรณ์ character device จริง</td><td>port-guard ตรวจชื่อ <code>COMn</code> + <code>check-com-ports.ps1</code> ตรวจใน Device Manager ว่าไม่ใช่พอร์ตเสมือน</td></tr>
+<tr><td>เริ่มเองเมื่อเปิดเครื่อง</td><td>ได้ทันทีตอน boot ไม่ต้อง login</td><td>เริ่มเมื่อผู้ใช้ login (ใช้ Windows auto sign-in ถ้าต้องการ)</td></tr>
+<tr><td>แยก monitor ด้วย IP (<code>source_ip</code>)</td><td>ได้</td><td>ไม่ได้ (Docker Desktop เปลี่ยน IP ต้นทาง) — ใช้ 1 พอร์ต LAN ต่อ 1 เครื่อง</td></tr>
+<tr><td>สถานะการทดสอบ</td><td>ทดสอบกับเครื่องจริงแล้ว</td><td>ตรวจไฟล์และ syntax แล้ว ควรทดสอบบนเครื่อง Windows ก่อนใช้งานจริง</td></tr>
+</table>
+
+<h2>ส่วนประกอบหลัก</h2>
+<figure>
+<svg viewBox="0 0 720 210" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="FloraLatin, sans-serif">
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#475569"/></marker></defs>
+  <rect x="5" y="20" width="140" height="170" rx="8" fill="#ecfdf5" stroke="#059669"/>
+  <text x="75" y="44" text-anchor="middle" font-size="12" font-weight="700" fill="#065f46">Medical devices</text>
+  <text x="75" y="74" text-anchor="middle" font-size="10">RS-232 (COM port)</text>
+  <text x="75" y="94" text-anchor="middle" font-size="10">LAN TCP (HL7, Vista)</text>
+  <text x="75" y="114" text-anchor="middle" font-size="10">M540 via iacs-relay</text>
+  <text x="75" y="134" text-anchor="middle" font-size="10">HTTP push / poll</text>
+  <rect x="185" y="20" width="350" height="170" rx="8" fill="#f8fafc" stroke="#334155" stroke-dasharray="4 3"/>
+  <text x="360" y="40" text-anchor="middle" font-size="12" font-weight="700" fill="#0b3b4a">Flora Gateway host</text>
+  <rect x="200" y="55" width="150" height="50" rx="6" fill="#fff7ed" stroke="#ea580c"/>
+  <text x="275" y="76" text-anchor="middle" font-size="11" font-weight="700" fill="#9a3412">port-guard</text>
+  <text x="275" y="92" text-anchor="middle" font-size="9">real ports only</text>
+  <rect x="200" y="120" width="150" height="55" rx="6" fill="#fff7ed" stroke="#ea580c"/>
+  <text x="275" y="142" text-anchor="middle" font-size="11" font-weight="700" fill="#9a3412">serial-controller</text>
+  <text x="275" y="158" text-anchor="middle" font-size="9">Linux: Docker · Windows: native</text>
+  <rect x="370" y="55" width="150" height="120" rx="6" fill="#ecfeff" stroke="#0e7490"/>
+  <text x="445" y="78" text-anchor="middle" font-size="11" font-weight="700" fill="#155e75">Docker services</text>
+  <text x="445" y="98" text-anchor="middle" font-size="9">kafka · gateway-db · parsers</text>
+  <text x="445" y="114" text-anchor="middle" font-size="9">socket / webhook / feeder</text>
+  <text x="445" y="130" text-anchor="middle" font-size="9">collector · server · kong</text>
+  <text x="445" y="146" text-anchor="middle" font-size="9">gateway-service · edge</text>
+  <text x="445" y="162" text-anchor="middle" font-size="9">updater</text>
+  <rect x="575" y="35" width="140" height="60" rx="8" fill="#f0f9ff" stroke="#0369a1"/>
+  <text x="645" y="60" text-anchor="middle" font-size="11" font-weight="700" fill="#075985">Flora Leaf</text>
+  <text x="645" y="78" text-anchor="middle" font-size="9">data-api :7410 / HTTPS</text>
+  <rect x="575" y="115" width="140" height="60" rx="8" fill="#eef2ff" stroke="#4f46e5"/>
+  <text x="645" y="140" text-anchor="middle" font-size="11" font-weight="700" fill="#3730a3">Canopy / Haber</text>
+  <text x="645" y="158" text-anchor="middle" font-size="9">check-in · license</text>
+  <line x1="145" y1="105" x2="183" y2="105" stroke="#475569" stroke-width="1.5" marker-end="url(#ar)"/>
+  <line x1="350" y1="147" x2="368" y2="130" stroke="#475569" stroke-width="1.5" marker-end="url(#ar)"/>
+  <line x1="520" y1="80" x2="573" y2="66" stroke="#475569" stroke-width="1.5" marker-end="url(#ar)"/>
+  <line x1="520" y1="140" x2="573" y2="145" stroke="#475569" stroke-width="1.5" marker-end="url(#ar)"/>
+</svg>
+<figcaption>รูปที่ 1 — ส่วนประกอบของ Flora Gateway และระบบที่เชื่อมต่อ</figcaption>
+</figure>
+
+<!-- ============================================================ 2 -->
+<h1 id="c2"><span class="num">2</span> สิ่งที่ต้องเตรียมก่อนติดตั้ง</h1>
+<h2>ฮาร์ดแวร์</h2>
+<table>
+<tr><th style="width:24%">รายการ</th><th style="width:30%">ขั้นต่ำ</th><th>หมายเหตุ</th></tr>
+<tr><td>CPU / RAM</td><td>4 core / 8 GB</td><td>Windows ใช้ RAM มากกว่า (มี VM ของ WSL2) แนะนำ 16 GB</td></tr>
+<tr><td>ดิสก์</td><td>64 GB SSD</td><td>image + build cache ~10 GB</td></tr>
+<tr><td>พอร์ต RS-232</td><td>ตามจำนวนเครื่องที่ต่อสาย</td><td>พอร์ตบนเมนบอร์ด (COM1/COM2) หรือ USB-RS232 ชิป FTDI/Prolific — <b>ห้ามใช้พอร์ตเสมือน</b></td></tr>
+<tr><td>เครือข่าย</td><td>LAN แบบสาย</td><td>แนะนำใช้สาย LAN ไม่ใช้ WiFi โดยเฉพาะถ้ามี Dräger M540 (multicast)</td></tr>
+<tr><td>สาย</td><td>ตามเครื่องมือแพทย์</td><td>ต่อ PC ↔ อุปกรณ์ที่เป็น DTE ต้องใช้ null-modem</td></tr>
+</table>
+<h2>ข้อมูลที่ต้องขอจากผู้ดูแลระบบ Flora</h2>
+<table>
+<tr><th style="width:34%">ข้อมูล</th><th>ตัวอย่าง</th></tr>
+<tr><td>ที่อยู่ Haber (Canopy)</td><td><code>http://172.22.19.81:7204</code></td></tr>
+<tr><td>ที่อยู่ Flora Root (แก้ไลเซนส์)</td><td><code>https://172.22.19.81:8443</code></td></tr>
+<tr><td>Gateway ID</td><td><code>gateway-hospital-01-a</code></td></tr>
+<tr><td>Token ของ gateway / node</td><td><code>HABER_GATEWAY_TOKEN</code>, <code>HABER_NODE_TOKEN</code></td></tr>
+<tr><td>ประเภทเครื่องที่จะใช้ (อยู่ในไลเซนส์)</td><td><code>draeger-medibus</code>, <code>draeger-vista-120s</code>, …</td></tr>
+<tr><td>Leaf ID ที่จะดึงข้อมูล</td><td><code>leaf-or-01</code></td></tr>
+<tr><td>IP คงที่ของเครื่อง gateway</td><td><code>172.22.1.233</code></td></tr>
+</table>
+
+<!-- ============================================================ 3 -->
+<h1 id="c3"><span class="num">3</span> ติดตั้งบน Ubuntu (Docker Engine)</h1>
+
+<h2 id="c3-1">3.1 เตรียมเครื่อง</h2>
+<pre>sudo apt update &amp;&amp; sudo apt -y upgrade
+sudo apt -y install git curl openssl python3 python3-serial
+sudo usermod -aG dialout $USER                <span class="c"># สิทธิ์ใช้พอร์ต serial</span>
+sudo systemctl disable --now ModemManager       <span class="c"># กันโปรแกรมแย่งพอร์ต serial</span></pre>
+<p>ตรวจพอร์ต serial จริงของเครื่อง (<code>type</code> ไม่ใช่ 0 = มีฮาร์ดแวร์จริง):</p>
+<pre>for d in /sys/class/tty/ttyS*; do t=$(cat $d/type); [ "$t" != 0 ] &amp;&amp; echo "$(basename $d) io=$(cat $d/port)"; done
+ls -l /dev/serial/by-id/ 2&gt;/dev/null          <span class="c"># USB-RS232 (ถ้ามี)</span></pre>
+
+<h2 id="c3-2">3.2 ติดตั้ง Docker Engine</h2>
+<pre>sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+  https://download.docker.com/linux/ubuntu $(. /etc/os-release; echo $VERSION_CODENAME) stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list &gt; /dev/null
+sudo apt update
+sudo apt -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo systemctl enable --now docker containerd   <span class="c"># เริ่มเองตอน boot</span>
+sudo usermod -aG docker $USER                   <span class="c"># แล้ว logout / login ใหม่</span>
+echo '{"log-driver":"json-file","log-opts":{"max-size":"20m","max-file":"5"}}' | sudo tee /etc/docker/daemon.json
+sudo systemctl restart docker</pre>
+<div class="note"><b>ไม่ใช้ Docker Desktop บน Linux</b>Docker Desktop map พอร์ต serial จริงเข้า container ไม่ได้ เปลี่ยน IP ต้นทางของเครื่องที่ต่อเข้ามา และต้องมีคน login ก่อนจึงจะเริ่ม ถ้าเคยติดตั้งไว้ให้รัน <code>docker context use default</code> และ <code>systemctl --user disable --now docker-desktop</code></div>
+
+<h2 id="c3-3">3.3 ดึงโค้ด</h2>
+<pre>mkdir -p ~/flora &amp;&amp; cd ~/flora
+git clone http://172.22.1.103:8080/esm-solution/flora-esm flora-core
+cd flora-core &amp;&amp; git checkout gateway-g             <span class="c"># branch ที่มีชุดติดตั้งนี้</span>
+cd flora-gateway</pre>
+<div class="warn"><b>ห้ามย้ายโฟลเดอร์หลังติดตั้ง</b>ถ้าย้าย Docker จะสร้างโฟลเดอร์เปล่าแทนไฟล์ที่ mount ไว้ ทำให้ฐานข้อมูลเริ่มไม่ได้</div>
+
+<h2 id="c3-4">3.4 ตั้งค่า .env</h2>
+<p>สร้างไฟล์ <code>flora-gateway/.env</code> (ตัวอย่างเต็มในหัวข้อ 9.1):</p>
+<pre>FLORA_GATEWAY_ID=gateway-hospital-01-a
+HABER_URL=http://172.22.19.81:7204
+GATEWAY_DATA_API_URL=http://172.22.1.233:7410/data-api
+FLORA_GATEWAY_CONFIG_FILE=gateway.site.toml
+FLORA_GATEWAY_SEED_FILE=instances.site.json
+FLORA_GATEWAY_ADMIN_BIND=0.0.0.0
+FLORA_SERIAL_PORT_1=/dev/ttyS0
+FLORA_SERIAL_PORT_2=/dev/ttyS1
+FLORA_GATEWAY_DB_PASSWORD=&lt;ตั้งรหัสใหม่&gt;
+GATEWAY_ADMIN_PASSWORD=&lt;ตั้งรหัสใหม่&gt;</pre>
+
+<h2 id="c3-5">3.5 ตั้งค่าพอร์ตจริง (gateway.site.toml)</h2>
+<pre>cp config/gateway.toml config/gateway.site.toml
+echo '[]' &gt; config/instances.site.json</pre>
+<p>แก้ <code>config/gateway.site.toml</code> ให้ serial pod ชี้ไปพอร์ตจริงเท่านั้น และลบ pod ของเครื่องจำลองออก:</p>
+<pre>[[serial.pods]]
+id = "COM1"
+path = "/dev/ttyS0"      <span class="c"># พอร์ตจริงที่ map ใน FLORA_SERIAL_PORT_1</span>
+baud = 9600              <span class="c"># ค่าสายจะถูกตั้งตาม Device type ให้เองเมื่อเพิ่ม device</span>
+
+[[serial.pods]]
+id = "COM2"
+path = "/dev/ttyS1"      <span class="c"># พอร์ตจริงที่ map ใน FLORA_SERIAL_PORT_2</span></pre>
+<ul>
+<li>ลบ pod ที่ใช้ <code>/dev/ttyV*</code> และ URL ของ <code>simulator</code> (ใน <code>[feeder]</code>, <code>[publisher]</code>) ออก</li>
+<li>USB-RS232: ใช้ชื่อถาวรจาก <code>/dev/serial/by-id/…</code> และเพิ่มบรรทัด <code>devices</code> ใน <code>compose.production.yaml</code></li>
+</ul>
+<pre>python3 scripts/validate_config.py config/gateway.site.toml config/instances.site.json</pre>
+
+<h2 id="c3-6">3.6 Certificate สำหรับ HTTPS (edge)</h2>
+<p>service <code>edge</code> (HTTPS พอร์ต 443) ต้องมี cert ถ้าไม่มี Docker จะสร้างโฟลเดอร์เปล่าแทนไฟล์และ edge จะ restart วนซ้ำ ใช้ cert ขององค์กร หรือสร้างแบบ self-signed:</p>
+<pre>cd certs
+openssl req -x509 -newkey rsa:2048 -nodes -days 730 -keyout server.key -out server.crt \
+  -subj "/CN=flora-gateway" -addext "subjectAltName=IP:172.22.1.233,IP:127.0.0.1,DNS:localhost"
+chmod 600 server.key &amp;&amp; cd ..</pre>
+
+<h2 id="c3-7">3.7 Build และเริ่มระบบ</h2>
+<pre>docker compose -p flora-gateway -f compose.production.yaml up -d --build
+docker compose -p flora-gateway -f compose.production.yaml logs port-guard</pre>
+<p>ผลที่ถูกต้องของ port-guard:</p>
+<pre>port-guard: /dev/ttyS0 ok
+port-guard: /dev/ttyS1 ok
+port-guard: real serial ports only — ok</pre>
+<div class="warn"><b>ต้องใส่ <code>-f compose.production.yaml</code> ทุกครั้ง</b>ถ้ารัน <code>docker compose up</code> โดยไม่ระบุ จะใช้ <code>compose.yaml</code> (dev/demo) ซึ่งเปิดพอร์ตเสมือน</div>
+
+<h2 id="c3-8">3.8 เริ่มเองเมื่อเปิดเครื่อง</h2>
+<ul>
+<li>Docker Engine เริ่มตอน boot และ container ทุกตัวตั้ง <code>restart: unless-stopped</code> ไว้แล้ว <b>ไม่ต้อง login</b></li>
+<li>service เสริมของผู้ใช้ (log การทำงาน <code>flora-watch</code>, relay ของ M540 <code>flora-iacs-relay</code>) ให้เปิด linger:</li>
+</ul>
+<pre>sudo loginctl enable-linger $USER
+systemctl --user enable flora-watch flora-iacs-relay</pre>
+<p>ทดสอบ: รีบูตแล้วปล่อยไว้ที่หน้า login จากนั้นเปิด <code>http://&lt;gateway&gt;:7400</code> จากเครื่องอื่น</p>
+
+<!-- ============================================================ 4 -->
+<h1 id="c4"><span class="num">4</span> ติดตั้งบน Windows 10 / 11</h1>
+<div class="note"><b>หลักการบน Windows</b>Docker Desktop ส่งพอร์ต COM ของ Windows เข้า container ไม่ได้ จึงรัน <b>serial-controller บน Windows โดยตรง</b> (เปิด COM1, COM2 จริง) ส่วนอื่นรันใน Docker Desktop สคริปต์ <code>windows\start-gateway.ps1</code> จัดการทั้งหมดให้</div>
+
+<h2 id="c4-1">4.1 ติดตั้งซอฟต์แวร์</h2>
+<table>
+<tr><th style="width:30%">โปรแกรม</th><th>หมายเหตุ</th></tr>
+<tr><td>Windows 10 21H2+ / Windows 11</td><td>64-bit, เปิด virtualization ใน BIOS</td></tr>
+<tr><td>WSL2</td><td>PowerShell (Admin): <code>wsl --install</code> แล้วรีสตาร์ต</td></tr>
+<tr><td>Docker Desktop</td><td>เลือก WSL2 backend · Settings → General → <b>Start Docker Desktop when you sign in</b> · Resources → Memory 4 GB+</td></tr>
+<tr><td>Git for Windows</td><td>ใช้ดึงโค้ด</td></tr>
+<tr><td>Rust (rustup) + Visual Studio Build Tools</td><td>https://rustup.rs และเลือก "Desktop development with C++" (ใช้ build serial-controller.exe)</td></tr>
+<tr><td>Python 3 (ทางเลือก)</td><td>สำหรับ iacs-relay (M540) และตัวจำลองทดสอบ</td></tr>
+</table>
+<p>อนุญาตให้รันสคริปต์ PowerShell ของผู้ใช้ (ครั้งเดียว):</p>
+<pre>Set-ExecutionPolicy -Scope CurrentUser RemoteSigned</pre>
+
+<h2 id="c4-2">4.2 ดึงโค้ดและตั้งค่า .env</h2>
+<pre>cd $HOME
+git clone http://172.22.1.103:8080/esm-solution/flora-esm flora-core
+cd flora-core; git checkout gateway-g; cd flora-gateway
+echo '[]' &gt; config\instances.site.json</pre>
+<p>สร้าง <code>.env</code> (เหมือน Linux แต่ใช้ไฟล์ config ของ Windows และ data-api เป็น IP ของเครื่อง Windows):</p>
+<pre>FLORA_GATEWAY_ID=gateway-hospital-01-a
+HABER_URL=http://172.22.19.81:7204
+GATEWAY_DATA_API_URL=http://&lt;IP เครื่อง Windows&gt;:7410/data-api
+FLORA_GATEWAY_CONFIG_FILE=gateway.windows.toml
+FLORA_GATEWAY_SEED_FILE=instances.site.json
+FLORA_GATEWAY_ADMIN_BIND=0.0.0.0
+FLORA_GATEWAY_DB_PASSWORD=&lt;ตั้งรหัสใหม่&gt;
+GATEWAY_ADMIN_PASSWORD=&lt;ตั้งรหัสใหม่&gt;</pre>
+<div class="tip"><b>ปัญหาปลายบรรทัด (CRLF)</b>Git บน Windows อาจแปลงปลายบรรทัดเป็น CRLF ไฟล์ <code>.env</code> และ <code>.toml</code> ใช้ได้ทั้งสองแบบ แต่ถ้าแก้ไฟล์ด้วย Notepad ให้บันทึกเป็น UTF-8</div>
+
+<h2 id="c4-3">4.3 ตั้งค่าพอร์ต COM จริง (gateway.windows.toml)</h2>
+<ol>
+<li>เปิด <b>Device Manager → Ports (COM &amp; LPT)</b> ดูชื่อพอร์ต เช่น <i>Communications Port (COM1)</i>, <i>USB Serial Port (COM3)</i></li>
+<li>แก้ <code>config\gateway.windows.toml</code> ให้ <code>path</code> ของแต่ละ pod ตรงกับชื่อพอร์ต (<code>"COM1"</code>, <code>"COM3"</code> …)</li>
+<li>ตรวจว่าเป็นพอร์ตจริง:</li>
+</ol>
+<pre>.\windows\check-com-ports.ps1</pre>
+<pre>ok   COM1 : Communications Port (COM1) [ACPI\PNP0501\0]
+ok   COM3 : USB Serial Port (COM3) [FTDIBUS\VID_0403+PID_6001+...]
+check-com-ports: all serial pods use physical COM ports</pre>
+<p>ที่มาของพอร์ต: <code>ACPI\</code> = บนเมนบอร์ด, <code>USB\</code>/<code>FTDIBUS\</code> = USB adapter, <code>PCI\</code> = การ์ด ถ้าเป็นพอร์ตเสมือน (com0com, Eltima, VSPE หรือ <code>ROOT\</code>) จะขึ้น <b>FAIL</b> และระบบจะไม่เริ่ม</p>
+
+<h2 id="c4-4">4.4 Certificate และ Firewall</h2>
+<p>Cert สำหรับ HTTPS (Git for Windows มี openssl อยู่ใน Git Bash):</p>
+<pre>openssl req -x509 -newkey rsa:2048 -nodes -days 730 -keyout certs/server.key -out certs/server.crt \
+  -subj "/CN=flora-gateway" -addext "subjectAltName=IP:&lt;IP เครื่อง Windows&gt;,IP:127.0.0.1"</pre>
+<p>เปิด Windows Firewall ให้เครื่องมือแพทย์และ Leaf ต่อเข้ามาได้ (PowerShell แบบ Administrator):</p>
+<pre>New-NetFirewallRule -DisplayName "Flora Gateway" -Direction Inbound -Protocol TCP `
+  -LocalPort 443,7400,7410,7421,7422,7423,9500,2051 -Action Allow -Profile Domain,Private</pre>
+
+<h2 id="c4-5">4.5 Build และเริ่มระบบ</h2>
+<p>ใน PowerShell ที่โฟลเดอร์ <code>flora-gateway</code> (ครั้งแรกใส่ <code>-Build</code>):</p>
+<pre>.\windows\start-gateway.ps1 -Build</pre>
+<p>สคริปต์ทำตามลำดับ:</p>
+<ol>
+<li>รอ Docker Desktop พร้อม</li>
+<li>ตรวจพอร์ต COM จริง (<code>check-com-ports.ps1</code>) — ไม่ผ่านจะหยุด</li>
+<li><code>docker compose -f compose.windows.yaml up -d --build</code> (port-guard ตรวจชื่อ COMn อีกชั้น)</li>
+<li>build <code>serial-controller.exe</code> (ครั้งแรกใช้เวลา 5–15 นาที)</li>
+<li>รัน serial-controller และ <b>เริ่มใหม่เองถ้าหยุด</b> (watchdog) log อยู่ใน <code>logs\</code></li>
+</ol>
+<div class="note"><b>เปลี่ยนค่าพอร์ตหลังติดตั้ง</b>เมื่อเพิ่มหรือแก้ device หน้า admin จะเขียนค่าสายของ pod ให้ตาม Device type แต่บน Windows ต้อง restart serial-controller เอง: ปิดโปรเซส <code>serial-controller.exe</code> ใน Task Manager แล้ว watchdog จะเริ่มใหม่ด้วยค่าใหม่ใน 5 วินาที</div>
+
+<h2 id="c4-6">4.6 เริ่มเองเมื่อ login</h2>
+<pre>.\windows\install-autostart.ps1            <span class="c"># ลงทะเบียน Task Scheduler "Flora Gateway"</span>
+.\windows\install-autostart.ps1 -Remove    <span class="c"># ถอนการตั้งค่า</span></pre>
+<ul>
+<li>Docker Desktop บน Windows ทำงานใน session ของผู้ใช้ ระบบจึงเริ่มเมื่อผู้ใช้ login</li>
+<li>ถ้าต้องการให้เริ่มเองโดยไม่มีคนอยู่หน้าเครื่อง: เปิด Windows automatic sign-in (Sysinternals Autologon) และตั้งล็อกหน้าจออัตโนมัติ</li>
+<li>ตั้ง Windows Update ไม่ให้รีสตาร์ตเองในเวลาทำงาน (Active hours)</li>
+</ul>
+
+<!-- ============================================================ 5 -->
+<h1 id="c5"><span class="num">5</span> ตรวจสอบหลังติดตั้ง</h1>
+<table>
+<tr><th style="width:36%">ตรวจ</th><th style="width:40%">คำสั่ง / ที่</th><th>ผลที่ถูกต้อง</th></tr>
+<tr><td>container ทั้งหมด</td><td><code>docker compose -p flora-gateway -f &lt;compose&gt; ps</code></td><td>Up; db/kafka/kong/server/edge healthy; port-guard และ parser-image Exited (0)</td></tr>
+<tr><td>port-guard</td><td><code>docker compose … logs port-guard</code></td><td><code>real … ports only — ok</code></td></tr>
+<tr><td>หน้า admin</td><td><code>http://&lt;gateway&gt;:7400</code> และ <code>https://&lt;gateway&gt;</code></td><td>หน้า login</td></tr>
+<tr><td>data-api</td><td><code>http://&lt;gateway&gt;:7410/data-api/leaf-or-01/health</code></td><td>HTTP 200</td></tr>
+<tr><td>serial-controller</td><td>Linux: <code>curl 127.0.0.1:7401/status</code> · Windows: <code>curl 127.0.0.1:7501/status</code></td><td>pod <code>connected: true</code>, ไม่มี <code>last_error</code></td></tr>
+<tr><td>check-in Canopy</td><td><code>docker logs flora-gateway-gateway-service-1 | findstr checkin</code> (Windows) / <code>grep</code></td><td><code>HTTP/1.1 200 OK</code></td></tr>
+<tr><td>หน้า Devices</td><td>การ์ดแสดงป้ายพอร์ต <b>COM1</b> (ไม่ใช่ <i>virtual</i>)</td><td>มีข้อมูล in เมื่อต่อเครื่อง</td></tr>
+</table>
+<div class="warn"><b>เปลี่ยนรหัส admin ทันที</b>ถ้าใช้ค่าเริ่มต้น admin/admin ให้เปลี่ยนในหน้า admin ก่อนเปิดให้เครื่องอื่นเข้าถึง</div>
+
+<!-- ============================================================ 6 -->
+<h1 id="c6"><span class="num">6</span> เชื่อม Canopy, ไลเซนส์ และ Leaf</h1>
+<h2>6.1 Canopy / Haber</h2>
+<ul>
+<li>ค่าเริ่มต้นมาจาก <code>HABER_URL</code> ใน <code>.env</code> หรือแก้ที่หน้า admin → Canopy link (ค่าที่หน้า admin ใช้แทน .env)</li>
+<li>Canopy แบบ HTTPS ที่ใช้ cert ออกเอง: ติดตั้ง cert ของ Canopy ลง <code>certs/canopy-trust.pem</code> + <code>certs/trust.env</code> หรือใช้ <code>http://&lt;canopy&gt;:7204</code></li>
+</ul>
+<h2>6.2 ไลเซนส์ (Flora Root)</h2>
+<ol>
+<li>เปิด Root (<code>https://172.22.19.81:8443</code>) → Tenants → <b>Edit license</b></li>
+<li>เพิ่มประเภทเครื่องที่ใช้ ถ้าไม่มีในรายการ ให้เลือก <b>+ custom code…</b> แล้วพิมพ์ code เช่น <code>draeger-medibus</code></li>
+<li>ตรวจ Max leaves / gateways / devices ให้พอกับที่ใช้จริง แล้วกด <b>Issue new bundle</b></li>
+<li>ภายใน ~1 นาที gateway จะได้ไลเซนส์ใหม่ (หน้า admin → License)</li>
+</ol>
+<h2>6.3 เพิ่มเครื่องมือแพทย์</h2>
+<ul>
+<li>หน้า Devices → <b>Add device</b> → เลือก Device type และ Connection pod</li>
+<li>ค่าสาย/framing ของ pod ถูกตั้งตาม Device type ให้อัตโนมัติ (มีกล่องแสดงล่วงหน้าก่อนกด Save)</li>
+<li>1 พอร์ต serial = 1 เครื่อง</li>
+</ul>
+<h2>6.4 Leaf</h2>
+<ul>
+<li>Leaf ต้องตั้ง <code>FLORA_LEAF_ID</code> และ gateway ต้องมี route ของ Leaf นั้นใน <code>kong/kong.yaml</code></li>
+<li>ใน Leaf → Set up bedside gateway → data-api base <code>http://&lt;gateway&gt;:7410/data-api</code> (หรือ HTTPS <code>https://&lt;gateway&gt;/data-api</code>)</li>
+</ul>
+<h2>6.5 Dräger M540 (ถ้ามี)</h2>
+<pre><span class="c"># เครื่องที่อยู่วง LAN เดียวกับ M540 (gateway เองได้ ถ้าวงเดียวกัน)</span>
+python3 tools/iacs-relay/relay.py --gateway &lt;gateway&gt;:2051 --interface &lt;IP ของเครื่องนี้&gt;</pre>
+<p>Linux ตั้งเป็น service <code>flora-iacs-relay</code> ได้ (ดูคู่มือการใช้งาน) device ต้องมี <code>{"source_ip": "&lt;IP ของ M540&gt;"}</code></p>
+
+<!-- ============================================================ 7 -->
+<h1 id="c7"><span class="num">7</span> อัปเดตโค้ดและสำรองข้อมูล</h1>
+<h2>7.1 สำรองฐานข้อมูล</h2>
+<pre>docker exec flora-gateway-gateway-db-1 pg_dump -U flora_gateway -d flora_gateway -Fc &gt; flora_gateway-&lt;วันที่&gt;.dump</pre>
+<h2>7.2 อัปเดตบน Ubuntu</h2>
+<pre>cd ~/flora/flora-core &amp;&amp; git pull
+cd flora-gateway
+docker compose -p flora-gateway -f compose.production.yaml up -d --build
+docker rm -f $(docker ps -aq --filter name=flora-gw-parser)   <span class="c"># ให้ parser ใช้ image ใหม่</span></pre>
+<h2>7.3 อัปเดตบน Windows</h2>
+<pre>cd $HOME\flora-core; git pull; cd flora-gateway
+.\windows\start-gateway.ps1 -Build
+docker ps -aq --filter name=flora-gw-parser | ForEach-Object { docker rm -f $_ }</pre>
+<div class="note"><b>ทำไมต้องลบ parser เก่า</b>parser container อ้าง image เดิม หลัง build image เดิมถูกแทนที่ gateway-service จะสร้าง parser ใหม่จาก image ล่าสุดให้เองภายในไม่กี่วินาที</div>
+
+<!-- ============================================================ 8 -->
+<h1 id="c8"><span class="num">8</span> แก้ปัญหาการติดตั้ง</h1>
+<table>
+<tr><th style="width:30%">อาการ</th><th style="width:33%">สาเหตุ</th><th>วิธีแก้</th></tr>
+<tr><td>port-guard: <i>virtual serial port found</i></td><td>config มี pod ที่ใช้ <code>/dev/ttyV*</code></td><td>ลบหรือแก้ pod นั้นให้เป็นพอร์ตจริง</td></tr>
+<tr><td>port-guard: <i>is not a real serial device mapped</i></td><td>พอร์ตไม่มีอยู่จริง หรือไม่ได้อยู่ใน <code>FLORA_SERIAL_PORT_n</code> / <code>devices</code></td><td>ตรวจ <code>ls -l /dev/ttyS*</code> แล้วแก้ .env หรือ compose</td></tr>
+<tr><td>port-guard (Windows): <i>not a Windows COM port</i></td><td>ใช้ config ของ Linux (<code>/dev/…</code>) บน Windows</td><td>ตั้ง <code>FLORA_GATEWAY_CONFIG_FILE=gateway.windows.toml</code></td></tr>
+<tr><td>check-com-ports: <b>FAIL … virtual port</b></td><td>พอร์ตจาก com0com / Eltima / VSPE</td><td>ใช้พอร์ตจริงหรือ USB-RS232 แทน</td></tr>
+<tr><td>check-com-ports: <i>no such port</i></td><td>ชื่อ COM ไม่ตรงกับ Device Manager</td><td>แก้ <code>path</code> ใน gateway.windows.toml</td></tr>
+<tr><td>start-gateway.ps1: <i>Docker Desktop is not running</i></td><td>Docker Desktop ยังไม่เปิด</td><td>เปิด Docker Desktop / ตั้งให้เริ่มตอน login</td></tr>
+<tr><td><code>permission denied … docker.sock</code> (Linux)</td><td>ผู้ใช้ไม่อยู่กลุ่ม docker</td><td><code>sudo usermod -aG docker $USER</code> แล้ว login ใหม่</td></tr>
+<tr><td>edge restart วนซ้ำ</td><td>ไม่มี cert (Docker สร้างโฟลเดอร์ <code>server.crt</code> เปล่า)</td><td>ลบโฟลเดอร์เปล่าแล้วสร้าง cert (3.6)</td></tr>
+<tr><td>เปิดเว็บไม่ได้หลังย้ายโฟลเดอร์</td><td>mount path เก่า</td><td><code>up -d --force-recreate</code> จากโฟลเดอร์ใหม่</td></tr>
+<tr><td>Leaf ได้ 502 / ดึงข้อมูลไม่ได้</td><td>server ยังไม่พร้อม หรือไม่มี route ของ Leaf</td><td>ตรวจ <code>docker compose ps</code>, เพิ่ม route ใน kong.yaml</td></tr>
+<tr><td>เพิ่ม device: <i>not licensed</i></td><td>ประเภทไม่อยู่ในไลเซนส์</td><td>เพิ่มที่ Root (6.2)</td></tr>
+<tr><td>เพิ่ม device: <i>pod … needs different …</i> (409)</td><td>pod มีเครื่องอื่นที่ใช้ค่าสายต่างกัน</td><td>ใช้ pod อื่น หรือปิดเครื่องเดิม</td></tr>
+<tr><td>Kafka unhealthy / เครื่องช้า</td><td>RAM ไม่พอ (Windows: WSL2 จำกัด)</td><td>เพิ่ม Memory ของ Docker Desktop, ปิดโปรแกรมที่ไม่ใช้</td></tr>
+<tr><td>M540 ไม่มีข้อมูล</td><td>multicast ไม่ถึง relay (WiFi/switch), <code>source_ip</code> ไม่ตรง</td><td>ใช้สาย LAN, ตรวจ log relay, ตั้ง source_ip ตาม IP ที่ relay เจอ</td></tr>
+</table>
+
+<!-- ============================================================ 9 -->
+<h1 id="c9"><span class="num">9</span> ภาคผนวก</h1>
+<h2 id="c9-1">9.1 ตัวอย่าง .env ฉบับเต็ม</h2>
+<pre><span class="c"># --- เครื่องนี้ ---</span>
+FLORA_GATEWAY_ID=gateway-hospital-01-a
+GATEWAY_DATA_API_URL=http://172.22.1.233:7410/data-api
+FLORA_GATEWAY_ADMIN_BIND=0.0.0.0
+<span class="c"># --- Canopy / Haber ---</span>
+HABER_URL=http://172.22.19.81:7204
+HABER_GATEWAY_TOKEN=&lt;จากผู้ดูแล Canopy&gt;
+HABER_NODE_TOKEN=&lt;จากผู้ดูแล Canopy&gt;
+FLORA_CANOPY_IP=172.22.19.81
+<span class="c"># --- config ---</span>
+FLORA_GATEWAY_CONFIG_FILE=gateway.site.toml        <span class="c"># Windows: gateway.windows.toml</span>
+FLORA_GATEWAY_SEED_FILE=instances.site.json
+<span class="c"># --- พอร์ตจริง (Linux) ---</span>
+FLORA_SERIAL_PORT_1=/dev/ttyS0
+FLORA_SERIAL_PORT_2=/dev/ttyS1
+<span class="c"># --- รหัสผ่าน ---</span>
+FLORA_GATEWAY_DB_PASSWORD=&lt;ตั้งใหม่&gt;
+GATEWAY_ADMIN_PASSWORD=&lt;ตั้งใหม่&gt;</pre>
+
+<h2 id="c9-2">9.2 พอร์ตที่ต้องเปิด (inbound)</h2>
+<table>
+<tr><th style="width:18%">พอร์ต</th><th style="width:30%">ใครต่อเข้ามา</th><th>ใช้ทำอะไร</th></tr>
+<tr><td>443</td><td>ผู้ดูแล / Leaf</td><td>HTTPS (หน้า admin, data-api)</td></tr>
+<tr><td>7400</td><td>ผู้ดูแล</td><td>หน้า admin (HTTP)</td></tr>
+<tr><td>7410</td><td>Leaf</td><td>data-api (HTTP)</td></tr>
+<tr><td>7421</td><td>HL7 monitor</td><td>HL7 MLLP</td></tr>
+<tr><td>7422</td><td>Vista 120 S</td><td>raw (CMS link)</td></tr>
+<tr><td>9500</td><td>Vista 120 S</td><td>CMS link (pod socket.vista)</td></tr>
+<tr><td>2051</td><td>iacs-relay</td><td>Dräger M540 / C700</td></tr>
+<tr><td>7423</td><td>เครื่องแบบ HTTP push</td><td>webhook</td></tr>
+</table>
+<p class="small">พอร์ต 7401–7406, 7412, 7414 เปิดเฉพาะเครื่องตัวเอง (127.0.0.1) ไม่ต้องเปิดใน firewall ส่วน 7430/7431 (พอร์ตเสมือน) ไม่มีในการติดตั้งนี้</p>
+
+<h2 id="c9-3">9.3 ไฟล์ที่เกี่ยวข้อง</h2>
+<table>
+<tr><th style="width:46%">ไฟล์</th><th>หน้าที่</th></tr>
+<tr><td><code>compose.production.yaml</code></td><td>Linux: พอร์ตจริงเท่านั้น + port-guard (คอมเมนต์ทุกบรรทัด)</td></tr>
+<tr><td><code>compose.windows.yaml</code></td><td>Windows: ทุกอย่างยกเว้น serial-controller + port-guard</td></tr>
+<tr><td><code>compose.yaml</code></td><td>dev/demo เดิม (มีพอร์ตเสมือน — ห้ามใช้ในระบบจริง)</td></tr>
+<tr><td><code>config/gateway.site.toml</code></td><td>pod ของไซต์ Linux</td></tr>
+<tr><td><code>config/gateway.windows.toml</code></td><td>pod ของไซต์ Windows (COMn)</td></tr>
+<tr><td><code>windows/start-gateway.ps1</code></td><td>เริ่มระบบ Windows + watchdog ของ serial-controller</td></tr>
+<tr><td><code>windows/check-com-ports.ps1</code></td><td>ตรวจพอร์ต COM จริงใน Device Manager</td></tr>
+<tr><td><code>windows/build-serial-controller.ps1</code></td><td>build serial-controller.exe</td></tr>
+<tr><td><code>windows/install-autostart.ps1</code></td><td>Task Scheduler เริ่มเองเมื่อ login</td></tr>
+<tr><td><code>certs/server.crt</code>, <code>server.key</code></td><td>cert ของ HTTPS edge</td></tr>
+<tr><td><code>kong/kong.yaml</code></td><td>route ของ Leaf</td></tr>
+</table>
+
+<h2 id="c9-4">9.4 Checklist การติดตั้ง</h2>
+<table>
+<tr><th style="width:7%">✓</th><th>รายการ</th></tr>
+<tr><td>☐</td><td>ได้ข้อมูลจากผู้ดูแล Flora ครบ (Haber, Root, Gateway ID, token, ประเภทเครื่อง, Leaf ID)</td></tr>
+<tr><td>☐</td><td>ติดตั้ง Docker (Linux: Engine · Windows: Desktop + WSL2) และเปิดให้เริ่มเอง</td></tr>
+<tr><td>☐</td><td>ดึงโค้ด branch ที่ถูกต้อง และไม่ย้ายโฟลเดอร์ภายหลัง</td></tr>
+<tr><td>☐</td><td>.env ครบ เปลี่ยนรหัสผ่านฐานข้อมูลและ admin</td></tr>
+<tr><td>☐</td><td>config ชี้พอร์ตจริงเท่านั้น (validate ผ่าน · Windows: check-com-ports ผ่าน)</td></tr>
+<tr><td>☐</td><td>สร้าง cert ของ edge แล้ว</td></tr>
+<tr><td>☐</td><td>เริ่มระบบด้วยไฟล์ compose ที่ถูกต้อง port-guard ผ่าน</td></tr>
+<tr><td>☐</td><td>ตรวจหลังติดตั้งผ่านครบ (บทที่ 5)</td></tr>
+<tr><td>☐</td><td>ไลเซนส์มีประเภทเครื่องที่ใช้ และ check-in Canopy 200 OK</td></tr>
+<tr><td>☐</td><td>เพิ่ม device ได้ การ์ดแสดงพอร์ตจริงและมีข้อมูลเข้า</td></tr>
+<tr><td>☐</td><td>Leaf ดึงข้อมูลได้</td></tr>
+<tr><td>☐</td><td>ตั้งเริ่มเองแล้ว และทดสอบรีบูตแล้ว</td></tr>
+<tr><td>☐</td><td>สำรองฐานข้อมูลครั้งแรกแล้ว</td></tr>
+</table>
+<p class="small">คู่มือนี้อ้างอิงไฟล์ในโฟลเดอร์ flora-gateway ณ ตุลาคม 2026 · ค่า IP เป็นตัวอย่าง ให้แทนด้วยค่าของไซต์จริง · ส่วน Windows ตรวจไฟล์และ syntax แล้ว ควรทดสอบบนเครื่องจริงก่อนใช้งาน</p>
+</body>
+</html>

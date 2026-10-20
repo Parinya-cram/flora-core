@@ -1,0 +1,13 @@
+# Site-local (Docker Engine): this gateway's physical RS-232 ports, used by serial.COM1 and serial.COM2
+# in config/gateway.site.toml.
+services:
+  serial-controller:
+    devices:
+      - /dev/ttyS0:/dev/ttyS0
+      - /dev/ttyS1:/dev/ttyS1
+  # Keep the plain-HTTP data API reachable on the LAN while Leafs still use
+  # http://<gateway>:7410/data-api (compose.yaml publishes it on 127.0.0.1 only and
+  # expects Leafs on the HTTPS edge). Remove once every Leaf uses https://<gateway>/data-api.
+  kong:
+    ports: !override
+      - "${FLORA_GATEWAY_DATA_API_PORT:-7410}:8000"

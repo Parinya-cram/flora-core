@@ -10,7 +10,6 @@ import asyncio
 import re
 import json
 import logging
-import time
 import tomllib
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -18,6 +17,7 @@ from typing import Annotated, Any
 
 import httpx
 import tomli_w
+import tomlkit
 from aiokafka import AIOKafkaProducer
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse
@@ -431,6 +431,59 @@ def get_type(code: str) -> dict[str, Any]:
     return row
 
 
+def type_line_settings(device_type: dict[str, Any]) -> dict[str, Any]:
+    """Every setting the type's controller manages on a pod: the type's value, or None for "controller default"."""
+    defaults = device_type.get("connection_defaults") or {}
+    return {field: defaults.get(field) for field in connection.MODELS[device_type["controller"]].model_fields}
+
+
+def apply_type_to_pod(pod: str, device_type_code: str, device_id: str | None) -> dict[str, Any]:
+    """Makes the pod's line/framing settings follow the device type (the pod's port, path and address stay).
+
+    Fields the type leaves unset are removed from the pod so the controller default applies. Refuses when another
+    enabled device on the same pod needs different settings, since one port has one set of line settings.
+    Rewrites only the changed keys (comments in the site config survive) and restarts the controller."""
+    device_type = get_type(device_type_code)
+    section, _, pod_id = pod.partition(".")
+    if section != device_type["controller"]:
+        raise HTTPException(422, f"{device_type_code} is a {device_type['controller']} device; pod {pod} belongs to "
+                                 f"the {section} controller")
+    wanted = type_line_settings(device_type)
+    for other in db.fetch_all("SELECT device_id, device_type FROM gateway_device_instance "
+                              "WHERE pod=%s AND enabled AND device_id IS DISTINCT FROM %s AND device_type <> %s",
+                              (pod, device_id, device_type_code)):
+        differ = sorted(k for k, v in type_line_settings(get_type(other["device_type"])).items() if v != wanted[k])
+        if differ:
+            raise HTTPException(409, f"pod {pod} is used by {other['device_id']} ({other['device_type']}), which needs "
+                                     f"different {', '.join(differ)}; use another pod or disable that device first")
+    path = Path(settings.CONFIG_PATH)
+    document = tomlkit.parse(path.read_text())
+    entry = next((p for p in document.get(section, {}).get("pods", []) if p.get("id") == pod_id), None)
+    if entry is None:
+        raise HTTPException(422, f"pod {pod} is not in {path.name}")
+    changes: dict[str, Any] = {}
+    for field, value in wanted.items():
+        if value is None and field in entry:
+            changes[field] = None
+            del entry[field]
+        elif value is not None and entry.get(field) != value:
+            changes[field] = value
+            entry[field] = value
+    if not changes:
+        return {"pod": pod, "changed": {}}
+    path.write_text(tomlkit.dumps(document))
+    try:
+        restarted = docker_ops.restart_service(settings.CONFIG_SECTIONS[section])
+    except LookupError:
+        # Not a container (Windows: serial-controller runs natively); its operator restarts it.
+        log.warning("pod %s now follows %s: %s; restart the native %s to apply", pod, device_type_code, changes,
+                    settings.CONFIG_SECTIONS[section])
+        return {"pod": pod, "changed": changes, "restarted": None,
+                "restart_required": f"restart the native {settings.CONFIG_SECTIONS[section]}"}
+    log.info("pod %s now follows %s: %s (restarted %s)", pod, device_type_code, changes, restarted)
+    return {"pod": pod, "changed": changes, "restarted": restarted}
+
+
 def start_instance(device_id: str) -> dict[str, Any]:
     instance = db.instance_row(db.fetch_one("SELECT * FROM gateway_device_instance WHERE device_id=%s", (device_id,)))
     container_id = docker_ops.start_parser(instance, get_type(instance["device_type"]))
@@ -517,8 +570,10 @@ def create_instance(payload: InstanceIn):
     if db.fetch_one("SELECT 1 FROM gateway_device_instance WHERE device_id=%s", (payload.device_id,)):
         raise HTTPException(409, "device_id already exists")
     check_license(payload.device_type, adding=payload.enabled)
+    pod_settings = apply_type_to_pod(payload.pod, payload.device_type, payload.device_id) if payload.enabled else None
     insert_instance(payload)
-    return start_instance(payload.device_id) if payload.enabled else {"device_id": payload.device_id}
+    result = start_instance(payload.device_id) if payload.enabled else {"device_id": payload.device_id}
+    return {**result, "pod_settings": pod_settings}
 
 
 @app.put("/api/instances/{device_id}", dependencies=[Depends(require_admin)])
@@ -528,8 +583,10 @@ def update_instance(device_id: str, payload: InstanceFields):
         raise HTTPException(404, "device not found")
     current = db.instance_row(row)
     get_type(payload.device_type)
+    pod_settings = None
     if payload.enabled:
         check_license(payload.device_type, adding=not current["enabled"])
+        pod_settings = apply_type_to_pod(payload.pod, payload.device_type, device_id)
     db.execute(
         f"UPDATE gateway_device_instance SET {', '.join(c + '=%s' for c in INSTANCE_COLUMNS)}, updated_at=%s "
         "WHERE device_id=%s",
@@ -537,8 +594,8 @@ def update_instance(device_id: str, payload: InstanceFields):
     )
     changed = {column for column in PARSER_COLUMNS if getattr(payload, column) != current[column]}
     if payload.enabled and changed:
-        return {**start_instance(device_id), "restarted_for": sorted(changed)}
-    return {"device_id": device_id, **reconcile()}
+        return {**start_instance(device_id), "restarted_for": sorted(changed), "pod_settings": pod_settings}
+    return {"device_id": device_id, **reconcile(), "pod_settings": pod_settings}
 
 
 @app.post("/api/instances/{device_id}/restart", dependencies=[Depends(require_admin)])
@@ -552,14 +609,16 @@ def restart_instance(device_id: str):
 
 @app.post("/api/instances/{device_id}/enabled/{enabled}", dependencies=[Depends(require_admin)])
 def set_enabled(device_id: str, enabled: bool):
-    instance = db.fetch_one("SELECT device_type, enabled FROM gateway_device_instance WHERE device_id=%s", (device_id,))
+    instance = db.fetch_one("SELECT device_type, pod, enabled FROM gateway_device_instance WHERE device_id=%s", (device_id,))
     if instance is None:
         raise HTTPException(404, "device not found")
+    pod_settings = None
     if enabled and not instance["enabled"]:
         check_license(instance["device_type"], adding=True)
+        pod_settings = apply_type_to_pod(instance["pod"], instance["device_type"], device_id)
     db.execute("UPDATE gateway_device_instance SET enabled=%s, updated_at=%s WHERE device_id=%s",
                (enabled, db.now_ms(), device_id))
-    return reconcile()
+    return {**reconcile(), "pod_settings": pod_settings}
 
 
 @app.delete("/api/instances/{device_id}", dependencies=[Depends(require_admin)])
@@ -975,8 +1034,13 @@ def latest_parameters(device_ids: list[str], since: int) -> dict[str, list[dict[
 SERIAL_NAMES = (("/dev/ttyS", "COM", 1), ("/dev/ttyUSB", "USB-serial ", 0), ("/dev/ttyACM", "USB-ACM ", 0))
 
 
+WINDOWS_COM = re.compile(r"^COM\d+$", re.IGNORECASE)
+
+
 def serial_port_name(host_path: str | None) -> str | None:
-    """/dev/ttyS0 -> COM1; /dev/ttyUSB0 -> USB-serial 0; virtual ttyV* ports have no physical name."""
+    """/dev/ttyS0 -> COM1; /dev/ttyUSB0 -> USB-serial 0; Windows COM3 stays COM3; virtual ttyV* ports have none."""
+    if host_path and WINDOWS_COM.match(host_path):
+        return host_path.upper()
     for prefix, label, base in SERIAL_NAMES:
         if host_path and host_path.startswith(prefix) and host_path[len(prefix):].isdigit():
             return f"{label}{int(host_path[len(prefix):]) + base}"
@@ -999,7 +1063,8 @@ def pod_connections() -> dict[str, dict[str, Any]]:
             key, info = f"{section}.{pod['id']}", {"kind": section, "enabled": pod.get("enabled", True)}
             if section == "serial":
                 path = pod.get("path")
-                host = wiring["devices"].get(path)
+                # Windows: serial-controller runs natively and opens COMn itself (no container mapping).
+                host = path if path and WINDOWS_COM.match(path) else wiring["devices"].get(path)
                 info.update(path=path, host_path=host, port_name=serial_port_name(host),
                             virtual=host is None, line=f"{pod.get('baud', 9600)} {pod.get('data_bits', 8)}"
                             f"{str(pod.get('parity', 'none'))[0].upper()}{pod.get('stop_bits', 1)}")
@@ -1029,34 +1094,22 @@ def frame_sources(frames) -> list[dict[str, Any]]:
     return sorted(sources.values(), key=lambda s: s["last_ts"], reverse=True)
 
 
-def frames_series(frames, window: int = 300) -> list[list[int]]:
-    """Dense per-second [sec, frames_in, bytes_in, frames_out, bytes_out] built from individual frames."""
-    end = int(time.time())
-    start = end - window
-    seconds = {sec: [sec, 0, 0, 0, 0] for sec in range(start, end)}
-    for frame in frames:
-        row = seconds.get(int(frame["ts"] // 1000))
-        if row:
-            offset = 1 if frame["direction"] == "in" else 3
-            row[offset] += 1
-            row[offset + 1] += frame["size"]
-    return list(seconds.values())
+LIVE_GRAPH_MINUTES = 30   # live cards chart one point per complete minute
 
 
 def device_graph(device: dict[str, Any], connection: dict[str, Any] | None, stream) -> dict[str, Any]:
-    """What a live card charts: nothing for a disabled device; on a LAN pod only the frames from the
-    device's source_ip (none without one, since the pod's traffic may be other monitors'); else the pod."""
+    """What a live card charts, one point per minute: nothing for a disabled device; on a LAN pod only the
+    frames from the device's source_ip (none without one, since the pod may carry other monitors); else the pod."""
     if not device.get("enabled"):
         return {"mode": "disabled", "series": []}
     if connection and connection["kind"] in ("socket", "webhook"):
         source = (device.get("options") or {}).get("source_ip")
         if not source:
             return {"mode": "no_source_ip", "series": []}
-        frames = [f for f in (stream.recent if stream else [])
-                  if f["direction"] == "in" and f["meta"].get("source_ip") == source]
-        return {"mode": "source_ip", "series": frames_series(frames), "frames_in": len(frames),
-                "bytes_in": sum(f["size"] for f in frames)}
-    return {"mode": "pod", "series": stream.series(300) if stream else []}
+        series = stream.minute_series(LIVE_GRAPH_MINUTES, source) if stream else []
+        return {"mode": "source_ip", "series": series, "frames_in": sum(r[1] for r in series),
+                "bytes_in": sum(r[2] for r in series)}
+    return {"mode": "pod", "series": stream.minute_series(LIVE_GRAPH_MINUTES) if stream else []}
 
 
 def own_frames(device: dict[str, Any], frames) -> list[dict[str, Any]]:
@@ -1064,6 +1117,48 @@ def own_frames(device: dict[str, Any], frames) -> list[dict[str, Any]]:
     source = (device.get("options") or {}).get("source_ip")
     return [frame for frame in frames
             if not source or frame["direction"] != "in" or frame["meta"].get("source_ip") in (None, source)]
+
+
+KONG_LEAF_ROUTE = re.compile(r'paths:\s*\[\s*"/data-api/([A-Za-z0-9_.-]+)"\s*\]')
+
+
+def kong_leaves() -> list[str]:
+    """Leafs with a data-api route (/data-api/<leaf-id>) in kong.yaml; a Leaf without one cannot read its devices."""
+    try:
+        return sorted(set(KONG_LEAF_ROUTE.findall(Path(settings.KONG_CONFIG_PATH).read_text())))
+    except OSError:
+        return []
+
+
+@app.get("/api/device-form")
+def device_form_options():
+    """Choices for the Add/Edit device form: Leafs, pods with their physical port, licensed types, used places."""
+    routed = kong_leaves()
+    used = [row["leaf_id"] for row in db.fetch_all(
+        "SELECT DISTINCT leaf_id FROM gateway_device_instance WHERE leaf_id IS NOT NULL AND leaf_id <> ''")]
+    leaves = [{"id": leaf, "route": leaf in routed} for leaf in sorted(set(routed) | set(used))]
+    places = db.fetch_all("SELECT DISTINCT station, location FROM gateway_device_instance")
+    license_row = license_state()
+    pods = pod_connections()
+    try:
+        config = read_config()
+    except Exception:
+        config = {}
+    managed = {section: set(model.model_fields) for section, model in connection.MODELS.items()}
+    current = {f"{section}.{pod['id']}": {k: v for k, v in pod.items() if k in managed[section]}
+               for section in managed for pod in config.get(section, {}).get("pods", [])}
+    in_use: dict[str, list[str]] = {}
+    for row in db.fetch_all("SELECT device_id, pod FROM gateway_device_instance WHERE enabled"):
+        in_use.setdefault(row["pod"], []).append(row["device_id"])
+    return {
+        "leaves": leaves, "kong_routes": bool(routed),
+        "pods": [{"pod": pod, **info, "devices": in_use.get(pod, []), "settings": current.get(pod, {})}
+                 for pod, info in pods.items()],
+        "managed_fields": {section: sorted(fields) for section, fields in managed.items()},
+        "allowed_types": license_row.get("allowed_types") or [],
+        "stations": sorted({p["station"] for p in places if p["station"]}),
+        "locations": sorted({p["location"] for p in places if p["location"]}),
+    }
 
 
 @app.get("/api/live")

@@ -113,6 +113,14 @@
   .livecard .acts .danger { margin-left:auto } .livecard .meta { font-size:12px; color:var(--muted) }
   .livecard .from { font-size:12px; display:flex; gap:4px; flex-wrap:wrap; align-items:baseline; margin-top:2px }
   .src { font:12px ui-monospace,Menlo,monospace; padding:1px 7px; border-radius:6px; border:1px solid var(--line) }
+  .spark { overflow:hidden; margin-top:6px } .spark svg { margin-top:0 }
+  @media (prefers-reduced-motion: no-preference) { .spark.slide svg { animation:spark-slide .9s ease-out } }
+  @keyframes spark-slide { from { transform:translateX(var(--step)) } to { transform:none } }
+  .spark-cap { display:flex; justify-content:space-between; font-size:11px; color:var(--muted) }
+  .podnote { grid-column:1 / -1; font-size:12px; margin-top:6px; padding:6px 10px; border-radius:6px; background:var(--chip) }
+  .podnote b { font-weight:600 } .podnote .chg { color:var(--warn) }
+  .pager { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:0 0 10px } .pager button.cur { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600 }
+  .pager .muted { margin-left:auto; font-size:12px }
   .nograph { height:36px; margin-top:6px; display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--muted); border:1px dashed var(--line); border-radius:6px }
   .src.ok { color:var(--ok); border-color:var(--ok) } .src.skip { color:var(--bad); border-color:var(--bad); text-decoration:line-through }
   .chip.val b { font-weight:600 } .chip.val small { color:var(--muted) }
@@ -159,7 +167,6 @@
     <div class="site"><b id="site-label">Location not set</b><code id="site-id"></code></div></div>
   <nav id="tabs">
     <button data-tab="overview"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Overview</button>
-    <button data-tab="devices"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Devices</button>
     <button data-tab="streams"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7c3 0 3 3 6 3s3-3 6-3 3 3 6 3M3 14c3 0 3 3 6 3s3-3 6-3 3 3 6 3"/></svg>Streams</button>
     <button data-tab="alerts"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2zM10 20a2 2 0 0 0 4 0"/></svg>Alerts<span class="badge" id="alert-badge" hidden></span></button>
   </nav>
@@ -181,17 +188,6 @@
   <section><div class="head"><h2>Station</h2><span style="margin-left:auto; display:flex; gap:6px">
       <button class="admin-only" onclick="editCanopyLink()">Canopy connection</button>
       <button class="admin-only" id="edit-site" onclick="editSite()">Edit location</button></span></div><div id="site"></div></section>
-  <section><div class="head"><h2>Status history</h2>
-      <label class="muted" style="margin-left:auto">Range <select id="tl-hours"><option value="1">1 hour</option><option value="6" selected>6 hours</option><option value="24">24 hours</option></select></label></div>
-    <div class="legend" id="tl-legend"></div>
-    <div class="timeline" id="timeline"></div>
-    <div id="incidents"></div></section>
-  <section><h2>License (from Haber at Canopy)</h2><div id="license">Loading…</div></section>
-  <section><h2>Layers</h2><div id="layers" class="layers"></div></section>
-  <section><h2>Live device data</h2><div id="instances"></div></section>
-  <section><h2>Logs</h2><div id="logs"></div></section>
-</main>
-<main data-panel="devices" hidden>
   <section><div class="head"><h2>Installed devices</h2><span id="live-note" class="muted" style="margin-left:auto"></span><button class="primary" onclick="editDevice()">Add device</button></div>
     <div class="legend"><span><span class="state live"><i></i></span>receiving data</span><span><span class="state stale"><i></i></span>raw data in, nothing decoded</span>
       <span><span class="state silent"><i></i></span>running, no data</span><span><span class="state off"><i></i></span>parser not started</span></div>
@@ -227,6 +223,10 @@
     <p class="muted" style="margin-top:0">Live messages this device's parser publishes for the collector, exactly as sent. Collected since the gateway service started.</p>
     <div id="dm-payloads"></div>
   </section>
+  <section><h2>License (from Haber at Canopy)</h2><div id="license">Loading…</div></section>
+  <section><h2>Layers</h2><div id="layers" class="layers"></div></section>
+  <section><h2>Live device data</h2><div id="instances"></div></section>
+  <section><h2>Logs</h2><div id="logs"></div></section>
 </main>
 <main data-panel="alerts" hidden>
   <section><div class="head"><h2>Active alerts</h2><span id="alert-delivery" class="muted"></span>
@@ -341,7 +341,7 @@ async function stopController(name) {
 async function signOut() { await fetch("api/auth/logout", { method: "POST" }); location.href = "/login"; }
 
 // ---------------------------------------------------------------- tabs
-let tab = (location.hash || "#overview").slice(1).replace(/^live$/, "devices");
+let tab = (location.hash || "#overview").slice(1).replace(/^(live|devices)$/, "overview");
 function show(name) {
   tab = document.querySelector(`main[data-panel="${name}"]`) ? name : "overview";
   history.replaceState(null, "", "#" + tab);
@@ -364,7 +364,7 @@ document.querySelector("aside").addEventListener("click", (e) => { const b = e.t
   document.addEventListener("mousedown", (e) => { if (!menu.hidden && !e.target.closest(".sysmenu")) set(false); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") set(false); });
 })();
-addEventListener("hashchange", () => location.hash.slice(1) !== tab && show(location.hash.slice(1)));
+addEventListener("hashchange", () => { const h = location.hash.slice(1).replace(/^(live|devices)$/, "overview"); if (h !== tab) show(h); });
 
 // ---------------------------------------------------------------- form dialog
 // fields: [{name, label, type: text|number|select|check|json|textarea|date|password, options, wide, disabled, placeholder, list}]
@@ -484,9 +484,23 @@ function nextDeviceId(id) {
   if (m) for (let n = Number(m[2]) + 1; ; n++) { const c = m[1] + String(n).padStart(m[2].length, "0"); if (!taken.has(c)) return c; }
   for (let n = 1; ; n++) { const c = n === 1 ? `${id}-copy` : `${id}-copy-${n}`; if (!taken.has(c)) return c; }
 }
-function editDevice(device, copyOf) {
+// One pod option: where it connects (COM port / LAN port) and who already uses it.
+function podLabel(p) {
+  let where = "";
+  if (p.kind === "serial") where = p.virtual ? `virtual ${p.path}` : `${p.port_name || p.host_path} · ${p.line}`;
+  else if (p.kind === "socket" || p.kind === "webhook") where = p.remote_host ? `TCP → ${p.remote_host}:${p.container_port}`
+    : `${p.kind === "webhook" ? "HTTP" : (p.transport || "tcp").toUpperCase()} :${(p.host_ports || []).join(",") || p.container_port}${p.framing ? " · " + p.framing : ""}`;
+  else where = `polls ${p.url || ""}`;
+  const flags = [p.enabled === false ? "disabled in config" : "", p.devices?.length ? `used by ${p.devices.join(", ")}` : ""].filter(Boolean).join("; ");
+  return `${p.pod} — ${where}${flags ? ` (${flags})` : ""}`;
+}
+async function editDevice(device, copyOf) {
   const isNew = !device;
-  const typeOptions = cache.types.map((t) => [t.code, `${t.manufacturer_name ? t.manufacturer_name + " · " : ""}${t.label} (${t.code})`]);
+  let opts = { pods: [], allowed_types: [] };
+  try { opts = await get("api/device-form"); } catch { /* fall back to free text below */ }
+  const allowed = new Set(opts.allowed_types), licensed = (code) => !allowed.size || allowed.has(code);
+  const typeOptions = [...cache.types].sort((a, b) => licensed(b.code) - licensed(a.code)).map((t) =>
+    [t.code, `${t.manufacturer_name ? t.manufacturer_name + " · " : ""}${t.label} (${t.code})${licensed(t.code) ? "" : " — not licensed"}`]);
   const start = copyOf ? {
     ...copyOf, device_id: nextDeviceId(copyOf.device_id), label: copyOf.label ? `${copyOf.label} (copy)` : "",
     serial_number: "", asset_tag: "", installed_at: Date.now(), enabled: true,
@@ -502,7 +516,9 @@ function editDevice(device, copyOf) {
     { name: "location", label: "Location", placeholder: "Building / floor / room" },
     { name: "installed_at", label: "Installed on", type: "date" },
     { name: "leaf_id", label: "Leaf workstation", placeholder: "leaf-or-02" },
-    { name: "pod", label: "Connection pod (controller.pod)", required: true, list: "pods", placeholder: "socket.or2-monitor", wide: true },
+    opts.pods.length
+      ? { name: "pod", label: "Connection pod (from gateway.site.toml)", type: "select", required: true, wide: true, options: [] }
+      : { name: "pod", label: "Connection pod (controller.pod)", required: true, list: "pods", placeholder: "socket.or2-monitor", wide: true },
     { name: "options", label: "Parser options (JSON, overrides type defaults)", type: "json", wide: true },
     { name: "notes", label: "Notes", type: "textarea", wide: true },
     { name: "enabled", label: "Enabled (runs a parser container)", type: "check" },
@@ -510,6 +526,40 @@ function editDevice(device, copyOf) {
     if (isNew) await api("api/instances", "POST", values);
     else { delete values.device_id; await api(`api/instances/${enc(device.device_id)}`, "PUT", values); }
   });
+  // Pods follow the device type's controller (a serial type can only use a serial pod).
+  const form = $("dialog-form");
+  if (form.elements.pod?.tagName === "SELECT") {
+    const fillPods = () => {
+      const controller = cache.types.find((t) => t.code === form.elements.device_type.value)?.controller;
+      const list = opts.pods.filter((p) => !controller || p.kind === controller);
+      const current = form.elements.pod.value || start.pod || "";
+      const rows = list.map((p) => [p.pod, podLabel(p)]);
+      if (current && !rows.some(([v]) => v === current)) rows.push([current, `${current} — not in this controller / config`]);
+      form.elements.pod.innerHTML = (rows.length ? rows : [["", `no ${controller} pod in gateway.site.toml`]])
+        .map(([v, label]) => `<option value="${esc(v)}" ${v === current ? "selected" : ""}>${esc(label)}</option>`).join("");
+    };
+    fillPods();
+    form.elements.device_type.addEventListener("change", () => { form.elements.pod.value = ""; fillPods(); podNote(); });
+    form.elements.pod.addEventListener("change", podNote);
+  }
+  // Preview: the pod's line/framing settings follow the selected device type when the device is saved enabled.
+  function podNote() {
+    const field = form.elements.pod?.closest(".field");
+    if (!field) return;
+    let note = form.querySelector(".podnote");
+    if (!note) { note = document.createElement("div"); note.className = "podnote"; field.after(note); }
+    const t = cache.types.find((x) => x.code === form.elements.device_type.value), p = opts.pods.find((x) => x.pod === form.elements.pod.value);
+    if (!t || !p) { note.textContent = ""; note.hidden = true; return; }
+    note.hidden = false;
+    const fields = opts.managed_fields?.[t.controller] || [], want = t.connection_defaults || {}, have = p.settings || {};
+    const show = (v) => v === undefined ? "default" : String(v);
+    const diffs = fields.filter((f) => show(want[f]) !== show(have[f])).map((f) => `${esc(f)} ${esc(show(have[f]))} → <b>${esc(show(want[f]))}</b>`);
+    const summary = Object.keys(want).length ? Object.entries(want).map(([k, v]) => `${k} ${v}`).join(", ") : "controller defaults";
+    note.innerHTML = `Pod settings follow the device type: <b>${esc(summary)}</b>.<br>` + (diffs.length
+      ? `<span class="chg">On save ${esc(p.pod)} changes ${diffs.join(", ")} and its controller restarts.</span>`
+      : `${esc(p.pod)} already matches.`);
+  }
+  podNote();
 }
 function renderDevices() {
   // Enabled devices are the live cards above; this lists only the disabled ones.
@@ -531,6 +581,13 @@ function renderDevices() {
 
 // ---------------------------------------------------------------- device types
 const parsersOf = (image) => cache.images.find((i) => i.image === image)?.parsers || [];
+// The wire protocol each parser decodes; picking a parser fills in the template's protocol.
+const PARSER_PROTOCOL = { hl7v2: "hl7v2", hidro_hl7: "hl7v2", ascii_kv: "ascii", json_fields: "json", medibus: "draeger-medibus",
+  iacs_m540: "draeger-iacs", draeger_vista_s: "draeger-vista-s", ge_carestation: "ge-datex-com12", ge_dri: "ge-s5-dri",
+  bbraun_bcc: "bbraun-bcc", acme_t200: "acme-t200" };
+const CATEGORIES = ["patient_monitor", "ventilator", "anesthesia_machine", "infusion_pump", "temperature_module", "device"];
+// Known values first, then any others already used by a type, then the current one, so editing never drops a value.
+const choices = (base, used, current) => [...new Set([...base, ...used.filter(Boolean), ...(current ? [current] : [])])].map((v) => [v, v]);
 function editType(type) {
   const isNew = !type, haber = type?.source === "haber";
   const manufacturerOptions = [["", "—"], ...cache.manufacturers.map((m) => [m.code, m.name])];
@@ -548,14 +605,17 @@ function editType(type) {
     { name: "manufacturer", label: "Manufacturer", type: "select", options: manufacturerOptions },
     { name: "model", label: "Model", placeholder: "IntelliVue MX800" },
     { name: "description", label: "Description", type: "textarea", wide: true },
-    { name: "category", label: "Category", disabled: haber, placeholder: "patient_monitor" },
-    { name: "protocol", label: "Protocol", disabled: haber, required: true, placeholder: "hl7v2" },
+    { name: "category", label: "Category", type: "select", disabled: haber,
+      options: choices(CATEGORIES, cache.types.map((t) => t.category), type?.category) },
+    { name: "protocol", label: "Protocol (follows the parser)", type: "select", disabled: haber, required: true,
+      options: choices(Object.values(PARSER_PROTOCOL), cache.types.map((t) => t.protocol), type?.protocol) },
     { name: "controller", label: "Controller", type: "select", disabled: haber, options: ["socket", "serial", "feeder", "webhook"].map((c) => [c, c]) },
     parserField,
     imageField,
     { name: "connection_defaults", label: "Connection defaults (for the device's pod)", type: "connection", controllerField: "controller" },
     { name: "default_options", label: "Default parser options (JSON)", type: "json", disabled: haber, wide: true },
-  ], type || { category: "device", controller: "socket", default_options: {}, connection_defaults: {}, image }, async (values) => {
+  ], type || { category: "device", controller: "socket", default_options: {}, connection_defaults: {}, image,
+               protocol: PARSER_PROTOCOL[parsersOf(image)[0]] || "hl7v2" }, async (values) => {
     const body = { ...type, ...values, code: type?.code || values.code };
     for (const key of ["category"]) body[key] = body[key] || "device";
     if (isNew) await api("api/device-types", "POST", body);
@@ -563,9 +623,13 @@ function editType(type) {
   });
   // The parser list follows the chosen image, so a template cannot name a parser the image lacks.
   const form = $("dialog-form");
+  const syncProtocol = () => { const p = PARSER_PROTOCOL[form.elements.parser.value]; if (p && !haber) form.elements.protocol.value = p; };
   if (!haber && form.elements.parser.tagName === "SELECT") form.elements.image.addEventListener("change", () => {
     form.elements.parser.innerHTML = parsersOf(form.elements.image.value).map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join("");
+    syncProtocol();
   });
+  if (!haber) form.elements.parser.addEventListener("change", syncProtocol);
+  if (isNew) syncProtocol();
 }
 function renderTypes() {
   const h = cache.haber || {};
@@ -970,65 +1034,9 @@ async function renderDeviceMonitor() {
 }
 
 
-// ---------------------------------------------------------------- status history
-const ST = { ok: ["var(--st-ok)", "✓", "Up"], down: ["var(--st-down)", "✕", "Down / unreachable"],
-             stopped: ["var(--st-stopped)", "■", "Stopped or disabled"], none: ["url(#tl-hatch)", "", "No record"] };
+// ---------------------------------------------------------------- time helpers (alerts)
 const hhmm = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 const dur = (ms) => ms < 3600000 ? `${Math.max(1, Math.round(ms / 60000))} min` : `${(ms / 3600000).toFixed(1)} h`;
-$("tl-legend").innerHTML = Object.entries(ST).map(([k, [color, icon, label]]) =>
-  `<span><i style="background:${k === "none" ? "var(--st-none)" : color}">${icon}</i>${label}</span>`).join("") +
-  `<span class="muted">· a gap in “Gateway service” means the service itself was not running</span>`;
-$("tl-hours").addEventListener("change", () => renderTimeline());
-
-async function renderTimeline() {
-  const t = await get(`api/status/timeline?hours=${$("tl-hours").value}`);
-  const el = $("timeline"), W = Math.max(320, el.clientWidth || 800), LABEL = Math.min(170, W * 0.32), RIGHT = 52;
-  const ROW = 18, GAP = 5, GROUP = 18, cw = (W - LABEL - RIGHT) / t.buckets;
-  let y = 0, body = "", prevKind = null;
-  const kindTitle = { gateway: "Gateway", canopy: "Gateway", controller: "Controllers", device: "Devices" };
-  for (const lane of t.lanes) {
-    const group = kindTitle[lane.kind];
-    if (group !== prevKind) { body += `<text class="group" x="0" y="${y + 12}">${esc(group)}</text>`; y += GROUP; prevKind = group; }
-    body += `<text x="0" y="${y + 13}">${esc(lane.label.length > 26 ? lane.label.slice(0, 25) + "…" : lane.label)}</text>`;
-    // Runs of the same state become one bar, with a 1px surface gap only where the state changes.
-    for (let i = 0; i < lane.states.length;) {
-      let j = i; while (j + 1 < lane.states.length && lane.states[j + 1] === lane.states[i]) j++;
-      const x0 = LABEL + i * cw, x1 = LABEL + (j + 1) * cw - (j + 1 < lane.states.length ? 1 : 0);
-      body += `<rect x="${x0.toFixed(2)}" y="${y}" width="${Math.max(0.8, x1 - x0).toFixed(2)}" height="${ROW}" rx="2" fill="${ST[lane.states[i]][0]}" data-lane="${esc(lane.lane)}"/>`;
-      i = j + 1;
-    }
-    body += `<text class="muted" x="${W}" y="${y + 13}" text-anchor="end">${lane.uptime == null ? "—" : lane.uptime + "%"}</text>`;
-    y += ROW + GAP;
-  }
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => t.start + f * t.buckets * t.bucket_ms);
-  body += ticks.map((ms, k) => `<text class="muted" x="${LABEL + (ms - t.start) / t.bucket_ms * cw}" y="${y + 12}" text-anchor="${k === 0 ? "start" : k === 4 ? "end" : "middle"}">${k === 4 ? "now" : hhmm(ms)}</text>`).join("");
-  el.innerHTML = `<svg viewBox="0 0 ${W} ${y + 18}" height="${y + 18}" role="img" aria-label="Status of each gateway part over the last ${t.hours} hours; incidents are listed below">
-    <defs><pattern id="tl-hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-      <rect width="4" height="4" fill="var(--st-none)"/><line x1="0" y1="0" x2="0" y2="4" stroke="var(--line)" stroke-width="1.5"/></pattern></defs>
-    <text class="muted" x="${W}" y="-4" text-anchor="end">uptime</text>${body}</svg><div class="tip" hidden></div>`;
-  const tip = el.querySelector(".tip"), byLane = Object.fromEntries(t.lanes.map((l) => [l.lane, l]));
-  el.querySelector("svg").addEventListener("mousemove", (ev) => {
-    const r = ev.target.closest("rect[data-lane]"); if (!r) { tip.hidden = true; return; }
-    const box = el.querySelector("svg").getBoundingClientRect(), px = (ev.clientX - box.left) / box.width * W;
-    const lane = byLane[r.dataset.lane], i = Math.max(0, Math.min(t.buckets - 1, Math.floor((px - LABEL) / cw)));
-    const st = lane.states[i], from = t.start + i * t.bucket_ms;
-    tip.hidden = false;
-    tip.innerHTML = `<b>${esc(lane.label)}</b><div class="muted">${hhmm(from)}–${hhmm(from + t.bucket_ms)}</div>
-      <div><span class="key" style="background:${st === "none" ? "var(--st-none)" : ST[st][0]}"></span>${ST[st][1]} ${esc(ST[st][2])}</div>
-      ${lane.details[i] ? `<div class="muted">${esc(lane.details[i])}</div>` : ""}`;
-    const outer = el.getBoundingClientRect(), x = ev.clientX - outer.left;
-    tip.style.left = `${x > box.width / 2 ? x - tip.offsetWidth - 12 : x + 12}px`; tip.style.top = `${ev.clientY - outer.top + 12}px`;
-  });
-  el.querySelector("svg").addEventListener("mouseleave", () => tip.hidden = true);
-  const incidents = t.lanes.flatMap((l) => l.incidents.map((x) => ({ ...x, label: l.label, kind: l.kind }))).sort((a, b) => b.start - a.start);
-  const since = t.recording_since ? `Recording since ${new Date(t.recording_since).toLocaleString()}.` : "Recording starts within 30 seconds.";
-  $("incidents").innerHTML = incidents.length ? `<table class="incidents"><tr><th>Down</th><th>From</th><th>To</th><th>Duration</th><th>Detail</th></tr>${incidents.slice(0, 30).map((x) => `<tr>
-      <td><span class="bad">✕</span> ${esc(x.label)}</td><td>${hhmm(x.start)}</td><td>${Date.now() - x.end < t.bucket_ms * 1.5 ? "<b class='bad'>ongoing</b>" : hhmm(x.end)}</td>
-      <td>${dur(x.end - x.start)}</td><td class="muted">${esc(x.detail || "")}</td></tr>`).join("")}</table>
-      <div class="muted" style="font-size:12px">${since}${incidents.length > 30 ? ` Showing the latest 30 of ${incidents.length}.` : ""}</div>`
-    : `<div class="ok" style="margin-top:8px">✓ No outages in the last ${t.hours} h.</div><div class="muted" style="font-size:12px">${since}</div>`;
-}
-
 
 // ---------------------------------------------------------------- alerts
 const SEV = { critical: ["✕", "Critical"], warning: ["!", "Warning"], info: ["i", "Info"] };
@@ -1073,7 +1081,8 @@ async function pushAlerts() {
 }
 
 // ---------------------------------------------------------------- live data
-const live = { selected: null, paused: false, rows: [] };
+const live = { selected: null, paused: false, rows: [], page: 0, lastMinute: {} };
+const LIVE_PAGE_SIZE = 6;
 const LIVE_FRESH_MS = 60_000;
 const fmtVal = (v) => v === null || v === undefined ? "—" : typeof v === "number" ? String(Math.round(v * 1000) / 1000) : typeof v === "string" ? v : JSON.stringify(v);
 function liveState(d) {
@@ -1110,10 +1119,17 @@ function graphBlock(d) {
   const g = d.graph, when = `raw ${esc(ago(d.ingress.last_in_ts))} · value ${esc(ago(d.last_value_ts))}`;
   if (g.mode === "disabled") return `<div class="nograph">disabled · no graph</div>`;
   if (g.mode === "no_source_ip") return `<div class="nograph" title="Parser options: {&quot;source_ip&quot;: &quot;&lt;IP&gt;&quot;}">set source_ip to show this device's graph</div><div class="nums">${when}</div>`;
+  const rows = g.series, n = rows.length, last = rows[n - 1]?.[0];
+  // One point per complete minute: when a new minute lands, slide the line left by one step.
+  const prev = live.lastMinute[d.device_id], slide = prev !== undefined && last !== undefined && prev !== last;
+  live.lastMinute[d.device_id] = last;
+  const sum = (k) => rows.reduce((a, r) => a + r[k], 0);
   const counts = g.mode === "source_ip"
-    ? `${g.frames_in} in from ${esc(d.source_ip)} · ${fmtBytes(g.bytes_in)}`
-    : `${d.ingress.frames_in} in · ${d.ingress.frames_out} out · ${fmtBytes(d.ingress.bytes_in)}`;
-  return `${sparkline(bucket(g.series, 10))}<div class="nums">${counts} · ${when}</div>`;
+    ? `${sum(1)} in from ${esc(d.source_ip)} · ${fmtBytes(sum(2))}`
+    : `${sum(1)} in · ${sum(3)} out · ${fmtBytes(sum(2))}`;
+  return `<div class="spark${slide ? " slide" : ""}" style="--step:${n > 1 ? (100 / (n - 1)).toFixed(2) : 0}%">${sparkline(rows)}</div>
+    <div class="spark-cap"><span>${n} min ago</span><span>per minute</span><span>now</span></div>
+    <div class="nums">${counts} in ${n} min · ${when}</div>`;
 }
 function sourcesLine(d) {
   if (!d.connection || !["socket", "webhook"].includes(d.connection.kind)) return "";
@@ -1129,10 +1145,18 @@ function sourcesLine(d) {
 async function renderLive() {
   const data = await get("api/live");
   live.rows = data.rows;
-  $("live-note").textContent = `values from the last ${Math.round(data.window_ms / 60000)} min · refreshes every 2 s${live.paused ? " (paused)" : ""}`;
-  const groups = {}, shown = data.rows.filter((d) => d.enabled);
-  for (const d of shown) (groups[d.controller] ||= []).push(d);
-  $("live-table").innerHTML = data.rows.length ? Object.entries(groups).map(([controller, list]) => `<div class="group"><h3>${esc(controller)}-controller</h3>
+  $("live-note").textContent = `values from the last ${Math.round(data.window_ms / 60000)} min · graphs: 1 point per minute · refreshes every 2 s${live.paused ? " (paused)" : ""}`;
+  const shown = data.rows.filter((d) => d.enabled)
+    .sort((a, b) => a.controller.localeCompare(b.controller) || a.device_id.localeCompare(b.device_id));
+  const pages = Math.max(1, Math.ceil(shown.length / LIVE_PAGE_SIZE));
+  live.page = Math.min(live.page, pages - 1);
+  const groups = {};
+  for (const d of shown.slice(live.page * LIVE_PAGE_SIZE, (live.page + 1) * LIVE_PAGE_SIZE)) (groups[d.controller] ||= []).push(d);
+  const pager = pages > 1 ? `<div class="pager"><button data-page="${live.page - 1}" ${live.page ? "" : "disabled"}>‹ Prev</button>
+    ${Array.from({ length: pages }, (_, i) => `<button data-page="${i}" class="${i === live.page ? "cur" : ""}" aria-current="${i === live.page}">${i + 1}</button>`).join("")}
+    <button data-page="${live.page + 1}" ${live.page < pages - 1 ? "" : "disabled"}>Next ›</button>
+    <span class="muted">${live.page * LIVE_PAGE_SIZE + 1}–${Math.min(shown.length, (live.page + 1) * LIVE_PAGE_SIZE)} of ${shown.length} devices</span></div>` : "";
+  $("live-table").innerHTML = pager + (data.rows.length ? Object.entries(groups).map(([controller, list]) => `<div class="group"><h3>${esc(controller)}-controller</h3>
     <div class="livecards">${list.map((d) => {
       const [cls, text] = liveState(d);
       const vals = d.parameters.map((p) => `<span class="chip val" title="${esc(p.raw_code ?? "")} · ${esc(ago(p.system_ts))}"><small>${esc(p.ivy_param)}</small> <b>${esc(fmtVal(p.value))}</b> <small>${esc(p.unit ?? "")}</small></span>`).join("");
@@ -1147,7 +1171,7 @@ async function renderLive() {
         <div class="vals">${vals || '<span class="muted" style="font-size:12px">no values in the last 10 min</span>'}</div>
         ${where || asset || info.installed_at ? `<div class="meta">${esc(where || "")}${asset ? ` · ${esc(asset)}` : ""}${info.installed_at ? ` · installed ${day(info.installed_at)}` : ""}</div>` : ""}
         ${deviceActions(d.device_id, true)}</div>`;
-    }).join("")}</div></div>`).join("") : `<p class="muted">${data.rows.length ? "No enabled devices — enable one below." : "No devices installed yet."}</p>`;
+    }).join("")}</div></div>`).join("") : "") + (shown.length ? "" : `<p class="muted">${data.rows.length ? "No enabled devices — enable one below." : "No devices installed yet."}</p>`);
   if (live.selected) await renderLiveDetail();
 }
 async function renderLiveDetail() {
@@ -1175,6 +1199,8 @@ async function renderLiveDetail() {
 function toggleLivePause() { live.paused = !live.paused; $("ld-pause").textContent = live.paused ? "Resume" : "Pause"; renderLive().catch(() => {}); }
 function closeLive() { live.selected = null; $("live-detail").hidden = true; renderLive().catch(() => {}); }
 $("live-table").addEventListener("click", (e) => {
+  const pageBtn = e.target.closest("button[data-page]");
+  if (pageBtn) { live.page = Number(pageBtn.dataset.page); renderLive().catch(() => {}); return; }
   if (e.target.closest("button")) return;
   const row = e.target.closest("[data-id]");
   if (!row) return;
@@ -1186,13 +1212,18 @@ $("live-table").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e
 
 async function render() {
   try {
-    if (tab === "overview") { loadSite().catch(() => {}); renderTimeline().catch((e) => console.error(e)); return await renderOverview(); }
+    if (tab === "overview") {
+      loadSite().catch(() => {});
+      await loadRegistry();
+      renderDevices();
+      await renderLive();
+      return await renderOverview();
+    }
     if (tab === "streams") return await renderStreams();
     if (tab === "alerts") return await renderAlerts();
     if (tab === "users") return me.role === "admin" ? await renderUsers() : undefined;
     await loadRegistry();
-    ({ devices: renderDevices, types: renderTypes, manufacturers: renderManufacturers })[tab]();
-    if (tab === "devices") await renderLive();
+    ({ types: renderTypes, manufacturers: renderManufacturers })[tab]();
   } catch (error) { if (error.message !== "sign in required") console.error(error); }
 }
 
@@ -1207,10 +1238,10 @@ loadRegistry().catch(() => {});
 show(tab);
 setInterval(() => tab === "overview" && !dialog.open && render(), 5000);
 setInterval(() => tab === "streams" && !dialog.open && render(), 2000);
-setInterval(() => tab === "devices" && !dialog.open && !live.paused && renderLive().catch(() => {}), 2000);
+setInterval(() => tab === "overview" && !dialog.open && !live.paused && renderLive().catch(() => {}), 2000);
 setInterval(() => tab === "alerts" ? !dialog.open && render() : loadAlertBadge().catch(() => {}), 10000);
 loadAlertBadge().catch(() => {});
-setInterval(() => tab === "devices" && dmon.selected && !dialog.open && renderDeviceMonitor().catch(() => {}), 4000);
+setInterval(() => tab === "overview" && dmon.selected && !dialog.open && renderDeviceMonitor().catch(() => {}), 4000);
 </script>
 </body>
 </html>

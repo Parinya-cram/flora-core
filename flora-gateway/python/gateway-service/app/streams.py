@@ -28,6 +28,7 @@ WINDOW_SEC = 900
 RECENT_FRAMES = 200
 PAYLOAD_LIMIT = 8192           # characters kept per frame; the size field keeps the real byte count
 RECENT_OUTPUT = 300
+MINUTES_KEPT = 60              # per-minute history behind the live cards' graphs
 TOPIC_PATTERN = r"^gw\.(raw|cmd)\..+|^gw\.(obs|measurements)$"
 
 
@@ -38,7 +39,7 @@ def payload_bytes(encoding: str, payload: str) -> int:
 
 
 class PodStream:
-    __slots__ = ("pod", "controller", "seconds", "recent", "totals", "last_ts", "next_id")
+    __slots__ = ("pod", "controller", "seconds", "recent", "totals", "last_ts", "next_id", "minutes", "source_minutes")
 
     def __init__(self, pod: str) -> None:
         self.pod = pod
@@ -48,6 +49,18 @@ class PodStream:
         self.totals = {"frames_in": 0, "bytes_in": 0, "frames_out": 0, "bytes_out": 0}
         self.last_ts: int | None = None
         self.next_id = 0
+        # [epoch_minute, frames_in, bytes_in, frames_out, bytes_out], for the whole pod and per sender IP
+        self.minutes: deque[list[int]] = deque()
+        self.source_minutes: dict[str, deque[list[int]]] = {}
+
+    @staticmethod
+    def _count_minute(rows: deque[list[int]], minute: int, offset: int, size: int) -> None:
+        if not rows or rows[-1][0] != minute:
+            rows.append([minute, 0, 0, 0, 0])
+        while rows and rows[0][0] <= minute - MINUTES_KEPT:
+            rows.popleft()
+        rows[-1][offset] += 1
+        rows[-1][offset + 1] += size
 
     def add(self, direction: str, frame: dict[str, Any], size: int) -> None:
         now_sec = int(time.time())
@@ -59,6 +72,11 @@ class PodStream:
         offset = 1 if direction == "in" else 3
         bucket[offset] += 1
         bucket[offset + 1] += size
+        minute = now_sec // 60
+        self._count_minute(self.minutes, minute, offset, size)
+        source = (frame.get("meta") or {}).get("source_ip") if direction == "in" else None
+        if source:
+            self._count_minute(self.source_minutes.setdefault(source, deque()), minute, offset, size)
         self.totals[f"frames_{direction}"] += 1
         self.totals[f"bytes_{direction}"] += size
         self.last_ts = int(time.time() * 1000)
@@ -78,6 +96,14 @@ class PodStream:
         start = end - window
         by_sec = {row[0]: row for row in self.seconds if row[0] >= start}
         return [by_sec.get(sec, [sec, 0, 0, 0, 0]) for sec in range(start, end)]
+
+    def minute_series(self, minutes: int, source: str | None = None) -> list[list[int]]:
+        """Dense per-minute series of the last `minutes` complete minutes (the current one is still filling),
+        for the whole pod or only frames from one sender IP. Timestamps are epoch seconds."""
+        rows = self.source_minutes.get(source, ()) if source else self.minutes
+        end = int(time.time()) // 60
+        by_min = {row[0]: row for row in rows if row[0] >= end - minutes}
+        return [[m * 60, *by_min.get(m, [m, 0, 0, 0, 0])[1:]] for m in range(end - minutes, end)]
 
     def rate(self, seconds: int = 10) -> dict[str, float]:
         since = int(time.time()) - seconds
