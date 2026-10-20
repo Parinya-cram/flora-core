@@ -4,7 +4,7 @@ import { createFormDevClient, type FormDevClient } from "../index";
 import { AttachmentContext, deviceAttachments, memoryAttachments } from "./attachments";
 import { IndexedDbAdapter } from "../data/IndexedDbAdapter";
 import { RestApiAdapter } from "../data/RestApiAdapter";
-import { FormDevError, type FormDefinition, type FormSummary, type Issue, type LocalRecord, type RecordData, type SchemaVersion } from "../core/types";
+import { FormDevError, type FormDefinition, type FormSummary, type Issue, type LeafLink, type LocalRecord, type RecordData, type SchemaVersion } from "../core/types";
 import { describePath, issueText } from "../core/validate";
 import { lookupIds, type LookupTables } from "../logic/lookup";
 import { recordAllows } from "../logic/permission";
@@ -12,15 +12,16 @@ import type { QueueCounts } from "../offline/SyncEngine";
 import type { QueryPrincipal } from "../query/types";
 import DesignerPanel, { type DesignerIncoming } from "../designer/DesignerPanel";
 import TemplateLibrary from "../ai/TemplateLibrary";
-import FormPreview from "./FormPreview";
+import DocumentStudio from "../reading/DocumentStudio";
 import PdfPreview, { type PdfPreviewHandle } from "./PdfPreview";
 import FormRenderer from "./FormRenderer";
 import JobsPanel from "./JobsPanel";
+import LeafLinkPanel from "./LeafLinkPanel";
 import QueryPanel from "./QueryPanel";
 import RecordsSheet from "./RecordsSheet";
 
 type Props = { username: string; isAdmin: boolean; principal: QueryPrincipal; language?: string };
-type Tab = "records" | "designer" | "templates" | "preview" | "query" | "jobs";
+type Tab = "records" | "designer" | "documents" | "templates" | "preview" | "query" | "jobs";
 /** form = data entry, detail = read-only (display.detail), print = A4 sheet. */
 type Editing = { record: LocalRecord | null; data: RecordData; issues: Issue[]; definition: FormDefinition; view: "form" | "detail" | "print" };
 
@@ -67,6 +68,9 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
   const [formId, setFormId] = useState<string | null>(null);
   const [schema, setSchema] = useState<SchemaVersion | null>(null);
   const [sheetVersion, setSheetVersion] = useState(0);
+  // Records of the open form that are Flora Leaf case forms: changed only by amendment, with a reason.
+  const [leafLinks, setLeafLinks] = useState<Record<string, LeafLink>>({});
+  const [amendReason, setAmendReason] = useState("");
   const [editing, setEditing] = useState<Editing | null>(null);
   // Lookup tables the open form reads (Phase 2.3): the offline cache, else the server.
   const [lookups, setLookups] = useState<LookupTables>({});
@@ -87,7 +91,6 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
   }, [client, remote, editingDefinition]);
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
-  const [previewDefinitions, setPreviewDefinitions] = useState<FormDefinition[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,12 +150,12 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
   }, [client]);
 
   useEffect(() => {
-    if (tab !== "preview" || !client) return;
+    if (!formId || !online) return;
     let cancelled = false;
-    void Promise.all(forms.map(form => client.schemas.latestPublished(form.form_id).then(row => row.definition).catch(() => null)))
-      .then(rows => !cancelled && setPreviewDefinitions(rows.filter((row): row is FormDefinition => row !== null)));
+    void remote.leafLinks(formId).then(links => { if (!cancelled) setLeafLinks(links); }).catch(() => { if (!cancelled) setLeafLinks({}); });
     return () => { cancelled = true; };
-  }, [tab, client, forms]);
+  }, [remote, formId, online, sheetVersion]);
+  const leafLink = editing?.record ? leafLinks[editing.record.record_id] : undefined;
 
   const syncNow = async () => {
     if (!client) return;
@@ -171,6 +174,20 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
     setError("");
     try {
       const { record, data } = editing;
+      if (record && leafLink) {
+        // A Flora Leaf case form: an amendment with a reason (the server refuses it without one); completion stays on the Leaf.
+        if (amendReason.trim().length < 3) {
+          setError(thai ? "ระบุเหตุผลของการแก้ไข (อย่างน้อย 3 ตัวอักษร)" : "Give a reason for the amendment (at least 3 characters).");
+          return;
+        }
+        const saved = await client.records.update(record.record_id, data, record.version, amendReason.trim());
+        setEditing({ record: saved, data: saved.data, issues: [], definition: editing.definition, view: "detail" });
+        setAmendReason("");
+        setNote(thai ? "บันทึกการแก้ไขแล้ว จะส่งไป Canopy และกลับไปที่ Leaf เมื่อซิงก์" : "Amendment saved; it reaches Canopy and then the Leaf when it syncs.");
+        client.sync.runSoon(0);
+        await refresh();
+        return;
+      }
       const saved = record
         ? await (submit ? client.records.submit(record.record_id, data, record.version) : client.records.update(record.record_id, data, record.version))
         : await client.records.create(formId, data, submit ? "submitted" : "draft");
@@ -190,6 +207,7 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
     try {
       // A record is always edited with the schema version it was created under.
       const own = await client.schemas.get(record.form_id, record.schema_version);
+      setAmendReason("");
       setEditing({ record, data: record.data, issues: [], definition: own.definition, view: "detail" });
       if (schema && record.schema_version !== schema.schema_version) setNote(`This record uses form v${record.schema_version}; an administrator can upgrade it to v${schema.schema_version}.`);
     } catch (caught) {
@@ -206,7 +224,7 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
     setPdfBusy(true);
     try {
       const { buildFormPdf, downloadPdf } = await import("../render/formPdf");
-      const bytes = await buildFormPdf({ definition: editing.definition, value: editing.data, recordId: editing.record?.record_id, roles: codes, isAdmin, lookups, language });
+      const bytes = await buildFormPdf({ definition: editing.definition, value: editing.data, recordId: editing.record?.record_id, printedBy: username, roles: codes, isAdmin, lookups, language });
       downloadPdf(bytes, `${editing.definition.form_id}-${editing.record?.record_id ?? "new"}.pdf`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -234,9 +252,9 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
         </div>
       </header>
       <nav className="flex gap-2 border-b border-[var(--app-border)] pb-2" aria-label="Form Studio sections">
-        {(isAdmin ? ["records", "designer", "templates", "preview", "query", "jobs"] as const : ["records", "preview", "query", "jobs"] as const).map(item => <button key={item} type="button" onClick={() => setTab(item)} aria-current={tab === item ? "page" : undefined}
+        {(isAdmin ? ["records", "designer", "documents", "templates", "query", "jobs"] as const : ["records", "query", "jobs"] as const).map(item => <button key={item} type="button" onClick={() => setTab(item)} aria-current={tab === item ? "page" : undefined}
           className={`rounded-xl px-4 py-2 text-sm font-bold ${tab === item ? "bg-[var(--app-accent)] text-[var(--app-accent-contrast)]" : "text-[var(--app-muted)] hover:bg-[var(--app-control-bg)]"}`}>
-          {item === "records" ? (thai ? "กรอกข้อมูล" : "Records") : item === "designer" ? (thai ? "ออกแบบฟอร์ม" : "Form designer") : item === "templates" ? (thai ? "แม่แบบ / AI" : "Templates / AI") : item === "preview" ? "Preview" : item === "query" ? "Query" : "Jobs"}
+          {item === "records" ? (thai ? "กรอกข้อมูล" : "Records") : item === "designer" ? (thai ? "ออกแบบฟอร์ม" : "Form designer") : item === "documents" ? (thai ? "เอกสาร" : "Documents") : item === "templates" ? (thai ? "คลังแม่แบบ" : "Template library") : item === "query" ? (thai ? "ค้นหาข้อมูล" : "Query") : (thai ? "งานเบื้องหลัง" : "Jobs")}
         </button>)}
       </nav>
       {/* Kept mounted while other tabs are open, so the form being designed is not lost. */}
@@ -244,12 +262,16 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
         <DesignerPanel remote={remote} online={online} language={language} onPublished={publishedId => {
           void client?.pull().then(async () => { setFormId(publishedId); setEditing(null); await refresh(); });
         }} onUse={formToUse => { setFormId(formToUse); setEditing(null); setTab("records"); }}
-          incoming={designerIncoming} onTemplateSaved={templateId => { setTemplateFocus({ templateId, key: Date.now() }); setTab("templates"); }} />
+          incoming={designerIncoming} onTemplateSaved={templateId => { setTemplateFocus({ templateId, key: Date.now() }); setTab("templates"); }}
+          onOpenDocuments={() => setTab("documents")} />
       </div> : null}
-      {isAdmin && tab === "templates" ? <TemplateLibrary remote={remote} online={online} language={language} focus={templateFocus}
+      {isAdmin && tab === "templates" ? <TemplateLibrary remote={remote} online={online} language={language} focus={templateFocus} onDocuments={() => setTab("documents")}
         onEdit={template => { setDesignerIncoming({ key: Date.now(), kind: "template", template }); setTab("designer"); }}
         onFormCreated={createdId => { setDesignerIncoming({ key: Date.now(), kind: "form", formId: createdId }); setTab("designer"); void refresh(); }} /> : null}
-      {tab === "preview" ? <FormPreview remote={remote} online={online} definitions={previewDefinitions} language={language} /> : null}
+      {isAdmin ? <div hidden={tab !== "documents"}>
+        <DocumentStudio remote={remote} online={online} language={language}
+          onOpenDraft={(definition, draftNote) => { setDesignerIncoming({ key: Date.now(), kind: "definition", definition, note: draftNote }); setTab("designer"); }} />
+      </div> : null}
       {tab === "query" ? <QueryPanel remote={remote} principal={principal} online={online} onJobCreated={() => setJobsVersion(value => value + 1)} /> : null}
       {tab === "jobs" ? <JobsPanel remote={remote} refreshKey={jobsVersion} online={online} /> : null}
       {note && tab === "records" ? <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] px-4 py-2 text-sm text-[var(--app-text)]">{note}</div> : null}
@@ -270,7 +292,7 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
           {schema && !editing && client ? <div className={`${panel} overflow-hidden`}>
             <div className="border-b border-[var(--app-border)] px-4 py-3 font-semibold text-[var(--app-text)]">{schema.definition.title} <span className="text-xs text-[var(--app-muted)]">v{schema.schema_version}</span></div>
             <RecordsSheet client={client} definition={schema.definition} schemaVersion={schema.schema_version} codes={codes} isAdmin={isAdmin} language={language}
-              refreshKey={sheetVersion} onOpen={record => void open(record)} onChanged={() => void refresh()}
+              refreshKey={sheetVersion} leafLinks={leafLinks} onOpen={record => void open(record)} onChanged={() => void refresh()}
               onNew={() => setEditing({ record: null, data: {}, issues: [], definition: schema.definition, view: "form" })} />
           </div> : null}
 
@@ -283,55 +305,37 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
                 {editing.view !== "print" ? <button type="button" className={secondary} onClick={() => setEditing(current => current && { ...current, view: "print" })}>A4 / Print</button>
                   : <button type="button" className={secondary} onClick={() => printView.current?.print()}>Print</button>}
                 <button type="button" className={secondary} disabled={pdfBusy} onClick={() => void savePdf()}>{pdfBusy ? "…" : thai ? "ดาวน์โหลด PDF" : "Download PDF"}</button>
-                {editing.view === "form" && recordAllows(editing.definition, editing.record ? "edit" : "create", codes, isAdmin) ? <>
+                {editing.view === "form" && leafLink && recordAllows(editing.definition, "edit", codes, isAdmin) ? (
+                  <button type="button" className={primary} disabled={amendReason.trim().length < 3} onClick={() => void save(false)}>
+                    {thai ? "บันทึกการแก้ไข (amendment)" : "Save amendment"}
+                  </button>
+                ) : editing.view === "form" && recordAllows(editing.definition, editing.record ? "edit" : "create", codes, isAdmin) ? <>
                   <button type="button" className={secondary} disabled={editing.record?.status === "submitted"} onClick={() => void save(false)}>Save draft</button>
                   <button type="button" className={primary} onClick={() => void save(true)}>{editing.record?.status === "submitted" ? "Save amendment" : "Submit"}</button>
                 </> : null}
               </div>
             </div>
+            {leafLink ? <LeafLinkPanel remote={remote} link={leafLink} definition={editing.definition} language={language}
+              reason={editing.view === "form" ? amendReason : null} onReason={setAmendReason} /> : null}
             <AttachmentContext.Provider value={attachments}>
             {editing.view === "print"
-              ? <PdfPreview ref={printView} definition={editing.definition} value={editing.data} recordId={editing.record?.record_id} roles={codes} isAdmin={isAdmin} lookups={lookups} language={language} />
+              ? <PdfPreview ref={printView} definition={editing.definition} value={editing.data} recordId={editing.record?.record_id} printedBy={username} roles={codes} isAdmin={isAdmin} lookups={lookups} language={language} />
               : <FormRenderer definition={editing.definition} value={editing.data} issues={editing.issues} context={editing.view === "detail" ? "detail" : "form"} language={language}
                 roles={codes} isAdmin={isAdmin} lookups={lookups} onChange={data => setEditing(current => current && { ...current, data })} />}
             </AttachmentContext.Provider>
           </div> : null}
 
-          {isAdmin ? <DesignPanel remote={remote} onChanged={() => void client?.pull().then(refresh)} language={language} /> : null}
+          {isAdmin ? <PackagePanel remote={remote} formId={schema?.definition.form_id} version={schema?.schema_version} onChanged={() => void client?.pull().then(refresh)} /> : null}
         </section>
       </div> : null}
     </div>
   </main>;
 }
 
-function DesignPanel({ remote, onChanged, language }: { remote: RestApiAdapter; onChanged: () => void; language: string }) {
-  const [text, setText] = useState("");
-  const [issues, setIssues] = useState<Issue[]>([]);
+/** Moving a form between servers: install a .formpack, or export the open form's published version. Designing and
+ * publishing happen in the designer only (it builds the migration for records already entered). */
+function PackagePanel({ remote, formId, version, onChanged }: { remote: RestApiAdapter; formId?: string; version?: number; onChanged: () => void }) {
   const [message, setMessage] = useState("");
-
-  const parse = (): FormDefinition | null => {
-    try {
-      return JSON.parse(text) as FormDefinition;
-    } catch (caught) {
-      setMessage(`JSON error: ${messageOf(caught)}`);
-      return null;
-    }
-  };
-
-  const run = async (label: string, action: (definition: FormDefinition) => Promise<unknown>) => {
-    const definition = parse();
-    if (!definition) return;
-    try {
-      setIssues([]);
-      await action(definition);
-      setMessage(`${label}: done`);
-      onChanged();
-    } catch (caught) {
-      setIssues(caught instanceof FormDevError && Array.isArray(caught.details) ? caught.details as Issue[] : []);
-      setMessage(`${label}: ${messageOf(caught, language)}`);
-    }
-  };
-
   const importPack = async (file: File | undefined) => {
     if (!file) return;
     try {
@@ -342,27 +346,24 @@ function DesignPanel({ remote, onChanged, language }: { remote: RestApiAdapter; 
       setMessage(`Import failed: ${messageOf(caught)}`);
     }
   };
-
+  const exportPack = async () => {
+    if (!formId || !version) return;
+    try {
+      const blob = await remote.exportPackage(formId, version);
+      const link = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `${formId.replace(/_/g, "-")}.v${version}.formpack` });
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (caught) {
+      setMessage(`Export failed: ${messageOf(caught)}`);
+    }
+  };
   return <details className={`${panel} p-4`}>
-    <summary className="cursor-pointer text-sm font-semibold text-[var(--app-text)]">Design (administrator, online)</summary>
-    <p className="mt-2 text-xs text-[var(--app-muted)]">Paste a flora.form/1 definition. Published versions are immutable; publish the next schema_version with a migration instead.</p>
-    <textarea className="mt-3 h-64 w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] p-3 font-mono text-xs text-[var(--app-text)]" value={text} onChange={event => setText(event.target.value)} spellCheck={false} />
+    <summary className="cursor-pointer text-sm font-semibold text-[var(--app-text)]">Form package (.formpack)</summary>
+    <p className="mt-2 text-xs text-[var(--app-muted)]">Move a form between servers. To design or publish a form, use the Form designer tab.</p>
     <div className="mt-3 flex flex-wrap gap-2">
-      <button type="button" className={secondary} onClick={() => void run("Validate", async definition => { const found = await remote.validate(definition); setIssues(found); if (found.length) throw new Error(`${found.length} issue(s)`); })}>Validate</button>
-      <button type="button" className={secondary} onClick={() => void run("Create form", definition => remote.createForm(definition))}>Create form</button>
-      <button type="button" className={secondary} onClick={() => void run("Save draft", definition => remote.saveDraft(definition))}>Save draft</button>
-      <button type="button" className={primary} onClick={() => void run("Publish", definition => remote.publish(definition.form_id, definition.schema_version))}>Publish</button>
       <label className={`${secondary} cursor-pointer`}>Import .formpack<input type="file" accept=".formpack,application/zip" className="hidden" onChange={event => void importPack(event.target.files?.[0])} /></label>
-      <button type="button" className={secondary} onClick={() => void run("Export", async definition => {
-        const blob = await remote.exportPackage(definition.form_id, definition.schema_version);
-        const link = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `${definition.form_id.replace(/_/g, "-")}.v${definition.schema_version}.formpack` });
-        link.click();
-        URL.revokeObjectURL(link.href);
-      })}>Export .formpack</button>
+      <button type="button" className={secondary} disabled={!formId || !version} onClick={() => void exportPack()}>Export {formId ? `${formId} v${version}` : ""} .formpack</button>
     </div>
     {message ? <div className="mt-3 text-sm text-[var(--app-text)]">{message}</div> : null}
-    {issues.length ? <ul className="mt-2 space-y-1 text-xs text-rose-500">{issues.map((item, index) => <li key={`${item.path}:${item.code}:${index}`}>
-      <span className="font-semibold">{(item as Issue & { location?: string }).location ?? item.path}</span> — {issueText(item, language)} <code className="opacity-70">{item.code}</code>
-    </li>)}</ul> : null}
   </details>;
 }

@@ -150,6 +150,20 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
   const readOnly = !isAdmin || selectedRow?.status === "archived";
   const visibleRows = rows.filter(row => showArchived || row.status !== "archived");
   const wardName = useMemo(() => new Map(options.wards.map(ward => [ward.key, ward.name])), [options.wards]);
+  // Wards offering published workflows but none as default: a case started there quickly (or as an emergency) gets
+  // no workflow, so its Form Studio forms do not show at the bedside until one is attached to the case.
+  const wardsWithoutDefault = useMemo(() => {
+    const offered = new Set<string>();
+    const defaulted = new Set<string>();
+    for (const row of rows) {
+      if (row.status !== "published") continue;
+      for (const ward of row.wards || []) {
+        offered.add(ward.unitKey);
+        if (ward.isDefault) defaulted.add(ward.unitKey);
+      }
+    }
+    return [...offered].filter(key => !defaulted.has(key));
+  }, [rows]);
   const formOption = useMemo(() => new Map(options.forms.map(form => [form.form_id, form])), [options.forms]);
 
   const def = editing?.definition;
@@ -347,6 +361,10 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
           <h2 className="text-sm font-bold">Workflows <span className="text-[var(--app-muted)]">{visibleRows.length}</span></h2>
           <label className="flex items-center gap-1 text-xs text-[var(--app-muted)]"><input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)} className="accent-[var(--app-accent)]" />Archived</label>
         </div>
+        {wardsWithoutDefault.length ? <div className="rounded-lg border border-amber-400/50 bg-amber-500/10 px-2 py-1.5 text-[11px]">
+          <b>No default workflow:</b> {wardsWithoutDefault.map(key => wardName.get(key) || key).join(", ")}. Cases started there get no workflow
+          unless one is chosen at the start (or attached later on the Leaf's Forms page). Mark one workflow of each ward as Default.
+        </div> : null}
         {!loading && !visibleRows.length ? <p className="text-sm text-[var(--app-muted)]">No workflows yet.{isAdmin ? " Create one or import a .workflow.json file." : ""}</p> : null}
         {visibleRows.map(row => <button key={row.id} type="button" onClick={() => { setEditing(editingFrom(row)); setNote(""); setError(""); setImportResult(null); }}
           className={`w-full rounded-xl border p-3 text-left transition ${editing?.originalId === row.id ? "border-[var(--app-accent)] bg-[var(--app-accent)]/10" : "border-[var(--app-border)] bg-[var(--app-control-bg)] hover:border-[var(--app-accent)]/60"}`}>
@@ -423,7 +441,8 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
                 {PHASES.map(phase => <option key={phase} value={phase}>{phase}</option>)}
               </select></label>
               <label className="text-xs text-[var(--app-muted)]">Used as <select className={`${inputClass} !w-auto !py-1`} disabled={readOnly} value={form.display ?? "tab"}
-                onChange={event => patchForm(index, { display: event.target.value as WorkflowFormRef["display"] })}>
+                onChange={event => patchForm(index, { display: event.target.value as WorkflowFormRef["display"],
+                  ...(event.target.value === "report" ? { repeatable: undefined, max_instances: undefined } : {}) })}>
                 <option value="tab">data-entry tab + print</option>
                 <option value="report">print from Reports only</option>
               </select></label>
@@ -432,6 +451,12 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
                 {options.sections.map(section => <option key={section.id} value={section.id}>{section.label}</option>)}
               </select></label>
               <label className="flex items-center gap-1 text-xs font-semibold"><input type="checkbox" disabled={readOnly} checked={Boolean(form.required)} onChange={event => patchForm(index, { required: event.target.checked })} className="accent-[var(--app-accent)]" />Required</label>
+              {(form.display ?? "tab") === "tab" ? <label className="flex items-center gap-1 text-xs font-semibold" title="Several copies per case on Leaf (e.g. one per transfusion), each its own Form Studio record">
+                <input type="checkbox" disabled={readOnly} checked={Boolean(form.repeatable)} className="accent-[var(--app-accent)]"
+                  onChange={event => patchForm(index, event.target.checked ? { repeatable: true } : { repeatable: undefined, max_instances: undefined })} />Repeatable</label> : null}
+              {form.repeatable ? <label className="text-xs text-[var(--app-muted)]">at most <input type="number" min={2} max={99} step={1} className={`${inputClass} !w-16 !py-1`} disabled={readOnly}
+                value={form.max_instances ?? ""} placeholder="99" aria-label={`Most copies of ${form.title || form.form_id}`}
+                onChange={event => patchForm(index, { max_instances: event.target.value ? Math.max(2, Math.min(99, Math.round(Number(event.target.value)))) : undefined })} /> copies</label> : null}
               <input className={`${inputClass} !py-1 basis-full text-xs`} disabled={readOnly} maxLength={300} value={form.hint ?? ""} placeholder="Note shown on Leaf, e.g. Filled in by the PACU nurse before discharge"
                 aria-label={`Note for ${form.title || form.form_id} on Leaf`} onChange={event => patchForm(index, { hint: event.target.value })} />
               {option?.placement && (option.placement.phase !== (form.phase || "any") || (option.placement.after_section ?? null) !== (form.after_section ?? null))

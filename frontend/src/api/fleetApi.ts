@@ -204,6 +204,31 @@ export const getFleetCaseSnapshot = (globalCaseId: string) =>
   getJson<FleetSnapshot>(
     `/api/fleet/cases/${encodeURIComponent(globalCaseId)}/snapshot`,
   );
+/** A Workflow Studio form of a case for review in Canopy (GET /api/fleet/cases/{id}/forms). */
+export type CaseFormReview = import("../formdev/core/types").LeafLink & {
+  data: import("../formdev/core/types").RecordData;
+  definition: import("../formdev/core/types").FormDefinition | null;
+  amendments: import("../formdev/core/types").LeafAmendment[];
+};
+export const getCaseFormsReview = (globalCaseId: string) =>
+  getJson<{ forms: CaseFormReview[] }>(`/api/fleet/cases/${encodeURIComponent(globalCaseId)}/forms`).then(result => result.forms || []);
+export type CaseFormHistoryItem = {
+  kind: "version" | "amendment" | "reviewed" | "approved"; at: number; by: string; version?: number; status?: string;
+  reason?: string; note?: string | null; changes?: Record<string, { from: unknown; to: unknown }>;
+};
+export const getCaseFormHistory = (globalCaseId: string, formId: string) =>
+  getJson<{ history: CaseFormHistoryItem[] }>(`/api/fleet/cases/${encodeURIComponent(globalCaseId)}/forms/${encodeURIComponent(formId)}/history`)
+    .then(result => result.history || []);
+export async function reviewCaseForm(globalCaseId: string, formId: string, action: "reviewed" | "approved", note?: string) {
+  const response = await fetch(`${BACKEND_BASE}/api/fleet/cases/${encodeURIComponent(globalCaseId)}/forms/${encodeURIComponent(formId)}/review`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...wardHeaders(), ...(readStoredAuthToken() ? { "X-FLORA-Session": readStoredAuthToken() as string } : {}) },
+    body: JSON.stringify({ action, ...(note ? { note } : {}) }),
+  });
+  const data = await response.json().catch(() => ({})) as { detail?: string; review?: CaseFormReview["review"] };
+  if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : `Review failed (${response.status})`);
+  return data.review;
+}
 export const getLegacyArchiveCases = (params: {
   query?: string;
   from?: string;

@@ -14,6 +14,7 @@ from psycopg.types.json import Jsonb
 from .. import form_sync
 from ..clinical import case_audit
 from ..database import connection
+from . import leaf_sync
 from .auth_leaf import now_ms, require_permission, service_only
 
 router = APIRouter(prefix="/api/case", tags=["canopy admissions"])
@@ -49,8 +50,15 @@ def canopy_admissions(_: dict = Depends(require_permission("case.read")), databa
     return {"rows": [inbox_public(row) for row in rows]}
 
 
+OUTBOX_CASES = 400  # Canopy takes at most 500 per exchange
+
+
 @router.get("/canopy-sync/outbox")
 def outbox(_: dict = Depends(service_only), database: Connection = Depends(connection)) -> dict:
+    """Forms of cases started from Canopy admissions: open cases, and archived ones until an exchange after their
+    archiving went through (however long Canopy was unreachable). `built_at` comes back with the inbox call."""
+    built_at = now_ms()
+    synced = (leaf_sync.state(database).get("admissions.synced_at") or 0)
     cases = database.execute(
         """SELECT c.id, c.canopy_admission_id, c.status, c.case_code, c.start_time, c.discharge_time,
                   to_jsonb(c) ->> 'discharge_reason' AS discharge_reason, to_jsonb(c) ->> 'discharge_destination' AS discharge_destination,
@@ -58,11 +66,14 @@ def outbox(_: dict = Depends(service_only), database: Connection = Depends(conne
                   d.form_draft_json, d.field_versions
            FROM cases c LEFT JOIN case_detail d ON d.case_id=c.id
            WHERE c.canopy_admission_id IS NOT NULL
-             AND (c.status<>'archived' OR c.archive_time > %s)""",
-        (now_ms() - 24 * 3600 * 1000,),
+             AND (c.status<>'archived' OR coalesce(c.archive_time, 0) >= %s)
+           ORDER BY (c.status='active') DESC, (c.status<>'archived') DESC, c.id DESC
+           LIMIT %s""",
+        (int(synced) if isinstance(synced, (int, float)) else 0, OUTBOX_CASES),
     ).fetchall()
     claims = database.execute(
-        "SELECT id, case_id FROM canopy_admission_inbox WHERE status='claimed' AND NOT claim_acknowledged"
+        "SELECT id, case_id FROM canopy_admission_inbox WHERE status='claimed' AND NOT claim_acknowledged ORDER BY updated_at LIMIT %s",
+        (OUTBOX_CASES,),
     ).fetchall()
     return {
         "cases": [{
@@ -73,6 +84,7 @@ def outbox(_: dict = Depends(service_only), database: Connection = Depends(conne
             "values": form_sync.parse(row["form_draft_json"]), "versions": row["field_versions"] or {},
         } for row in cases],
         "claims": [{"admission_id": str(row["id"]), "case_id": row["case_id"]} for row in claims],
+        "built_at": built_at,
     }
 
 
@@ -132,6 +144,9 @@ def inbox(payload: dict[str, Any], _: dict = Depends(service_only), database: Co
             if changed:
                 case_audit(database, case["id"], "form.draft.canopy", old, values, SYNC_ACTOR)
                 updated_forms += 1
+        # Archived cases included in the outbox this exchange was built from have now reached Canopy.
+        if isinstance(payload.get("outbox_built_at"), int):
+            leaf_sync.set_state(database, "admissions.synced_at", payload["outbox_built_at"])
     started = auto_move_in(database, pending)
     requested = run_requests(database, payload.get("linked") or [])
     return {"ok": True, "received": received, "withdrawn": [str(row["id"]) for row in withdrawn],

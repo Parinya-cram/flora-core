@@ -1,0 +1,57 @@
+{
+  "description": "Report components (field type case_block): the Flora Leaf case data a printed template can show as a table. Each block names its source and its columns with default widths (percent of the block, adding to 100). Twins: frontend/src/formdev/core/caseBlocks.ts and services/flora-api/app/formdev/case_blocks.py.",
+  "blocks": {
+    "diagnoses": { "th": "การวินิจฉัย", "en": "Diagnoses", "source": "diagnosis", "columns": [
+      { "key": "no", "th": "ที่", "en": "#", "width": 8 },
+      { "key": "text", "th": "การวินิจฉัย", "en": "Diagnosis", "width": 62 },
+      { "key": "icd", "th": "ICD-10", "en": "ICD-10", "width": 30 } ] },
+    "procedures": { "th": "หัตถการ / การผ่าตัด", "en": "Procedures", "source": "procedures", "columns": [
+      { "key": "no", "th": "ที่", "en": "#", "width": 8 },
+      { "key": "text", "th": "หัตถการ", "en": "Procedure", "width": 62 },
+      { "key": "icd", "th": "ICD-9-CM", "en": "ICD-9-CM", "width": 30 } ] },
+    "allergies": { "th": "ประวัติแพ้", "en": "Allergies", "source": "allergies", "columns": [
+      { "key": "allergen", "th": "สิ่งที่แพ้", "en": "Allergen", "width": 40 },
+      { "key": "reaction", "th": "อาการ", "en": "Reaction", "width": 40 },
+      { "key": "severity", "th": "ความรุนแรง", "en": "Severity", "width": 20 } ] },
+    "labs": { "th": "ผลแล็บ", "en": "Lab results", "source": "labs", "columns": [
+      { "key": "test", "th": "รายการ", "en": "Test", "width": 30 },
+      { "key": "value", "th": "ผล", "en": "Result", "width": 20 },
+      { "key": "unit", "th": "หน่วย", "en": "Unit", "width": 15 },
+      { "key": "range", "th": "ค่าปกติ", "en": "Range", "width": 20 },
+      { "key": "time", "th": "วันเวลา", "en": "Taken", "width": 15 } ] },
+    "events": { "th": "เหตุการณ์ระหว่างผ่าตัด", "en": "Case events", "source": "events", "columns": [
+      { "key": "time", "th": "เวลา", "en": "Time", "width": 15 },
+      { "key": "title", "th": "เหตุการณ์", "en": "Event", "width": 40 },
+      { "key": "detail", "th": "รายละเอียด", "en": "Detail", "width": 45 } ] },
+    "staff": { "th": "ทีมผู้ดูแล", "en": "Care team", "source": "staff", "columns": [
+      { "key": "role", "th": "หน้าที่", "en": "Role", "width": 40 },
+      { "key": "name", "th": "ชื่อ", "en": "Name", "width": 60 } ] },
+    "medications": { "th": "ยาที่ให้", "en": "Medications given", "source": "io", "columns": [
+      { "key": "time", "th": "เวลา", "en": "Time", "width": 15 },
+      { "key": "name", "th": "ยา", "en": "Drug", "width": 45 },
+      { "key": "dose", "th": "ขนาด", "en": "Dose", "width": 20 },
+      { "key": "note", "th": "หมายเหตุ", "en": "Note", "width": 20 } ] },
+    "fluids": { "th": "สารน้ำ / เลือด", "en": "Fluids and blood", "source": "io", "columns": [
+      { "key": "start", "th": "เริ่ม", "en": "Start", "width": 15 },
+      { "key": "stop", "th": "หยุด", "en": "Stop", "width": 15 },
+      { "key": "name", "th": "รายการ", "en": "Item", "width": 40 },
+      { "key": "route", "th": "ทาง", "en": "Route", "width": 15 },
+      { "key": "volume", "th": "ปริมาตร (ml)", "en": "Volume (ml)", "width": 15 } ] },
+    "outputs": { "th": "สิ่งที่ออกจากร่างกาย", "en": "Outputs", "source": "io", "columns": [
+      { "key": "time", "th": "เวลา", "en": "Time", "width": 20 },
+      { "key": "name", "th": "รายการ", "en": "Output", "width": 50 },
+      { "key": "volume", "th": "ปริมาตร (ml)", "en": "Volume (ml)", "width": 30 } ] },
+    "billing": { "th": "รายการค่าใช้จ่าย", "en": "Billing items", "source": "billing", "columns": [
+      { "key": "code", "th": "รหัส", "en": "Code", "width": 15 },
+      { "key": "name", "th": "รายการ", "en": "Item", "width": 50 },
+      { "key": "qty", "th": "จำนวน", "en": "Qty", "width": 10 },
+      { "key": "unit", "th": "หน่วย", "en": "Unit", "width": 10 },
+      { "key": "amount", "th": "จำนวนเงิน", "en": "Amount", "width": 15 } ] },
+    "scores": { "th": "คะแนนประเมิน", "en": "Scores", "source": "scores", "columns": [
+      { "key": "time", "th": "เวลา", "en": "Time", "width": 15 },
+      { "key": "name", "th": "แบบประเมิน", "en": "Score", "width": 40 },
+      { "key": "total", "th": "คะแนนรวม", "en": "Total", "width": 15 },
+      { "key": "band", "th": "แปลผล", "en": "Result", "width": 30 } ] }
+  },
+  "limits": { "max_rows": [1, 200], "min_rows": [0, 60], "column_width": [3, 100], "max_columns": 12 }
+}

@@ -9,8 +9,17 @@
 # Set FLORA_BIND_ADDR=0.0.0.0 in the Portainer stack so the LAN can reach it.
 name: flora
 
+# Container logs are capped (Docker's default json-file log grows without limit and has filled servers): at most
+# FLORA_LOG_MAX_FILES files of FLORA_LOG_MAX_SIZE each per container, the oldest dropped first.
+x-flora-logging: &flora-logging
+  driver: json-file
+  options:
+    max-size: "${FLORA_LOG_MAX_SIZE:-10m}"
+    max-file: "${FLORA_LOG_MAX_FILES:-3}"
+
 services:
   postgres:
+    logging: *flora-logging
     build:
       context: .
       dockerfile: Dockerfile.postgres.dev
@@ -39,6 +48,7 @@ services:
     restart: unless-stopped
 
   flora-liveagent:
+    logging: *flora-logging
     build:
       context: ./services/flora-liveagent
     environment:
@@ -55,6 +65,7 @@ services:
     restart: unless-stopped
 
   flora-leaf-api:
+    logging: *flora-logging
     build:
       context: ./services/flora-api
     environment:
@@ -93,6 +104,7 @@ services:
     restart: unless-stopped
 
   flora-sync-api:
+    logging: *flora-logging
     build:
       context: ./services/flora-api
     environment:
@@ -113,6 +125,7 @@ services:
     restart: unless-stopped
 
   flora-leaf:
+    logging: *flora-logging
     build:
       context: .
       dockerfile: Dockerfile.frontend.dev
@@ -128,6 +141,7 @@ services:
     restart: unless-stopped
 
   flora-leaf-sync:
+    logging: *flora-logging
     build:
       context: ./services/flora-sync-worker
     environment:
@@ -148,6 +162,7 @@ services:
 
   # ---- Canopy (central read-only viewer) ----
   flora-canopy-api:
+    logging: *flora-logging
     build:
       context: ./services/flora-api
     environment:
@@ -172,6 +187,7 @@ services:
     restart: unless-stopped
 
   flora-canopy:
+    logging: *flora-logging
     build:
       context: .
       dockerfile: Dockerfile.frontend.dev

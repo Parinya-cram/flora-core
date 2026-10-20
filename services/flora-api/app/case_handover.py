@@ -39,6 +39,9 @@ def export_case(database: Connection, case_id: int) -> dict[str, Any] | None:
     tables["case_io_segment"] = _rows(
         database, "SELECT s.* FROM case_io_segment s JOIN case_io_run r ON r.id=s.run_id WHERE r.case_id=%s ORDER BY s.id",
         (case_id,))
+    # Workflow (Form Studio) forms: keyed by (case_id, form_id), no id column, so copied on their own.
+    tables["case_form_record"] = _rows(database, "SELECT * FROM case_form_record WHERE case_id=%s ORDER BY form_id", (case_id,)) \
+        if _columns(database, "case_form_record") else []
     item_ids = sorted({row["item_id"] for key in ("case_io_run", "case_io_event") for row in tables[key] if row.get("item_id")})
     concept_ids = sorted({row["concept_id"] for key in ("case_diagnosis", "case_procedure")
                           for row in tables[key] if row.get("concept_id")})
@@ -130,6 +133,16 @@ def import_case(database: Connection, export: dict[str, Any], *, from_leaf_id: s
             continue
         _insert(database, "case_io_segment", segment_columns, {**segment, "run_id": run_ids[segment["run_id"]]})
         counts["case_io_segment"] = counts.get("case_io_segment", 0) + 1
+    form_columns = _columns(database, "case_form_record")
+    for form in tables.get("case_form_record") or [] if form_columns else []:
+        # The forms continue here under the same global case id; this Leaf sends them to Canopy afresh.
+        row = {name: value for name, value in form.items() if name in form_columns}
+        row.update(case_id=case_id, sent_digest=None, synced_at=None, sync_state="pending", sync_issues=[])
+        row = {name: value for name, value in row.items() if name in form_columns}
+        names = list(row)
+        database.execute(f"INSERT INTO case_form_record ({', '.join(names)}) VALUES ({', '.join(['%s'] * len(names))})",
+                         tuple(_value(row[name], form_columns[name]) for name in names))
+        counts["case_form_record"] = counts.get("case_form_record", 0) + 1
     database.execute(
         """INSERT INTO case_clinical_audit (case_id, action, before_json, after_json, actor_username, actor_role, created_at)
            VALUES (%s, 'handover.import', NULL, %s, %s, 'integration', %s)""",

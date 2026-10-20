@@ -38,6 +38,12 @@ class RegistryTwins(unittest.TestCase):
         self.assertEqual(list(field_types.COMMON_CONTAINER_PROPS), spec["common_container"])
         self.assertEqual(field_types.FIELD_TYPES, spec["types"])
 
+    def test_report_components_equal_the_spec(self):
+        from app.formdev import case_blocks
+        spec = load_json("spec/case-blocks.json")
+        self.assertEqual(case_blocks.CASE_BLOCKS, spec["blocks"])
+        self.assertEqual({**case_blocks.LIMITS, "max_columns": case_blocks.MAX_COLUMNS}, spec["limits"])
+
     def test_style_tokens_equal_the_spec(self):
         spec = load_json("spec/style-tokens.json")
         self.assertEqual(list(field_types.STYLE_COMPONENTS), spec["components"])

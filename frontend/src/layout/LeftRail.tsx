@@ -15,7 +15,7 @@ import {
 import { getCaseDetailDraft } from "../api/caseDetailApi";
 import { listLeafWorkflows } from "../api/workflowApi";
 import { defaultWorkflowId } from "../components/workflow/leafWorkflows";
-import { saveCaseDetailDraft } from "../api/caseDetailApi";
+import { patchCaseDetailDraft } from "../api/caseDetailApi";
 import type { CaseStatus } from "../api/caseApi";
 import ConfirmDialog from "../components/common/ConfirmDialog";
 import HnBarcode from "../components/common/HnBarcode";
@@ -1300,7 +1300,9 @@ export default function LeftRail({
     const pendingPatientDraft = readPrestartPatientDraft(targetHn);
     if (Number.isFinite(startedCaseId) && startedCaseId > 0 && pendingPatientDraft) {
       try {
-        await saveCaseDetailDraft(startedCaseId, {
+        // Only the patient fields typed before the start: a full save would replace what the start already put in the
+        // draft (sections switched on by the workflow, a Canopy admission's pre-op form).
+        await patchCaseDetailDraft(startedCaseId, {
           ...pendingPatientDraft,
           hn: String(targetHn).trim(),
         });

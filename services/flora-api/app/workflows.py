@@ -16,6 +16,8 @@ from typing import Any
 
 from psycopg import Connection
 
+from .case_forms import MAX_INSTANCES
+
 LOG = logging.getLogger("flora.workflows")
 FORMAT = "flora-workflow/1"
 WORKFLOW_ID = re.compile(r"^[a-z][a-z0-9_]{1,63}\Z")
@@ -71,6 +73,11 @@ def normalize(definition: dict[str, Any]) -> dict[str, Any]:
                  "after_section": item.get("after_section") or None,
                  "hint": item.get("hint") if isinstance(item.get("hint"), str) else "",
                  "display": item.get("display") or "tab"}
+        # A repeatable form: several copies per case (case_forms.INSTANCE_KEY), at most max_instances when set.
+        if item.get("repeatable") is not None and item.get("repeatable") is not False:
+            entry["repeatable"] = item["repeatable"]
+            if item.get("max_instances") is not None:
+                entry["max_instances"] = item["max_instances"]
         forms.append(entry)
     return {
         "format": definition.get("format") or FORMAT,
@@ -170,6 +177,14 @@ def validate(database: Connection, definition: Any) -> list[dict[str, str]]:
             issues.append({"path": f"{path}.after_section", "message": f"unknown Leaf tab '{item['after_section']}'"})
         if item.get("display") not in DISPLAYS:
             issues.append({"path": f"{path}.display", "message": "display is tab (data entry on Leaf) or report (printed from Reports only)"})
+        if "repeatable" in item:
+            limit = item.get("max_instances")
+            if item["repeatable"] is not True:
+                issues.append({"path": f"{path}.repeatable", "message": "repeatable must be true or left out"})
+            elif item.get("display") != "tab":
+                issues.append({"path": f"{path}.repeatable", "message": "only a form filled on the Leaf (display tab) can be repeated"})
+            if limit is not None and (not isinstance(limit, int) or isinstance(limit, bool) or not 2 <= limit <= MAX_INSTANCES):
+                issues.append({"path": f"{path}.max_instances", "message": f"max_instances is a whole number from 2 to {MAX_INSTANCES}"})
         if len(item.get("hint") or "") > MAX_HINT:
             issues.append({"path": f"{path}.hint", "message": f"the note for Leaf is at most {MAX_HINT} characters"})
         if form_id not in known:

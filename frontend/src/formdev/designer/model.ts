@@ -7,6 +7,7 @@
  * categories and the children of group / repeat fields all hold field lists — and a field is a list plus an index.
  */
 import { fieldTypeSpec } from "../core/fieldTypes";
+import { autoPlace, formColumns, placeField, type GridCell } from "../core/layout";
 import type { CategoryDefinition, FieldDefinition, FieldType, FormDefinition, MigrationOp, SectionDefinition } from "../core/types";
 import { fieldMap, fieldKey } from "../core/validate";
 import { FormulaError, rename as renameNames, tokenize } from "../logic/formula";
@@ -18,7 +19,8 @@ export type Selection = { kind: "form" } | { kind: "section"; path: Path } | { k
 
 type Obj = Record<string, unknown>;
 const ITEM_ID = /^[a-z][a-z0-9_]{0,63}$/;
-export const GRID_COLUMNS = 12;
+/** The grid of new forms (24 columns: halves, thirds, quarters, sixths and eighths all fit). */
+export const GRID_COLUMNS = 24;
 
 /** The value at a path (undefined when it does not exist). */
 export function at(root: unknown, path: Path): unknown {
@@ -124,9 +126,15 @@ export function newField(type: FieldType, used: Set<string>, label: string, defa
     field.fields = [{ id: child, type: "text", label: defaults.child }];
   }
   if (type === "repeat") field.max_items = 20;
+  if (type === "heading") field.level = 2;
+  if (type === "paragraph") field.content = defaults.child === "Item" ? "Instructions for whoever fills in the form." : "คำชี้แจงสำหรับผู้กรอกแบบฟอร์ม";
   if (type === "timeline") {
     field.timeline = { parts: ["events", "chart", "table"], step_min: 5, source: "leaf" };
     field.layout = { span: 12 };
+  }
+  if (type === "case_block") {
+    const columns: Array<[string, number]> = [["no", 8], ["text", 62], ["icd", 30]];
+    Object.assign(field, { block: "diagnoses", block_columns: columns.map(([key, width]) => ({ key, width })), min_rows: 3, max_rows: 15 });
   }
   if (type === "logo") { field.height_mm = 14; field.layout = { span: 6 }; }
   // The patient's HN when the form has it (the usual case); otherwise the author picks the field.
@@ -154,7 +162,8 @@ export function emptyForm(formId: string, title: string, sectionTitle: string, f
   const used = new Set<string>();
   const section = newSection(used, sectionTitle);
   section.fields.push(firstField(used));
-  return { format: "flora.form/1", form_id: formId, schema_version: 1, title, paper: { size: "A4", orientation: "portrait" }, style_id: "style.a4.medical", sections: [section] };
+  return { format: "flora.form/1", form_id: formId, schema_version: 1, title, paper: { size: "A4", orientation: "portrait" }, style_id: "style.a4.medical",
+    layout: { type: "grid", columns: GRID_COLUMNS }, sections: [section] };
 }
 
 // Field edits ----------------------------------------------------------------------------------
@@ -235,25 +244,114 @@ export function patchField(definition: FormDefinition, ref: FieldRef, patch: Par
   });
 }
 
-/** Width and start column on the 12-column grid (or for one device). col undefined = flow after the previous field. */
-export function placeOnGrid(definition: FormDefinition, ref: FieldRef, place: { span?: number; col?: number | null }, mode: "desktop" | "tablet" = "desktop"): FormDefinition {
+/** Width and start column on the container's grid (or for one device). col undefined = flow after the previous field. */
+export function placeOnGrid(definition: FormDefinition, ref: FieldRef, place: { span?: number; col?: number | null }, mode: "desktop" | "tablet" = "desktop",
+  columns = listColumns(definition, ref.list, formColumns(definition))): FormDefinition {
   const field = fieldAt(definition, ref);
   if (!field) return definition;
   const layout = structuredClone(field.layout ?? {});
-  const span = place.span === undefined ? undefined : Math.max(1, Math.min(GRID_COLUMNS, Math.round(place.span)));
+  const span = place.span === undefined ? undefined : Math.max(1, Math.min(columns, Math.round(place.span)));
   if (mode === "desktop") {
     if (span !== undefined) layout.span = span;
     if (place.col === null) delete layout.col;
-    else if (place.col !== undefined) layout.col = Math.max(1, Math.min(GRID_COLUMNS - (span ?? layout.span ?? 1) + 1, Math.round(place.col)));
+    else if (place.col !== undefined) layout.col = Math.max(1, Math.min(columns - (span ?? layout.span ?? 1) + 1, Math.round(place.col)));
   } else {
     const rule = { ...(layout.responsive?.tablet ?? {}) };
     if (span !== undefined) rule.span = span;
     if (place.col === null) delete rule.col;
-    else if (place.col !== undefined) rule.col = Math.max(1, Math.min(GRID_COLUMNS - (span ?? rule.span ?? 1) + 1, Math.round(place.col)));
+    else if (place.col !== undefined) rule.col = Math.max(1, Math.min(columns - (span ?? rule.span ?? 1) + 1, Math.round(place.col)));
     layout.responsive = { ...(layout.responsive ?? {}), tablet: rule };
   }
   return patchField(definition, ref, { layout });
 }
+
+// The two-dimensional grid ---------------------------------------------------------------------
+
+/** The cells the fields of a list show in now on a desktop grid (pinned or flowing), by index. */
+export function cellsOf(fields: FieldDefinition[], columns: number, styleColumns = 2): GridCell[] {
+  return autoPlace(fields.map(field => {
+    const placement = placeField(field, "desktop", columns, styleColumns, "grid", fields.length);
+    return { span: placement.span, rows: placement.rowSpan ?? 1, col: placement.col, row: placement.row };
+  }), columns);
+}
+
+const overlaps = (a: GridCell, b: GridCell) => a.col < b.col + b.span && b.col < a.col + a.span && a.row < b.row + b.rows && b.row < a.row + a.rows;
+
+/**
+ * Put the field at `ref` in a cell of its list's grid (any row and column, any width and height): every field of the
+ * list is pinned where it shows, the ones the field would cover move down just below it (and those they then cover,
+ * in turn), and the list is kept in reading order (row, then column) so phones and keyboards follow the page.
+ * Returns the definition and the field's new reference.
+ */
+export function placeAt(definition: FormDefinition, ref: FieldRef, cell: Partial<GridCell>, columns: number, styleColumns = 2): { definition: FormDefinition; ref: FieldRef } {
+  const fields = at(definition, ref.list) as FieldDefinition[] | undefined;
+  const moving = fields?.[ref.index];
+  if (!fields || !moving) return { definition, ref };
+  const cells = cellsOf(fields, columns, styleColumns);
+  const current = cells[ref.index];
+  const span = Math.max(1, Math.min(columns, Math.round(cell.span ?? current.span)));
+  const target: GridCell = {
+    span, rows: Math.max(1, Math.min(50, Math.round(cell.rows ?? current.rows))),
+    col: Math.max(1, Math.min(columns - span + 1, Math.round(cell.col ?? current.col))), row: Math.max(1, Math.round(cell.row ?? current.row)),
+  };
+  const placed: Array<{ index: number; cell: GridCell }> = [{ index: ref.index, cell: target }];
+  const others = cells.map((other, index) => ({ index, cell: { ...other } })).filter(item => item.index !== ref.index)
+    .sort((a, b) => a.cell.row - b.cell.row || a.cell.col - b.cell.col);
+  for (const item of others) {
+    for (let guard = 0; guard < 200; guard += 1) {
+      const blockers = placed.filter(fixed => overlaps(fixed.cell, item.cell));
+      if (!blockers.length) break;
+      item.cell.row = Math.max(...blockers.map(fixed => fixed.cell.row + fixed.cell.rows));
+    }
+    placed.push(item);
+  }
+  const order = [...placed].sort((a, b) => a.cell.row - b.cell.row || a.cell.col - b.cell.col);
+  const next = edit(definition, draft => {
+    const list = listAt(draft, ref.list);
+    const before = list.slice();
+    list.length = 0;
+    for (const item of order) {
+      const field = before[item.index];
+      const layout = { ...(field.layout ?? {}), row: item.cell.row, col: item.cell.col, span: item.cell.span } as NonNullable<FieldDefinition["layout"]>;
+      if (item.cell.rows > 1) layout.row_span = item.cell.rows;
+      else delete layout.row_span;
+      field.layout = layout;
+      list.push(field);
+    }
+  });
+  return { definition: next, ref: { list: ref.list, index: order.findIndex(item => item.index === ref.index) } };
+}
+
+/** Remove the empty rows of a list's grid (fields keep their order and columns). */
+export function compactRows(definition: FormDefinition, list: Path, columns: number, styleColumns = 2): FormDefinition {
+  const fields = at(definition, list) as FieldDefinition[] | undefined;
+  if (!fields?.length || !fields.some(field => field.layout?.row !== undefined)) return definition;
+  const cells = cellsOf(fields, columns, styleColumns);
+  const used = [...new Set(cells.flatMap(cell => Array.from({ length: cell.rows }, (_, offset) => cell.row + offset)))].sort((a, b) => a - b);
+  const renumber = new Map(used.map((row, index) => [row, index + 1]));
+  return edit(definition, draft => {
+    listAt(draft, list).forEach((field, index) => {
+      const cell = cells[index];
+      field.layout = { ...(field.layout ?? {}), row: renumber.get(cell.row) ?? cell.row, col: cell.col, span: cell.span };
+    });
+  });
+}
+
+/** The column count of a field list's grid: the form's, a section's or category's own, or a group / repeat's. */
+export function listColumns(definition: FormDefinition, list: Path, formGrid: number): number {
+  let columns = formGrid;
+  for (let depth = 1; depth < list.length; depth += 1) {
+    const node = at(definition, list.slice(0, depth)) as Obj | undefined;
+    if (!node || Array.isArray(node) || typeof node !== "object") continue;
+    const layout = node.layout as { columns?: number } | undefined;
+    if (node.type === "group" || node.type === "repeat") columns = (node.columns as number | undefined) ?? columns;
+    else if (layout?.columns && ("fields" in node || "categories" in node)) columns = layout.columns;
+  }
+  return columns;
+}
+
+/** The field list a field lives in and every field of it pinned (row and col), for a list that still flows. */
+export const isPinned = (fields: FieldDefinition[]) => fields.length > 0 && fields.every(field => field.layout?.row !== undefined && field.layout?.col !== undefined);
 
 // Sections and categories ----------------------------------------------------------------------
 
@@ -424,4 +522,19 @@ export function renameKey(definition: FormDefinition, ref: FieldRef, to: string)
     }
     if (draft.extensions?.["flora.subject_field"] === from) draft.extensions["flora.subject_field"] = to;
   });
+}
+
+// Comparing two versions (the AI panel's change list) -------------------------------------------
+
+const fieldsOf = (definition: FormDefinition) => new Map(allFields(definition).map(({ field }) => [field.id, field] as const));
+
+/** What the AI's answer changes: fields added, removed and changed (label, type, options or layout). */
+export function changesOf(before: FormDefinition, after: FormDefinition): { added: FieldDefinition[]; removed: FieldDefinition[]; changed: Array<[FieldDefinition, FieldDefinition]> } {
+  const old = fieldsOf(before);
+  const next = fieldsOf(after);
+  return {
+    added: [...next.values()].filter(field => !old.has(field.id)),
+    removed: [...old.values()].filter(field => !next.has(field.id)),
+    changed: [...next.values()].filter(field => old.has(field.id) && JSON.stringify(old.get(field.id)) !== JSON.stringify(field)).map(field => [old.get(field.id)!, field]),
+  };
 }

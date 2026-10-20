@@ -141,3 +141,24 @@ def set_admin_pin(payload: AdminPinRequest, user: dict = Depends(account_manager
     audit(database, "canopy.self.admin-pin", user, target=row, detail={"cleared": not payload.pin})
     row = attach_entitlements(database, database.execute("SELECT * FROM auth_user WHERE id=%s", (user["id"],)).fetchone())
     return {"user": auth_leaf.public_user(row), "row": managed_user(row)}
+
+
+
+@router.put("/self/sign-pin")
+@atomic
+def set_sign_pin(payload: AdminPinRequest, user: dict = Depends(current_canopy_user),
+                 database: Connection = Depends(connection)) -> dict:
+    """Your signing PIN: confirms the signatures you draw in forms on any Leaf (travels with the user directory)."""
+    row = database.execute("SELECT * FROM auth_user WHERE id=%s", (user["id"],)).fetchone()
+    if row.get("auth_source") == "ldap":
+        try:
+            confirmed = ldap_auth.authenticate(row["username"], payload.current_password) is not None
+        except ldap_auth.LdapUnavailable:
+            raise HTTPException(status_code=503, detail="directory server unavailable") from None
+    else:
+        confirmed = verify_password(payload.current_password, row["password_salt"] or "", row["password_hash"] or "")
+    if not confirmed:
+        raise HTTPException(status_code=400, detail="current password is incorrect")
+    directory.set_sign_pin(database, user["id"], (payload.pin or "").strip() or None)
+    audit(database, "canopy.self.sign-pin", user, target=row, detail={"cleared": not payload.pin})
+    return {"ok": True, "hasSignPin": bool((payload.pin or "").strip())}

@@ -41,7 +41,9 @@ import { getCaseWorkflow } from "../api/workflowApi";
 import type { ClinicalTimelineRow, ClinicalTimelineValues } from "../components/clinical-timeline/types";
 import { BASE_IVY_ROWS, ROW_META, getRowGroup, makeFallbackLabel } from "./clinical-chart/constants";
 import { readStoredUsername } from "./clinical-chart/storage";
-import type { ReportPdfModel } from "./report/pdfModel";
+import { reportSigners, type ReportPdfModel } from "./report/pdfModel";
+import { useHospitalProfile } from "../hooks/useHospitalProfile";
+import type { HospitalProfile } from "../formdev/core/hospital";
 import ReportTimelineAxis from "./report/ReportTimelineAxis";
 import ReportVitalSignsTrendChart from "./report/ReportVitalSignsTrendChart";
 import ReportClinicalTimelineGrid from "./report/ReportClinicalTimelineGrid";
@@ -55,6 +57,7 @@ import {
 } from "../utils/patientName";
 
 const FormStudioReportPanel = lazy(() => import("../components/workflow/FormStudioReportPanel"));
+const CaseDocumentsPanel = lazy(() => import("../components/workflow/CaseDocumentsPanel"));
 
 type ReportIoRowMode = "bolus" | "drip";
 
@@ -80,7 +83,21 @@ type ReportData = {
   ioSummary: CaseIoSummaryTotals | null;
 };
 
-function ReportLogo() {
+/** The report's logo: the hospital's own (set in Canopy) when there is one, else the edition's built-in header. */
+function ReportLogo({ profile }: { profile: HospitalProfile | null }) {
+  if (profile) {
+    return (
+      <div className="inline-flex items-center gap-2">
+        {profile.logo ? <img src={profile.logo} alt="" className="h-8 w-auto max-w-[72px] shrink-0 object-contain" /> : null}
+        {profile.name_th || profile.name_en ? (
+          <div className="report-thai-text max-w-[150px] text-[9px] font-semibold leading-tight text-gray-800 dark:text-gray-200">
+            {profile.name_th ? <div>{profile.name_th}</div> : null}
+            {profile.name_en ? <div>{profile.name_en}</div> : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
   const edition = getEditionInfo();
   if (edition.code === "eforl") {
     return (
@@ -525,6 +542,7 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
   );
   const workstation = useWorkstationSettings();
   const edition = getEditionInfo();
+  const hospital = useHospitalProfile();
   const allowedReportModes = edition.allowedReportModes;
   const preferenceUsername = readStoredUsername();
   const [loadedReportPrefsScope, setLoadedReportPrefsScope] = useState("");
@@ -859,7 +877,11 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
         }
       }
       const { buildCasePacket } = await import("../components/workflow/casePacket");
-      const { bytes, skipped } = await buildCasePacket({ caseId, caseWorkflow: fresh, reportPdf });
+      // Documents attached to the case follow the forms (scans put together on this Leaf).
+      const { caseDocumentFile, listCaseDocuments } = await import("../api/caseDocumentsApi");
+      const attached = await listCaseDocuments(caseId).catch(() => []);
+      const documents = await Promise.all(attached.filter(item => !item.removed_at).map(async item => ({ title: item.title, bytes: await caseDocumentFile(caseId, item.id) })));
+      const { bytes, skipped } = await buildCasePacket({ caseId, caseWorkflow: fresh, reportPdf, head: currentCaseHead ?? undefined, language: reportLanguage, documents });
       if (skipped.length) notes.push(`Left out: ${skipped.join(", ")}.`);
       const fileName = `case-packet-case${caseId}-${Date.now()}.pdf`;
       setPreviewPdfBytes(bytes);
@@ -896,6 +918,7 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
     () => [...(data?.staff || [])],
     [data?.staff],
   );
+  const signers = useMemo(() => reportSigners(caseStaff), [caseStaff]);
   const itemTotals = useMemo(
     () =>
       [...(data?.ioSummary?.item_totals_ml || [])]
@@ -2133,6 +2156,9 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
 
   const reportPdfModel = useMemo<ReportPdfModel>(() => ({
     editionCode: edition.code,
+    hospital: hospital ? { nameTh: hospital.name_th, nameEn: hospital.name_en, logo: hospital.logo } : null,
+    printedBy: preferenceUsername || undefined,
+    signers,
     generatedAt: data?.generatedAt || Date.now(),
     currentCase,
     form,
@@ -2161,6 +2187,9 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
     reportPageHours,
   }), [
     edition.code,
+    hospital,
+    preferenceUsername,
+    signers,
     bloodProductSummary,
     bucketedTimeline,
     caseAllergyRows,
@@ -2190,11 +2219,14 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
   ]);
 
   const totalPageCount = 1 + Math.max(1, timelinePages.length);
+  const printedAt = reportPdfModel.generatedAt;
+  const dobIso = getText(form.dob);
+  const dobText = /^\d{4}-\d{2}-\d{2}$/.test(dobIso) ? formatDateDDMMYYYY(new Date(`${dobIso}T12:00:00`).getTime(), workstation) : dobIso || "-";
 
   const renderPageHeader = (pageNum: number, subtitle: string) => (
     <header className="mb-2 flex items-start justify-between gap-2 border-b border-gray-500 pb-1.5">
       <div className="flex items-center gap-2 shrink-0">
-        <ReportLogo />
+        <ReportLogo profile={hospital} />
         <div>
           <div className="text-[12px] font-bold tracking-wide">ANESTHESIA RECORD</div>
           <div className="text-[10px] text-gray-600">{subtitle}</div>
@@ -2233,8 +2265,8 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
 
   const renderPageFooter = (pageNum: number) => (
     <footer className="mt-auto flex items-center justify-between border-t border-gray-400 pt-1 text-[8px] text-gray-500">
-      <span>ANESTHESIA RECORD — CONFIDENTIAL MEDICAL DOCUMENT</span>
-      <span>HN: {currentCase?.hn || "-"} | AN: {safeText(form.an)} | {currentCase ? formatDateDDMMYYYY(currentCase.start_time, workstation) : "-"}</span>
+      <span>CONFIDENTIAL · Printed {formatDateTime(printedAt, workstation)}{preferenceUsername ? ` · ${preferenceUsername}` : ""}</span>
+      <span>HN: {currentCase?.hn || "-"} | AN: {safeText(form.an)} | DOB: {dobText} | {currentCase ? formatDateDDMMYYYY(currentCase.start_time, workstation) : "-"}</span>
       <span>Page {pageNum} / {totalPageCount}</span>
     </footer>
   );
@@ -2492,6 +2524,17 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
             <div className="text-[9px] text-gray-400">No events recorded</div>
           )}
         </section>
+        <section className="report-signatures mt-3 grid grid-cols-2 gap-8 text-[9px]">
+          {([["Anesthesiologist", signers.anesthetist], ["Nurse anesthetist", signers.nurse]] as const).map(([role, name]) => (
+            <div key={role}>
+              <div className="h-7 border-b border-gray-500" />
+              <div className="mt-0.5 flex justify-between gap-2">
+                <span>{role}: <span className="report-thai-text font-semibold">{name || "...................................."}</span></span>
+                <span className="text-gray-500">Date / time ....................</span>
+              </div>
+            </div>
+          ))}
+        </section>
         {renderPageFooter(1)}
       </article>
 
@@ -2592,6 +2635,9 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
       <>
       {formStudioOpen && currentCaseHead ? <Suspense fallback={<div className="mb-2 text-xs text-gray-500">Loading Form Studio…</div>}>
         <FormStudioReportPanel head={currentCaseHead} language={reportLanguage} />
+      </Suspense> : null}
+      {currentCaseHead ? <Suspense fallback={null}>
+        <CaseDocumentsPanel caseId={currentCaseHead.caseId} language={reportLanguage} readOnly={caseStatus.status === "ARCHIVED"} />
       </Suspense> : null}
       <section className="report-setup mb-4 rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-4 shadow-sm">
           <div className="mb-3 flex items-baseline justify-between">

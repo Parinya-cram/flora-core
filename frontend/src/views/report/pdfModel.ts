@@ -75,8 +75,28 @@ export type ReportPdfCaseMilestones = {
   surgeryDuration: string | null;
 };
 
+/** The hospital's name and logo set in Canopy (formdev/core/hospital.ts); null keeps the edition's built-in header. */
+export type ReportPdfHospital = { nameTh: string; nameEn: string; logo: string | null };
+
+/** The people who sign the summary page: the responsible anesthetist and the nurse anesthetist (blank lines when the
+ * case has none, to sign by hand). */
+export type ReportSigners = { anesthetist: string; nurse: string };
+
+export function reportSigners(staff: Array<Pick<StaffMember, "name" | "role">>): ReportSigners {
+  const named = staff.filter(member => member.name?.trim());
+  const role = (member: Pick<StaffMember, "role">) => String(member.role || "");
+  const nurse = named.find(member => /nurse\s*anest/i.test(role(member)));
+  const anesthetist = named.find(member => /anest|anaest/i.test(role(member)) && !/nurse|resident|fellow|student/i.test(role(member)))
+    ?? named.find(member => /anest|anaest/i.test(role(member)) && !/nurse|student/i.test(role(member)));
+  return { anesthetist: anesthetist?.name.trim() || "", nurse: nurse?.name.trim() || "" };
+}
+
 export type ReportPdfModel = {
   editionCode?: "full" | "rcat" | "eforl";
+  hospital?: ReportPdfHospital | null;
+  /** Who printed the report (footer of every page). */
+  printedBy?: string;
+  signers?: ReportSigners;
   generatedAt: number;
   currentCase: ReportPdfActiveCase;
   form: Record<string, unknown>;

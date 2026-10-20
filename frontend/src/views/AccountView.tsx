@@ -9,6 +9,7 @@ import {
   mergeStoredAuthUser,
   savePersonalThemeToAccount,
   setOwnAdminPin,
+  setOwnSignPin,
   updateOwnPreferences,
   type ManagedAuthUser,
   type PersonalThemeRow,
@@ -71,6 +72,10 @@ export default function AccountView({ sessionUser }: { sessionUser: AuthUser | n
   const [pinValue, setPinValue] = useState("");
   const [pinConfirm, setPinConfirm] = useState("");
   const [pinSet, setPinSet] = useState<boolean | null>(null);
+  const [signPassword, setSignPassword] = useState("");
+  const [signPin, setSignPin] = useState("");
+  const [signConfirm, setSignConfirm] = useState("");
+  const [signSet, setSignSet] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -109,6 +114,26 @@ export default function AccountView({ sessionUser }: { sessionUser: AuthUser | n
   const canManageUsers = sessionUser?.permissions?.includes("account.manage") === true;
   const hasAdminPin = pinSet ?? (account?.hasAdminPin === true || sessionUser?.hasAdminPin === true);
   const isLdapAccount = (account?.authSource || sessionUser?.authSource) === "ldap";
+
+  const hasSignPin = signSet ?? sessionUser?.hasSignPin === true;
+  const saveSignPin = async (clear: boolean) => {
+    if (!clear) {
+      if (!/^\d{4,8}$/.test(signPin)) return setError("Signing PIN must be 4–8 digits.");
+      if (signPin !== signConfirm) return setError("Signing PINs do not match.");
+    }
+    setSaving(true); setError(""); setMessage("");
+    try {
+      await setOwnSignPin(signPassword, clear ? null : signPin);
+      setSignSet(!clear);
+      if (sessionUser) {
+        mergeStoredAuthUser({ ...sessionUser, hasSignPin: !clear });
+        window.dispatchEvent(new Event("flora:auth-changed"));
+      }
+      setSignPassword(""); setSignPin(""); setSignConfirm("");
+      setMessage(clear ? "Signing PIN cleared." : "Signing PIN saved.");
+    } catch (err) { setError(err instanceof Error ? err.message : "Unable to update signing PIN"); }
+    finally { setSaving(false); }
+  };
 
   const saveAdminPin = async (clear: boolean) => {
     if (!clear) {
@@ -253,6 +278,22 @@ export default function AccountView({ sessionUser }: { sessionUser: AuthUser | n
     {isLdapAccount
       ? <section className="space-y-1 rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-5"><h2 className="font-semibold">Password</h2><p className="text-sm text-[var(--app-muted)]">This account signs in through the organisation directory (LDAP). Change your password in the directory service.</p></section>
       : <section className="space-y-3 rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-5"><h2 className="font-semibold">Password</h2><div className="grid max-w-3xl gap-3 sm:grid-cols-3"><input type="password" className="rounded-lg border border-[var(--app-border)] px-3 py-2" placeholder="Current password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} /><input type="password" className="rounded-lg border border-[var(--app-border)] px-3 py-2" placeholder="New password" value={newPassword} onChange={e => setNewPassword(e.target.value)} /><input type="password" className="rounded-lg border border-[var(--app-border)] px-3 py-2" placeholder="Confirm password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} /></div><button type="button" onClick={() => void changePassword()} disabled={saving || !currentPassword || !newPassword || !confirmPassword} className="rounded-lg border border-[var(--app-border)] px-4 py-2 text-sm font-semibold disabled:opacity-50">Change password</button></section>}
+    <section className="space-y-3 rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="font-semibold">Signing PIN</h2>
+        <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${hasSignPin ? "border-emerald-400/35 bg-emerald-500/10 text-emerald-300" : "border-amber-400/35 bg-amber-500/10 text-amber-300"}`}>{hasSignPin ? "PIN set" : "No PIN set"}</span>
+      </div>
+      <p className="text-xs text-[var(--app-muted)]">A 4–8 digit PIN you enter when you sign a form at the bedside: the signature is recorded as yours and locked. It works on every Leaf of your wards. Confirm with your current password.</p>
+      <div className="grid max-w-3xl gap-3 sm:grid-cols-3">
+        <input type="password" autoComplete="current-password" className="rounded-lg border border-[var(--app-border)] px-3 py-2" placeholder="Current password" value={signPassword} onChange={e => setSignPassword(e.target.value)} />
+        <input type="password" inputMode="numeric" autoComplete="off" maxLength={8} className="rounded-lg border border-[var(--app-border)] px-3 py-2" placeholder="New PIN (4–8 digits)" value={signPin} onChange={e => setSignPin(e.target.value.replace(/\D/g, "").slice(0, 8))} />
+        <input type="password" inputMode="numeric" autoComplete="off" maxLength={8} className="rounded-lg border border-[var(--app-border)] px-3 py-2" placeholder="Confirm PIN" value={signConfirm} onChange={e => setSignConfirm(e.target.value.replace(/\D/g, "").slice(0, 8))} />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => void saveSignPin(false)} disabled={saving || !signPassword || signPin.length < 4 || !signConfirm} className="rounded-lg border border-[var(--app-border)] px-4 py-2 text-sm font-semibold disabled:opacity-50">{hasSignPin ? "Change PIN" : "Set PIN"}</button>
+        {hasSignPin ? <button type="button" onClick={() => void saveSignPin(true)} disabled={saving || !signPassword} className="rounded-lg border border-rose-400/40 px-4 py-2 text-sm font-semibold text-rose-300 disabled:opacity-50">Clear PIN</button> : null}
+      </div>
+    </section>
     {canManageUsers ? <section className="space-y-3 rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-5">
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="font-semibold">Admin PIN</h2>

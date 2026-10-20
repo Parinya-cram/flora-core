@@ -3,8 +3,10 @@
  * both are run against formdev/spec/fixtures so offline validation matches the server.
  * Format reference: formdev/spec/FORM-SCHEMA.md.
  */
+import { HOSPITAL_LOGO } from "./hospital";
 import { allowedProps, allProps, FIELD_TYPE_SPECS, fieldTypeSpec, hasValue, INDEX_FAMILY, INDEXABLE_TYPES, STYLE_COMPONENTS, STYLE_TOKENS, valueKind, type TokenSpec, type ValueKind } from "./fieldTypes";
 import { sectionFieldLists } from "./blocks";
+import { CASE_BLOCK_IDS, CASE_BLOCK_LIMITS, caseBlockSpec } from "./caseBlocks";
 import { check as checkFormula } from "../logic/formula";
 import { build as buildModel, cycles as logicCycles } from "../logic/model";
 import { MESSAGES } from "./messages";
@@ -31,7 +33,8 @@ const LIST_OPERATORS = ["in", "not_in"];
 const FORM_ACTIONS = ["view", "create", "edit", "delete", "export"];
 const SECTION_ACTIONS = ["view", "edit"];
 const FIELD_ACTIONS = ["view", "edit", "export"];
-export const TEMPLATE_TOKENS = ["title", "form_id", "version", "page", "pages", "date", "record_id"];
+// Header / footer tokens: the form and page, and the patient and print (hn, an, patient, dob from the record's fields).
+export const TEMPLATE_TOKENS = ["title", "form_id", "version", "page", "pages", "date", "record_id", "hn", "an", "patient", "dob", "printed_at", "printed_by", "hospital"];
 const CALCULATOR_OUTPUTS = ["number", "integer", "decimal", "text", "boolean"];
 export const RECORD_STATUSES: RecordStatus[] = ["draft", "submitted", "deleted"];
 export const MAX_INDEXED_FIELDS = 16;
@@ -60,9 +63,9 @@ const SIGNATURE_DATA = /^data:image\/(png|svg\+xml);base64,[A-Za-z0-9+/=]+$/;
 
 const DEFINITION_KEYS = new Set(["format", "form_id", "schema_version", "title", "description", "paper", "style_id", "style", "font_id", "offline", "metadata",
   "layout", "calculators", "rules", "permission", "sections", "migration", "extensions"]);
-const SECTION_KEYS = new Set(["id", "title", "description", "fields", "categories", "sections", "layout", "style", "visibility", "permission", "page_break", "repeat",
+const SECTION_KEYS = new Set(["id", "title", "title_en", "description", "fields", "categories", "sections", "layout", "style", "visibility", "permission", "page_break", "repeat",
   "print_style", "hide_title", "repeat_on_pages"]);
-const CATEGORY_KEYS = new Set(["id", "title", "description", "fields", "layout", "style", "visibility", "permission", "page_break", "repeat", "print_style", "hide_title"]);
+const CATEGORY_KEYS = new Set(["id", "title", "title_en", "description", "fields", "layout", "style", "visibility", "permission", "page_break", "repeat", "print_style", "hide_title"]);
 // Paper layout (Template phase): bordered cells with "Label: value", and top-level sections drawn on every page.
 const PRINT_STYLES = ["plain", "boxed"];
 const PAGE_BANDS = ["header", "footer"];
@@ -96,7 +99,12 @@ export const TIMELINE_PRINT_COLUMNS = [8, 48] as const;
 const BAND_KEYS = new Set(["left", "center", "right", "height_mm", "first_page"]);
 const MARGIN_KEYS = ["top", "right", "bottom", "left"];
 const CALCULATOR_KEYS = new Set(["id", "name", "description", "formula", "output"]);
-const FIELD_LAYOUT_KEYS = new Set(["col", "row", "span", "responsive", "page_break"]);
+const FIELD_LAYOUT_KEYS = new Set(["col", "row", "span", "row_span", "responsive", "page_break"]);
+/** A field may cover several grid rows (row_span), up to this many. */
+export const MAX_ROW_SPAN = 50;
+export const MAX_PARAGRAPH = 4000;
+/** Static elements: no value, shown on screen and on paper. */
+export const STATIC_TYPES = new Set(["heading", "paragraph", "divider"]);
 const RESPONSIVE_KEYS = new Set(["col", "span", "hidden"]);
 const RULE_KEYS = new Set(["required", "min", "max", "min_length", "max_length", "pattern", "email", "numeric", "min_date", "max_date", "message", "rules"]);
 const RULES_BY_VALUE: Record<string, Set<string>> = {
@@ -621,7 +629,8 @@ function validateDisplay(ctx: Ctx, field: Obj, path: string) {
   }
 }
 
-type Cell = [number, number, number];
+/** An explicit placement: row, col, span and row_span (rows covered). */
+type Cell = [number, number, number, number];
 
 function validateFieldLayout(ctx: Ctx, layout: unknown, path: string, columns: number): Cell | null {
   if (!isObject(layout)) {
@@ -631,6 +640,9 @@ function validateFieldLayout(ctx: Ctx, layout: unknown, path: string, columns: n
   ctx.unknown(layout, FIELD_LAYOUT_KEYS, path);
   checkPlacement(ctx, layout, path, columns);
   if ("row" in layout && !(isInt(layout.row) && layout.row >= 1 && layout.row <= 500)) ctx.add(`${path}.row`, "invalid_layout", "row must be an integer 1-500");
+  if ("row_span" in layout && !(isInt(layout.row_span) && layout.row_span >= 1 && layout.row_span <= MAX_ROW_SPAN)) {
+    ctx.add(`${path}.row_span`, "invalid_layout", `row_span must be an integer 1-${MAX_ROW_SPAN}`);
+  }
   if ("page_break" in layout && !PAGE_BREAKS.includes(layout.page_break as string)) ctx.add(`${path}.page_break`, "invalid_page_break", `page_break must be one of ${PAGE_BREAKS.join(", ")}`);
   if ("responsive" in layout) {
     const responsive = layout.responsive;
@@ -651,7 +663,8 @@ function validateFieldLayout(ctx: Ctx, layout: unknown, path: string, columns: n
     }
   }
   const cell = [layout.row, layout.col, layout.span];
-  return cell.every(isInt) ? (cell as Cell) : null;
+  if (!cell.every(isInt)) return null;
+  return [...cell, isInt(layout.row_span) ? layout.row_span : 1] as Cell;
 }
 
 function checkPlacement(ctx: Ctx, rule: Obj, path: string, columns: number) {
@@ -666,10 +679,10 @@ function checkPlacement(ctx: Ctx, rule: Obj, path: string, columns: number) {
 
 function checkOverlaps(ctx: Ctx, cells: Array<[string, Cell]>) {
   const taken = new Set<string>();
-  for (const [path, [row, col, span]] of cells) {
-    const wanted = Array.from({ length: span }, (_, offset) => `${row}:${col + offset}`);
+  for (const [path, [row, col, span, rows]] of cells) {
+    const wanted = Array.from({ length: rows }, (_, down) => Array.from({ length: span }, (_, offset) => `${row + down}:${col + offset}`)).flat();
     const clash = wanted.find(cell => taken.has(cell));
-    if (clash) ctx.add(`${path}.layout`, "layout_overlap", `Overlaps another field at row ${row}, column ${clash.split(":")[1]}`);
+    if (clash) ctx.add(`${path}.layout`, "layout_overlap", `Overlaps another field at row ${clash.split(":")[0]}, column ${clash.split(":")[1]}`);
     wanted.forEach(cell => taken.add(cell));
   }
 }
@@ -739,6 +752,7 @@ function validateSection(ctx: Ctx, section: unknown, path: string, scope: Scope,
   else ctx.sectionIds.add(sectionId);
   if (!isText(section.title) || !section.title.trim()) ctx.add(`${path}.title`, "invalid_title", "Section title is required");
   checkText(ctx, section, "description", path, 2000);
+  checkText(ctx, section, "title_en", path, 200);
   if ("layout" in section) columns = validateContainerLayout(ctx, section.layout, `${path}.layout`, columns, SECTION_LAYOUTS);
   if ("style" in section) validateStyleRef(ctx, section.style, `${path}.style`);
   if ("visibility" in section) validateVisibility(ctx, section.visibility, `${path}.visibility`, scope);
@@ -786,6 +800,7 @@ function validateCategory(ctx: Ctx, category: unknown, path: string, scope: Scop
   else ctx.categoryIds.add(categoryId);
   if (!isText(category.title) || !category.title.trim()) ctx.add(`${path}.title`, "invalid_title", "Category title is required");
   checkText(ctx, category, "description", path, 2000);
+  checkText(ctx, category, "title_en", path, 200);
   if ("layout" in category) columns = validateContainerLayout(ctx, category.layout, `${path}.layout`, columns, SECTION_LAYOUTS);
   if ("style" in category) validateStyleRef(ctx, category.style, `${path}.style`);
   if ("visibility" in category) validateVisibility(ctx, category.visibility, `${path}.visibility`, scope);
@@ -878,7 +893,7 @@ function validateField(ctx: Ctx, field: unknown, path: string, scope: Scope, col
     if (flag in field && typeof field[flag] !== "boolean") ctx.add(`${path}.${flag}`, "invalid_type", `${flag} must be a boolean`);
   }
   if (typeof field.visible === "boolean" && typeof field.hidden === "boolean" && field.visible === field.hidden) ctx.add(`${path}.visible`, "conflicting_visibility", "visible and hidden disagree");
-  for (const [name, limit] of [["description", 2000], ["placeholder", 200], ["unit", 40]] as const) checkText(ctx, field, name, path, limit);
+  for (const [name, limit] of [["description", 2000], ["placeholder", 200], ["unit", 40], ["label_en", 200]] as const) checkText(ctx, field, name, path, limit);
   for (const bound of ["min", "max"]) {
     if (bound in field && !isNumber(field[bound])) ctx.add(`${path}.${bound}`, "invalid_type", `${bound} must be a number`);
   }
@@ -891,12 +906,17 @@ function validateField(ctx: Ctx, field: unknown, path: string, scope: Scope, col
     if (isText(field.formula) && field.formula.trim() && !("calculator" in field)) ctx.formulas.push([`${path}.formula`, field.formula, scope]);
   }
   if (kind === "file" || kind === "signature") validateFileProps(ctx, field, path);
+  if ("label_width" in field && allowed.has("label_width") && !(isInt(field.label_width) && field.label_width >= 10 && field.label_width <= 90)) {
+    ctx.add(`${path}.label_width`, "invalid_layout", "label_width must be an integer 10-90 (percent of the table)");
+  }
   if ("option_columns" in field && allowed.has("option_columns") && !(isInt(field.option_columns) && field.option_columns >= 1 && field.option_columns <= 6)) {
     ctx.add(`${path}.option_columns`, "invalid_columns", "option_columns must be an integer 1-6");
   }
   if (field.type === "matrix") validateMatrix(ctx, field, path);
   if (field.type === "timeline" && "timeline" in field) validateTimelineConfig(ctx, field.timeline, `${path}.timeline`);
   if (field.type === "logo" || field.type === "barcode") validatePrintedElement(ctx, field, path, scope);
+  if (field.type === "case_block") validateCaseBlock(ctx, field, path);
+  if (STATIC_TYPES.has(field.type as string)) validateStaticElement(ctx, field, path);
   if ("bind" in field && !(isText(field.bind) && BIND.test(field.bind))) ctx.add(`${path}.bind`, "invalid_type", "bind names a case datum such as patient.hn or case.asa");
   if ("derive" in field && allowed.has("derive")) validateDerive(ctx, field, path, scope);
 
@@ -1038,13 +1058,23 @@ function validateTimelineColors(ctx: Ctx, colors: unknown, path: string) {
 }
 
 /** timeline: which parts show, the table rows, the chart series, the column step (minutes) and the value source. */
+/** heading: level 1-3; paragraph: its text (required); all: alignment. */
+function validateStaticElement(ctx: Ctx, field: Obj, path: string) {
+  if ("level" in field && !(isInt(field.level) && field.level >= 1 && field.level <= 3)) ctx.add(`${path}.level`, "invalid_layout", "level must be 1, 2 or 3");
+  if ("align" in field && !(ALIGNS as readonly unknown[]).includes(field.align)) ctx.add(`${path}.align`, "invalid_layout", "align is left, center or right");
+  if (field.type === "paragraph" && (!isText(field.content) || !field.content.trim() || textLength(field.content) > MAX_PARAGRAPH)) {
+    ctx.add(`${path}.content`, "invalid_type", `content is the paragraph's text (1-${MAX_PARAGRAPH} characters)`);
+  }
+}
+
 /** logo: a PNG / JPEG picture kept in the definition; barcode: the value of another field of the form. */
 function validatePrintedElement(ctx: Ctx, field: Obj, path: string, scope: Scope) {
   const [low, high] = field.type === "logo" ? LOGO_HEIGHT_MM : BARCODE_HEIGHT_MM;
   if ("height_mm" in field && !(isNumber(field.height_mm) && field.height_mm >= low && field.height_mm <= high)) ctx.add(`${path}.height_mm`, "invalid_layout", `height_mm must be ${low}-${high}`);
   if ("align" in field && !(ALIGNS as readonly unknown[]).includes(field.align)) ctx.add(`${path}.align`, "invalid_layout", "align is left, center or right");
   if (field.type === "logo") {
-    if (!isText(field.src) || !LOGO_SRC.test(field.src)) ctx.add(`${path}.src`, "invalid_file", "src is a PNG or JPEG picture (data:image/png;base64,...)");
+    if (field.src === HOSPITAL_LOGO) return;  // the hospital's logo, set in Canopy (core/hospital.ts)
+    if (!isText(field.src) || !LOGO_SRC.test(field.src)) ctx.add(`${path}.src`, "invalid_file", "src is a PNG or JPEG picture (data:image/png;base64,...) or \"hospital\"");
     else if (field.src.length > MAX_LOGO_CHARS) ctx.add(`${path}.src`, "invalid_max_size", `The picture is limited to ${MAX_LOGO_CHARS / 1000} KB (base64); use a smaller image`);
     return;
   }
@@ -1052,6 +1082,47 @@ function validatePrintedElement(ctx: Ctx, field: Obj, path: string, scope: Scope
   else ctx.refs.push([`${path}.source`, field.source, scope]);
   if ("symbology" in field && !(SYMBOLOGIES as readonly unknown[]).includes(field.symbology)) ctx.add(`${path}.symbology`, "invalid_layout", `symbology is one of ${SYMBOLOGIES.join(", ")}`);
   if ("show_text" in field && typeof field.show_text !== "boolean") ctx.add(`${path}.show_text`, "invalid_type", "show_text must be a boolean");
+}
+
+/** case_block: a known block, some of its columns (each once) with widths in percent that together fit the block,
+ * and row limits (core/caseBlocks.ts). */
+function validateCaseBlock(ctx: Ctx, field: Obj, path: string) {
+  const spec = caseBlockSpec(field.block);
+  if (!spec) {
+    ctx.add(`${path}.block`, "invalid_type", `block is one of ${CASE_BLOCK_IDS.join(", ")}`);
+    return;
+  }
+  if ("block_columns" in field) {
+    const columns = field.block_columns;
+    const [low, high] = CASE_BLOCK_LIMITS.column_width;
+    if (!Array.isArray(columns) || !columns.length || columns.length > CASE_BLOCK_LIMITS.max_columns) {
+      ctx.add(`${path}.block_columns`, "invalid_type", `block_columns lists 1-${CASE_BLOCK_LIMITS.max_columns} of the block's columns`);
+    } else {
+      const seen = new Set<string>();
+      let total = 0;
+      columns.forEach((column, index) => {
+        const at = `${path}.block_columns[${index}]`;
+        if (!isObject(column)) { ctx.add(at, "invalid_type", "a column is {key, width?, label?}"); return; }
+        ctx.unknown(column, new Set(["key", "width", "label"]), at);
+        if (!isText(column.key) || !spec.columns.some(own => own.key === column.key)) {
+          ctx.add(`${at}.key`, "invalid_type", `key is one of ${spec.columns.map(own => own.key).join(", ")}`);
+        } else if (seen.has(column.key)) ctx.add(`${at}.key`, "duplicate_option", `column '${column.key}' is listed twice`);
+        else seen.add(column.key);
+        if ("width" in column) {
+          if (!(isNumber(column.width) && column.width >= low && column.width <= high)) ctx.add(`${at}.width`, "invalid_layout", `width is ${low}-${high} (percent of the block)`);
+          else total += column.width;
+        }
+        if ("label" in column && !(isText(column.label) && column.label.trim() && textLength(column.label) <= 80)) ctx.add(`${at}.label`, "invalid_label", "label is 1-80 characters");
+      });
+      if (total > 100.5) ctx.add(`${path}.block_columns`, "invalid_layout", `the column widths add to ${Math.round(total)}%; together they must fit the block (100%)`);
+    }
+  }
+  for (const name of ["max_rows", "min_rows"] as const) {
+    const [low, high] = CASE_BLOCK_LIMITS[name];
+    if (name in field && !(isInt(field[name]) && field[name] >= low && field[name] <= high)) ctx.add(`${path}.${name}`, "invalid_type", `${name} must be an integer ${low}-${high}`);
+  }
+  if (isInt(field.max_rows) && isInt(field.min_rows) && field.min_rows > field.max_rows) ctx.add(`${path}.min_rows`, "invalid_range", "min_rows must not be more than max_rows");
+  if ("show_header" in field && typeof field.show_header !== "boolean") ctx.add(`${path}.show_header`, "invalid_type", "show_header must be a boolean");
 }
 
 function validateTimelineConfig(ctx: Ctx, config: unknown, path: string) {
@@ -1193,7 +1264,8 @@ function validateOptions(ctx: Ctx, field: Obj, path: string, scope: Scope) {
     else {
       values.add(value);
       const oPath = `${path}.options[${oIndex}]`;
-      ctx.unknown(option, new Set(["value", "label", "has_input", "input_required", "when"]), oPath);
+      ctx.unknown(option, new Set(["value", "label", "label_en", "has_input", "input_required", "when"]), oPath);
+      checkText(ctx, option, "label_en", oPath, 200);
       for (const flag of ["has_input", "input_required"]) {
         if (flag in option && typeof option[flag] !== "boolean") ctx.add(`${oPath}.${flag}`, "invalid_option", `${flag} must be a boolean`);
       }
@@ -1509,10 +1581,13 @@ const valueFile: ValueValidator = (field, value, path) => {
 };
 
 const valueSignature: ValueValidator = (field, value, path) => {
-  const ok = isObject(value) && Object.keys(value).every(key => ["data", "signed_at", "signer"].includes(key)) && isText(value.data) && SIGNATURE_DATA.test(value.data)
+  // signer / signer_name: who signed; verified "pin": confirmed with the signer's signing PIN on Flora Leaf.
+  const ok = isObject(value) && Object.keys(value).every(key => ["data", "signed_at", "signer", "signer_name", "verified"].includes(key))
+    && isText(value.data) && SIGNATURE_DATA.test(value.data)
     && (!("signed_at" in value) || (isText(value.signed_at) && validDateTime(value.signed_at)))
-    && (!("signer" in value) || (isText(value.signer) && textLength(value.signer) <= 200));
-  if (!ok) return [issue(path, "invalid_signature", "Expected {data: PNG or SVG data URL, signed_at?, signer?}")];
+    && ["signer", "signer_name"].every(key => !(key in value) || (isText(value[key]) && textLength(value[key] as string) <= 200))
+    && (!("verified" in value) || value.verified === "pin");
+  if (!ok) return [issue(path, "invalid_signature", "Expected {data: PNG or SVG data URL, signed_at?, signer?, signer_name?, verified?: pin}")];
   const limit = isInt(field.max_size_kb) ? field.max_size_kb : DEFAULT_SIGNATURE_KB;
   return (value.data as string).length > limit * 1024 ? [issue(path, "file_too_large", `Larger than ${limit} KB`)] : [];
 };

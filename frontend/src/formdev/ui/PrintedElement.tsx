@@ -4,6 +4,7 @@
  * its label, as it prints.
  */
 import type { FieldDefinition, JsonValue } from "../core/types";
+import { logoSource } from "../core/hospital";
 import { encodeBarcode } from "../render/barcode";
 
 const JUSTIFY = { left: "flex-start", center: "center", right: "flex-end" } as const;
@@ -12,8 +13,9 @@ export default function PrintedElement({ field, data }: { field: FieldDefinition
   const align = field.align ?? (field.type === "logo" ? "left" : "center");
   if (field.type === "logo") {
     const height = `${field.height_mm ?? 14}mm`;
+    const src = logoSource(field.src);
     return <div data-printed="logo" style={{ display: "flex", justifyContent: JUSTIFY[align], height }}>
-      {field.src ? <img src={field.src} alt={field.label} style={{ height, maxWidth: "100%", objectFit: "contain" }} />
+      {src ? <img src={src} alt={field.label} style={{ height, maxWidth: "100%", objectFit: "contain" }} />
         : <span style={{ alignSelf: "center", fontSize: "8pt", color: "#94a3b8" }}>{field.label}</span>}
     </div>;
   }

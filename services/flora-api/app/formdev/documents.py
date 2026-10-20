@@ -8,8 +8,6 @@ to the author; a file with status "error" stops the build.
 """
 from __future__ import annotations
 
-import base64
-import binascii
 import hashlib
 import io
 import json
@@ -77,47 +75,37 @@ class SourceFile:
 
 
 class DocumentError(ValueError):
-    """The request itself is unusable (too many files, bad base64); shown to the author."""
+    """The request itself is unusable (no documents, too many, too large in total); shown to the author."""
 
 
-def _decode(value: Any, what: str) -> bytes:
-    if not isinstance(value, str):
-        raise DocumentError(f"{what}: data must be base64 text")
-    try:
-        return base64.b64decode(value.split(",", 1)[1] if value.startswith("data:") else value, validate=True)
-    except (binascii.Error, ValueError) as error:
-        raise DocumentError(f"{what}: data is not valid base64") from error
-
-
-def read_upload(body: Any) -> list[SourceFile]:
-    """{"files": [{name, data (base64), page_images?: [base64 PNG]}]} -> files, not yet inspected."""
-    items = body.get("files") if isinstance(body, dict) else None
-    if not isinstance(items, list) or not items:
+def check_request(files: list[SourceFile]) -> list[SourceFile]:
+    """The documents of one build (uploaded one by one: formdev/uploads.py), within the limits of one request."""
+    if not files:
         raise DocumentError("Add at least one document")
-    if len(items) > MAX_FILES:
+    if len(files) > MAX_FILES:
         raise DocumentError(f"At most {MAX_FILES} documents at a time")
-    files: list[SourceFile] = []
-    total = 0
-    for index, item in enumerate(items):
-        if not isinstance(item, dict):
-            raise DocumentError(f"files[{index}] must be an object")
-        name = str(item.get("name") or f"document-{index + 1}").strip()[:MAX_NAME] or f"document-{index + 1}"
-        content = _decode(item.get("data"), name)
-        total += len(content)
-        source = SourceFile(name=name, content=content)
-        images = item.get("page_images") or []
-        if not isinstance(images, list) or len(images) > MAX_PAGE_IMAGES:
-            raise DocumentError(f"{name}: page_images is a list of at most {MAX_PAGE_IMAGES} PNG pages")
-        for page, image in enumerate(images):
-            data = _decode(image, f"{name} page {page + 1}")
-            if not data.startswith(b"\x89PNG\r\n\x1a\n"):
-                raise DocumentError(f"{name} page {page + 1}: page images are PNG")
-            total += len(data)
-            source.page_images.append(data)
-        files.append(source)
-    if total > MAX_TOTAL_BYTES:
+    if sum(len(source.content) for source in files) > MAX_TOTAL_BYTES:
         raise DocumentError(f"Documents are limited to {MAX_TOTAL_BYTES // (1024 * 1024)} MB in total")
     return files
+
+
+def render_pages(content: bytes, max_pages: int, width_px: int = 1600) -> list[bytes]:
+    """PNG pages of a PDF, for AI hosts that cannot read PDF files (rendered here: the browser sends only the file)."""
+    import pypdfium2 as pdfium
+
+    pages: list[bytes] = []
+    document = pdfium.PdfDocument(content)
+    try:
+        for index in range(min(len(document), max_pages)):
+            page = document[index]
+            width_pt = page.get_size()[0] or 595
+            image = page.render(scale=width_px / width_pt).to_pil().convert("RGB")
+            out = io.BytesIO()
+            image.save(out, "PNG", optimize=True)
+            pages.append(out.getvalue())
+    finally:
+        document.close()
+    return pages
 
 
 def sniff(content: bytes) -> tuple[str, str]:

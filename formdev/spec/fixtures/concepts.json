@@ -1,0 +1,860 @@
+{
+ "concepts": [
+  {
+   "key": "patient.hn",
+   "th": "HN",
+   "en": "HN",
+   "kind": "text",
+   "aliases": [
+    "hn",
+    "hospital_number",
+    "mrn"
+   ]
+  },
+  {
+   "key": "patient.an",
+   "th": "AN",
+   "en": "AN",
+   "kind": "text",
+   "aliases": [
+    "an",
+    "admission_number",
+    "encounter_number"
+   ]
+  },
+  {
+   "key": "patient.name",
+   "th": "ชื่อ-นามสกุลผู้ป่วย",
+   "en": "Patient name",
+   "kind": "text",
+   "aliases": [
+    "patient_name",
+    "name",
+    "full_name",
+    "patient_full_name"
+   ]
+  },
+  {
+   "key": "patient.id_card",
+   "th": "เลขบัตรประชาชน",
+   "en": "ID card",
+   "kind": "text",
+   "aliases": [
+    "id_card",
+    "cid",
+    "citizen_id",
+    "national_id"
+   ]
+  },
+  {
+   "key": "patient.dob",
+   "th": "วันเกิด",
+   "en": "Date of birth",
+   "kind": "date",
+   "aliases": [
+    "dob",
+    "date_of_birth",
+    "birth_date"
+   ]
+  },
+  {
+   "key": "patient.age_years",
+   "th": "อายุ (ปี)",
+   "en": "Age (years)",
+   "kind": "number",
+   "aliases": [
+    "age",
+    "age_years",
+    "age_y"
+   ]
+  },
+  {
+   "key": "patient.sex",
+   "th": "เพศ",
+   "en": "Sex",
+   "kind": "text",
+   "aliases": [
+    "gender",
+    "sex"
+   ]
+  },
+  {
+   "key": "patient.weight_kg",
+   "th": "น้ำหนัก (kg)",
+   "en": "Weight (kg)",
+   "kind": "number",
+   "aliases": [
+    "weight",
+    "weight_kg",
+    "wt",
+    "body_weight"
+   ]
+  },
+  {
+   "key": "patient.height_cm",
+   "th": "ส่วนสูง (cm)",
+   "en": "Height (cm)",
+   "kind": "number",
+   "aliases": [
+    "height",
+    "height_cm",
+    "ht"
+   ]
+  },
+  {
+   "key": "patient.blood_group",
+   "th": "หมู่เลือด",
+   "en": "Blood group",
+   "kind": "text",
+   "aliases": [
+    "blood_type",
+    "blood_group",
+    "blood_group_abo"
+   ]
+  },
+  {
+   "key": "patient.allergy",
+   "th": "ประวัติแพ้",
+   "en": "Allergy",
+   "kind": "text",
+   "aliases": [
+    "allergy",
+    "allergies",
+    "drug_allergy"
+   ]
+  },
+  {
+   "key": "case.asa",
+   "th": "ASA",
+   "en": "ASA",
+   "kind": "text",
+   "aliases": [
+    "asa_status",
+    "asa",
+    "asa_class"
+   ]
+  },
+  {
+   "key": "case.diagnosis",
+   "th": "การวินิจฉัย",
+   "en": "Diagnosis",
+   "kind": "text",
+   "aliases": [
+    "post_op_dx",
+    "diagnosis",
+    "pre_op_dx",
+    "dx"
+   ]
+  },
+  {
+   "key": "case.operation",
+   "th": "การผ่าตัด / หัตถการ",
+   "en": "Operation",
+   "kind": "text",
+   "aliases": [
+    "operation",
+    "procedure",
+    "operation_name"
+   ]
+  },
+  {
+   "key": "case.room",
+   "th": "ห้องผ่าตัด",
+   "en": "Room",
+   "kind": "text",
+   "aliases": [
+    "room",
+    "or_room",
+    "theatre"
+   ]
+  },
+  {
+   "key": "case.ward",
+   "th": "หอผู้ป่วย / หน่วยงาน",
+   "en": "Ward / unit",
+   "kind": "text",
+   "aliases": [
+    "ward",
+    "care_unit",
+    "unit"
+   ]
+  },
+  {
+   "key": "case.date",
+   "th": "วันที่ผ่าตัด",
+   "en": "Operation date",
+   "kind": "date",
+   "aliases": [
+    "op_date",
+    "operation_date",
+    "date",
+    "case_date"
+   ]
+  },
+  {
+   "key": "case.admit_date",
+   "th": "วันที่รับไว้ในโรงพยาบาล",
+   "en": "Admission date",
+   "kind": "date",
+   "aliases": [
+    "admit_date",
+    "admission_date"
+   ]
+  },
+  {
+   "key": "case.type",
+   "th": "ประเภทเคส",
+   "en": "Case type",
+   "kind": "text",
+   "aliases": [
+    "case_type",
+    "priority",
+    "surgical_priority"
+   ]
+  },
+  {
+   "key": "anesthesia.technique",
+   "th": "เทคนิคระงับความรู้สึก",
+   "en": "Anesthesia technique",
+   "kind": "text",
+   "aliases": [
+    "anesthesia_technique",
+    "technique",
+    "anesthesia_type"
+   ]
+  },
+  {
+   "key": "anesthesia.start",
+   "th": "เวลาเริ่มให้ยาระงับความรู้สึก",
+   "en": "Anesthesia start",
+   "kind": "time",
+   "aliases": [
+    "anesthesia_start",
+    "start_anesthesia"
+   ]
+  },
+  {
+   "key": "anesthesia.end",
+   "th": "เวลาสิ้นสุดการให้ยาระงับความรู้สึก",
+   "en": "Anesthesia end",
+   "kind": "time",
+   "aliases": [
+    "anesthesia_end",
+    "end_anesthesia"
+   ]
+  },
+  {
+   "key": "anesthesia.time",
+   "th": "ช่วงเวลาให้ยาระงับความรู้สึก",
+   "en": "Anesthesia time",
+   "kind": "text",
+   "aliases": [
+    "anesthesia_time"
+   ]
+  },
+  {
+   "key": "surgery.start",
+   "th": "เวลาเริ่มผ่าตัด",
+   "en": "Surgery start",
+   "kind": "time",
+   "aliases": [
+    "surgery_start",
+    "start_surgery",
+    "incision_time"
+   ]
+  },
+  {
+   "key": "surgery.end",
+   "th": "เวลาสิ้นสุดการผ่าตัด",
+   "en": "Surgery end",
+   "kind": "time",
+   "aliases": [
+    "surgery_end",
+    "end_surgery"
+   ]
+  },
+  {
+   "key": "surgery.duration",
+   "th": "ช่วงเวลาผ่าตัด",
+   "en": "Surgery duration",
+   "kind": "text",
+   "aliases": [
+    "surgery_duration",
+    "operation_duration"
+   ]
+  },
+  {
+   "key": "staff.anesthesiologist",
+   "th": "วิสัญญีแพทย์",
+   "en": "Anesthesiologist",
+   "kind": "text",
+   "aliases": [
+    "anesthesiologist",
+    "anesthesiologist_name"
+   ]
+  },
+  {
+   "key": "staff.surgeon",
+   "th": "ศัลยแพทย์",
+   "en": "Surgeon",
+   "kind": "text",
+   "aliases": [
+    "surgeon",
+    "surgeon_name"
+   ]
+  },
+  {
+   "key": "staff.nurse",
+   "th": "พยาบาลวิสัญญี",
+   "en": "Anesthesia nurse",
+   "kind": "text",
+   "aliases": [
+    "anesthesia_nurse",
+    "nurse_anesthetist"
+   ]
+  },
+  {
+   "key": "pacu.arrival",
+   "th": "เวลาเข้า PACU",
+   "en": "PACU arrival",
+   "kind": "time",
+   "aliases": [
+    "recovery_start",
+    "pacu_arrival",
+    "pacu_in"
+   ]
+  },
+  {
+   "key": "pacu.discharge",
+   "th": "เวลาออกจาก PACU",
+   "en": "PACU discharge",
+   "kind": "time",
+   "aliases": [
+    "recovery_end",
+    "pacu_discharge",
+    "pacu_out"
+   ]
+  },
+  {
+   "key": "pacu.destination",
+   "th": "ส่งต่อไปที่",
+   "en": "Discharge location",
+   "kind": "text",
+   "aliases": [
+    "discharge_location",
+    "destination",
+    "postoperative_destination"
+   ]
+  },
+  {
+   "key": "lab.hb",
+   "th": "Hb",
+   "en": "Hb",
+   "kind": "number",
+   "aliases": [
+    "hb",
+    "hemoglobin"
+   ]
+  },
+  {
+   "key": "lab.hct",
+   "th": "Hct",
+   "en": "Hct",
+   "kind": "number",
+   "aliases": [
+    "hct",
+    "hematocrit"
+   ]
+  },
+  {
+   "key": "lab.wbc",
+   "th": "WBC",
+   "en": "WBC",
+   "kind": "number",
+   "aliases": [
+    "wbc"
+   ]
+  },
+  {
+   "key": "lab.plt",
+   "th": "Platelet",
+   "en": "Platelet",
+   "kind": "number",
+   "aliases": [
+    "plt",
+    "platelet"
+   ]
+  }
+ ],
+ "draft_keys": {
+  "patient.hn": "hn",
+  "patient.an": "an",
+  "patient.id_card": "idCard",
+  "patient.dob": "dob",
+  "patient.age_years": "ageY",
+  "patient.sex": "sex",
+  "patient.weight_kg": "weightKg",
+  "patient.height_cm": "heightCm",
+  "case.asa": "asa",
+  "case.diagnosis": "diagnosis",
+  "case.operation": "operation",
+  "case.type": "emergency",
+  "anesthesia.technique": "anesthesiaTypes",
+  "pacu.arrival": "pacuArrivalTime",
+  "pacu.discharge": "pacuDischargeTime",
+  "pacu.destination": "postoperativeDestination"
+ },
+ "now": 1792120000000,
+ "cases": [
+  {
+   "name": "the record draft first, then HIS and the lists",
+   "head": {
+    "caseId": 1,
+    "hn": "6512345",
+    "admissionNumber": "67-1",
+    "startTime": 1792112400000
+   },
+   "loaded": {
+    "draft": {
+     "titleTh": "นาย",
+     "firstName": "สมชาย",
+     "lastName": "ใจดี",
+     "an": "67-00123",
+     "idCard": "1100100100100",
+     "dob": "02/05/2513",
+     "sex": "Male",
+     "weightKg": "70,5",
+     "heightCm": 170,
+     "bloodGroupABO": "o",
+     "bloodGroupRh": "neg",
+     "asa": "2",
+     "emergency": true,
+     "diagnosis": [
+      "Appendicitis",
+      " "
+     ],
+     "operation": "Appendectomy",
+     "anesthesiaTypes": [
+      "General anesthesia",
+      "Spinal anesthesia"
+     ],
+     "pacuArrivalTime": "9.05",
+     "pacuDischargeTime": "10:30",
+     "postoperativeDestination": "Ward 5"
+    },
+    "patient": {
+     "patient_name": "HIS NAME",
+     "an": "HIS-AN",
+     "sex": "F",
+     "weight_kg": 50,
+     "asa_status": "3"
+    },
+    "diagnosis": [
+     {
+      "diagnosis_text": "Acute appendicitis",
+      "icd_code": "K35.8"
+     },
+     {
+      "diagnosis_text": "",
+      "icd_code": ""
+     }
+    ],
+    "procedures": [
+     {
+      "procedure_text": "Laparoscopic appendectomy"
+     }
+    ],
+    "allergies": [
+     {
+      "allergen": "Penicillin",
+      "reaction": "rash"
+     },
+     {
+      "allergen": "NKA"
+     },
+     {
+      "allergen": "Latex",
+      "reaction": ""
+     }
+    ],
+    "labs": [
+     {
+      "test_name": "Hgb",
+      "value_text": "12,5"
+     },
+     {
+      "test_name": "Platelet count",
+      "value_text": "250"
+     },
+     {
+      "test_name": "WBC",
+      "value_text": "pending"
+     }
+    ],
+    "events": [
+     {
+      "event_type": "event",
+      "title": "Start Anesthesia",
+      "event_ts": 1792112700000
+     },
+     {
+      "event_type": "event",
+      "title": "Start Surgery",
+      "event_ts": 1792114200000
+     },
+     {
+      "event_type": "note",
+      "title": "End Surgery",
+      "event_ts": 1792119540000
+     },
+     {
+      "event_type": "event",
+      "title": "End Surgery",
+      "event_ts": 1792118400000
+     },
+     {
+      "event_type": "event",
+      "title": "EA",
+      "event_ts": 1792119000000
+     },
+     {
+      "event_type": "event",
+      "title": "End Anesthesia",
+      "event_ts": 1792119300000
+     }
+    ],
+    "staff": [
+     {
+      "role_id": "anesthetistResident",
+      "name": "Dr Res"
+     },
+     {
+      "role_id": "anesthetist",
+      "name": "Dr Staff"
+     },
+     {
+      "role": "Surgeon",
+      "name": "Dr Cut"
+     },
+     {
+      "role_id": "nurseAnesthetist",
+      "name": ""
+     },
+     {
+      "role_id": "nurseAnesthetist",
+      "name": "Nurse A"
+     }
+    ],
+    "workstation": {
+     "roomName": "OR 3",
+     "careUnitName": "Main OR"
+    }
+   },
+   "values": {
+    "patient.hn": {
+     "value": "6512345",
+     "source": "เคส / Case"
+    },
+    "patient.an": {
+     "value": "67-00123",
+     "source": "บันทึก / Record"
+    },
+    "patient.name": {
+     "value": "นายสมชาย ใจดี",
+     "source": "บันทึก / Record"
+    },
+    "patient.id_card": {
+     "value": "1100100100100",
+     "source": "บันทึก / Record"
+    },
+    "patient.dob": {
+     "value": "1970-05-02",
+     "source": "บันทึก / Record"
+    },
+    "patient.age_years": {
+     "value": 56,
+     "source": "คำนวณจากวันเกิด / From DOB"
+    },
+    "patient.sex": {
+     "value": "Male",
+     "source": "บันทึก / Record"
+    },
+    "patient.weight_kg": {
+     "value": 70.5,
+     "source": "บันทึก / Record"
+    },
+    "patient.height_cm": {
+     "value": 170,
+     "source": "บันทึก / Record"
+    },
+    "patient.blood_group": {
+     "value": "O-",
+     "source": "บันทึก / Record"
+    },
+    "patient.allergy": {
+     "value": "Penicillin (rash), Latex",
+     "source": "ประวัติแพ้ / Allergies"
+    },
+    "case.asa": {
+     "value": "2E",
+     "source": "บันทึก / Record"
+    },
+    "case.diagnosis": {
+     "value": "Acute appendicitis (K35.8)",
+     "source": "การวินิจฉัย / Diagnosis"
+    },
+    "case.operation": {
+     "value": "Laparoscopic appendectomy",
+     "source": "หัตถการ / Procedures"
+    },
+    "case.room": {
+     "value": "OR 3",
+     "source": "เครื่องนี้ / Workstation"
+    },
+    "case.ward": {
+     "value": "Main OR",
+     "source": "เครื่องนี้ / Workstation"
+    },
+    "case.date": {
+     "value": "2026-10-16",
+     "source": "เคส / Case"
+    },
+    "case.type": {
+     "value": "Emergency",
+     "source": "บันทึก / Record"
+    },
+    "anesthesia.technique": {
+     "value": "General anesthesia, Spinal anesthesia",
+     "source": "บันทึก / Record"
+    },
+    "anesthesia.start": {
+     "value": "08:05",
+     "source": "เหตุการณ์ / Events"
+    },
+    "anesthesia.end": {
+     "value": "09:55",
+     "source": "เหตุการณ์ / Events"
+    },
+    "anesthesia.time": {
+     "value": "08:05 - 09:55 (01:50)",
+     "source": "เหตุการณ์ / Events"
+    },
+    "surgery.start": {
+     "value": "08:30",
+     "source": "เหตุการณ์ / Events"
+    },
+    "surgery.end": {
+     "value": "09:40",
+     "source": "เหตุการณ์ / Events"
+    },
+    "surgery.duration": {
+     "value": "08:30 - 09:40 (01:10)",
+     "source": "เหตุการณ์ / Events"
+    },
+    "staff.anesthesiologist": {
+     "value": "Dr Res, Dr Staff",
+     "source": "ทีม / Staff"
+    },
+    "staff.surgeon": {
+     "value": "Dr Cut",
+     "source": "ทีม / Staff"
+    },
+    "staff.nurse": {
+     "value": "Nurse A",
+     "source": "ทีม / Staff"
+    },
+    "pacu.arrival": {
+     "value": "09:05",
+     "source": "บันทึก / Record"
+    },
+    "pacu.discharge": {
+     "value": "10:30",
+     "source": "บันทึก / Record"
+    },
+    "pacu.destination": {
+     "value": "Ward 5",
+     "source": "บันทึก / Record"
+    },
+    "lab.hb": {
+     "value": 12.5,
+     "source": "Lab"
+    },
+    "lab.wbc": {
+     "value": "pending",
+     "source": "Lab"
+    },
+    "lab.plt": {
+     "value": 250,
+     "source": "Lab"
+    }
+   }
+  },
+  {
+   "name": "HIS only",
+   "head": {
+    "caseId": 2,
+    "hn": null,
+    "startTime": 1792168200000
+   },
+   "loaded": {
+    "draft": null,
+    "patient": {
+     "hn": "HN-HIS",
+     "an": "AN-HIS",
+     "title_th": "Mr.",
+     "first_name": "John",
+     "last_name": "Doe",
+     "dob": "1970-05-02T00:00:00",
+     "age_text": "56 Y",
+     "sex": "M",
+     "weight_kg": "60",
+     "height_cm": 165.5,
+     "blood_group_abo": "a",
+     "blood_group_rh": "+",
+     "asa_status": "3",
+     "asa_emergency": true,
+     "pre_admit_at": 1792033200000
+    },
+    "diagnosis": [],
+    "procedures": [],
+    "allergies": [
+     {
+      "allergen": "NKDA"
+     }
+    ],
+    "labs": [],
+    "events": [],
+    "staff": [],
+    "workstation": null
+   },
+   "values": {
+    "patient.hn": {
+     "value": "HN-HIS",
+     "source": "เคส / Case"
+    },
+    "patient.an": {
+     "value": "AN-HIS",
+     "source": "HIS"
+    },
+    "patient.name": {
+     "value": "Mr.John Doe",
+     "source": "HIS"
+    },
+    "patient.dob": {
+     "value": "1970-05-02",
+     "source": "HIS"
+    },
+    "patient.age_years": {
+     "value": 56,
+     "source": "HIS"
+    },
+    "patient.sex": {
+     "value": "M",
+     "source": "HIS"
+    },
+    "patient.weight_kg": {
+     "value": 60,
+     "source": "HIS"
+    },
+    "patient.height_cm": {
+     "value": 165.5,
+     "source": "HIS"
+    },
+    "patient.blood_group": {
+     "value": "A+",
+     "source": "HIS"
+    },
+    "patient.allergy": {
+     "value": "NKA",
+     "source": "ประวัติแพ้ / Allergies"
+    },
+    "case.asa": {
+     "value": "3E",
+     "source": "รับผู้ป่วย / Admission"
+    },
+    "case.date": {
+     "value": "2026-10-16",
+     "source": "เคส / Case"
+    },
+    "case.admit_date": {
+     "value": "2026-10-15",
+     "source": "HIS"
+    }
+   }
+  },
+  {
+   "name": "age from the date of birth, Thai title without a space",
+   "head": {
+    "caseId": 3,
+    "startTime": 1792108800000
+   },
+   "loaded": {
+    "draft": {
+     "titleTh": "ด.ญ.",
+     "firstName": "มะลิ",
+     "dob": "2016-10-17",
+     "emergency": false
+    },
+    "patient": {
+     "blood_group_text": "B Rh+",
+     "pre_admit_at": "16/10/2569"
+    },
+    "diagnosis": [],
+    "procedures": [],
+    "allergies": [],
+    "labs": [],
+    "events": [],
+    "staff": [],
+    "workstation": null
+   },
+   "values": {
+    "patient.name": {
+     "value": "ด.ญ.มะลิ",
+     "source": "บันทึก / Record"
+    },
+    "patient.dob": {
+     "value": "2016-10-17",
+     "source": "บันทึก / Record"
+    },
+    "patient.age_years": {
+     "value": 9,
+     "source": "คำนวณจากวันเกิด / From DOB"
+    },
+    "patient.blood_group": {
+     "value": "B Rh+",
+     "source": "HIS"
+    },
+    "case.date": {
+     "value": "2026-10-16",
+     "source": "เคส / Case"
+    },
+    "case.admit_date": {
+     "value": "2026-10-16",
+     "source": "HIS"
+    },
+    "case.type": {
+     "value": "Elective",
+     "source": "บันทึก / Record"
+    }
+   }
+  },
+  {
+   "name": "nothing known",
+   "head": {
+    "caseId": 4
+   },
+   "loaded": {
+    "draft": {},
+    "patient": {},
+    "diagnosis": [],
+    "procedures": [],
+    "allergies": [],
+    "labs": [],
+    "events": [],
+    "staff": [],
+    "workstation": {}
+   },
+   "values": {}
+  }
+ ]
+}

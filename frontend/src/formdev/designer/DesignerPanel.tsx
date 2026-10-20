@@ -6,33 +6,45 @@
  */
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { FormDevError, type FontEntry, type FormDefinition, type FormSummary, type Issue, type RecordData, type SchemaVersion, type StyleEntry } from "../core/types";
-import { describeIssues, issueText, parseJsonStrict, validateDefinition } from "../core/validate";
+import { describeIssues, issueText, paperSpec, parseJsonStrict, validateDefinition } from "../core/validate";
 import type { RestApiAdapter } from "../data/RestApiAdapter";
 import type { Template } from "../ai/types";
 import { evaluateRecord } from "../logic/evaluate";
 import { lookupIds, type LookupTables } from "../logic/lookup";
 import { DEFAULT_FONTS, DEFAULT_STYLES } from "../registry/defaults";
 import PdfPreview from "../ui/PdfPreview";
+import { withSampleBlocks } from "../leaf/caseBlocks";
 import FormRenderer from "../ui/FormRenderer";
 import Canvas from "./Canvas";
-import { BLOCKS, PALETTE, STARTERS, langOf, paletteField, starterForm, tr, type Lang } from "./catalog";
+import Finder, { type FinderPick } from "./Finder";
+import IdCheck from "./IdCheck";
+import AiPanel from "./AiPanel";
+import type { IdFinding } from "../reading/types";
+import { splitBilingual } from "../core/labels";
+import { BLOCKS, PALETTE, STARTERS, langOf, paletteField, scaleSpans, starterForm, tr, type Lang } from "./catalog";
 import ContainerInspector from "./ContainerInspector";
 import { DRAG_MIME, type DragItem, type DropTarget } from "./drag";
 import FieldInspector from "./FieldInspector";
 import { useHistory } from "./history";
 import {
-  allFields, at, buildMigration, duplicateField, fieldAt, fieldRefOfIssuePath, insertAt, insertFields, moveAt, moveField, movedRef, newCategory, newSection, placeOnGrid,
-  publishedKeys, removeAt, removeField, slug, usedNames, type FieldRef, type Path, type Selection,
+  allFields, at, buildMigration, cellsOf, compactRows, duplicateField, fieldAt, fieldPath, fieldRefOfIssuePath, insertAt, insertFields, isPinned, listColumns, moveAt, moveField,
+  movedRef, newCategory, newSection, patchField, placeAt, renameKey, placeOnGrid, publishedKeys, removeAt, removeField, samePath, slug, uniqueName, usedNames, type FieldRef, type Path, type Selection,
 } from "./model";
+import { formColumns } from "../core/layout";
+import type { FieldDefinition, PaperConfig } from "../core/types";
+import { fieldKey } from "../core/validate";
 import type { LookupInfo } from "./OptionsEditor";
 import { danger, input, panel, primary, secondary, small } from "./styles";
 
 /** What another Form Studio tab asks the designer to open: a library template (saved back to the template) or a form. */
-export type DesignerIncoming = { key: number } & ({ kind: "template"; template: Template } | { kind: "form"; formId: string });
+export type DesignerIncoming = { key: number } & ({ kind: "template"; template: Template } | { kind: "form"; formId: string }
+  | { kind: "definition"; definition: FormDefinition; note?: string });
 /** onPublished: the form was published (refresh the local catalogue); onUse: open data entry for it; onTemplateSaved: back to its review. */
 type Props = {
   remote: RestApiAdapter; online: boolean; language?: string; onPublished?: (formId: string) => void; onUse?: (formId: string) => void;
   incoming?: DesignerIncoming | null; onTemplateSaved?: (templateId: string) => void;
+  /** Reading paper or scanned documents into a form happens in the Documents tab. */
+  onOpenDocuments?: () => void;
 };
 /** Where the form stands on the server: not created yet, a draft version, or a published version (edits become the next version). */
 type Source = { exists: boolean; version: number; status: "draft" | "published" | null; previous: FormDefinition | null };
@@ -85,7 +97,7 @@ async function loadForm(remote: RestApiAdapter, formId: string): Promise<{ defin
 
 const newFormId = () => `form_${new Date().toISOString().slice(0, 10).replace(/-/g, "")}_${Math.random().toString(36).slice(2, 5)}`;
 
-export default function DesignerPanel({ remote, online, language = "th", onPublished, onUse, incoming, onTemplateSaved }: Props) {
+export default function DesignerPanel({ remote, online, language = "th", onPublished, onUse, incoming, onTemplateSaved, onOpenDocuments }: Props) {
   const lang = langOf(language);
   const t = (th: string, en: string) => tr(lang, th, en);
   const history = useHistory();
@@ -100,8 +112,18 @@ export default function DesignerPanel({ remote, online, language = "th", onPubli
   const [lookups, setLookups] = useState<LookupInfo[]>([]);
   const [tables, setTables] = useState<LookupTables>({});
   const [tryData, setTryData] = useState<RecordData>({});
+  const [paperInfo, setPaperInfo] = useState<{ pages: number; scale: number } | null>(null);
   const [showIssues, setShowIssues] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  /** Fields selected besides the primary selection (Shift / Ctrl / Cmd-click). */
+  const [also, setAlso] = useState<FieldRef[]>([]);
+  const [showGrid, setShowGrid] = useState(true);
+  const [zoom, setZoom] = useState(100);
+  const [searching, setSearching] = useState(false);
+  const clipboard = useRef<FieldDefinition[] | null>(null);
+  const [idFindings, setIdFindings] = useState<IdFinding[] | null>(null);
+  const [idBusy, setIdBusy] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   /** Editing a library template: saving writes the template, not a form. */
   const [templateLink, setTemplateLink] = useState<{ id: string; version: number; title: string } | null>(null);
   const dragRef = useRef<DragItem | null>(null);
@@ -145,6 +167,18 @@ export default function DesignerPanel({ remote, online, language = "th", onPubli
     return () => window.removeEventListener("keydown", onKey);
   }, [undo, redo]);
 
+  // Keyboard on the selection (outside inputs): arrows move a field one cell, Shift + arrows resize it, Delete,
+  // Ctrl/Cmd + C / V / D copy, paste, duplicate, Ctrl/Cmd + K searches, Esc deselects.
+  const keyHandler = useRef<(event: KeyboardEvent) => void>(() => undefined);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => keyHandler.current(event);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // The print preview shows sample rows in report components (case_block); the case's own rows print from Leaf.
+  const previewData = useMemo(() => (definition ? withSampleBlocks(definition, tryData) : tryData), [definition, tryData]);
+  const showPaperInfo = (info: { pages: number; scale: number }) => setPaperInfo(current => (current?.pages === info.pages && current.scale === info.scale ? current : info));
   const checkIssues = useMemo(() => {
     if (!definition) return [];
     const found = validateDefinition(prepared(definition, source), registry.styles.map(row => row.style_id), registry.fonts.map(row => row.font_id));
@@ -153,7 +187,18 @@ export default function DesignerPanel({ remote, online, language = "th", onPubli
 
   const commit = (next: FormDefinition, mergeKey: string | null = null) => {
     history.commit(next, mergeKey);
+    setAlso([]);
     writeAutosave({ definition: next, source, at: Date.now() });
+  };
+  /** Click selects; Shift / Ctrl / Cmd-click adds a field to (or takes it from) the selection. */
+  const select = (next: Selection, add = false) => {
+    if (add && next.kind === "field" && selection.kind === "field") {
+      if (samePath(fieldPath(next.ref), fieldPath(selection.ref))) return;
+      setAlso(current => (current.some(ref => samePath(fieldPath(ref), fieldPath(next.ref))) ? current.filter(ref => !samePath(fieldPath(ref), fieldPath(next.ref))) : [...current, next.ref]));
+      return;
+    }
+    setAlso([]);
+    setSelection(next);
   };
   const open = (next: FormDefinition, nextSource: Source) => {
     history.reset(next);
@@ -172,6 +217,12 @@ export default function DesignerPanel({ remote, online, language = "th", onPubli
     // Deferred, and marked handled when it runs: a cancelled timer (React's development double run) does not count.
     const timer = setTimeout(() => {
       handled.current = incoming.key;
+      if (incoming.kind === "definition") {
+        setTemplateLink(null);
+        open(structuredClone(incoming.definition), NEW_SOURCE);
+        if (incoming.note) setMessage({ tone: "info", text: incoming.note });
+        return;
+      }
       if (incoming.kind === "template") {
         const { template } = incoming;
         open(structuredClone(template.definition), NEW_SOURCE);
@@ -216,7 +267,7 @@ export default function DesignerPanel({ remote, online, language = "th", onPubli
       const block = BLOCKS.find(entry => entry.id === item.id);
       if (!block) return;
       const built = block.build(usedNames(definition), lang);
-      next = insertFields(definition, target.list, target.index, built.fields);
+      next = insertFields(definition, target.list, target.index, scaleSpans(built.fields, target.columns ?? listColumns(definition, target.list, formColumns(definition))));
       if (built.calculators.length) next = { ...next, calculators: [...(next.calculators ?? []), ...built.calculators] };
       commit(next);
       setSelection({ kind: "field", ref });
@@ -229,9 +280,62 @@ export default function DesignerPanel({ remote, online, language = "th", onPubli
       if (next === definition) return;
       ref = movedRef(item.ref, target.list, target.index);
     }
-    next = placeOnGrid(next, ref, { col: target.col }, device === "tablet" ? "tablet" : "desktop");
+    const list = at(next, ref.list) as FieldDefinition[];
+    const pinnedList = isPinned(list.filter((_, index) => index !== ref.index));
+    if (target.row !== undefined && target.columns) {
+      // Desktop: the two-dimensional grid — the exact row and column under the pointer.
+      ({ definition: next, ref } = placeAt(next, ref, { row: target.row, col: target.col ?? undefined, span: target.span }, target.columns));
+    } else if (device === "desktop" && pinnedList) {
+      // A click in the palette on a pinned grid: the row below the selected field (or a new last row).
+      const columns = listColumns(next, ref.list, formColumns(next));
+      const cells = cellsOf(list, columns);
+      const selected = selection.kind === "field" && samePath(selection.ref.list, ref.list) ? cells[selection.ref.index] : undefined;
+      const row = selected ? selected.row + selected.rows : Math.max(0, ...cells.filter((_, index) => index !== ref.index).map(cell => cell.row + cell.rows - 1)) + 1;
+      ({ definition: next, ref } = placeAt(next, ref, { row, col: 1 }, columns));
+    } else {
+      next = placeOnGrid(next, ref, { col: target.col }, device === "tablet" ? "tablet" : "desktop", target.columns ?? listColumns(next, target.list, formColumns(next)));
+    }
     commit(next);
     setSelection({ kind: "field", ref });
+  };
+
+  // The selection: the primary field and the others Shift / Ctrl-clicked.
+  const selectedRefs = (): FieldRef[] => (selection.kind === "field" ? [selection.ref, ...also] : []).filter(ref => fieldAt(definition, ref));
+  const columnsOf = (list: Path) => listColumns(definition, list, formColumns(definition));
+  const removeMany = (refs: FieldRef[]) => {
+    // Later indexes first, so earlier ones stay valid.
+    const ordered = [...refs].sort((a, b) => JSON.stringify(a.list).localeCompare(JSON.stringify(b.list)) || b.index - a.index);
+    commit(ordered.reduce((current, ref) => removeField(current, ref), definition));
+    setSelection({ kind: "form" });
+    setMessage({ tone: "info", text: t(`ลบ ${refs.length} ช่องแล้ว — กด เลิกทำ (Ctrl+Z) เพื่อนำกลับ`, `Deleted ${refs.length} field(s) — Undo (Ctrl+Z) brings them back`) });
+  };
+  /** Paste copied fields after the selected one (or at the end of the last section), with new names. */
+  const paste = (fields: FieldDefinition[]) => {
+    const used = usedNames(definition);
+    const rename = (field: FieldDefinition): FieldDefinition => {
+      const copy: FieldDefinition = { ...structuredClone(field), id: uniqueName(fieldKey(field), used) };
+      delete copy.key;
+      if (copy.layout) { delete copy.layout.row; delete copy.layout.col; }
+      if (copy.fields) copy.fields = copy.fields.map(rename);
+      return copy;
+    };
+    const copies = fields.map(rename);
+    const at_ = clickTarget();
+    let next = insertFields(definition, at_.list, at_.index, copies);
+    const columns = columnsOf(at_.list);
+    const list = at(next, at_.list) as FieldDefinition[];
+    if (isPinned(list.filter((_, index) => index < at_.index || index >= at_.index + copies.length))) {
+      // A pinned grid: the copies go on the rows below the selection.
+      const below = selection.kind === "field" ? cellsOf(at(definition, at_.list) as FieldDefinition[], columns)[selection.ref.index] : undefined;
+      let row = below ? below.row + below.rows : 1;
+      copies.forEach((_, offset) => {
+        const placed = placeAt(next, { list: at_.list, index: at_.index + offset }, { row, col: 1 }, columns);
+        next = placed.definition;
+        row += 1;
+      });
+    }
+    commit(next);
+    setMessage({ tone: "info", text: t(`วาง ${copies.length} ช่องแล้ว`, `Pasted ${copies.length} field(s)`) });
   };
 
   const fieldAction = (ref: FieldRef, action: "up" | "down" | "duplicate" | "remove") => {
@@ -272,6 +376,165 @@ export default function DesignerPanel({ remote, online, language = "th", onPubli
     section.fields.push(paletteField("text", used, lang));
     commit(insertAt(definition, ["sections"], definition.sections.length, section));
     setSelection({ kind: "section", path: ["sections", definition.sections.length] });
+  };
+
+  // The variable-name standard --------------------------------------------------------------------
+  const published = publishedKeys(source.previous);
+  const findRef = (id: string) => allFields(definition).find(entry => entry.field.id === id)?.ref;
+  /** Rename a field's variable; a field never published also takes the name as its id. */
+  const renameTo = (current: FormDefinition, ref: FieldRef, to: string): FormDefinition => {
+    const field = fieldAt(current, ref);
+    if (!field) return current;
+    const used = usedNames(current);
+    used.delete(field.id);
+    used.delete(fieldKey(field));
+    const name = uniqueName(to, used);
+    let next = fieldKey(field) === name ? current : renameKey(current, ref, name);
+    if (!published.has(fieldKey(field))) next = patchField(next, ref, { id: name, key: undefined });
+    return next;
+  };
+  const runIdCheck = async (current = definition) => {
+    if (!online) { setMessage({ tone: "error", text: t("ต้องเชื่อมต่อเซิร์ฟเวอร์เพื่อตรวจชื่อ", "Checking names needs the server") }); return; }
+    setIdBusy(true);
+    try {
+      setIdFindings(await remote.checkIds(prepared(current, source)));
+    } catch (error) {
+      setMessage({ tone: "error", text: failure(error) });
+    } finally {
+      setIdBusy(false);
+    }
+  };
+  const fixFinding = (current: FormDefinition, finding: IdFinding, how: "rename" | "bind" | "english"): FormDefinition => {
+    const ref = allFields(current).find(entry => entry.field.id === finding.id)?.ref;
+    const field = ref ? fieldAt(current, ref) : undefined;
+    if (!ref || !field) return current;
+    if (how === "english") {
+      const split = splitBilingual(field.label);
+      return split ? patchField(current, ref, { label: split.th, label_en: split.en }) : current;
+    }
+    if (how === "bind" && finding.concept) return renameTo(patchField(current, ref, { bind: finding.concept }), ref, finding.concept.replace(".", "_"));
+    if (finding.problem === "id_differs") return published.has(fieldKey(field)) ? current : patchField(current, ref, { id: fieldKey(field), key: undefined });
+    return finding.suggestion ? renameTo(current, ref, finding.suggestion) : current;
+  };
+  const applyFix = (finding: IdFinding, how: "rename" | "bind" | "english") => {
+    const next = fixFinding(definition, finding, how);
+    if (next === definition && how === "english") {
+      const ref = findRef(finding.id);
+      if (ref) setSelection({ kind: "field", ref });
+      setMessage({ tone: "info", text: t("พิมพ์ชื่อภาษาอังกฤษในช่อง \"ชื่อภาษาอังกฤษ\" ทางขวา", "Type the English label in the inspector on the right") });
+      return;
+    }
+    commit(next);
+    void runIdCheck(next);
+  };
+  const fixAll = () => {
+    const findings = idFindings ?? [];
+    let next = definition;
+    for (const finding of findings) {
+      if (finding.problem === "no_english") next = fixFinding(next, finding, "english");
+      else if (finding.suggestion || finding.problem === "id_differs") next = fixFinding(next, finding, "rename");
+    }
+    commit(next);
+    void runIdCheck(next);
+  };
+  const suggestName = async (field: FieldDefinition) => {
+    if (!online) return null;
+    const section = selection.kind === "field" ? (at(definition, selection.ref.list.slice(0, 2)) as { title_en?: string; id?: string } | undefined) : undefined;
+    const taken = [...usedNames(definition)].filter(name => name !== fieldKey(field) && name !== field.id);
+    const [found] = await remote.suggestIds([{ label: field.label, label_en: field.label_en, bind: field.bind, type: field.type, section: section?.title_en ?? section?.id }], taken);
+    return found ? { key: found.key, concept: found.concept } : null;
+  };
+
+  /** Keep the selected fields (or the selected part's fields) as a block the team finds with Ctrl+K. */
+  const saveBlock = async () => {
+    const refs = selectedRefs();
+    const fields = refs.length ? refs.map(ref => structuredClone(fieldAt(definition, ref)!))
+      : selection.kind === "section" || selection.kind === "category" ? structuredClone(((at(definition, [...selection.path, "fields"]) as FieldDefinition[]) ?? [])) : [];
+    if (!fields.length) { setMessage({ tone: "info", text: t("เลือกช่อง (หรือส่วน) ที่จะเก็บเป็นชุดก่อน", "Select the fields (or a part) to keep as a block first") }); return; }
+    const name = window.prompt(t("ชื่อชุด (เช่น สัญญาณชีพมาตรฐาน)", "Block name (e.g. Standard vital signs)"), fields[0].label)?.trim();
+    if (!name) return;
+    const id = `block_${slug(name, "") || Date.now().toString(36)}`.slice(0, 60);
+    const block: FormDefinition = { format: "flora.form/1", form_id: id, schema_version: 1, title: name, style_id: definition.style_id, paper: definition.paper,
+      layout: definition.layout, sections: [{ id: "block", title: name, fields: fields.map(field => ({ ...field, layout: field.layout ? { ...field.layout, row: undefined, col: undefined } : undefined })) }] };
+    try {
+      await remote.createTemplate({ definition: JSON.parse(JSON.stringify(block)), title: name, origin: "manual", description: t(`ชุดของทีม: ${fields.length} ช่อง`, `Team block: ${fields.length} fields`) });
+      setMessage({ tone: "ok", text: t(`เก็บชุด "${name}" แล้ว — ค้นหาได้ด้วย Ctrl+K`, `Block "${name}" kept — find it with Ctrl+K`) });
+    } catch (error) {
+      setMessage({ tone: "error", text: failure(error) });
+    }
+  };
+
+  const finderCommands = [
+    { id: "add_section", icon: "＋", th: "เพิ่มส่วนใหม่", en: "Add a section" },
+    { id: "check_ids", icon: "🔤", th: "ตรวจชื่อตัวแปรตามมาตรฐาน", en: "Check variable names" },
+    { id: "save_block", icon: "🧩", th: "เก็บที่เลือกเป็นชุดของทีม", en: "Keep the selection as a team block" },
+    { id: "toggle_grid", icon: "▦", th: "เปิด/ปิดเส้นกริด", en: "Show / hide grid lines" },
+    { id: "save", icon: "💾", th: "บันทึกร่าง", en: "Save draft" },
+    { id: "ai", icon: "✨", th: "ผู้ช่วย AI: สร้าง/แก้ฟอร์มด้วยคำอธิบาย", en: "AI assistant: create / change the form by description" },
+  ];
+  const pick = (choice: FinderPick) => {
+    if (choice.kind === "type") drop({ kind: "new", type: choice.type }, clickTarget());
+    else if (choice.kind === "block") drop({ kind: "block", id: choice.id }, clickTarget());
+    else if (choice.kind === "concept") {
+      const field = paletteField(choice.type, usedNames(definition), lang);
+      paste([{ ...field, id: choice.concept.replace(".", "_"), label: tr(lang, choice.th, choice.en), ...(lang === "th" ? { label_en: choice.en } : {}), bind: choice.concept }]);
+    } else if (choice.kind === "fields") paste(choice.fields);
+    else if (choice.kind === "section") {
+      const used = usedNames(definition);
+      const rename = (field: FieldDefinition): FieldDefinition => {
+        const copy: FieldDefinition = { ...structuredClone(field), id: uniqueName(fieldKey(field), used) };
+        delete copy.key;
+        if (copy.fields) copy.fields = copy.fields.map(rename);
+        return copy;
+      };
+      const section = { ...structuredClone(choice.section), id: uniqueName(choice.section.id, used), fields: choice.section.fields.map(rename),
+        categories: undefined, sections: undefined, repeat: undefined };
+      commit(insertAt(definition, ["sections"], definition.sections.length, section));
+      setSelection({ kind: "section", path: ["sections", definition.sections.length] });
+      setMessage({ tone: "info", text: t(`เพิ่มส่วน "${choice.name}" แล้ว`, `Added "${choice.name}"`) });
+    } else if (choice.kind === "jump") setSelection({ kind: "field", ref: choice.ref });
+    else if (choice.id === "add_section") addSection();
+    else if (choice.id === "check_ids") void runIdCheck();
+    else if (choice.id === "save_block") void saveBlock();
+    else if (choice.id === "toggle_grid") setShowGrid(value => !value);
+    else if (choice.id === "save") void run("save");
+    else if (choice.id === "ai") setAiOpen(true);
+  };
+
+  keyHandler.current = (event: KeyboardEvent) => {
+    const target = event.target as HTMLElement | null;
+    if (view !== "design" || (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable))) return;
+    const mod = event.metaKey || event.ctrlKey;
+    if (mod && event.key.toLowerCase() === "k") { event.preventDefault(); setSearching(true); return; }
+    const refs = selectedRefs();
+    if (event.key === "Escape") { setAlso([]); setSelection({ kind: "form" }); return; }
+    if (!refs.length || selection.kind !== "field") {
+      if (mod && event.key.toLowerCase() === "v" && clipboard.current) { event.preventDefault(); paste(clipboard.current); }
+      return;
+    }
+    if (event.key === "Delete" || event.key === "Backspace") { event.preventDefault(); removeMany(refs); return; }
+    if (mod && event.key.toLowerCase() === "c") {
+      event.preventDefault();
+      clipboard.current = refs.map(ref => structuredClone(fieldAt(definition, ref)!));
+      void navigator.clipboard?.writeText(JSON.stringify({ "flora.fields": clipboard.current })).catch(() => undefined);
+      setMessage({ tone: "info", text: t(`คัดลอก ${refs.length} ช่อง — Ctrl+V เพื่อวาง`, `Copied ${refs.length} field(s) — Ctrl+V to paste`) });
+      return;
+    }
+    if (mod && event.key.toLowerCase() === "v" && clipboard.current) { event.preventDefault(); paste(clipboard.current); return; }
+    if (mod && event.key.toLowerCase() === "d") { event.preventDefault(); fieldAction(selection.ref, "duplicate"); return; }
+    const arrows: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+    const step = arrows[event.key];
+    if (!step || device !== "desktop") return;
+    event.preventDefault();
+    const ref = selection.ref;
+    const columns = columnsOf(ref.list);
+    const cell = cellsOf(at(definition, ref.list) as FieldDefinition[], columns)[ref.index];
+    const change = event.shiftKey
+      ? { span: Math.max(1, cell.span + step[1]), rows: Math.max(1, cell.rows + step[0]) }
+      : { row: Math.max(1, cell.row + step[0]), col: Math.max(1, cell.col + step[1]) };
+    const placed = placeAt(definition, ref, change, columns);
+    commit(placed.definition, `key:${fieldKey(fieldAt(definition, ref)!)}`);
+    setSelection({ kind: "field", ref: placed.ref });
   };
 
   // Saving -----------------------------------------------------------------------------------------
@@ -360,6 +623,14 @@ export default function DesignerPanel({ remote, online, language = "th", onPubli
   const versionLabel = source.exists
     ? source.status === "draft" ? t(`ร่างเวอร์ชัน ${source.version}`, `draft v${source.version}`) : t(`แก้ไขเป็นเวอร์ชัน ${source.version + 1} (v${source.version} ใช้งานอยู่)`, `editing v${source.version + 1} (v${source.version} is live)`)
     : t("ยังไม่ได้บันทึก", "not saved yet");
+  const paperConfig: PaperConfig = typeof definition.paper === "string" ? { size: definition.paper } : definition.paper ?? { size: "A4" };
+  const density = paperConfig.density;
+  const setDensity = (next: PaperConfig["density"]) => {
+    const { density: _old, ...rest } = paperConfig;
+    void _old;
+    commit({ ...definition, paper: next ? { ...rest, density: next } : rest });
+  };
+  const paperName = (() => { const paper = paperSpec(definition); return `${paper.size}${paper.orientation === "landscape" ? t(" แนวนอน", " landscape") : ""}`; })();
   const recordIssues = view === "try" ? evaluateRecord(definition, tryData, "submitted", undefined, tables).issues : [];
   const width = device === "desktop" ? "100%" : device === "tablet" ? "768px" : "390px";
   const migration = source.previous ? buildMigration(source.previous, prepared(definition, source)) : null;
@@ -384,6 +655,8 @@ export default function DesignerPanel({ remote, online, language = "th", onPubli
         {([["desktop", "🖥", t("คอมพิวเตอร์", "Desktop")], ["tablet", "▭", t("แท็บเล็ต", "Tablet")], ["mobile", "📱", t("มือถือ", "Phone")]] as Array<[Device, string, string]>).map(([id, icon, text]) =>
           <button key={id} type="button" title={text} onClick={() => setDevice(id)} className={`rounded-md px-2 py-1 text-xs ${device === id ? "bg-[var(--app-accent)] text-[var(--app-accent-contrast)]" : "text-[var(--app-muted)]"}`}>{icon}</button>)}
       </div> : null}
+      <button type="button" className={small} onClick={() => setAiOpen(value => !value)} title={t("สร้างหรือแก้ฟอร์มด้วยคำอธิบาย", "Create or change the form by description")}>✨ AI</button>
+      <button type="button" className={small} disabled={idBusy} onClick={() => void runIdCheck()} title={t("ตรวจชื่อตัวแปรตามมาตรฐาน", "Check variable names by the standard")}>🔤 {t("ชื่อตัวแปร", "Names")}</button>
       <button type="button" onClick={() => setShowIssues(value => !value)}
         className={`rounded-lg px-2.5 py-1 text-xs font-bold ${checkIssues.length ? "bg-rose-500/15 text-rose-600 dark:text-rose-300" : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300"}`}>
         {checkIssues.length ? t(`⚠ ต้องแก้ ${checkIssues.length} จุด`, `⚠ ${checkIssues.length} to fix`) : t("✓ พร้อมใช้", "✓ Ready")}
@@ -430,20 +703,50 @@ export default function DesignerPanel({ remote, online, language = "th", onPubli
         : op.op === "convert_type" ? t(`แปลงชนิดค่าของ ${op.field}`, `convert ${op.field}`) : op.op).join(" · ")}
     </div> : null}
 
+    {idFindings ? <IdCheck lang={lang} findings={idFindings} busy={idBusy} onFix={applyFix} onFixAll={fixAll} onClose={() => setIdFindings(null)}
+      onSelect={finding => { const ref = findRef(finding.id); if (ref) { setSelection({ kind: "field", ref }); setView("design"); } }} /> : null}
+    {aiOpen ? <AiPanel lang={lang} remote={remote} online={online} definition={definition}
+      selectedIds={selectedRefs().map(ref => fieldAt(definition, ref)?.id).filter((id): id is string => Boolean(id))}
+      onOpenDocuments={onOpenDocuments} onClose={() => setAiOpen(false)}
+      onApply={(next, scope) => {
+        if (scope === "new") { setTemplateLink(null); open(next, NEW_SOURCE); setMessage({ tone: "info", text: t("ฟอร์มใหม่จาก AI — ตรวจแล้วบันทึกร่าง", "A new form from the AI — check it, then save a draft") }); }
+        else { commit({ ...next, form_id: definition.form_id, schema_version: definition.schema_version }); setMessage({ tone: "info", text: t("ใช้การเปลี่ยนแปลงจาก AI แล้ว — Ctrl+Z เพื่อย้อน", "Applied the AI's changes — Ctrl+Z undoes them") }); }
+        setAiOpen(false);
+      }} /> : null}
+    {searching ? <Finder lang={lang} definition={definition} remote={remote} online={online} commands={finderCommands} onPick={pick} onClose={() => setSearching(false)} /> : null}
+
     {view === "design" ? <div className="grid gap-3 xl:grid-cols-[230px_minmax(0,1fr)_340px]">
-      <Palette lang={lang} setDrag={setDrag} onAdd={item => drop(item, clickTarget())} onAddSection={addSection} lookups={lookups} />
-      <div className="min-w-0 rounded-2xl bg-[var(--app-bg)] p-1" onClick={() => setSelection({ kind: "form" })}>
-        <div className="mx-auto transition-all" style={{ maxWidth: width }}>
-          <Canvas definition={definition} lang={lang} mode={device} selection={selection} styleColumns={2} getDrag={getDrag} setDrag={setDrag}
-            onSelect={setSelection} onDrop={drop} onFieldAction={fieldAction} onSectionAction={sectionAction}
-            onResize={(ref, span) => commit(placeOnGrid(definition, ref, { span }, device === "tablet" ? "tablet" : "desktop"))} />
+      <Palette lang={lang} setDrag={setDrag} onAdd={item => drop(item, clickTarget())} onSearch={() => setSearching(true)} lookups={lookups} />
+      <div className="min-w-0 rounded-2xl bg-[var(--app-bg)] p-1" onClick={() => select({ kind: "form" })}>
+        <div className="mb-1 flex flex-wrap items-center gap-2 px-1 text-[11px] text-[var(--app-muted)]" onClick={event => event.stopPropagation()}>
+          <label className="flex items-center gap-1"><input type="checkbox" checked={showGrid} onChange={event => setShowGrid(event.target.checked)} />{t("เส้นกริด", "Grid lines")}</label>
+          <label className="flex items-center gap-1">{t("ย่อ/ขยาย", "Zoom")}
+            <input type="range" min={50} max={150} step={10} value={zoom} onChange={event => setZoom(Number(event.target.value))} className="w-24" aria-label={t("ย่อ/ขยาย", "Zoom")} />{zoom}%</label>
+          <button type="button" className={small} onClick={() => setSearching(true)} title="Ctrl+K">🔎 {t("ค้นหาส่วนประกอบ", "Find parts")} <kbd className="ml-1 opacity-60">Ctrl K</kbd></button>
+          {selection.kind === "section" || selection.kind === "category" ? <button type="button" className={small} title={t("ลบแถวว่างในส่วนนี้", "Remove the empty rows of this part")}
+            onClick={() => commit(compactRows(definition, [...selection.path, "fields"], columnsOf([...selection.path, "fields"])))}>⇡ {t("ชิดแถว", "Close up rows")}</button> : null}
+          <span className="ml-auto hidden lg:inline">{device === "desktop" ? t("ลากวางได้ทุกแถว/คอลัมน์ · ลากขอบขวา/ล่าง/มุมเพื่อย่อขยาย · ลูกศรเลื่อน · Shift+ลูกศรย่อขยาย",
+            "Drop on any row / column · drag the right / bottom edge or corner to resize · arrows move · Shift+arrows resize") : t("มุมมองนี้จัดลำดับการไหล (แก้ตำแหน่งแบบ 2 มิติที่มุมมองคอมพิวเตอร์)", "This view reorders the flow (place in 2D on the desktop view)")}</span>
+        </div>
+        <div className="mx-auto transition-all" style={{ maxWidth: width, zoom: zoom / 100 }}>
+          <Canvas definition={definition} lang={lang} mode={device} selection={selection} also={also} showGrid={showGrid} styleColumns={2} getDrag={getDrag} setDrag={setDrag}
+            onSelect={select} onDrop={drop} onFieldAction={fieldAction} onSectionAction={sectionAction}
+            onResize={(ref, size) => {
+              if (size.rows !== undefined && device === "desktop") {
+                const placed = placeAt(definition, ref, { span: size.span, rows: size.rows }, size.columns);
+                commit(placed.definition);
+                setSelection({ kind: "field", ref: placed.ref });
+              } else commit(placeOnGrid(definition, ref, { span: size.span }, device === "tablet" ? "tablet" : "desktop", size.columns));
+            }} />
           <button type="button" className={`${secondary} mt-3 w-full border-dashed`} onClick={event => { event.stopPropagation(); addSection(); }}>+ {t("เพิ่มส่วนใหม่", "Add a section")}</button>
         </div>
       </div>
       <aside className={`${panel} max-h-[calc(100vh-120px)] overflow-y-auto p-2 xl:sticky xl:top-2`}>
-        {selection.kind === "field" && fieldAt(definition, selection.ref)
+        {also.length && selection.kind === "field" ? <BulkPanel lang={lang} refs={selectedRefs()} definition={definition} onDelete={() => removeMany(selectedRefs())}
+          onChange={next => commit(next)} onClear={() => setAlso([])} columnsOf={columnsOf} /> : null}
+        {also.length ? null : selection.kind === "field" && fieldAt(definition, selection.ref)
           ? <FieldInspector key={JSON.stringify(selection.ref)} definition={definition} fieldRef={selection.ref} lang={lang} lookups={lookups} publishedKeys={publishedKeys(source.previous)}
-              onChange={next => commit(next, `field:${JSON.stringify(selection.ref)}`)} />
+              onChange={next => commit(next, `field:${JSON.stringify(selection.ref)}`)} suggestName={online ? suggestName : undefined} />
           : <ContainerInspector key={selectionKey(selection)} definition={definition} lang={lang} styles={registry.styles}
               formIdEditable={!source.exists} target={selection.kind === "field" ? { kind: "form" } : selection}
               onChange={next => commit(next, `container:${selectionKey(selection)}`)} />}
@@ -465,18 +768,33 @@ export default function DesignerPanel({ remote, online, language = "th", onPubli
 
     {view === "print" ? <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--app-muted)]">
       <button type="button" className={small} disabled={busy} onClick={() => void pdf()}>⬇ {t("ดาวน์โหลด PDF", "Download PDF")}</button>
-      {t("ค่าที่ลองกรอกในแท็บ \"ทดลองกรอก\" จะอยู่ใน PDF ด้วย", "Values typed in \"Try it\" are included")}
+      {paperInfo ? <span className={`rounded-full border px-2 py-0.5 font-semibold ${paperInfo.pages > 1 ? "border-amber-500/50 text-amber-700 dark:text-amber-300" : "border-emerald-500/50 text-emerald-700 dark:text-emerald-300"}`}>
+        📄 {paperInfo.pages === 1 ? t(`พอดี ${paperName} 1 หน้า`, `Fits one ${paperName} page`) : t(`${paperInfo.pages} หน้า ${paperName}`, `${paperInfo.pages} ${paperName} pages`)}
+        {paperInfo.scale < 0.999 ? ` · ${t("ย่อ", "scaled")} ${Math.round(paperInfo.scale * 100)}%` : ""}</span> : null}
+      {paperInfo && paperInfo.pages > 1 && density !== "fit_page"
+        ? <button type="button" className={small} onClick={() => setDensity("fit_page")}>{t("บีบให้พอดี 1 หน้า", "Fit to one page")}</button> : null}
+      {density === "fit_page" ? <button type="button" className={small} onClick={() => setDensity(undefined)}>{t("กลับเป็นขนาดปกติ", "Back to normal size")}</button> : null}
+      {paperInfo && paperInfo.pages > 1 && density === "fit_page"
+        ? <span className="text-amber-700 dark:text-amber-300">{t("ยังเกิน 1 หน้า: ลดแถวสูงสุด/แถวว่างของตารางรายงาน หรือจัดช่องให้อยู่ข้างกัน", "Still over one page: lower the report tables' rows, or place fields side by side")}</span> : null}
+      <span>{t("ค่าที่ลองกรอกในแท็บ \"ทดลองกรอก\" จะอยู่ใน PDF ด้วย · ตารางข้อมูลเคสแสดงข้อมูลตัวอย่าง", "Values typed in \"Try it\" are included · case data tables show sample rows")}</span>
     </div> : null}
-    {view === "print" ? <PdfPreview definition={definition} value={tryData} styles={registry.styles} fonts={registry.fonts} lookups={tables} language={lang} /> : null}
+    {view === "print" ? <PdfPreview definition={definition} value={previewData} onInfo={showPaperInfo} styles={registry.styles} fonts={registry.fonts} lookups={tables} language={lang} /> : null}
 
     {view === "json" ? <JsonView key={JSON.stringify(definition).length} definition={definition} lang={lang} onApply={next => commit(next)} /> : null}
   </div>;
 }
 
-function Palette({ lang, setDrag, onAdd, onAddSection, lookups }: {
-  lang: Lang; setDrag: (item: DragItem | null) => void; onAdd: (item: DragItem) => void; onAddSection: () => void; lookups: LookupInfo[];
+function Palette({ lang, setDrag, onAdd, onSearch, lookups }: {
+  lang: Lang; setDrag: (item: DragItem | null) => void; onAdd: (item: DragItem) => void; onSearch: () => void; lookups: LookupInfo[];
 }) {
   const t = (th: string, en: string) => tr(lang, th, en);
+  const [query, setQuery] = useState("");
+  const words = query.normalize("NFC").toLowerCase().split(/\s+/).filter(Boolean);
+  const matches = (...texts: string[]) => { const hay = texts.join(" ").toLowerCase(); return words.every(word => hay.includes(word)); };
+  const found = BLOCKS.filter(block => matches(block.th, block.en, block.hintTh, block.hintEn));
+  const blocks = found.filter(block => block.group !== "report");
+  const reports = found.filter(block => block.group === "report");
+  const groups = PALETTE.map(group => ({ ...group, items: group.items.filter(item => matches(item.th, item.en, item.hintTh, item.hintEn, item.type)) })).filter(group => group.items.length);
   const start = (item: DragItem, text: string) => (event: DragEvent) => {
     setDrag(item);
     event.dataTransfer.effectAllowed = "copy";
@@ -485,11 +803,15 @@ function Palette({ lang, setDrag, onAdd, onAddSection, lookups }: {
   };
   const tile = "flex w-full cursor-grab items-center gap-2 rounded-lg border border-[var(--app-border)] bg-[var(--app-panel-bg)] px-2 py-1.5 text-left text-xs hover:border-[var(--app-accent)] active:cursor-grabbing";
   return <aside className={`${panel} max-h-72 space-y-3 overflow-y-auto p-2 xl:sticky xl:top-2 xl:max-h-[calc(100vh-120px)]`}>
+    <input value={query} onChange={event => setQuery(event.target.value)} placeholder={t("ค้นหาชนิดช่อง / ชุด…", "Find a field type / block…")}
+      className="w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-control-bg)] px-2 py-1.5 text-xs text-[var(--app-text)]" aria-label={t("ค้นหาในแถบเครื่องมือ", "Search the palette")} />
+    <button type="button" className="w-full text-left text-[11px] text-[var(--app-accent)] underline-offset-2 hover:underline" onClick={onSearch}>
+      🔎 {t("ค้นหาทุกอย่าง: ข้อมูลเคส, ชุดของทีม, ส่วนจากฟอร์มอื่น (Ctrl+K)", "Search everything: case data, team blocks, other forms (Ctrl+K)")}</button>
     <p className="text-[11px] text-[var(--app-muted)]">{t("ลากไปวางบนหน้าฟอร์ม หรือคลิกเพื่อเพิ่มต่อจากช่องที่เลือก", "Drag onto the page, or click to add after the selected field")}</p>
-    <div>
+    {blocks.length ? <div>
       <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">{t("ชุดสำเร็จรูป", "Ready-made blocks")}</div>
       <div className="space-y-1">
-        {BLOCKS.map(block => {
+        {blocks.map(block => {
           const missing = block.needsLookup !== undefined && !lookups.some(row => row.lookup_id === block.needsLookup);
           return <button key={block.id} type="button" draggable className={tile} onDragStart={start({ kind: "block", id: block.id }, block.en)} onDragEnd={() => setDrag(null)}
             onClick={() => onAdd({ kind: "block", id: block.id })} title={tr(lang, block.hintTh, block.hintEn)}>
@@ -499,8 +821,18 @@ function Palette({ lang, setDrag, onAdd, onAddSection, lookups }: {
           </button>;
         })}
       </div>
-    </div>
-    {PALETTE.map(group => <div key={group.en}>
+    </div> : null}
+    {reports.length ? <div>
+      <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">{t("ส่วนประกอบรายงาน (ข้อมูลเคส)", "Report components (case data)")}</div>
+      <p className="mb-1 text-[10px] text-[var(--app-muted)]">{t("พิมพ์ด้วยข้อมูลจริงของเคสจาก Flora Leaf → รายงาน — ตั้งคอลัมน์และสัดส่วนได้ที่แผงขวา", "Printed with the case's real data from Flora Leaf → Reports — set columns and widths in the right panel")}</p>
+      <div className="grid grid-cols-2 gap-1">
+        {reports.map(block => <button key={block.id} type="button" draggable className={tile} onDragStart={start({ kind: "block", id: block.id }, block.en)} onDragEnd={() => setDrag(null)}
+          onClick={() => onAdd({ kind: "block", id: block.id })} title={tr(lang, block.hintTh, block.hintEn)}>
+          <span className="min-w-0 truncate font-semibold text-[var(--app-text)]">{block.icon} {tr(lang, block.th, block.en)}</span>
+        </button>)}
+      </div>
+    </div> : null}
+    {groups.map(group => <div key={group.en}>
       <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">{tr(lang, group.th, group.en)}</div>
       <div className="grid grid-cols-1 gap-1">
         {group.items.map(item => <button key={item.type} type="button" draggable className={tile} onDragStart={start({ kind: "new", type: item.type }, item.en)} onDragEnd={() => setDrag(null)}
@@ -511,7 +843,7 @@ function Palette({ lang, setDrag, onAdd, onAddSection, lookups }: {
         </button>)}
       </div>
     </div>)}
-    <button type="button" className={`${small} w-full`} onClick={onAddSection}>+ {t("เพิ่มส่วนใหม่", "Add a section")}</button>
+    {!blocks.length && !reports.length && !groups.length ? <p className="py-4 text-center text-xs text-[var(--app-muted)]">{t("ไม่พบ — ลองค้นหาทุกอย่าง (Ctrl+K)", "Nothing here — try searching everything (Ctrl+K)")}</p> : null}
   </aside>;
 }
 
@@ -639,5 +971,55 @@ function JsonView({ definition, lang, onApply }: { definition: FormDefinition; l
       {error ? <span className="text-xs text-rose-600 dark:text-rose-300">{error}</span> : null}
     </div>
   </div>;
+}
+
+/** Several fields selected (Shift / Ctrl-click): what can be done to all of them at once. */
+function BulkPanel({ lang, refs, definition, onChange, onDelete, onClear, columnsOf }: {
+  lang: Lang; refs: FieldRef[]; definition: FormDefinition; onChange: (next: FormDefinition) => void; onDelete: () => void; onClear: () => void;
+  columnsOf: (list: Path) => number;
+}) {
+  const t = (th: string, en: string) => tr(lang, th, en);
+  const fields = refs.map(ref => fieldAt(definition, ref)).filter((field): field is FieldDefinition => Boolean(field));
+  const primaryRef = refs[0];
+  const sameList = refs.every(ref => samePath(ref.list, primaryRef.list));
+  const apply = (change: (field: FieldDefinition) => Partial<FieldDefinition>) => {
+    let next = definition;
+    for (const ref of refs) {
+      const field = fieldAt(next, ref);
+      if (field) next = patchFieldValues(next, ref, change(field));
+    }
+    onChange(next);
+  };
+  const cells = sameList ? cellsOf(at(definition, primaryRef.list) as FieldDefinition[], columnsOf(primaryRef.list)) : [];
+  const lineUp = (how: "left" | "width") => {
+    let next = definition;
+    const lead = cells[primaryRef.index];
+    // One at a time, each from its current place (moving one may push the next).
+    for (const ref of refs.slice(1)) {
+      const field = fieldAt(next, ref);
+      if (!field) continue;
+      const index = (at(next, ref.list) as FieldDefinition[]).findIndex(item => item.id === field.id);
+      next = placeAt(next, { list: ref.list, index }, how === "left" ? { col: lead.col } : { span: lead.span }, columnsOf(ref.list)).definition;
+    }
+    onChange(next);
+  };
+  return <div className="space-y-2 text-sm">
+    <div className="flex items-center justify-between"><b className="text-[var(--app-text)]">{t(`เลือก ${fields.length} ช่อง`, `${fields.length} fields selected`)}</b>
+      <button type="button" className={small} onClick={onClear}>{t("เลือกช่องเดียว", "Select one")}</button></div>
+    <ul className="max-h-32 overflow-y-auto text-xs text-[var(--app-muted)]">{fields.map(field => <li key={field.id}>· {field.label} <code>{fieldKey(field)}</code></li>)}</ul>
+    <div className="grid grid-cols-2 gap-1">
+      <button type="button" className={small} onClick={() => apply(() => ({ required: true }))}>{t("บังคับกรอกทั้งหมด", "All required")}</button>
+      <button type="button" className={small} onClick={() => apply(() => ({ required: undefined }))}>{t("ไม่บังคับทั้งหมด", "None required")}</button>
+      {sameList ? <button type="button" className={small} onClick={() => lineUp("left")}>{t("ชิดซ้ายเท่าช่องแรก", "Align left with the first")}</button> : null}
+      {sameList ? <button type="button" className={small} onClick={() => lineUp("width")}>{t("กว้างเท่าช่องแรก", "Same width as the first")}</button> : null}
+    </div>
+    <button type="button" className={`${danger} w-full`} onClick={onDelete}>{t(`ลบ ${fields.length} ช่อง (Delete)`, `Delete ${fields.length} fields (Delete)`)}</button>
+    <p className="text-[11px] text-[var(--app-muted)]">{t("Ctrl+C คัดลอก · Ctrl+V วาง · Esc ยกเลิกการเลือก", "Ctrl+C copy · Ctrl+V paste · Esc deselect")}</p>
+  </div>;
+}
+
+/** patchField for a bulk change (undefined removes the property). */
+function patchFieldValues(definition: FormDefinition, ref: FieldRef, values: Partial<FieldDefinition>): FormDefinition {
+  return patchField(definition, ref, values as Partial<Record<keyof FieldDefinition, unknown>>);
 }
 

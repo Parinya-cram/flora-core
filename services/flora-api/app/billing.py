@@ -16,6 +16,8 @@ from typing import Any
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 
+from . import concepts
+
 GROUP_FIELDS = ("code", "name", "form_column", "sort_order", "is_active")
 ITEM_FIELDS = ("code", "group_code", "name", "unit", "qty_mode", "variant_label", "io_item_code", "charge_code",
                "unit_price", "sort_order", "is_active")
@@ -195,7 +197,7 @@ def chart_defaults(database: Connection, case_id: int) -> dict[str, Any]:
             form = json.loads(detail["form_draft_json"]) if isinstance(detail["form_draft_json"], str) else dict(detail["form_draft_json"])
         except (ValueError, TypeError):
             form = {}
-    techniques = sorted({TECHNIQUE_FROM_FORM[t] for t in form.get("anesthesiaTypes") or [] if t in TECHNIQUE_FROM_FORM})
+    techniques = sorted({TECHNIQUE_FROM_FORM[t] for t in concepts.draft_value(form, "anesthesia.technique") or [] if t in TECHNIQUE_FROM_FORM})
 
     # Doses charted in I/O (bolus entries, plus each drip run), matched through io_item_code.
     suggestions = []

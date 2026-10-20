@@ -2647,6 +2647,377 @@
   ]
  },
  {
+  "name": "p1: the hospital's logo (set in Canopy)",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "logo",
+       "type": "logo",
+       "label": "Logo",
+       "src": "hospital",
+       "height_mm": 12
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: report component",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "meds",
+       "type": "case_block",
+       "label": "ยาที่ให้",
+       "label_en": "Medications given",
+       "block": "medications",
+       "block_columns": [
+        {
+         "key": "time",
+         "width": 15
+        },
+        {
+         "key": "name",
+         "width": 45,
+         "label": "ชื่อยา"
+        },
+        {
+         "key": "dose"
+        }
+       ],
+       "min_rows": 5,
+       "max_rows": 12,
+       "show_header": false
+      },
+      {
+       "id": "dx",
+       "type": "case_block",
+       "label": "Diagnosis",
+       "block": "diagnoses"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: report components are checked",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "x",
+       "type": "case_block",
+       "label": "X",
+       "block": "vitals"
+      },
+      {
+       "id": "meds",
+       "type": "case_block",
+       "label": "M",
+       "block": "medications",
+       "block_columns": [
+        {
+         "key": "time",
+         "width": 70
+        },
+        {
+         "key": "time",
+         "width": 2
+        },
+        {
+         "key": "volume",
+         "width": 40,
+         "extra": 1
+        }
+       ],
+       "min_rows": 20,
+       "max_rows": 10,
+       "show_header": "no"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "duplicate_option",
+   "invalid_layout",
+   "invalid_layout",
+   "invalid_range",
+   "invalid_type",
+   "invalid_type",
+   "invalid_type",
+   "unknown_property"
+  ]
+ },
+ {
+  "name": "p1: report components take no value properties",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "meds",
+       "type": "case_block",
+       "label": "M",
+       "block": "labs",
+       "required": true,
+       "block_columns": []
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_type",
+   "property_not_supported"
+  ]
+ },
+ {
+  "name": "p1: heading, paragraph and divider",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "intro",
+       "type": "heading",
+       "label": "ประวัติ",
+       "label_en": "History",
+       "level": 2,
+       "align": "center"
+      },
+      {
+       "id": "intro_text",
+       "type": "paragraph",
+       "label": "Note",
+       "content": "กรอกให้ครบทุกช่อง / Fill in every field."
+      },
+      {
+       "id": "rule",
+       "type": "divider",
+       "label": "Line"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: static elements are checked",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "h",
+       "type": "heading",
+       "label": "H",
+       "level": 4,
+       "align": "middle"
+      },
+      {
+       "id": "p",
+       "type": "paragraph",
+       "label": "P"
+      },
+      {
+       "id": "d",
+       "type": "divider",
+       "label": "D",
+       "required": true
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_layout",
+   "invalid_layout",
+   "invalid_type",
+   "property_not_supported"
+  ]
+ },
+ {
+  "name": "p1: English labels and titles",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "sex",
+       "type": "radio",
+       "label": "เพศ",
+       "label_en": "Sex",
+       "options": [
+        {
+         "value": "f",
+         "label": "หญิง",
+         "label_en": "Female"
+        },
+        {
+         "value": "m",
+         "label": "ชาย"
+        }
+       ]
+      }
+     ],
+     "title_en": "Patient"
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: English labels are text",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "sex",
+       "type": "radio",
+       "label": "เพศ",
+       "label_en": 7,
+       "options": [
+        {
+         "value": "f",
+         "label": "หญิง",
+         "label_en": "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_type",
+   "invalid_type"
+  ]
+ },
+ {
   "name": "p1: printed elements take no value properties",
   "definition": {
    "format": "flora.form/1",
@@ -3621,6 +3992,161 @@
   ]
  },
  {
+  "name": "p1: a field covers several rows",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "photo",
+       "type": "image",
+       "label": "Photo",
+       "layout": {
+        "row": 1,
+        "col": 1,
+        "span": 8,
+        "row_span": 3
+       }
+      },
+      {
+       "id": "a",
+       "type": "text",
+       "label": "A",
+       "layout": {
+        "row": 1,
+        "col": 9,
+        "span": 16
+       }
+      },
+      {
+       "id": "b",
+       "type": "text",
+       "label": "B",
+       "layout": {
+        "row": 3,
+        "col": 9,
+        "span": 16
+       }
+      }
+     ]
+    }
+   ],
+   "layout": {
+    "type": "grid",
+    "columns": 24
+   }
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: a field covering rows overlaps one below",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "a",
+       "type": "text",
+       "label": "A",
+       "layout": {
+        "row": 1,
+        "col": 1,
+        "span": 6,
+        "row_span": 2
+       }
+      },
+      {
+       "id": "b",
+       "type": "text",
+       "label": "B",
+       "layout": {
+        "row": 2,
+        "col": 4,
+        "span": 4
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "layout_overlap"
+  ]
+ },
+ {
+  "name": "p1: row_span out of range",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": "A4",
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      },
+      {
+       "id": "a",
+       "type": "text",
+       "label": "A",
+       "layout": {
+        "row_span": 51
+       }
+      },
+      {
+       "id": "b",
+       "type": "text",
+       "label": "B",
+       "layout": {
+        "row_span": 0
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "valid": false,
+  "codes": [
+   "invalid_layout",
+   "invalid_layout"
+  ]
+ },
+ {
   "name": "p1: form grid columns out of range",
   "definition": {
    "format": "flora.form/1",
@@ -4272,7 +4798,7 @@
    "paper": {
     "size": "A4",
     "footer": {
-     "left": "{patient}"
+     "left": "{nurse}"
     }
    },
    "style_id": "form.a4.medical",
@@ -4294,6 +4820,72 @@
   "codes": [
    "unknown_template_token"
   ]
+ },
+ {
+  "name": "p1: patient and print tokens in bands",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": {
+    "size": "A4",
+    "header": {
+     "left": "HN {hn} · {patient}",
+     "right": "DOB {dob} · AN {an}"
+    },
+    "footer": {
+     "left": "Printed {printed_at} · {printed_by}"
+    }
+   },
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
+ },
+ {
+  "name": "p1: hospital name token",
+  "definition": {
+   "format": "flora.form/1",
+   "form_id": "demo_form",
+   "schema_version": 1,
+   "title": "Demo",
+   "paper": {
+    "size": "A4",
+    "header": {
+     "center": "{hospital}"
+    }
+   },
+   "style_id": "form.a4.medical",
+   "sections": [
+    {
+     "id": "main",
+     "title": "Main",
+     "fields": [
+      {
+       "id": "name",
+       "type": "text",
+       "label": "Name"
+      }
+     ]
+    }
+   ]
+  },
+  "valid": true,
+  "codes": []
  },
  {
   "name": "p1: print density",
