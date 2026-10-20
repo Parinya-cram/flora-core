@@ -44,6 +44,19 @@ export type DistributionOverview = {
     rows: ReleaseRow[];
   };
   nodes: DistributionNode[];
+  gateway_catalog?: DeviceTypeCatalog[];
+  bundle?: { entitlements?: { device_types?: string[]; max_gateway_devices?: number } } | null;
+  gateways?: Array<{ gateway_id: string; version?: string; devices?: Array<{ device_id: string; device_type?: string; label?: string | null; enabled?: boolean; parser_status?: string | null }> }>;
+};
+
+export type DeviceTypeCatalog = {
+  code: string;
+  label?: string;
+  category?: string;
+  protocol?: string;
+  parser?: string;
+  image?: string;       // parser image (e.g. flora-gateway-parser:dev)
+  version?: string;     // device-type definition version
 };
 
 const BASE = `${BACKEND_BASE}/api/fleet/distribution`;

@@ -156,6 +156,27 @@ export default function DeviceDistributionView() {
     return map;
   }, [releases]);
 
+  // Device "app store": each licensed device type with its definition version + parser image version,
+  // how many are installed/running on gateways, and whether its parser is downloadable (gateway release).
+  const gatewayReleaseId = releases?.latest?.gateway;
+  const gatewayRelease = useMemo(() => (releases?.rows || []).find((r) => r.release_id === gatewayReleaseId), [releases, gatewayReleaseId]);
+  const gatewayApproved = approvals.gateway === gatewayReleaseId;
+  const devices = useMemo(() => {
+    const licensed = new Set(data?.bundle?.entitlements?.device_types || []);
+    const installed: Record<string, number> = {}, running: Record<string, number> = {};
+    for (const g of data?.gateways || []) for (const dv of g.devices || []) {
+      if (!dv.device_type) continue;
+      if (dv.enabled !== false) installed[dv.device_type] = (installed[dv.device_type] || 0) + 1;
+      if (dv.parser_status === "running") running[dv.device_type] = (running[dv.device_type] || 0) + 1;
+    }
+    return (data?.gateway_catalog || []).map((t) => ({
+      ...t,
+      licensed: licensed.has(t.code),
+      installed: installed[t.code] || 0,
+      running: running[t.code] || 0,
+    })).sort((a, b) => Number(b.licensed) - Number(a.licensed) || (a.label || a.code).localeCompare(b.label || b.code));
+  }, [data]);
+
   if (loading && !data) {
     return <div className="mx-auto max-w-5xl px-4 py-10 text-center text-sm text-[var(--app-muted)]">Loading distribution state…</div>;
   }
@@ -205,7 +226,51 @@ export default function DeviceDistributionView() {
       <HaberSettings />
 
       <section className="mb-5">
-        <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--app-muted)]">Releases — mirror &amp; approve</h2>
+        <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--app-muted)]">Devices</h2>
+        {devices.length ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {devices.map((dv) => {
+              const parserVer = gatewayRelease?.version || (dv.image || "").split(":")[1] || "—";
+              const canInstall = dv.licensed && !!gatewayRelease && !gatewayApproved;
+              return (
+                <div key={dv.code} className={`rounded-xl border p-3 ${dv.licensed ? "border-[var(--app-border)] bg-[var(--app-panel-bg)]" : "border-[var(--app-border)] bg-[var(--app-panel-bg)] opacity-60"}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-bold">{dv.label || dv.code}</div>
+                      <div className="truncate text-[11px] text-[var(--app-muted)]">{dv.code}{dv.category ? ` · ${dv.category}` : ""}</div>
+                    </div>
+                    {dv.licensed
+                      ? <span className="shrink-0 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">licensed</span>
+                      : <span className="shrink-0 rounded-full bg-slate-500 px-2 py-0.5 text-[10px] font-bold text-white">not licensed</span>}
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-1 text-[11px] text-[var(--app-muted)]">
+                    <div>device <b className="text-[var(--app-text)]">v{dv.version || "1"}</b></div>
+                    <div>parser <b className="text-[var(--app-text)]">{parserVer}</b></div>
+                    <div>installed <b className="text-[var(--app-text)]">{dv.installed}</b></div>
+                    <div>running <b className={dv.running ? "text-emerald-500" : "text-[var(--app-text)]"}>{dv.running}</b></div>
+                  </div>
+                  <div className="mt-2.5">
+                    {!dv.licensed ? (
+                      <span className="text-[11px] text-[var(--app-muted)]">License it at Root → Edit license</span>
+                    ) : !gatewayRelease ? (
+                      <span className="text-[11px] text-[var(--app-muted)]">No gateway parser release yet</span>
+                    ) : canInstall ? (
+                      <button type="button" disabled={busy === `dev-${dv.code}`}
+                        onClick={() => act(`dev-${dv.code}`, () => approveRelease(gatewayRelease.release_id), `${dv.label || dv.code}: parser ${parserVer} installed — gateways will update.`)}
+                        className="rounded-lg border border-[var(--app-accent)] bg-[var(--app-accent)] px-3 py-1 text-xs font-bold text-[var(--app-accent-contrast)] disabled:opacity-50">Download / update</button>
+                    ) : (
+                      <span className="text-[11px] font-semibold text-emerald-500">✓ up to date (parser {parserVer})</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : <div className="rounded-lg border border-[var(--app-border)] bg-[var(--app-panel-bg)] px-3 py-4 text-xs text-[var(--app-muted)]">No device types in the catalog yet.</div>}
+      </section>
+
+      <section className="mb-5">
+        <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--app-muted)]">Releases — mirror &amp; approve (components)</h2>
         <div className="space-y-4">
           {COMPONENTS.map(component => {
             const rows = byComponent[component] || [];
