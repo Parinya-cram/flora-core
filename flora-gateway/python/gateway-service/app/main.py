@@ -110,9 +110,11 @@ async def sample_status() -> list[tuple[str, str, str | None]]:
     else:
         rows.append(("canopy", "down", haber.get("error") or f"no check-in since {haber.get('last_sync') or 'start'}"))
     pods: dict[str, bool] = {}
+    pod_status: dict[str, dict[str, Any]] = {}
     for name, result in (await controllers()).items():
         if result.get("reachable") and name in settings.INGRESS:
             pods |= {pod["pod"]: bool(pod.get("connected")) for pod in result.get("pods") or [] if pod.get("pod")}
+            pod_status |= {pod["pod"]: pod for pod in result.get("pods") or [] if pod.get("pod")}
         status = result.get("container_status")
         if status and status != "running":
             rows.append((f"controller:{name}", "stopped", f"container {status}"))
@@ -121,10 +123,15 @@ async def sample_status() -> list[tuple[str, str, str | None]]:
         else:
             rows.append((f"controller:{name}", "down", str(result.get("error") or "unreachable")[:200]))
     seen = {r["device_id"]: r["last_seen_ts"] for r in db.fetch_all("SELECT device_id, last_seen_ts FROM gateway_device_seen")}
-    for instance in db.fetch_all("SELECT device_id, enabled, pod FROM gateway_device_instance"):
+    tcp_open = open_tcp_peers(pod_status)
+    for instance in db.fetch_all("SELECT device_id, enabled, pod, options FROM gateway_device_instance"):
         last = seen.get(instance["device_id"])
-        # Network devices report a lost connection; serial ones are switched off or unplugged.
+        # Network devices report a lost connection, unless their TCP session is still open (then: no data);
+        # serial ones are switched off or unplugged.
         how = "network: " if instance["pod"].split(".", 1)[0] in ("socket", "webhook", "feeder") else ""
+        source = (instance.get("options") or {}).get("source_ip")
+        if how and source and source in tcp_open.get(instance["pod"], ()):
+            how = "connected, "
         if not instance["enabled"]:
             rows.append((f"device:{instance['device_id']}", "stopped", "disabled"))
         elif last and now - last < DEVICE_SILENT_MS:
@@ -1160,11 +1167,38 @@ def ingress_pod_status() -> dict[str, dict[str, Any]]:
     return result
 
 
+def open_tcp_peers(pod_status: dict[str, dict[str, Any]]) -> dict[str, set[str]]:
+    """Sender IPs with an open TCP session, per socket pod, from the socket-controller's connect/disconnect log.
+    A pod the controller reports with no open connection has none (a controller restart logs no disconnects)."""
+    sessions: dict[tuple[str, Any], str] = {}
+    for row in db.fetch_all("""SELECT pod, message, detail FROM gateway_log WHERE component='socket-controller'
+                               AND message IN ('device connected', 'device disconnected') AND ts > %s ORDER BY ts, id""",
+                            (db.now_ms() - 7 * 86_400_000,)):
+        detail = row["detail"] or {}
+        key = (row["pod"], detail.get("connection"))
+        if row["message"] == "device connected" and detail.get("peer"):
+            sessions[key] = str(detail["peer"]).rsplit(":", 1)[0].strip("[]")
+        else:
+            sessions.pop(key, None)
+    by_pod: dict[str, list[str]] = {}
+    for (pod, _), ip in sessions.items():          # oldest first (log order)
+        by_pod.setdefault(pod, []).append(ip)
+    result: dict[str, set[str]] = {}
+    for pod, ips in by_pod.items():
+        # Only as many as the controller has open now, newest first: sessions cut by a restart leave no disconnect.
+        count = int((((pod_status.get(pod) or {}).get("detail") or {}).get("connections")) or 0)
+        if count:
+            result[pod] = set(ips[-count:])
+    return result
+
+
 def device_status(device: dict[str, Any], connection: dict[str, Any] | None, stream, container: dict | None,
-                  pod_status: dict[str, Any] | None, last_value: int | None, now: int) -> dict[str, Any]:
+                  pod_status: dict[str, Any] | None, last_value: int | None, now: int,
+                  tcp_open: set[str] | None = None, last_setting: int | None = None) -> dict[str, Any]:
     """The device's own state for its live card.
-    receiving: decoded values now · standby: powered on and talking, nothing to measure yet ·
+    receiving: measurements now · standby (online, not in use): the device talks but sends no measurements ·
     plugged_in: a serial device whose modem lines are up but that sends nothing yet ·
+    connected: a network device with an open TCP session that sends nothing (now) ·
     unplugged: a serial device that stopped answering (off or cable out) ·
     not_connected / connection_lost: a network device never seen / no longer heard · plus gateway-side faults."""
     kind = (connection or {}).get("kind") or device["pod"].split(".", 1)[0]
@@ -1183,17 +1217,23 @@ def device_status(device: dict[str, Any], connection: dict[str, Any] | None, str
     if fresh(last_value):
         return state("receiving", since=last_value)
     if fresh(last_in):
-        return state("standby", "powered on, sending no measurements", since=last_in)
+        # Online but not in use: the device talks, yet sends no measurements (standby, no patient connected).
+        if fresh(last_setting):
+            return state("standby", "online · settings only, no measurements (standby)", since=last_in)
+        return state("standby", "online · " + ("sends data, no measurements (no patient)" if network
+                                               else "answers, no measurements (standby or no patient)"), since=last_in)
     if not network:
         # A powered device on a full RS-232 cable raises DSR/CTS/DCD even before it sends anything.
         lines = ((pod_status or {}).get("detail") or {}).get("lines") or {}
         raised = [name.upper() for name in ("dsr", "cts", "dcd") if lines.get(name)]
         if raised:
-            return state("plugged_in", f"cable connected, device on ({'/'.join(raised)}), waiting for data", since=last_in)
+            return state("plugged_in", f"online · cable plugged in, device on ({'/'.join(raised)}) · no reply yet "
+                                   "(if it stays: check the device's protocol and line settings)", since=last_in)
         return state("unplugged", "no reply and no line signal: switched off or cable out", since=last_in)
     connections = ((pod_status or {}).get("detail") or {}).get("connections")
-    if not source and connections:
-        return state("standby", f"{connections} TCP connection(s) open, no data yet", since=last_in)
+    if (source and source in (tcp_open or ())) or (not source and connections):
+        # Found on the network (TCP session open) but silent: not a lost connection.
+        return state("connected", "online · TCP connection open, sends nothing " + ("now" if last_in else "yet"), since=last_in)
     if last_in:
         return state("connection_lost", "no data from the device over the network", since=last_in)
     return state("not_connected", f"never heard from {source}" if source else "no device has connected yet")
@@ -1250,6 +1290,7 @@ def live_devices():
     latest = latest_parameters([d["device_id"] for d in devices], now - LIVE_WINDOW_MS) if devices else {}
     connections = pod_connections()
     pod_status = ingress_pod_status() if devices else {}
+    tcp_open = open_tcp_peers(pod_status) if devices else {}
     rows = []
     for device in devices:
         stream = monitor.pods.get(device["pod"])
@@ -1258,11 +1299,15 @@ def live_devices():
         output = monitor.devices.get(device["device_id"])
         params = latest.get(device["device_id"], [])
         last_value = max((p["system_ts"] for p in params), default=None)
+        # "In use" means measurements; device settings (set_*) keep coming while a device is in standby.
+        last_measured = max((p["system_ts"] for p in params if not str(p["ivy_param"]).startswith("set_")), default=None)
+        last_setting = max((p["system_ts"] for p in params if str(p["ivy_param"]).startswith("set_")), default=None)
         rows.append({
             **{key: device.get(key) for key in ("device_id", "label", "device_type", "pod", "leaf_id", "enabled")},
             "container": states.get(device["device_id"]),
             "status": device_status(device, connections.get(device["pod"]), stream, states.get(device["device_id"]),
-                                    pod_status.get(device["pod"]), last_value, now),
+                                    pod_status.get(device["pod"]), last_measured, now, tcp_open.get(device["pod"]),
+                                    last_setting),
             "controller": device["pod"].split(".", 1)[0],
             "connection": connections.get(device["pod"]),
             "graph": device_graph(device, connections.get(device["pod"]), stream),
