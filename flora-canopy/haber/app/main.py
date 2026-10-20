@@ -393,7 +393,7 @@ app = FastAPI(title="Flora Canopy Haber", lifespan=lifespan)
 basic_auth.install(app, "Canopy Haber", "HABER", [
     r"/health", r"/api/haber/v1/gateways/[^/]+/(checkin|alerts|activity)",  # gateways, token auth
     r"/api/haber/v1/root-keys", r"/api/haber/v1/nodes/[^/]+/(desired|report)",  # flora-updater, token auth
-    r"/install/(leaf|gateway)\.sh", r"/api/haber/v1/install/(claim|report)",   # new LAN machines, one-time code
+    r"/install/(leaf|gateway)\.sh", r"/install/files/[a-z]+/[A-Za-z0-9._-]+", r"/api/haber/v1/install/(claim|report)",   # new LAN machines, one-time code
 ])
 
 
@@ -927,9 +927,22 @@ def install_overview() -> list[dict[str, Any]]:
 def install_script(kind: str, request: Request):
     if kind not in INSTALL_KINDS:
         raise HTTPException(404, "no such installer")
-    return PlainTextResponse((Path(__file__).parent / "install" / "node.sh").read_text()
+    # Leaf: full install (images from this appliance). Gateway: claim only until gateway images are published.
+    script = "leaf.sh" if kind == "leaf" else "node.sh"
+    return PlainTextResponse((Path(__file__).parent / "install" / script).read_text()
                              .replace("__HABER_URL__", str(request.base_url).rstrip("/")).replace("__KIND__", kind),
                              media_type="text/x-shellscript")
+
+
+INSTALL_FILES = {"leaf": {"compose.yaml", "https.conf.template"}}
+
+
+@app.get("/install/files/{kind}/{name}")
+def install_file(kind: str, name: str):
+    """The files an installer writes next to its compose project (no source code, images only)."""
+    if name not in INSTALL_FILES.get(kind, set()):
+        raise HTTPException(404, "no such file")
+    return PlainTextResponse((Path(__file__).parent / "install" / kind / name).read_text())
 
 
 @app.get("/health")
