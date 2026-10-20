@@ -240,7 +240,7 @@ export default function FormDevWorkspace({ username, isAdmin, principal, languag
     <div className="w-full space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">ESM Flora Canopy · Form Studio</div>
+          <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">Flora iCIS Canopy · Form Studio</div>
           <h1 className="mt-1 text-2xl font-semibold text-[var(--app-text)]">Form Studio</h1>
           <p className="mt-1 text-sm text-[var(--app-muted)]">Fill forms online or offline. Changes are stored on this device first and synced in order.</p>
         </div>

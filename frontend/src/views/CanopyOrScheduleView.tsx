@@ -170,7 +170,7 @@ export default function CanopyOrScheduleView({ sessionUser }: { sessionUser: Aut
     <div className="app-theme-scope mx-auto max-w-[1700px] space-y-3 p-4 pb-24 text-[var(--app-text)]">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">ESM Flora Canopy · schedule</div>
+          <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">Flora iCIS Canopy · schedule</div>
           <h1 className="mt-1 text-2xl font-semibold">{wardName ? `${wardName} schedule` : "Schedule"}</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">

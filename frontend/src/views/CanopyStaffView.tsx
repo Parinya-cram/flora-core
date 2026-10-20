@@ -112,7 +112,7 @@ export default function CanopyStaffView({ sessionUser }: { sessionUser: AuthUser
     <div className="app-theme-scope mx-auto max-w-[1500px] space-y-4 p-4 pb-24 text-[var(--app-text)]">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">ESM Flora Canopy · master data</div>
+          <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">Flora iCIS Canopy · master data</div>
           <h1 className="mt-1 text-2xl font-semibold">Staff directory</h1>
           <p className="mt-1 text-sm text-[var(--app-muted)]">Doctors, nurses and other staff by ward. Each Leaf receives its ward's staff; people added on a Leaf come here for review. The staff code identifies a person on every Leaf.</p>
         </div>

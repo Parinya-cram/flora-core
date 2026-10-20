@@ -328,7 +328,7 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
   return <div className="app-theme-scope mx-auto max-w-[1500px] space-y-4 p-4 pb-24 text-[var(--app-text)]">
     <header className="flex flex-wrap items-end justify-between gap-3">
       <div>
-        <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">ESM Flora Canopy · case workflows</div>
+        <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">Flora iCIS Canopy · case workflows</div>
         <h1 className="mt-1 text-2xl font-semibold">Workflow Studio</h1>
         <p className="mt-1 text-sm text-[var(--app-muted)]">Choose which record sections and Form Studio forms a case uses, the order of its case packet, and which wards offer it.</p>
       </div>
