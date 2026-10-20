@@ -39,12 +39,12 @@ function Icon({ kind }: { kind: "account" | "logout" | "power" }) {
 export default function TopBar({ setActiveView, sessionUser, caseStatus, ward = null, onLogout, onShutdown, onToggleNavigation }: Props) {
   const { t } = useLanguage();
   const surface = getSurfaceInfo();
-  const hospitalName = hospitalDisplayName(useHospitalProfile());
   const isIdleLeaf = surface.code === "leaf" && caseStatus.status === "IDLE";
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const sessionLabel = sessionUser?.name || sessionUser?.username || "Current User";
   const account = surface.code === "canopy" ? readSessionAccount() : null;
+  const hospitalName = hospitalDisplayName(useHospitalProfile(), account?.name);
   const workstation = currentDemoWorkstation();
   const sessionInitials = sessionLabel.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join("").toUpperCase() || "U";
 
@@ -64,11 +64,10 @@ export default function TopBar({ setActiveView, sessionUser, caseStatus, ward = 
       <div className="truncate text-[15px] font-extrabold text-[var(--app-text)]">Flora iCIS</div>
       <div className="truncate text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--app-muted)]">{surface.code === "canopy" ? "Canopy" : "Leaf"}</div>
     </div>
-    {hospitalName ? <div className="hidden min-w-0 shrink border-l border-[var(--app-border)] pl-3 text-[13px] font-semibold leading-tight text-[var(--app-text)] md:block" title={hospitalName}>{hospitalName}</div> : null}
+    {hospitalName ? <div className="hidden min-w-0 shrink border-l border-[var(--app-border)] pl-3 text-[13px] font-semibold leading-tight text-[var(--app-text)] md:block" title={account ? `${hospitalName} · account ${account.code}` : hospitalName}>{hospitalName}</div> : null}
     {isIdleLeaf ? <span className="hidden items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold text-emerald-500 sm:inline-flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />{t("topbar.readyNextCase")}</span> : null}
     {caseStatus.status !== "IDLE" && caseStatus.identity_status === "pending" ? <span className="hidden items-center gap-1.5 rounded-full border border-rose-400/35 bg-rose-500/10 px-2.5 py-1 text-[10px] font-bold text-rose-400 sm:inline-flex"><span className="h-1.5 w-1.5 rounded-full bg-rose-400" />{t("topbar.identityPending")}</span> : null}
     <div className="ml-auto flex shrink-0 items-center gap-2">
-      {account ? <span title={`Account ${account.code}`} className="hidden max-w-[180px] items-center gap-1.5 truncate rounded-full border border-[var(--app-nav-border)] px-2.5 py-1 text-[11px] font-bold text-[var(--app-text)] md:inline-flex"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--app-accent)]" /><span className="truncate">{account.name}</span></span> : null}
       {workstation ? <span title={`Demo workstation ${workstation.id}`} className="hidden items-center gap-1.5 rounded-full border border-dashed border-[var(--app-nav-border)] px-2.5 py-1 text-[11px] font-bold text-[var(--app-text)] md:inline-flex">{workstation.name}</span> : null}
       {surface.code === "canopy" && ward ? <WardSwitcher ward={ward} /> : null}
       <LanguagePicker compact />
