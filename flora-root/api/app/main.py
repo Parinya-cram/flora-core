@@ -508,11 +508,15 @@ class InstallReport(BaseModel):
 def report_install(tenant_id: str, install_id: str, body: InstallReport, request: Request):
     """The appliance reports a Leaf / gateway install it ran (claimed when the code was used, then installed / failed)."""
     require_tenant(tenant_id, request)
+    # A failed attempt keeps the install open (claimed) so the same machine can retry with the same code;
+    # the error is kept for the operator. Only "installed" closes it.
+    status = "claimed" if body.status == "failed" else body.status
+    detail = body.detail | ({"last_error": body.detail.get("error"), "failed_at": now_ms()} if body.status == "failed" else {"last_error": None})
     with pool.connection() as connection:
         row = connection.execute(
             """UPDATE root_install SET status=%s, detail=detail || %s, updated_at=%s
                WHERE install_id=%s AND tenant_id=%s AND status IN ('pending','claimed') RETURNING install_id""",
-            (body.status, Jsonb(body.detail), now_ms(), install_id, tenant_id)).fetchone()
+            (status, Jsonb(detail), now_ms(), install_id, tenant_id)).fetchone()
     if not row:
         raise HTTPException(409, "install is not open")
     return {"ok": True}

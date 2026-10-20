@@ -450,7 +450,7 @@ function renderInstalls() {
     ${installRows.length ? `<table><tr><th>Machine</th><th>Kind</th><th>Ward / bed</th><th>Status</th><th>Created</th><th>Expires</th><th></th></tr>${installRows.map((row) => `<tr>
       <td><b>${esc(row.label || row.node_id || "site server")}</b>${row.node_id ? `<div class="muted">${esc(row.node_id)}</div>` : ""}</td>
       <td><span class="chip">${esc(row.kind)}</span></td><td>${esc([row.ward, row.room, row.bed].filter(Boolean).join(" · ") || "—")}</td>
-      <td class="${cls[row.status] || ""}">${esc(row.status)}</td><td>${when(row.created_at)}<div class="muted">${esc(row.created_by || "")}</div></td>
+      <td class="${cls[row.status] || ""}">${esc(row.status)}${row.detail && row.detail.hostname ? `<div class="muted">${esc(row.detail.hostname)}${row.detail.ip ? " · " + esc(row.detail.ip) : ""}</div>` : ""}${row.status === "claimed" && row.detail && row.detail.last_error ? `<div class="bad" style="font-size:12px">last try failed: ${esc(row.detail.last_error)}</div>` : ""}</td><td>${when(row.created_at)}<div class="muted">${esc(row.created_by || "")}</div></td>
       <td>${row.status === "pending" || row.status === "expired" ? when(row.expires_at) : "—"}</td>
       <td>${["pending", "claimed"].includes(row.status) ? `<button class="danger admin-only" onclick="revokeInstall('${esc(row.install_id)}')">Revoke</button>` : ""}</td></tr>`).join("")}</table>`
       : `<div class="note">No installs planned for this hospital yet.</div>`}</div>`;

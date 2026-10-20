@@ -799,8 +799,9 @@ async def flush_install_reports(client: httpx.AsyncClient, headers: dict[str, st
         if state.get("reported") or state.get("status") not in {"claimed", "installed", "failed"}:
             continue
         detail = {key: state.get(key) for key in ("hostname", "ip", "placed", "placement_error", "error") if state.get(key) is not None}
+        status = "failed" if state.get("last_result") == "failed" and state.get("status") == "claimed" else state["status"]
         response = await client.post(f"{ROOT_URL}/api/v1/tenants/{TENANT_ID}/installs/{install_id}/report", headers=headers,
-                                     json={"status": state["status"], "detail": detail})
+                                     json={"status": status, "detail": detail})
         if response.status_code in (200, 409):   # 409: Root already closed it (revoked / done)
             _mark_reported(install_id)
 
@@ -879,7 +880,7 @@ def install_claim(body: InstallClaim, request: Request):
     if plan is None:
         raise HTTPException(403, "invalid, used or expired install code (or this appliance has not synced it from Root yet)")
     state = install_states().get(plan["install_id"], {})
-    if state.get("status") in {"installed", "failed"} or (state.get("hostname") and body.hostname and state["hostname"] != body.hostname):
+    if state.get("status") == "installed" or (state.get("hostname") and body.hostname and state["hostname"] != body.hostname):
         raise HTTPException(409, f"this code was already used by {state.get('hostname') or 'another machine'}")
     copies = kv_get("install_plan_copy") or {}
     copies[plan["install_id"]] = plan            # keep the plan after Root closes it (placement still needs it)
@@ -912,7 +913,9 @@ def install_report(body: InstallResult):
     plan = next((p for p in plans if hmac.compare_digest(p["code_hash"], digest)), None)
     if plan is None or install_states().get(plan["install_id"], {}).get("status") != "claimed":
         raise HTTPException(409, "no claimed install for this code")
-    save_install_state(plan["install_id"], status=body.status, error=body.error, finished_at=now_ms())
+    # failed: stays claimed so the same machine can fix the cause and run the installer again
+    save_install_state(plan["install_id"], status="installed" if body.status == "installed" else "claimed",
+                       error=body.error, last_result=body.status, finished_at=now_ms())
     return {"ok": True}
 
 
