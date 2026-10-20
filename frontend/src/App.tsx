@@ -385,7 +385,7 @@ export default function App() {
         }}
       />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <AppSidebar
           activeView={activeView}
           setActiveView={setActiveView}

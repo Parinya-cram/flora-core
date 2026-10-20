@@ -1,7 +1,7 @@
 import type { AxisStepMin } from "../views/clinical-chart/constants";
 
 /** Brand shown in the header, the sign-in page and the browser tab. */
-export const BRAND_NAME = "ESM Flora";
+export const BRAND_NAME = "Flora iCIS";
 
 export type FloraEditionCode = "full" | "rcat" | "eforl";
 export type FloraSurfaceCode = "leaf" | "canopy";
@@ -100,13 +100,13 @@ const EDITION_CONFIG: Record<FloraEditionCode, EditionInfo> = {
 const SURFACE_CONFIG: Record<FloraSurfaceCode, SurfaceInfo> = {
   leaf: {
     code: "leaf",
-    productName: "ESM Flora Leaf",
+    productName: "Flora iCIS Leaf",
     description: "Perioperative workstation",
     clinicalWriteEnabled: true,
   },
   canopy: {
     code: "canopy",
-    productName: "ESM Flora Canopy",
+    productName: "Flora iCIS Canopy",
     description: "Central clinical viewer",
     clinicalWriteEnabled: false,
   },

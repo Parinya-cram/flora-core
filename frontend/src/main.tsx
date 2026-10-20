@@ -9,13 +9,11 @@ import { ThemeProvider } from "./context/ThemeContext"; // Import provider
 import { LanguageProvider } from "./context/LanguageContext";
 import { installAuthenticatedFetch } from "./api/authenticatedFetch";
 import { getSurfaceInfo } from "./edition/config";
-import floraAppIcon from "./assets/logos/floraicon.png";
-import canopyAppIcon from "./assets/logos/canopyicon.png";
+import appIcon from "./assets/logos/flora-icis-icon.png";
 
 installAuthenticatedFetch();
 
 const surface = getSurfaceInfo();
-const appIcon = surface.code === "canopy" ? canopyAppIcon : floraAppIcon;
 document.title = surface.productName;
 document.querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="apple-touch-icon"]').forEach(link => {
   link.href = appIcon;

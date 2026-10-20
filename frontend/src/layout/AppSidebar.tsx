@@ -169,7 +169,7 @@ function SystemMenu({ collapsed, canSettings, activeView, sessionUser, navigate,
     : workstation.hospitalName;
   const itemClass = "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-xs font-semibold hover:bg-[var(--app-control-bg)]";
 
-  return <div ref={rootRef} className="relative border-t border-[var(--app-border)] p-2">
+  return <div ref={rootRef} className="relative shrink-0 border-t border-[var(--app-border)] p-2">
     {open ? createPortal(<div ref={menuRef} role="menu" aria-label={t("system.menu")} style={menuStyle} className="fixed z-[1200] w-64 rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-2 shadow-2xl">
       <div className="mb-1 border-b border-[var(--app-border)] px-3 pb-2 pt-1">
         <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--app-muted)]">{surface.code === "leaf" ? t("system.workstation") : surface.productName}</div>
@@ -295,7 +295,7 @@ function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, colla
 export default function AppSidebar(props: Props) {
   const shared = { ...props };
   return <>
-    <aside className={`app-rail hidden shrink-0 border-r md:block ${props.collapsed ? "w-16" : "w-56"}`}><SidebarBody {...shared} /></aside>
+    <aside className={`app-rail hidden h-full min-h-0 shrink-0 border-r md:block ${props.collapsed ? "w-16" : "w-56"}`}><SidebarBody {...shared} /></aside>
     {props.mobileOpen ? <div className="fixed inset-0 z-[1150] md:hidden"><button type="button" aria-label="Close navigation" onClick={props.onCloseMobile} className="absolute inset-0 bg-black/55" /><aside className="app-rail absolute inset-y-0 left-0 w-[82vw] max-w-[280px] border-r shadow-2xl"><SidebarBody {...shared} collapsed={false} /></aside></div> : null}
   </>;
 }
