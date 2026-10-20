@@ -83,6 +83,7 @@ export type WardOverview = {
   peers: WardPeer[];
   gateways: RegisteredGateway[];
   device_source?: { gateway_id?: string | null; data_api_url: string; configured_at: number; configured_by?: string } | null;
+  adopted?: string[] | null;   // device-type codes downloaded for this hospital; null = show all
   sync: { auto_interval_sec: number; requested_at?: number | null; ward_synced_at?: number | null; last_ok_at?: number | null; components: SyncComponent[] };
 };
 

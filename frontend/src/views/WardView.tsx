@@ -133,10 +133,14 @@ export default function WardView({ sessionUser, onOpenCase, onCaseChanged }: Pro
   const sync = data?.sync;
   const failing = (sync?.components || []).filter(item => item.last_error);
   const stale = !sync?.last_ok_at || Date.now() - sync.last_ok_at > Math.max(30, (sync.auto_interval_sec || 10) * 3) * 1000;
-  // Only the devices actually selected (enabled) for this Leaf — unselected ones aren't shown.
-  const myDevices = useMemo(() => (data?.gateways || []).flatMap(gateway =>
-    gateway.devices.filter(device => device.leaf_id === data?.leaf.id && device.enabled !== false)
-      .map(device => ({ ...device, gateway: gateway.site_name, gatewayOnline: gateway.online, gatewayLastSeen: gateway.last_seen }))), [data]);
+  // Only devices selected (enabled) for this Leaf AND of a device type this hospital downloaded (adopted).
+  const myDevices = useMemo(() => {
+    const adopted = Array.isArray(data?.adopted) ? new Set(data.adopted) : null;  // null = appliance unavailable → show all
+    return (data?.gateways || []).flatMap(gateway =>
+      gateway.devices.filter(device => device.leaf_id === data?.leaf.id && device.enabled !== false
+        && (!adopted || adopted.has(device.device_type)))
+        .map(device => ({ ...device, gateway: gateway.site_name, gatewayOnline: gateway.online, gatewayLastSeen: gateway.last_seen })));
+  }, [data]);
   const sourceGateway = data?.gateways.find(gateway => gateway.gateway_id === data?.device_source?.gateway_id);
   const sinceText = (ms: number) => {
     const s = Math.max(0, Math.floor(ms / 1000));

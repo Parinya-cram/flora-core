@@ -25,6 +25,22 @@ from .canopy_inbox import inbox_public
 router = APIRouter(prefix="/api/ward", tags=["ward"])
 LEAF_ID = os.getenv("FLORA_LEAF_ID", "").strip()
 AUTO_SYNC_SECONDS = int(os.getenv("FLORA_SYNC_INTERVAL_SECONDS", "10"))
+HABER_URL = os.getenv("FLORA_HABER_URL", "").rstrip("/")
+
+
+def haber_adopted() -> list[str] | None:
+    """Device-type codes this hospital downloaded (from the appliance); None if unavailable (show all)."""
+    if not HABER_URL:
+        return None
+    import base64
+    auth = "Basic " + base64.b64encode(
+        f"{os.getenv('HABER_ADMIN_USERNAME', 'admin')}:{os.getenv('HABER_ADMIN_PASSWORD', 'admin')}".encode()).decode()
+    try:
+        request = urllib.request.Request(f"{HABER_URL}/api/haber/v1/adopted", headers={"authorization": auth})
+        with urllib.request.urlopen(request, timeout=3) as response:
+            return json.load(response).get("codes") or []
+    except Exception:
+        return None
 
 
 def ward_state(database: Connection) -> dict[str, Any]:
@@ -68,6 +84,7 @@ def overview(_: dict = Depends(require_permission("case.read")), database: Conne
         "gateways": payload.get("gateways") or [],
         "handovers": payload.get("handovers") or [],
         "device_source": source,
+        "adopted": haber_adopted(),   # device-type codes downloaded for this hospital (null = unavailable, show all)
         "sync": {
             "auto_interval_sec": AUTO_SYNC_SECONDS,
             "requested_at": control.get("requested_at"),

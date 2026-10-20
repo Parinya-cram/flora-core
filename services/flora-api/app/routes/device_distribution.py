@@ -70,6 +70,12 @@ def put_settings(body: dict[str, Any] = Body(...)) -> Any:
     return _haber("PUT", "/api/haber/v1/settings", body)
 
 
+@router.get("/adopted")
+def list_adopted() -> Any:
+    """The device-type codes this hospital has downloaded (for filtering device lists)."""
+    return _haber("GET", "/api/haber/v1/adopted")
+
+
 @router.post("/devices/{code}/adopt")
 def adopt_device(code: str) -> Any:
     """Download/adopt a licensed device type for this hospital (Canopy/Leaf start using it)."""
