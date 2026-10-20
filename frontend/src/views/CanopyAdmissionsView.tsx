@@ -16,6 +16,7 @@ import type { AuthUser } from "../auth/useAuth";
 import ConfirmDialog from "../components/common/ConfirmDialog";
 import CanopyAdmissionFormEditor from "./CanopyAdmissionFormEditor";
 import { AdmissionCaseBadge, AdmissionStatusBadge } from "./CanopyAdmissionStatusBadge";
+import { ageAt, ageTextAt, formatAge, normalizeBirthdate, todayIso } from "../utils/patientAge";
 
 type Props = { sessionUser: AuthUser | null };
 
@@ -117,7 +118,8 @@ function inputFromDraft(draft: Draft): AdmissionInput {
       patient_name: draft.name.trim(),
       sex: optional(draft.sex),
       dob: optional(draft.dob),
-      age_text: optional(draft.ageText),
+      // From the birthdate on the scheduled day (today if not scheduled); a typed age only without one.
+      age_text: optional(ageTextAt(draft.dob, Number.isFinite(scheduled) ? scheduled : Date.now(), draft.ageText)),
       weight_kg: positiveNumber(draft.weight),
       height_cm: positiveNumber(draft.height),
     },
@@ -196,6 +198,9 @@ function AdmitPatientForm({ wards, editing, onClose, onSaved }: AdmitFormProps) 
   const [hisBusy, setHisBusy] = useState(false);
   const [hisNote, setHisNote] = useState<{ tone: "ok" | "warn" | "error"; text: string } | null>(null);
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft(current => ({ ...current, [key]: value }));
+  const [openedAt] = useState(() => Date.now());
+  const draftScheduled = draft.scheduledAt ? new Date(draft.scheduledAt).getTime() : NaN;
+  const draftAge = ageAt(draft.dob, Number.isFinite(draftScheduled) ? draftScheduled : openedAt);
   const ward = wards.find(item => item.key === draft.unitKey) || null;
   const missing = [
     !draft.unitKey ? "ward" : "",
@@ -312,8 +317,10 @@ function AdmitPatientForm({ wards, editing, onClose, onSaved }: AdmitFormProps) 
               <ChoiceRow label="Sex" options={SEXES} value={draft.sex} onChange={value => set("sex", value)} />
             </div>
             <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
-              <Field label="Date of birth"><input type="date" className={fieldClass} value={draft.dob} max={new Date().toISOString().slice(0, 10)} onChange={event => set("dob", event.target.value)} /></Field>
-              <Field label="or age"><input className={fieldClass} value={draft.ageText} placeholder="e.g. 54y" onChange={event => set("ageText", event.target.value)} /></Field>
+              <Field label="Date of birth"><input type="date" className={fieldClass} value={normalizeBirthdate(draft.dob)} max={todayIso(openedAt)} onChange={event => set("dob", event.target.value)} /></Field>
+              <Field label={draftAge ? (draft.scheduledAt ? "Age on scheduled day" : "Age today") : "or age"}>
+                <input className={fieldClass} readOnly={Boolean(draftAge)} value={draftAge ? formatAge(draftAge) : draft.ageText} placeholder="e.g. 54y, 3m 4d" onChange={event => set("ageText", event.target.value)} />
+              </Field>
               <Field label="Weight (kg)"><input type="number" inputMode="decimal" min="0.1" max="500" step="0.1" className={fieldClass} value={draft.weight} onChange={event => set("weight", event.target.value)} /></Field>
               <Field label="Height (cm)"><input type="number" inputMode="decimal" min="1" max="300" step="0.1" className={fieldClass} value={draft.height} onChange={event => set("height", event.target.value)} /></Field>
             </div>

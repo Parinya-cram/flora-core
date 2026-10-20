@@ -185,13 +185,15 @@ export async function startCase(
   return data;
 }
 
-export async function dischargeCase(case_id: number, discharge_time?: number) {
+export async function dischargeCase(case_id: number, discharge_time?: number, destination?: { destination?: string; note?: string }) {
   const res = await fetch(`${BASE}/discharge`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       case_id,
       ...(Number.isFinite(discharge_time) ? { discharge_time } : {}),
+      ...(destination?.destination ? { destination: destination.destination } : {}),
+      ...(destination?.note ? { destination_note: destination.note } : {}),
     }),
   });
   const data = await res.json().catch(() => ({}));
@@ -337,4 +339,39 @@ export async function getSuggestedCaseEndTime(case_id: number): Promise<Suggeste
   }
   const suggestion = (data as { suggestion?: SuggestedCaseEnd }).suggestion;
   return suggestion ?? null;
+}
+
+/** OR ward journey of a case started from an OR-schedule booking: 'or' (in the OR room) or 'recovery'. */
+export type CaseOrSession = { stage: "or" | "or_recovery" | "recovery" | null; room_name?: string | null; bed_name?: string | null };
+export async function getCaseOrSession(case_id: number): Promise<CaseOrSession> {
+  const res = await fetch(`${BASE}/${case_id}/or-session`);
+  if (!res.ok) return { stage: null };
+  return res.json();
+}
+
+/** Patient out of the OR room (not a discharge): the case continues on a recovery bed's Leaf. */
+export async function moveOutCase(case_id: number, at?: number, recordEvent = true) {
+  const res = await fetch(`${BASE}/${case_id}/move-out`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...(Number.isFinite(at) ? { at } : {}), record_event: recordEvent }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : `move out failed (${res.status})`);
+  return data as { ok: boolean; moved_out_at: number };
+}
+
+/** Start Recovery in the OR room: the patient recovers here (Canopy shows Recovery); Move out stays possible. */
+export async function recoverInRoom(case_id: number, at?: number) {
+  const res = await fetch(`${BASE}/${case_id}/recover-here`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Number.isFinite(at) ? { at } : {}) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : `recover here failed (${res.status})`);
+  return data as { ok: boolean };
+}
+
+/** Move a patient waiting for this recovery bed in (continues the case from the OR room). */
+export async function moveInRecovery(admission_id: string) {
+  const res = await fetch(`${BASE}/or-recovery/${encodeURIComponent(admission_id)}/move-in`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : `move in failed (${res.status})`);
+  return data as { ok: boolean; case_id: number };
 }

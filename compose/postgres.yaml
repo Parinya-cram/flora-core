@@ -80,6 +80,7 @@ services:
       - ../infrastructure/postgres/0083-location-zone.sql:/docker-entrypoint-initdb.d/0083-location-zone.sql:ro
       - ../infrastructure/postgres/0086-leaf-beds-device-bed.sql:/docker-entrypoint-initdb.d/0086-leaf-beds-device-bed.sql:ro
       - ../infrastructure/postgres/0088-digital-twin.sql:/docker-entrypoint-initdb.d/0088-digital-twin.sql:ro
+      - ../infrastructure/postgres/0089-or-schedule.sql:/docker-entrypoint-initdb.d/0089-or-schedule.sql:ro
       - ../infrastructure/postgres/0084-scoring.sql:/docker-entrypoint-initdb.d/0084-scoring.sql:ro
       - ../infrastructure/postgres/0085-staff-sync.sql:/docker-entrypoint-initdb.d/0085-staff-sync.sql:ro
       - ../infrastructure/postgres/0087-formdev-template.sql:/docker-entrypoint-initdb.d/0087-formdev-template.sql:ro

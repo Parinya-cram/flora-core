@@ -22,6 +22,7 @@ import CanopyReportStudioView from "../views/CanopyReportStudioView";
 import CanopyAiStudioView from "../views/CanopyAiStudioView";
 import WorkflowStudioView from "../views/WorkflowStudioView";
 import CanopyStaffView from "../views/CanopyStaffView";
+import CanopyOrScheduleView from "../views/CanopyOrScheduleView";
 import { getSurfaceInfo } from "../edition/config";
 import CaseHeaderStrip from "../components/case/CaseHeaderStrip";
 
@@ -62,7 +63,8 @@ interface Props {
     | "ai-studio"
     | "history"
     | "billing"
-    | "staff-directory";
+    | "staff-directory"
+    | "or-schedule";
   sessionUser: AuthUser | null;
   onCaseDischargeTimeUpdated?: (caseId: number, dischargeTime: number) => void;
   onCaseArchived?: (caseId: number) => void;
@@ -200,6 +202,8 @@ export default function MainArea({
         <CanopyReportStudioView sessionUser={sessionUser} />
       ) : activeView === "ai-studio" ? (
         <CanopyAiStudioView sessionUser={sessionUser} />
+      ) : activeView === "or-schedule" ? (
+        <CanopyOrScheduleView sessionUser={sessionUser} />
       ) : activeView === "staff-directory" ? (
         <CanopyStaffView sessionUser={sessionUser} />
       ) : activeView === "workflows" ? (

@@ -11,9 +11,10 @@ import CanopyLoginPage from "./CanopyLoginPage";
 import BranchNetwork from "./BranchNetwork";
 import "./canopyLogin.css";
 import { ReadinessRow, type Readiness } from "./ReadinessRow";
+import WorkstationSwitcher from "../demo/WorkstationSwitcher";
 
 type Props = {
-  onLogin: (username: string, password: string) => Promise<boolean> | boolean;
+  onLogin: (username: string, password: string, accountCode?: string) => Promise<boolean> | boolean;
   loginEnabled?: boolean;
   bootstrapStatus?: BootstrapStatus;
 };
@@ -94,6 +95,7 @@ function WorkstationLoginPage({ onLogin, loginEnabled = true, bootstrapStatus }:
 
             <form onSubmit={handleSubmit} className="space-y-[12px]">
               <h1 id="login-title" className="mb-[15px] text-[18px] font-semibold leading-[24px] text-[var(--app-text)]">{t("login.title")}</h1>
+              <WorkstationSwitcher />
               <div>
                 <label htmlFor="flora-username" className="mb-[5px] block text-[12px] font-semibold text-[var(--app-text)]">{t("login.username")}</label>
                 <input

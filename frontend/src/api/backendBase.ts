@@ -1,3 +1,5 @@
+import { currentDemoWorkstation } from "../demo/workstations";
+
 const DEFAULT_BACKEND_BASE = "http://localhost:6893";
 
 function normalizeBaseUrl(value: string): string {
@@ -6,6 +8,6 @@ function normalizeBaseUrl(value: string): string {
 
 export const BACKEND_BASE = normalizeBaseUrl(
   typeof window !== "undefined"
-    ? window.floraDesktop?.getBackendBaseUrl?.() || import.meta.env.VITE_FLORA_BACKEND_BASE || window.location.origin
+    ? currentDemoWorkstation()?.apiBase || window.floraDesktop?.getBackendBaseUrl?.() || import.meta.env.VITE_FLORA_BACKEND_BASE || window.location.origin
     : DEFAULT_BACKEND_BASE,
 );

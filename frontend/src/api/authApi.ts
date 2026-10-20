@@ -1,4 +1,5 @@
 import { BACKEND_BASE } from "./backendBase";
+import { ACCOUNT_HEADER, parseAccount, type CanopyAccount } from "./accountApi";
 
 export type AuthThemeMode = "dark";
 export type AuthThemeColor = string;
@@ -64,6 +65,8 @@ export type AuthLoginResult = {
   user: AuthApiUser;
   sessionToken: string;
   expiresAt?: number;
+  /** Canopy account (hospital) the session belongs to; absent on Leaf. */
+  account?: CanopyAccount | null;
 };
 
 export type ManagedAuthUser = {
@@ -208,11 +211,12 @@ function parseAuthUser(user: Partial<AuthApiUser> | undefined): AuthApiUser {
   };
 }
 
-export async function loginWithPassword(username: string, password: string): Promise<AuthLoginResult> {
+export async function loginWithPassword(username: string, password: string, accountCode?: string): Promise<AuthLoginResult> {
+  const account = (accountCode || "").trim().toLowerCase();
   const res = await fetch(`${BASE}/login`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
+    headers: { "Content-Type": "application/json", ...(account ? { [ACCOUNT_HEADER]: account } : {}) },
+    body: JSON.stringify(account ? { username, password, account_code: account } : { username, password }),
   });
 
   const data = await res.json().catch(() => ({}));
@@ -234,6 +238,7 @@ export async function loginWithPassword(username: string, password: string): Pro
     user: parseAuthUser(user),
     sessionToken,
     expiresAt: Number.isFinite(Number(data?.expires_at)) ? Number(data.expires_at) : undefined,
+    account: parseAccount(data?.account),
   };
 }
 

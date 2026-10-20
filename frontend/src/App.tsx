@@ -5,6 +5,7 @@ import MainArea from "./layout/MainArea";
 import { getCaseStatus } from "./api/caseApi";
 import type { CaseStatus } from "./api/caseApi";
 import LoginPage from "./auth/LoginPage";
+import PlatformConsoleView from "./views/PlatformConsoleView";
 import { useAuth } from "./auth/useAuth";
 import { useBootstrapStatus } from "./bootstrap/useBootstrapStatus";
 import { getEditionInfo, getSurfaceInfo } from "./edition/config";
@@ -30,7 +31,8 @@ export default function App() {
   const surface = getSurfaceInfo();
   const workstation = useWorkstationSettings();
   const isCanopy = surface.code === "canopy";
-  const ward = useCanopyWard(user, isCanopy && isAuthenticated);
+  const isPlatformAdmin = isCanopy && user?.role === "platform_admin";
+  const ward = useCanopyWard(user, isCanopy && isAuthenticated && !isPlatformAdmin);
   const [caseStatus, setCaseStatus] = useState<CaseStatus>({ status: "IDLE" });
   const [isNavigationOpen, setIsNavigationOpen] = useState(false);
   const [isNavigationCollapsed, setIsNavigationCollapsed] = useState(() => readStoredBool(NAV_COLLAPSED_KEY, false));
@@ -369,6 +371,9 @@ export default function App() {
       </>
     );
   }
+
+  // Platform administrators manage accounts only; they never get the hospital shell.
+  if (isPlatformAdmin && user) return <PlatformConsoleView user={user} onLogout={logout} />;
 
   return (
     <div className="app-shell app-theme-scope h-screen font-sans flex flex-col">

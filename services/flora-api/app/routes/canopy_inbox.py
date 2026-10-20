@@ -7,7 +7,7 @@ Canopy, e.g. pre-op filled on a tablet).
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import HTTPException, APIRouter, Depends
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 
@@ -32,6 +32,8 @@ def inbox_public(row: dict[str, Any]) -> dict[str, Any]:
         "unitName": header.get("unit_name"),
         "targetLeafId": header.get("target_leaf_id"),
         "scheduledAt": header.get("scheduled_at"),
+        # OR schedule: the room / bed the ward desk assigned, the booked team, a pending move-in request.
+        "orSession": header.get("or_session"),
         "note": header.get("note"),
         "createdBy": header.get("created_by"),
         "formFieldCount": len([value for value in values.values() if value not in (None, "", [], {})]),
@@ -51,6 +53,8 @@ def canopy_admissions(_: dict = Depends(require_permission("case.read")), databa
 def outbox(_: dict = Depends(service_only), database: Connection = Depends(connection)) -> dict:
     cases = database.execute(
         """SELECT c.id, c.canopy_admission_id, c.status, c.case_code, c.start_time, c.discharge_time,
+                  to_jsonb(c) ->> 'discharge_reason' AS discharge_reason, to_jsonb(c) ->> 'discharge_destination' AS discharge_destination,
+                  to_jsonb(c) ->> 'discharge_note' AS discharge_note, to_jsonb(c) ->> 'or_stage' AS or_stage,
                   d.form_draft_json, d.field_versions
            FROM cases c LEFT JOIN case_detail d ON d.case_id=c.id
            WHERE c.canopy_admission_id IS NOT NULL
@@ -64,6 +68,8 @@ def outbox(_: dict = Depends(service_only), database: Connection = Depends(conne
         "cases": [{
             "admission_id": str(row["canopy_admission_id"]), "case_id": row["id"], "status": row["status"],
             "case_code": row["case_code"], "start_time": row["start_time"], "discharge_time": row["discharge_time"],
+            "discharge_reason": row["discharge_reason"], "discharge_destination": row["discharge_destination"],
+            "discharge_note": row["discharge_note"], "or_stage": row["or_stage"],
             "values": form_sync.parse(row["form_draft_json"]), "versions": row["field_versions"] or {},
         } for row in cases],
         "claims": [{"admission_id": str(row["id"]), "case_id": row["case_id"]} for row in claims],
@@ -126,5 +132,70 @@ def inbox(payload: dict[str, Any], _: dict = Depends(service_only), database: Co
             if changed:
                 case_audit(database, case["id"], "form.draft.canopy", old, values, SYNC_ACTOR)
                 updated_forms += 1
+    started = auto_move_in(database, pending)
+    requested = run_requests(database, payload.get("linked") or [])
     return {"ok": True, "received": received, "withdrawn": [str(row["id"]) for row in withdrawn],
-            "updated_forms": updated_forms}
+            "updated_forms": updated_forms, "moved_in": started, "requests": requested}
+
+
+def run_requests(database: Connection, linked: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Move out / discharge pressed at the Canopy ward desk for the case running here."""
+    from .or_leaf import discharge_from_canopy, move_out_case
+    results = []
+    for item in linked:
+        requests = item.get("requests") or {}
+        if not requests:
+            continue
+        case = database.execute(
+            "SELECT id, status, to_jsonb(cases) ->> 'or_stage' AS or_stage FROM cases WHERE canopy_admission_id::text=%s AND status='active'",
+            (str(item.get("admission_id")),)).fetchone()
+        if case is None:
+            continue
+        try:
+            if requests.get("move_out") and case["or_stage"] in ("or", "or_recovery"):
+                request = requests["move_out"]
+                move_out_case(database, case["id"], {"username": str(request.get("by") or "canopy"), "role": "integration", "id": None},
+                              int(request.get("at") or now_ms()))
+                results.append({"admission_id": str(item["admission_id"]), "done": "move_out"})
+            elif requests.get("discharge"):
+                discharge_from_canopy(database, case["id"], requests["discharge"])
+                results.append({"admission_id": str(item["admission_id"]), "done": "discharge"})
+        except HTTPException as error:
+            results.append({"admission_id": str(item["admission_id"]), "failed": str(error.detail)})
+    return results
+
+
+def auto_move_in(database: Connection, pending: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The ward desk pressed Move in for a patient assigned to this bed: start the case now (at the requested
+    time). Skipped while another case is active here; the desk sees the patient still waiting."""
+    from .cases_lifecycle import StartCase, start_case
+    results = []
+    for item in pending:
+        session = (item.get("header") or {}).get("or_session") or {}
+        requested = session.get("move_in_requested_at")
+        if not requested:
+            continue
+        row = database.execute("SELECT status FROM canopy_admission_inbox WHERE id=%s", (item["id"],)).fetchone()
+        if not row or row["status"] != "pending":
+            continue
+        if database.execute("SELECT 1 FROM cases WHERE status='active' LIMIT 1").fetchone():
+            results.append({"admission_id": str(item["id"]), "started": False, "reason": "another case is active"})
+            continue
+        actor = {"username": str(session.get("move_in_requested_by") or "canopy"), "role": "integration", "id": None}
+        if session.get("stage") == "recovery":
+            from .or_leaf import recovery_move_in
+            try:
+                result = recovery_move_in(database, str(item["id"]), actor, int(requested))
+                results.append({"admission_id": str(item["id"]), "started": True, "case_id": result["case_id"]})
+            except HTTPException as error:
+                results.append({"admission_id": str(item["id"]), "started": False, "reason": str(error.detail)})
+            continue
+        try:
+            response = start_case(StartCase(start_time=int(requested), admission_source="prepared",
+                                            canopy_admission_id=str(item["id"]), overlap_policy="exclude"), actor, database)
+        except HTTPException as error:
+            results.append({"admission_id": str(item["id"]), "started": False, "reason": str(error.detail)})
+            continue
+        ok = isinstance(response, dict) and response.get("ok")
+        results.append({"admission_id": str(item["id"]), "started": bool(ok), **({"case_id": response["case_id"]} if ok else {})})
+    return results
