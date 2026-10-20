@@ -315,7 +315,7 @@ function renderTopology() {
       <text class="sub" x="14" y="104">appliance seen ${esc(ago(t.last_seen_at))}</text>
       <text class="sub" x="14" y="121" fill="var(--accent)">Open topology ›</text></g>`;
   });
-  box.innerHTML = `<div class="topo"><svg viewBox="0 0 ${width} ${120 + rows * (ch + 40)}">${svg}</svg>${legend}</div>`;
+  box.innerHTML = `<div class="topo"><svg style="max-width:${width * 1.15}px;margin:0 auto" viewBox="0 0 ${width} ${120 + rows * (ch + 40)}">${svg}</svg>${legend}</div>`;
 }
 function siteTopology(t) {
   const u = t.usage || {}, gws = u.gateway_detail || [], nodes = u.nodes || [];
@@ -334,7 +334,7 @@ function siteTopology(t) {
       const y = gy + nh + 6 + j * (dh + 4);
       gwSvg += `<g class="node" transform="translate(${gx + 14},${y})"><rect width="${nw - 14}" height="${dh}" rx="5"/>
         <circle class="dot ${d.enabled !== false && d.parser_status === "running" ? "ok" : "off"}" cx="10" cy="${dh / 2}" r="3.5"/>
-        <text x="20" y="15" font-size="11">${esc((d.label || d.device_id).slice(0, 18))} · ${esc(d.device_type || "")}</text></g>`;
+        <text x="20" y="15" font-size="11">${esc((d.label || d.device_id).slice(0, 24))}</text><title>${esc(d.label || d.device_id)} · ${esc(d.device_type || "")} · ${esc(d.parser_status || "")}</title></g>`;
       const leaf = leafPos[d.leaf_id];
       if (leaf) edges += `<path class="edge data" d="M${gx + 14},${y + dh / 2} C${gx - 120},${y + dh / 2} ${leaf.x + 120},${leaf.y + nh / 2} ${leaf.x + nw / 2},${leaf.y + nh / 2}"/>`;
     });
@@ -355,7 +355,7 @@ function siteTopology(t) {
     ${edges}
     ${tNode(W / 2 - nw / 2, 62, nw, nh, "Appliance (Haber)", `seen ${ago(t.last_seen_at)}`, "", isOnline(t.last_seen_at))}
     ${tEdge(W / 2, 108, 40 + nw / 2, 140)}
-    ${tNode(40, 140, nw, nh, "Canopy", `${t.canopy_version || "—"} · ${rel("canopy") || ""}`)}
+    ${tNode(40, 140, nw, nh, "Canopy", [t.canopy_version || "—", rel("canopy")].filter(Boolean).join(" · "))}
     ${leafSvg}${gwSvg}
     ${!gws.length && !leafIds.length ? `<text class="sub" x="40" y="230">No Leaf or gateway reported yet — waiting for the appliance's next check-in.</text>` : ""}`;
   return `<p><button onclick="topoOpen(null)">‹ All hospitals</button></p><div class="topo"><svg viewBox="0 0 ${W} ${H}">${svg}</svg>${legend}</div>`;
