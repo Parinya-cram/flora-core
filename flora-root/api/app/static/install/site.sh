@@ -64,10 +64,10 @@ IMAGES=$(printf '%s' "$RELEASES" | python3 -c '
 import json, sys
 d, registry = json.load(sys.stdin)["bundle"], sys.argv[1]
 rid = d["latest"].get("canopy"); rel = next(r for r in d["releases"] if r["release_id"] == rid)
-for key in ("api", "web", "db", "haber", "registry", "edge"):
+for key in ("api", "web", "db", "haber", "registry"):
     image = rel["services"][key]
     print("%s %s/%s@%s" % (key.upper(), registry, image["repository"], image["digest"]))
-print("RELEASE " + rid)' "$REGISTRY_HOST") || fail "the Canopy release has no full site image set (api web db haber registry edge)"
+print("RELEASE " + rid)' "$REGISTRY_HOST") || fail "the Canopy release has no full site image set (api web db haber registry)"
 img() { printf '%s\n' "$IMAGES" | sed -n "s/^$1 //p"; }
 echo "release $(img RELEASE)"
 
@@ -75,7 +75,7 @@ say "4/8 Pulling images into this server's container runtime"
 # Each image is pulled once by digest and kept under a local name (flora-site/<service>:<release>); the
 # cluster runs those local names only (imagePullPolicy: Never), so it never needs to reach a registry.
 RELEASE_ID=$(img RELEASE)
-for key in API WEB DB HABER REGISTRY EDGE; do
+for key in API WEB DB HABER REGISTRY; do
   ref=$(img $key); local_ref="flora-site/$(echo $key | tr 'A-Z' 'a-z'):$RELEASE_ID"
   if command -v k3s >/dev/null && [ "$KUBECTL" = "k3s kubectl" ]; then
     $SUDO k3s ctr -n k8s.io images pull --plain-http "$ref" >/dev/null && $SUDO k3s ctr -n k8s.io images tag --force "$ref" "docker.io/$local_ref" >/dev/null
@@ -125,7 +125,7 @@ curl $K "$ROOT/install/files/site/site.yaml" | sed \
   -e "s#__HABER_PORT__#$HABER_PORT#g" -e "s#__REGISTRY_PORT__#$REGISTRY_PORT#g" -e "s#__ROOT_URL__#$ROOT_URL#g" \
   -e "s#__ROOT_PUBLIC_KEY__#$ROOT_KEY#g" -e "s#__ROOT_REGISTRY__#$ROOT_REGISTRY#g" \
   -e "s#__IMG_API__#$(img API)#g" -e "s#__IMG_WEB__#$(img WEB)#g" -e "s#__IMG_DB__#$(img DB)#g" \
-  -e "s#__IMG_HABER__#$(img HABER)#g" -e "s#__IMG_REGISTRY__#$(img REGISTRY)#g" -e "s#__IMG_EDGE__#$(img EDGE)#g" \
+  -e "s#__IMG_HABER__#$(img HABER)#g" -e "s#__IMG_REGISTRY__#$(img REGISTRY)#g" \
   | $KUBECTL apply -f - >/dev/null || fail "kubectl apply failed"
 for d in canopy-db canopy-api sync-api canopy-web edge; do
   $KUBECTL -n "$P-canopy" rollout status "deploy/$d" --timeout=600s >/dev/null || fail "$d did not start"; echo "  $d ready"; done

@@ -173,7 +173,7 @@ spec:
     spec:
       containers:
         - name: edge
-          image: __IMG_EDGE__
+          image: __IMG_WEB__        # the Canopy web image is nginx too; its own config is replaced by edge-nginx below
           imagePullPolicy: Never
           ports: [ { containerPort: 443, hostPort: __CANOPY_PORT__ } ]
           volumeMounts:
