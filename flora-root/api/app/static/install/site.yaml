@@ -167,6 +167,7 @@ kind: Deployment
 metadata: { name: edge, namespace: __P__-canopy }
 spec:
   replicas: 1
+  strategy: { type: Recreate }      # one pod owns the host port: stop the old one before the new starts
   selector: { matchLabels: { app: edge } }
   template:
     metadata: { labels: { app: edge } }
@@ -175,6 +176,8 @@ spec:
         - name: edge
           image: __IMG_WEB__        # the Canopy web image is nginx too; its own config is replaced by edge-nginx below
           imagePullPolicy: Never
+          env:
+            - { name: NGINX_ENVSUBST_OUTPUT_DIR, value: /tmp }   # the image's own template must not write into conf.d
           ports: [ { containerPort: 443, hostPort: __CANOPY_PORT__ } ]
           volumeMounts:
             - { name: conf, mountPath: /etc/nginx/conf.d }
