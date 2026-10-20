@@ -132,18 +132,20 @@ for d in canopy-db canopy-api sync-api canopy-web edge; do
 
 say "7/8 Hospital account in Canopy"
 OWNER="postgresql://flora_admin:$(sec db-admin)@canopy-db:5432/flora"
+# Canopy account codes are [a-z][a-z0-9_]: Root's tenant id with "-" as "_" (hospital-01 -> hospital_01).
+ACCOUNT=$(printf '%s' "$TENANT" | tr 'A-Z-' 'a-z_'); case "$ACCOUNT" in [a-z]*) ;; *) ACCOUNT="h_$ACCOUNT" ;; esac
 cli() { $KUBECTL -n "$P-canopy" exec deploy/canopy-api -c canopy-api -- env FLORA_PLATFORM_DATABASE_URL="$OWNER" \
-  FLORA_SYNC_SHARED_SECRET="$(sec sync)" TENANT="$TENANT" NAME="$NAME" sh -c \
+  FLORA_SYNC_SHARED_SECRET="$(sec sync)" TENANT="$ACCOUNT" NAME="$NAME" sh -c \
   'export FLORA_DATABASE_URL=postgresql://flora_view:$DB_VIEW@canopy-db:5432/flora; python -m app.cli_accounts "$@"' cli "$@"; }
-if ! cli list 2>/dev/null | grep -q "^$TENANT "; then
+if ! cli list 2>/dev/null | grep -q "^$ACCOUNT "; then
   $KUBECTL -n "$P-canopy" exec deploy/canopy-api -c canopy-api -- env FLORA_PLATFORM_DATABASE_URL="$OWNER" \
-    FLORA_SYNC_SHARED_SECRET="$(sec sync)" TENANT="$TENANT" NAME="$NAME" sh -c \
+    FLORA_SYNC_SHARED_SECRET="$(sec sync)" TENANT="$ACCOUNT" NAME="$NAME" sh -c \
     'export FLORA_DATABASE_URL=postgresql://flora_view:$DB_VIEW@canopy-db:5432/flora; python -m app.cli_accounts adopt-public "$TENANT" "$NAME"' >/dev/null \
     || fail "cannot create the hospital account in Canopy"
   $KUBECTL -n "$P-canopy" rollout restart deploy/canopy-api >/dev/null        # first administrator of the account
   $KUBECTL -n "$P-canopy" rollout status deploy/canopy-api --timeout=300s >/dev/null || fail "canopy-api did not restart"
 fi
-echo "  account $TENANT ready"
+echo "  account $ACCOUNT ready"
 
 say "8/8 Appliance: connecting to Root"
 for d in haber-registry haber; do
