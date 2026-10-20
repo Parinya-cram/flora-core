@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { BootstrapStatus } from "../bootstrap/floraDesktop";
-import canopyAppIcon from "../assets/logos/canopyicon.png";
+import appIcon from "../assets/logos/flora-icis-icon.png";
 import ThemePicker from "../components/ThemePicker";
 import LanguagePicker from "../components/LanguagePicker";
 import { useLanguage } from "../context/LanguageContext";
@@ -129,7 +129,7 @@ export default function CanopyLoginPage({ onLogin, loginEnabled = true, bootstra
         <div className="canopy-card overflow-hidden rounded-[22px] border border-[var(--app-border)]">
           <header className="flex items-center gap-[12px] border-b border-[var(--app-border)] px-[20px] py-[14px] sm:px-[26px]">
             <span className="inline-flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[12px] border border-[var(--app-border)] bg-[var(--app-control-bg)]">
-              <img src={canopyAppIcon} alt="" className="h-[38px] w-[38px] object-contain [image-rendering:pixelated]" />
+              <img src={appIcon} alt="" className="h-[38px] w-[38px] object-contain" />
             </span>
             <div className="min-w-0">
               <div className="text-[19px] font-extrabold leading-[23px] tracking-[-0.01em] text-[var(--app-text)]">{t("product.canopy.name")}</div>
