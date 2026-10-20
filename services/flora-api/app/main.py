@@ -168,6 +168,8 @@ async def enforce_canopy_read_only(request: Request, call_next):
         formdev_write = formdev_write or request.url.path.startswith("/api/fleet/workflows")
         # AI Studio chats and kept visuals (permission checked by the routes).
         formdev_write = formdev_write or request.url.path.startswith("/api/ai-studio/")
+        # Device Distribution console: image rollout / registry settings / device adopt (admin, via Haber).
+        formdev_write = formdev_write or request.url.path.startswith("/api/fleet/distribution")
         if request.url.path not in {"/api/auth/login", "/api/auth/logout"} and not request.url.path.startswith("/api/fleet/control") and not canopy_preference_write and not report_generation and not formdev_write:
             return JSONResponse(
                 status_code=403,
