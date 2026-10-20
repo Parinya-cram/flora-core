@@ -86,7 +86,7 @@ if [ ! -f "$DIR/.env" ]; then
   cat > "$DIR/.env" <<ENV
 # Leaf $LEAF_ID — written by leaf.sh; secrets were generated on this machine.
 FLORA_LEAF_ID=$LEAF_ID
-FLORA_LEAF_NAME=$NAME
+FLORA_LEAF_NAME="$(printf %s "$NAME" | tr -d '"')"
 FLORA_HOSPITAL_ID=$(printf '%s' "$NODE" | json tenant_id)
 CANOPY_SYNC_URL=$CANOPY
 HABER_URL=$HABER
@@ -103,7 +103,8 @@ LEAF_API_PORT=$API_PORT
 ENV
   chmod 600 "$DIR/.env"
 fi
-. "$DIR/.env"
+envget() { sed -n "s/^$1=//p" "$DIR/.env" | tr -d '"'; }
+LEAF_HTTPS_PORT=$(envget LEAF_HTTPS_PORT); LEAF_ADMIN_PASSWORD=$(envget LEAF_ADMIN_PASSWORD)
 
 say "5/7 Certificates"
 if [ ! -f "$DIR/certs/server.crt" ]; then

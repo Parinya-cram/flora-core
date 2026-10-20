@@ -511,7 +511,7 @@ def report_install(tenant_id: str, install_id: str, body: InstallReport, request
     # A failed attempt keeps the install open (claimed) so the same machine can retry with the same code;
     # the error is kept for the operator. Only "installed" closes it.
     status = "claimed" if body.status == "failed" else body.status
-    detail = body.detail | ({"last_error": body.detail.get("error"), "failed_at": now_ms()} if body.status == "failed" else {"last_error": None})
+    detail = body.detail | ({"last_error": body.detail.get("error"), "failed_at": now_ms()} if body.status == "failed" else {"last_error": None, "error": None})
     with pool.connection() as connection:
         row = connection.execute(
             """UPDATE root_install SET status=%s, detail=detail || %s, updated_at=%s
