@@ -39,7 +39,8 @@ def payload_bytes(encoding: str, payload: str) -> int:
 
 
 class PodStream:
-    __slots__ = ("pod", "controller", "seconds", "recent", "totals", "last_ts", "next_id", "minutes", "source_minutes")
+    __slots__ = ("pod", "controller", "seconds", "recent", "totals", "last_ts", "next_id", "minutes", "source_minutes",
+                 "last_in_ts", "source_last_ts")
 
     def __init__(self, pod: str) -> None:
         self.pod = pod
@@ -52,6 +53,9 @@ class PodStream:
         # [epoch_minute, frames_in, bytes_in, frames_out, bytes_out], for the whole pod and per sender IP
         self.minutes: deque[list[int]] = deque()
         self.source_minutes: dict[str, deque[list[int]]] = {}
+        # When the device side was last heard: the whole pod, and each sender IP (kept past the recent-frame buffer)
+        self.last_in_ts: int | None = None
+        self.source_last_ts: dict[str, int] = {}
 
     @staticmethod
     def _count_minute(rows: deque[list[int]], minute: int, offset: int, size: int) -> None:
@@ -80,6 +84,10 @@ class PodStream:
         self.totals[f"frames_{direction}"] += 1
         self.totals[f"bytes_{direction}"] += size
         self.last_ts = int(time.time() * 1000)
+        if direction == "in":
+            self.last_in_ts = self.last_ts
+            if source:
+                self.source_last_ts[source] = self.last_ts
         payload = frame.get("payload") or ""
         self.next_id += 1
         self.recent.append({

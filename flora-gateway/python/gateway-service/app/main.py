@@ -121,15 +121,17 @@ async def sample_status() -> list[tuple[str, str, str | None]]:
         else:
             rows.append((f"controller:{name}", "down", str(result.get("error") or "unreachable")[:200]))
     seen = {r["device_id"]: r["last_seen_ts"] for r in db.fetch_all("SELECT device_id, last_seen_ts FROM gateway_device_seen")}
-    for instance in db.fetch_all("SELECT device_id, enabled FROM gateway_device_instance"):
+    for instance in db.fetch_all("SELECT device_id, enabled, pod FROM gateway_device_instance"):
         last = seen.get(instance["device_id"])
+        # Network devices report a lost connection; serial ones are switched off or unplugged.
+        how = "network: " if instance["pod"].split(".", 1)[0] in ("socket", "webhook", "feeder") else ""
         if not instance["enabled"]:
             rows.append((f"device:{instance['device_id']}", "stopped", "disabled"))
         elif last and now - last < DEVICE_SILENT_MS:
             rows.append((f"device:{instance['device_id']}", "ok", None))
         else:
             rows.append((f"device:{instance['device_id']}", "down",
-                         f"no data for {round((now - last) / 60000)} min" if last else "no data yet"))
+                         how + (f"no data for {round((now - last) / 60000)} min" if last else "no data yet")))
     STATE["pods"] = pods
     return rows
 
@@ -808,7 +810,29 @@ def update_device_type(code: str, payload: DeviceTypeIn):
     columns = HABER_EDITABLE if current["source"] == "haber" else TYPE_COLUMNS
     db.execute(f"UPDATE gateway_device_type SET {', '.join(c + '=%s' for c in columns)} WHERE code=%s",
                (*type_values(payload, columns), code))
-    return {"code": code, "updated": list(columns)}
+    return {"code": code, "updated": list(columns), **apply_type_to_devices(code, current)}
+
+
+def apply_type_to_devices(code: str, before: dict[str, Any]) -> dict[str, Any]:
+    """After a type edit, its enabled devices follow it: their pods take the new line settings and their parsers
+    restart when the parser, image or default options changed. Problems are reported, not raised."""
+    after = get_type(code)
+    parser_changed = any(before.get(k) != after.get(k) for k in ("parser", "image", "default_options"))
+    pods, restarted, problems = [], [], []
+    for instance in db.fetch_all("SELECT device_id, pod FROM gateway_device_instance WHERE device_type=%s AND enabled "
+                                 "ORDER BY device_id", (code,)):
+        try:
+            result = apply_type_to_pod(instance["pod"], code, instance["device_id"])
+            if result.get("changed"):
+                pods.append(result)
+            if parser_changed and license_state()["valid"]:
+                start_instance(instance["device_id"])
+                restarted.append(instance["device_id"])
+        except HTTPException as error:
+            problems.append(f"{instance['device_id']}: {error.detail}")
+        except Exception as error:  # docker or config trouble on one device must not hide the others
+            problems.append(f"{instance['device_id']}: {error}")
+    return {"pod_settings": pods, "restarted_parsers": restarted, "problems": problems}
 
 
 @app.delete("/api/device-types/{code}", dependencies=[Depends(require_admin), Depends(auth.require_role_admin)])
@@ -1119,6 +1143,62 @@ def own_frames(device: dict[str, Any], frames) -> list[dict[str, Any]]:
             if not source or frame["direction"] != "in" or frame["meta"].get("source_ip") in (None, source)]
 
 
+DEVICE_ACTIVE_MS = 30_000   # frames or values newer than this count as "now"
+
+
+def ingress_pod_status() -> dict[str, dict[str, Any]]:
+    """Per-pod status from the serial and socket controllers: serial `connected` = the port is open,
+    socket `detail.connections` = open TCP connections. Missing when a controller is unreachable."""
+    result: dict[str, dict[str, Any]] = {}
+    with httpx.Client(timeout=0.8) as client:
+        for name in ("serial-controller", "socket-controller"):
+            try:
+                for pod in client.get(f"{settings.CONTROLLERS[name]}/status").json().get("pods", []):
+                    result[pod["pod"]] = pod
+            except Exception:
+                continue
+    return result
+
+
+def device_status(device: dict[str, Any], connection: dict[str, Any] | None, stream, container: dict | None,
+                  pod_status: dict[str, Any] | None, last_value: int | None, now: int) -> dict[str, Any]:
+    """The device's own state for its live card.
+    receiving: decoded values now · standby: powered on and talking, nothing to measure yet ·
+    plugged_in: a serial device whose modem lines are up but that sends nothing yet ·
+    unplugged: a serial device that stopped answering (off or cable out) ·
+    not_connected / connection_lost: a network device never seen / no longer heard · plus gateway-side faults."""
+    kind = (connection or {}).get("kind") or device["pod"].split(".", 1)[0]
+    network = kind in ("socket", "webhook", "feeder")
+    source = (device.get("options") or {}).get("source_ip")
+    last_in = (stream.source_last_ts.get(source) if source else stream.last_in_ts) if stream else None
+    fresh = lambda ts: bool(ts) and now - ts < DEVICE_ACTIVE_MS
+    state = lambda code, detail=None, since=None: {"state": code, "network": network, "detail": detail,
+                                                   "since": since, "last_in_ts": last_in}
+    if not device.get("enabled"):
+        return state("disabled")
+    if container is not None and container.get("status") != "running":
+        return state("parser_down", f"parser container {container.get('status')}")
+    if kind == "serial" and pod_status and not pod_status.get("connected"):
+        return state("port_error", pod_status.get("last_error") or "serial port is not open")
+    if fresh(last_value):
+        return state("receiving", since=last_value)
+    if fresh(last_in):
+        return state("standby", "powered on, sending no measurements", since=last_in)
+    if not network:
+        # A powered device on a full RS-232 cable raises DSR/CTS/DCD even before it sends anything.
+        lines = ((pod_status or {}).get("detail") or {}).get("lines") or {}
+        raised = [name.upper() for name in ("dsr", "cts", "dcd") if lines.get(name)]
+        if raised:
+            return state("plugged_in", f"cable connected, device on ({'/'.join(raised)}), waiting for data", since=last_in)
+        return state("unplugged", "no reply and no line signal: switched off or cable out", since=last_in)
+    connections = ((pod_status or {}).get("detail") or {}).get("connections")
+    if not source and connections:
+        return state("standby", f"{connections} TCP connection(s) open, no data yet", since=last_in)
+    if last_in:
+        return state("connection_lost", "no data from the device over the network", since=last_in)
+    return state("not_connected", f"never heard from {source}" if source else "no device has connected yet")
+
+
 KONG_LEAF_ROUTE = re.compile(r'paths:\s*\[\s*"/data-api/([A-Za-z0-9_.-]+)"\s*\]')
 
 
@@ -1169,6 +1249,7 @@ def live_devices():
     now = db.now_ms()
     latest = latest_parameters([d["device_id"] for d in devices], now - LIVE_WINDOW_MS) if devices else {}
     connections = pod_connections()
+    pod_status = ingress_pod_status() if devices else {}
     rows = []
     for device in devices:
         stream = monitor.pods.get(device["pod"])
@@ -1180,6 +1261,8 @@ def live_devices():
         rows.append({
             **{key: device.get(key) for key in ("device_id", "label", "device_type", "pod", "leaf_id", "enabled")},
             "container": states.get(device["device_id"]),
+            "status": device_status(device, connections.get(device["pod"]), stream, states.get(device["device_id"]),
+                                    pod_status.get(device["pod"]), last_value, now),
             "controller": device["pod"].split(".", 1)[0],
             "connection": connections.get(device["pod"]),
             "graph": device_graph(device, connections.get(device["pod"]), stream),
@@ -1510,8 +1593,15 @@ async def haber_sync():
 
 
 @app.get("/api/logs")
-def logs(limit: int = 100):
-    return {"rows": db.fetch_all("SELECT * FROM gateway_log ORDER BY ts DESC LIMIT %s", (min(limit, 500),))}
+def logs(limit: int = 100, offset: int = 0, order: str = "desc", since: int | None = None, until: int | None = None):
+    """One page of the gateway log; order=desc is newest first, asc oldest first.
+    since/until (epoch ms, until exclusive) limit it to a period, e.g. one local day picked in the browser."""
+    direction = "ASC" if order.lower() == "asc" else "DESC"
+    where = "WHERE ts >= %s AND ts < %s"
+    period = (since if since is not None else 0, until if until is not None else 2**62)
+    rows = db.fetch_all(f"SELECT * FROM gateway_log {where} ORDER BY ts {direction}, id {direction} LIMIT %s OFFSET %s",
+                        (*period, max(1, min(limit, 500)), max(0, offset)))
+    return {"rows": rows, "total": db.fetch_one(f"SELECT count(*) AS n FROM gateway_log {where}", period)["n"]}
 
 
 @app.get("/api/devices/status")

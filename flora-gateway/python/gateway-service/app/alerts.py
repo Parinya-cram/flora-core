@@ -20,7 +20,7 @@ PUSH_BATCH = 100
 _down_streak: dict[str, int] = {}
 
 
-def describe(lane: str, label: str) -> tuple[str, str, str]:
+def describe(lane: str, label: str, detail: str | None = None) -> tuple[str, str, str]:
     """(category, severity, title) for a lane going down."""
     kind = lane.partition(":")[0]
     if kind == "canopy":
@@ -28,6 +28,8 @@ def describe(lane: str, label: str) -> tuple[str, str, str]:
     if kind == "controller":
         return "controller", "critical", f"Controller down: {label}"
     if kind == "device":
+        if detail and detail.startswith("network: "):
+            return "device", "critical", f"Connection lost: {label}"
         return "device", "critical", f"No data from {label}"
     return "gateway", "warning", label
 
@@ -45,7 +47,7 @@ def observe(now: int, rows: list[tuple[str, str, str | None]], labels: dict[str,
                 db.execute("UPDATE gateway_alert SET last_seen_at=%s, detail=%s WHERE id=%s",
                            (now, detail, open_alerts[lane]["id"]))
             elif _down_streak[lane] >= ALERT_AFTER:
-                category, severity, title = describe(lane, labels.get(lane, lane))
+                category, severity, title = describe(lane, labels.get(lane, lane), detail)
                 db.execute(
                     """INSERT INTO gateway_alert (alert_key,category,severity,title,detail,opened_at,last_seen_at)
                        VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",

@@ -28,7 +28,7 @@
   .content { min-width:0 }
   header { padding:16px 24px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:baseline; flex-wrap:wrap }
   header h2 { font-size:18px; margin:0; text-transform:none; letter-spacing:0; color:var(--ink) } header span { color:var(--muted) }
-  main { padding:20px 24px; display:grid; gap:18px; max-width:1300px }
+  main { padding:20px 24px; display:grid; gap:18px; min-width:0 }
   main[hidden] { display:none }
   section { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px; overflow-x:auto }
   .head { display:flex; align-items:center; gap:10px; margin:0 0 12px } .head h2 { margin:0 } .head button { margin-left:auto }
@@ -110,7 +110,10 @@
   .livecard .vals { margin-top:6px; min-height:22px } .livecard .row b { font-size:14px }
   div.livecard { cursor:pointer } div.livecard:focus-visible { outline:2px solid var(--accent) }
   .livecard .acts { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; padding-top:8px; border-top:1px solid var(--line) }
-  .livecard .acts .danger { margin-left:auto } .livecard .meta { font-size:12px; color:var(--muted) }
+  .livecard .acts .danger { margin-left:auto }
+  button.icon { display:inline-flex; align-items:center; justify-content:center; padding:4px 7px }
+  button.icon svg { width:15px; height:15px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round }
+  button.icon.busy svg { animation:spin .8s linear infinite } @keyframes spin { to { transform:rotate(360deg) } } .livecard .meta { font-size:12px; color:var(--muted) }
   .livecard .from { font-size:12px; display:flex; gap:4px; flex-wrap:wrap; align-items:baseline; margin-top:2px }
   .src { font:12px ui-monospace,Menlo,monospace; padding:1px 7px; border-radius:6px; border:1px solid var(--line) }
   .spark { overflow:hidden; margin-top:6px } .spark svg { margin-top:0 }
@@ -120,13 +123,42 @@
   .podnote { grid-column:1 / -1; font-size:12px; margin-top:6px; padding:6px 10px; border-radius:6px; background:var(--chip) }
   .podnote b { font-weight:600 } .podnote .chg { color:var(--warn) }
   .pager { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:0 0 10px } .pager button.cur { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600 }
-  .pager .muted { margin-left:auto; font-size:12px }
+  .pager .muted { margin-left:auto; font-size:12px } .pager .gap { color:var(--muted); padding:0 2px }
   .nograph { height:36px; margin-top:6px; display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--muted); border:1px dashed var(--line); border-radius:6px }
   .src.ok { color:var(--ok); border-color:var(--ok) } .src.skip { color:var(--bad); border-color:var(--bad); text-decoration:line-through }
   .chip.val b { font-weight:600 } .chip.val small { color:var(--muted) }
   .state { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600 }
   .state i { width:9px; height:9px; border-radius:50% } .state.live i { background:var(--st-ok) } .state.stale i { background:#fab219 }
   .state.silent i { background:var(--st-down) } .state.off i { background:var(--st-stopped) }
+  .state.standby i { background:#4ea1ff } .state.silent { color:var(--st-down) }
+  .combo { position:relative } .combo input { width:100% }
+  .combo-list { position:absolute; z-index:20; left:0; right:0; top:calc(100% + 2px); max-height:260px; overflow-y:auto;
+                background:var(--panel); border:1px solid var(--line); border-radius:7px; box-shadow:0 8px 24px rgba(0,0,0,.35); padding:4px }
+  .combo-list [role=option] { padding:6px 8px; border-radius:5px; cursor:pointer; font-size:13px }
+  .combo-list [role=option].active { background:var(--chip) } .combo-list [role=option].cur { font-weight:600 }
+  .combo-list .none { padding:6px 8px; color:var(--muted); font-size:13px }
+  #live-table mark { background:color-mix(in srgb, #fab219 45%, transparent); color:inherit; border-radius:3px; padding:0 1px }
+  .matchhint { font-size:12px; color:var(--muted); margin-top:2px } .matchhint span { color:var(--ink) }
+  .detail-pop { width:min(1280px, calc(100vw - 32px)); max-height:calc(100vh - 32px); overflow:auto }
+  .detail-pop .pop-body > section { margin:0; border:0; box-shadow:none }
+  .devsearch { position:relative; display:inline-flex; align-items:center }
+  .devsearch svg { position:absolute; left:11px; width:14px; height:14px; stroke:var(--muted); fill:none; stroke-width:2; stroke-linecap:round; pointer-events:none }
+  .devsearch input { width:230px; height:30px; padding:0 14px 0 32px; border:1px solid var(--line); border-radius:999px; background:var(--chip);
+                     color:var(--ink); font:inherit; font-size:13px; outline:none; transition:border-color .15s, box-shadow .15s, width .2s }
+  .devsearch input::placeholder { color:var(--muted) }
+  .devsearch input:focus { width:280px; border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent) }
+  .devsearch:focus-within svg { stroke:var(--accent) }
+  .head .devsearch + button { margin-left:-6px; height:30px; border-radius:999px; padding:0 14px }   /* one space after the search box */
+  .viewtoggle { display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; margin-right:8px }
+  .viewtoggle button { border:0; border-radius:0; background:none } .viewtoggle button.cur { background:var(--accent); color:#fff; font-weight:600 }
+  .livelist { overflow-x:auto } .livelist table { font-size:13px } .livelist tr[data-id] { cursor:pointer }
+  .livelist tr[data-id]:hover td { background:color-mix(in srgb, var(--accent) 6%, transparent) } .livelist tr.sel td { background:color-mix(in srgb, var(--accent) 12%, transparent) }
+  .livelist tr.alarm td:first-child { box-shadow:inset 3px 0 0 var(--st-down) } .livelist tr.alarm .why { color:var(--st-down) }
+  .livelist .why, .livelist .sub { font-size:12px; color:var(--muted) } .livelist .acts { display:flex; gap:4px; flex-wrap:nowrap; margin:0; padding:0; border:0 }
+  .livelist .acts button { padding:3px 8px; font-size:12px } .livelist .state { white-space:nowrap } .livelist .conn { display:flex; gap:6px; flex-wrap:wrap; align-items:baseline }
+  .livecard.alarm { border-color:var(--st-down); box-shadow:inset 3px 0 0 var(--st-down) }
+  .livecard .why { font-size:12px; color:var(--muted); margin-top:2px } .livecard.alarm .why { color:var(--st-down) }
+  .netalarm { border:1px solid var(--st-down); border-left:4px solid var(--st-down); border-radius:8px; padding:8px 12px; margin:0 0 10px; font-size:13px }
   .split { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px } @media (max-width:1100px) { .split { grid-template-columns:minmax(0,1fr) } }
   .split h3 { font-size:12px; margin:0 0 8px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em }
   .fields td { font-size:12px; padding:5px 8px } .fields td.num { font-variant-numeric:tabular-nums; white-space:nowrap } .arrow { color:var(--muted) }
@@ -139,6 +171,16 @@
     nav button.active { box-shadow:inset 0 -2px 0 var(--accent) }
     header, main { padding-left:16px; padding-right:16px }
   }
+  /* Layers: compact controller status in the left rail, on every tab. */
+  .side-layers { flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:6px; margin:0 -4px; padding:0 4px }
+  #layers { display:flex; flex-direction:column; gap:14px }   /* one blank line between layer cards */
+  .side-h { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); padding:0 6px }
+  .sl { border:1px solid var(--line); border-radius:7px; padding:6px 8px; font-size:12px } .sl.off { border-style:dashed }
+  .sl-head { display:flex; align-items:center; gap:6px } .sl-head b { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .sl-head button.icon { padding:2px 4px } .sl-head button.icon svg { width:13px; height:13px } .sl-head button.danger { color:var(--st-down) }
+  .sl-sub, .sl-pod { color:var(--muted); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .sl-pod code { font-size:11px; color:var(--ink) } .sl .bad { font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  @media (max-width:760px) { .side-layers { display:none } }
   /* System menu: bottom-of-rail entry point to settings, same on every Flora app. */
   .sysmenu { margin-top:auto; position:relative; padding-top:10px; border-top:1px solid var(--line) }
   .sysbtn { display:flex; align-items:center; gap:10px; width:100%; border:0; border-radius:7px; background:none; padding:8px 10px;
@@ -170,6 +212,7 @@
     <button data-tab="streams"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7c3 0 3 3 6 3s3-3 6-3 3 3 6 3M3 14c3 0 3 3 6 3s3-3 6-3 3 3 6 3"/></svg>Streams</button>
     <button data-tab="alerts"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2zM10 20a2 2 0 0 0 4 0"/></svg>Alerts<span class="badge" id="alert-badge" hidden></span></button>
   </nav>
+  <div class="side-layers" aria-label="Layers"><div class="side-h">Layers</div><div id="layers"></div></div>
   <div class="sysmenu">
     <div class="syspop" id="syspop" role="menu" hidden>
       <div class="who"><b>Station</b><span id="who" class="muted"></span></div>
@@ -188,9 +231,10 @@
   <section><div class="head"><h2>Station</h2><span style="margin-left:auto; display:flex; gap:6px">
       <button class="admin-only" onclick="editCanopyLink()">Canopy connection</button>
       <button class="admin-only" id="edit-site" onclick="editSite()">Edit location</button></span></div><div id="site"></div></section>
-  <section><div class="head"><h2>Installed devices</h2><span id="live-note" class="muted" style="margin-left:auto"></span><button class="primary" onclick="editDevice()">Add device</button></div>
-    <div class="legend"><span><span class="state live"><i></i></span>receiving data</span><span><span class="state stale"><i></i></span>raw data in, nothing decoded</span>
-      <span><span class="state silent"><i></i></span>running, no data</span><span><span class="state off"><i></i></span>parser not started</span></div>
+  <section><div class="head"><h2>Installed devices</h2><span id="live-note" class="muted" style="margin-left:auto"></span><span class="viewtoggle" role="group" aria-label="View"><button data-view="cards">Cards</button><button data-view="list">List</button></span><span class="devsearch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><input type="search" id="device-search" placeholder="Search devices…" aria-label="Search devices" autocomplete="off"></span>&#32;<button class="primary" onclick="editDevice()">Add device</button></div>
+    <div class="legend"><span><span class="state live"><i></i></span>receiving · in use</span><span><span class="state standby"><i></i></span>powered on · waiting for use</span><span><span class="state stale"><i></i></span>plugged in · waiting for data</span>
+      <span><span class="state silent"><i></i></span>unplugged / off (serial) · not connected / connection lost (network)</span><span><span class="state off"><i></i></span>parser or port problem</span></div>
+    <div id="net-alarm"></div>
     <div id="live-table"></div></section>
   <section id="live-detail" hidden>
     <div class="head" style="flex-wrap:wrap"><h2 id="ld-title"></h2>
@@ -224,9 +268,13 @@
     <div id="dm-payloads"></div>
   </section>
   <section><h2>License (from Haber at Canopy)</h2><div id="license">Loading…</div></section>
-  <section><h2>Layers</h2><div id="layers" class="layers"></div></section>
+  <!-- Live device data: hidden; Installed devices (cards / list) shows the same and more. Code kept for reference.
   <section><h2>Live device data</h2><div id="instances"></div></section>
-  <section><h2>Logs</h2><div id="logs"></div></section>
+  -->
+  <section><div class="head"><h2>Logs</h2><label class="muted" style="margin-left:auto">Day <input type="date" id="log-day"></label>
+    <button id="log-day-clear" title="Show all days" hidden>All days</button>
+    <label class="muted">Sort <select id="log-order">
+      <option value="desc">newest first</option><option value="asc">oldest first</option></select></label></div><div id="logs"></div></section>
 </main>
 <main data-panel="alerts" hidden>
   <section><div class="head"><h2>Active alerts</h2><span id="alert-delivery" class="muted"></span>
@@ -297,6 +345,17 @@
   <div class="formerror" id="dialog-error"></div>
   <div class="buttons"><button type="button" onclick="dialog.close()">Cancel</button><button class="primary" value="save">Save</button></div>
 </form></dialog>
+<dialog id="detail-pop" class="detail-pop" aria-label="Device detail"><div class="pop-body"></div></dialog>
+<dialog id="logs-all" style="width:min(1100px, calc(100vw - 32px))"><form method="dialog" style="padding:16px 18px">
+  <div class="head" style="display:flex; align-items:center; gap:8px"><h3 id="logs-all-title" style="margin:0"></h3><span id="logs-all-count" class="muted" style="margin-left:auto"></span></div>
+  <div id="logs-all-list" style="max-height:70vh; overflow:auto; margin-top:10px; border:1px solid var(--line); border-radius:6px"></div>
+  <div class="buttons"><button type="button" id="logs-all-more" hidden>Load more</button><button class="primary" value="close">Close</button></div>
+</form></dialog>
+<dialog id="log-dialog"><form method="dialog" style="padding:16px 18px">
+  <h3 id="log-title" style="margin:0 0 10px"></h3><table class="kv" id="log-fields"></table>
+  <div class="field" style="margin-top:10px"><label>Detail</label><pre id="log-detail" style="max-height:50vh; overflow:auto; margin:4px 0 0; padding:8px; border:1px solid var(--line); border-radius:6px; white-space:pre-wrap; word-break:break-word"></pre></div>
+  <div class="buttons"><button type="button" id="log-copy">Copy</button><button class="primary" value="close">Close</button></div>
+</form></dialog>
 <datalist id="pods"></datalist>
 
 <script>
@@ -321,7 +380,7 @@ const get = (path) => api(path);
 async function act(path, method = "POST", confirmText) {
   if (confirmText && !confirm(confirmText)) return;
   try { await api(path, method); } catch (error) { alert(error.message); }
-  render();
+  render(); renderLayers().catch(() => {});
 }
 // Stopping an ingress controller cuts off every device on its pods, so running parsers need a second confirmation.
 async function stopController(name) {
@@ -336,7 +395,7 @@ async function stopController(name) {
   }
   if (response.status === 401) { location.href = "/login"; return; }
   if (!response.ok) alert((await response.json().catch(() => ({}))).detail || response.statusText);
-  render();
+  render(); renderLayers().catch(() => {});
 }
 async function signOut() { await fetch("api/auth/logout", { method: "POST" }); location.href = "/login"; }
 
@@ -523,23 +582,124 @@ async function editDevice(device, copyOf) {
     { name: "notes", label: "Notes", type: "textarea", wide: true },
     { name: "enabled", label: "Enabled (runs a parser container)", type: "check" },
   ], start, async (values) => {
+    // Type settings first, so the device's pod follows the edited type when the device is saved.
+    const t = cache.types.find((x) => x.code === values.device_type);
+    if (t && typeStart !== null) {
+      const edited = readType(t);
+      if (JSON.stringify(edited) !== typeStart) {
+        const result = await api(`api/device-types/${enc(t.code)}`, "PUT", { ...t, ...edited });
+        if (result.problems?.length) alert(`Device type ${t.code} saved, but:\n${result.problems.join("\n")}`);
+      }
+    }
     if (isNew) await api("api/instances", "POST", values);
     else { delete values.device_id; await api(`api/instances/${enc(device.device_id)}`, "PUT", values); }
   });
-  // Pods follow the device type's controller (a serial type can only use a serial pod).
   const form = $("dialog-form");
+  // Device type: one search box that is also the picker. The real <select> stays (hidden) so the rest of the form
+  // keeps working; typing filters a list of label · manufacturer · code; click, or arrows + Enter, picks one.
+  const typeSel = form.elements.device_type, combo = document.createElement("div");
+  combo.className = "combo";
+  combo.innerHTML = `<input type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="type-list" autocomplete="off"
+    aria-label="Device type" placeholder="Search device type, manufacturer or code…"><div class="combo-list" id="type-list" role="listbox" hidden></div>`;
+  typeSel.hidden = true; typeSel.after(combo);
+  const typeInput = combo.querySelector("input"), typeList = combo.querySelector(".combo-list");
+  let typeActive = 0, typeMatches = [];
+  const typeText = () => typeSel.selectedOptions[0]?.text || "";
+  const closeTypes = () => { typeList.hidden = true; typeInput.setAttribute("aria-expanded", "false"); typeInput.value = typeText(); };
+  const drawTypes = () => {
+    typeList.innerHTML = typeMatches.length ? typeMatches.map((o, i) => `<div role="option" id="type-opt-${i}" data-value="${esc(o.value)}"
+      class="${i === typeActive ? "active" : ""} ${o.value === typeSel.value ? "cur" : ""}" aria-selected="${i === typeActive}">${esc(o.text)}</div>`).join("")
+      : `<div class="none">No device type matches</div>`;
+    typeInput.setAttribute("aria-activedescendant", typeMatches.length ? `type-opt-${typeActive}` : "");
+    typeList.querySelector(".active")?.scrollIntoView({ block: "nearest" });
+  };
+  const openTypes = (query) => {
+    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    typeMatches = [...typeSel.options].filter((o) => words.every((w) => o.text.toLowerCase().includes(w) || o.value.toLowerCase().includes(w)));
+    typeActive = Math.max(0, words.length ? 0 : typeMatches.findIndex((o) => o.value === typeSel.value));
+    typeList.hidden = false; typeInput.setAttribute("aria-expanded", "true"); drawTypes();
+  };
+  const pickType = (value) => {
+    const changed = value !== typeSel.value;
+    typeSel.value = value; closeTypes();
+    if (changed) typeSel.dispatchEvent(new Event("change"));
+  };
+  typeInput.value = typeText();
+  typeInput.addEventListener("focus", () => { typeInput.select(); openTypes(""); });
+  typeInput.addEventListener("input", () => openTypes(typeInput.value));
+  typeInput.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (typeList.hidden) return openTypes("");
+      typeActive = (typeActive + (e.key === "ArrowDown" ? 1 : -1) + typeMatches.length) % Math.max(1, typeMatches.length); drawTypes();
+    } else if (e.key === "Enter") { e.preventDefault(); if (!typeList.hidden && typeMatches[typeActive]) pickType(typeMatches[typeActive].value); }
+    else if (e.key === "Escape" && !typeList.hidden) { e.preventDefault(); closeTypes(); }
+    else if (e.key === "Tab") closeTypes();
+  });
+  typeList.addEventListener("mousedown", (e) => {   // mousedown, so the pick lands before the input loses focus
+    const item = e.target.closest("[data-value]");
+    e.preventDefault();
+    if (item) pickType(item.dataset.value);
+  });
+  typeInput.addEventListener("blur", () => setTimeout(closeTypes, 0));
+  // The device type's settings in the same dialog; saving writes them to the type, for every device of that type.
+  const typeBox = document.createElement("fieldset");
+  typeBox.className = "field wide conn";
+  form.elements.device_type.closest(".field").after(typeBox);
+  let typeStart = null;   // settings as first drawn: the type is saved only when they changed
+  function readType(t) {
+    let options = t.default_options || {};
+    const raw = form.elements.type_default_options;
+    if (raw && !raw.disabled) { try { options = JSON.parse(raw.value || "{}"); } catch { throw new Error("Default parser options: invalid JSON"); } }
+    return { parser: form.elements.type_parser?.value || t.parser, connection_defaults: readConnection(form, t.controller), default_options: options };
+  }
+  function drawType() {
+    const t = cache.types.find((x) => x.code === form.elements.device_type.value);
+    typeBox.hidden = !t; typeStart = null;
+    if (!t) return;
+    const haber = t.source === "haber", parsers = parsersOf(t.image);
+    const others = cache.devices.filter((d) => d.device_type === t.code && d.device_id !== start.device_id).map((d) => d.device_id);
+    const parserInput = haber || !parsers.length
+      ? `<input name="type_parser" value="${esc(t.parser)}" ${haber ? "disabled" : ""}>`
+      : `<select name="type_parser">${[...new Set([t.parser, ...parsers])].map((p) => `<option value="${esc(p)}" ${p === t.parser ? "selected" : ""}>${esc(p)}</option>`).join("")}</select>`;
+    typeBox.innerHTML = `<legend>Device type settings · ${esc(t.label)} (${esc(t.code)})${haber ? " · from Canopy" : ""}</legend>
+      <div class="grid">
+        <div class="field"><label>Controller</label><input value="${esc(t.controller)}" disabled></div>
+        <div class="field"><label>Parser${parsers.length ? " (in this image)" : ""}</label>${parserInput}</div>
+        ${connectionInputs(t.controller, t.connection_defaults || {})}
+        <div class="field wide"><label>Default parser options (JSON)</label><textarea name="type_default_options" ${haber ? "disabled" : ""}>${esc(JSON.stringify(t.default_options || {}, null, 2))}</textarea></div>
+      </div>
+      <div class="muted" style="font-size:12px">Saved to the device type${others.length ? ` — also applies to ${esc(others.join(", "))}` : " (no other device uses it)"}.</div>`;
+    typeStart = JSON.stringify(readType(t));
+  }
+  drawType();
+  form.elements.device_type.addEventListener("change", drawType);
+  // A different type starts from its own defaults, as when adding a device: no parser options carried over.
+  form.elements.device_type.addEventListener("change", () => {
+    const original = form.elements.device_type.value === start.device_type;
+    form.elements.options.value = JSON.stringify(original ? start.options || {} : {}, null, 2);
+    if (form.elements.pod.tagName !== "SELECT") form.elements.pod.value = original ? start.pod || "" : "";
+  });
+  typeBox.addEventListener("change", () => podNote());
+  // Pods follow the device type's controller (a serial type can only use a serial pod).
   if (form.elements.pod?.tagName === "SELECT") {
-    const fillPods = () => {
+    const fillPods = (prefer) => {
       const controller = cache.types.find((t) => t.code === form.elements.device_type.value)?.controller;
       const list = opts.pods.filter((p) => !controller || p.kind === controller);
-      const current = form.elements.pod.value || start.pod || "";
+      // A new type starts like Add device: the first pod no other device uses (else the first one).
+      const free = list.find((p) => !(p.devices || []).some((id) => id !== start.device_id)) || list[0];
+      const current = prefer === null ? free?.pod || "" : prefer ?? (form.elements.pod.value || start.pod || free?.pod || "");
       const rows = list.map((p) => [p.pod, podLabel(p)]);
       if (current && !rows.some(([v]) => v === current)) rows.push([current, `${current} — not in this controller / config`]);
       form.elements.pod.innerHTML = (rows.length ? rows : [["", `no ${controller} pod in gateway.site.toml`]])
         .map(([v, label]) => `<option value="${esc(v)}" ${v === current ? "selected" : ""}>${esc(label)}</option>`).join("");
     };
     fillPods();
-    form.elements.device_type.addEventListener("change", () => { form.elements.pod.value = ""; fillPods(); podNote(); });
+    // Back on the saved type: its saved pod; another type: a free pod of that type's controller.
+    form.elements.device_type.addEventListener("change", () => {
+      fillPods(form.elements.device_type.value === start.device_type ? start.pod || "" : null);
+      podNote();
+    });
     form.elements.pod.addEventListener("change", podNote);
   }
   // Preview: the pod's line/framing settings follow the selected device type when the device is saved enabled.
@@ -551,7 +711,7 @@ async function editDevice(device, copyOf) {
     const t = cache.types.find((x) => x.code === form.elements.device_type.value), p = opts.pods.find((x) => x.pod === form.elements.pod.value);
     if (!t || !p) { note.textContent = ""; note.hidden = true; return; }
     note.hidden = false;
-    const fields = opts.managed_fields?.[t.controller] || [], want = t.connection_defaults || {}, have = p.settings || {};
+    const fields = opts.managed_fields?.[t.controller] || [], want = readConnection(form, t.controller), have = p.settings || {};
     const show = (v) => v === undefined ? "default" : String(v);
     const diffs = fields.filter((f) => show(want[f]) !== show(have[f])).map((f) => `${esc(f)} ${esc(show(have[f]))} → <b>${esc(show(want[f]))}</b>`);
     const summary = Object.keys(want).length ? Object.entries(want).map(([k, v]) => `${k} ${v}`).join(", ") : "controller defaults";
@@ -708,9 +868,60 @@ $("password").addEventListener("submit", async (event) => {
 });
 
 // ---------------------------------------------------------------- overview
+const LOG_PAGE_SIZE = 5;
+const logView = { page: 0, order: "desc", day: "" };
+// The picked day as a local-time [start, next day) range in epoch ms.
+function logPeriod() {
+  if (!logView.day) return "";
+  const [y, m, d] = logView.day.split("-").map(Number);
+  return `&since=${new Date(y, m - 1, d).getTime()}&until=${new Date(y, m - 1, d + 1).getTime()}`;
+}
+try { logView.order = localStorage.getItem("flora.logOrder") === "asc" ? "asc" : "desc"; } catch { /* storage blocked */ }
+// Today's entries show the time only; older ones the date too.
+const logTime = (ts) => { const d = new Date(ts); return d.toDateString() === new Date().toDateString() ? d.toLocaleTimeString() : d.toLocaleString(); };
+function logPager(total) {
+  const pages = Math.max(1, Math.ceil(total / LOG_PAGE_SIZE)), cur = logView.page;
+  if (pages < 2) return total ? `<div class="pager" style="margin:8px 0 0"><button data-logall>Show all</button></div>` : "";
+  // First, last and the pages around the current one; gaps become "…".
+  const nums = [...new Set([0, pages - 1, cur - 2, cur - 1, cur, cur + 1, cur + 2])].filter((n) => n >= 0 && n < pages).sort((a, b) => a - b);
+  let prev = -1, out = "";
+  for (const n of nums) { if (n - prev > 1) out += `<span class="gap">…</span>`; out += `<button data-logpage="${n}" class="${n === cur ? "cur" : ""}" aria-current="${n === cur}">${n + 1}</button>`; prev = n; }
+  return `<div class="pager" style="margin:8px 0 0"><button data-logpage="${cur - 1}" ${cur ? "" : "disabled"}>‹ Prev</button>${out}
+    <button data-logpage="${cur + 1}" ${cur < pages - 1 ? "" : "disabled"}>Next ›</button>
+    <button data-logall>Show all</button>
+    <span class="muted">${cur * LOG_PAGE_SIZE + 1}–${Math.min(total, (cur + 1) * LOG_PAGE_SIZE)} of ${total}</span></div>`;
+}
+// Layers (left rail): each gateway layer with its state, pods and Start / Stop / Restart as icons.
+const ICONS = {
+  start: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg>',
+  stop: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>',
+  restart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>',
+};
+async function renderLayers() {
+  const [controllers, instances] = await Promise.all([get("api/controllers"), get("api/instances")]);
+  $("layers").innerHTML = Object.entries(controllers).map(([name, c]) => {
+    const stopped = c.container_status && c.container_status !== "running";
+    const section = name.replace(/-controller$/, "");
+    const users = c.ingress ? instances.rows.filter((i) => i.pod.startsWith(section + ".")) : [];
+    const enabledUsers = users.filter((i) => i.enabled);
+    const btn = (kind, label, onclick, cls = "") => `<button class="icon ${cls}" title="${label}" aria-label="${label} ${esc(name)}" onclick="${onclick}">${ICONS[kind]}</button>`;
+    const buttons = !c.container_status ? "" : stopped
+      ? btn("start", "Start", `act('api/controllers/${enc(name)}/start')`)
+      : (c.ingress ? btn("stop", "Stop", `stopController('${esc(name)}')`, "danger") : "") + btn("restart", "Restart", `act('api/controllers/${enc(name)}/restart')`);
+    const pods = stopped ? "" : (c.pods || []).map((p) => `<div class="sl-pod" title="${esc(p.pod)} · ${p.frames} frames · last ${esc(ago(p.last_frame_ts))}${p.last_error ? " · " + esc(p.last_error) : ""}">
+      <span class="dot ${p.connected ? "on" : ""}"></span><code>${esc(p.pod.replace(/^[^.]+\./, ""))}</code> ${p.frames} fr · ${esc(ago(p.last_frame_ts))}</div>
+      ${p.last_error ? `<div class="bad" title="${esc(p.last_error)}">${esc(p.last_error)}</div>` : ""}`).join("");
+    return `<div class="sl ${stopped ? "off" : ""}"><div class="sl-head"><span class="dot ${c.reachable ? "on" : ""}"></span><b title="${esc(name)}">${esc(section)}</b>${buttons}</div>
+      ${c.ingress ? `<div class="sl-sub">${users.length} device(s) · ${stopped ? `<b class="warn">${esc(c.container_status)}</b>` : esc(c.container_status || "unknown")}</div>` : ""}
+      ${stopped && enabledUsers.length ? `<div class="bad" title="${enabledUsers.map((i) => esc(i.device_id)).join(", ")}">stopped · ${enabledUsers.length} enabled device(s) use it</div>` : ""}
+      ${pods || (stopped ? "" : `<div class="sl-sub">${c.reachable ? "no pods" : esc(c.error || "unreachable")}</div>`)}</div>`;
+  }).join("");
+}
+renderLayers().catch(() => {});
+setInterval(() => !dialog.open && renderLayers().catch(() => {}), 5000);
 async function renderOverview() {
-  const [lic, controllers, instances, status, logs] = await Promise.all([
-    get("api/license"), get("api/controllers"), get("api/instances"), get("api/devices/status").catch(() => ({ devices: [] })), get("api/logs?limit=40")]);
+  const [lic, instances, status, logs] = await Promise.all([
+    get("api/license"), get("api/instances"), get("api/devices/status").catch(() => ({ devices: [] })), get(`api/logs?limit=${LOG_PAGE_SIZE}&offset=${logView.page * LOG_PAGE_SIZE}&order=${logView.order}${logPeriod()}`)]);
   $("ts").textContent = "updated " + new Date().toLocaleTimeString();
   $("gw").textContent = lic.gateway_id ? `${lic.gateway_id} · tenant ${lic.tenant_id || "—"}` : "Station admin";
   $("license").innerHTML = `<span class="${lic.valid ? "ok" : "bad"}"><b>${lic.valid ? "Valid" : "Not valid"}</b></span>
@@ -718,21 +929,7 @@ async function renderOverview() {
     ${lic.expires_at ? ` · expires ${new Date(lic.expires_at).toLocaleDateString()}` : ""} · bundle <code>${esc(lic.bundle_id || "—")}</code>
     <div class="muted">Haber: ${esc(lic.haber?.status)} ${lic.haber?.error ? "— " + esc(lic.haber.error) : ""} · last sync ${ago(lic.haber?.last_sync)}
     <button onclick="act('api/haber/sync')">Sync now</button></div>`;
-  const prefixes = { "serial-controller": "serial.", "feeder-controller": "feeder.", "webhook-controller": "webhook.", "socket-controller": "socket." };
-  $("layers").innerHTML = Object.entries(controllers).map(([name, c]) => {
-    const stopped = c.container_status && c.container_status !== "running";
-    const users = c.ingress ? instances.rows.filter((i) => i.pod.startsWith(prefixes[name])) : [];
-    const enabledUsers = users.filter((i) => i.enabled);
-    const buttons = !c.container_status ? "" : stopped
-      ? `<button onclick="act('api/controllers/${enc(name)}/start')">Start</button>`
-      : `${c.ingress ? `<button class="danger" onclick="stopController('${esc(name)}')">Stop</button> ` : ""}<button onclick="act('api/controllers/${enc(name)}/restart')">Restart</button>`;
-    return `<div class="layer ${stopped ? "off" : ""}"><h3><span class="dot ${c.reachable ? "on" : ""}"></span>${esc(name)}
-      <span style="float:right">${buttons}</span></h3>
-      ${c.ingress ? `<div class="muted">${users.length} device(s) · ${stopped ? `<b class="warn">${esc(c.container_status)}</b>` : esc(c.container_status || "unknown")}</div>` : ""}
-      ${stopped && enabledUsers.length ? `<div class="bad">Stopped while ${enabledUsers.length} enabled device(s) use it: ${enabledUsers.map((i) => esc(i.device_id)).join(", ")}</div>` : ""}
-      ${stopped ? "" : (c.pods || []).map((p) => `<div><span class="dot ${p.connected ? "on" : ""}"></span><code>${esc(p.pod)}</code>
-        <span class="muted">${p.frames} frames · ${ago(p.last_frame_ts)}</span>${p.last_error ? `<div class="bad">${esc(p.last_error)}</div>` : ""}</div>`).join("") || `<span class="muted">${c.reachable ? "no pods" : esc(c.error)}</span>`}</div>`;
-  }).join("");
+  /* Live device data table: hidden (its <section> is commented out above); kept for reference.
   const byDevice = Object.fromEntries((status.devices || []).map((d) => [d.device_id, d]));
   const latest = Object.fromEntries(await Promise.all(instances.rows.map(async (i) => [i.device_id, await get(`api/devices/${enc(i.device_id)}/latest?seconds=30`).catch(() => [])])));
   $("instances").innerHTML = `<table><tr><th>Device</th><th>Pod → Leaf</th><th>Parser container</th><th>Data</th><th>Latest values</th><th></th></tr>${instances.rows.map((i) => {
@@ -747,9 +944,66 @@ async function renderOverview() {
       <td class="actions"><button onclick="act('api/instances/${enc(i.device_id)}/restart')">Restart</button>
           <button onclick="act('api/instances/${enc(i.device_id)}/enabled/${!i.enabled}')">${i.enabled ? "Disable" : "Enable"}</button></td></tr>`;
   }).join("")}</table>`;
-  $("logs").innerHTML = `<table class="log">${logs.rows.map((l) => `<tr><td class="muted">${new Date(l.ts).toLocaleTimeString()}</td><td class="${l.level === "info" ? "" : "warn"}">${esc(l.level)}</td>
-    <td>${esc(l.component)}</td><td><code>${esc(l.pod || "")}</code></td><td>${esc(l.message)}</td></tr>`).join("")}</table>`;
+  */
+  const logPages = Math.max(1, Math.ceil((logs.total ?? logs.rows.length) / LOG_PAGE_SIZE));
+  if (logView.page >= logPages) { logView.page = logPages - 1; return renderOverview(); }
+  $("log-order").value = logView.order;
+  $("log-day").value = logView.day; $("log-day-clear").hidden = !logView.day;
+  logView.rows = logs.rows;
+  $("logs").innerHTML = `<table class="log">${logs.rows.map((l) => `<tr><td class="muted">${esc(logTime(l.ts))}</td><td class="${l.level === "info" ? "" : "warn"}">${esc(l.level)}</td>
+    <td>${esc(l.component)}</td><td><code>${esc(l.pod || "")}</code></td><td>${esc(l.message)}</td><td style="text-align:right"><button data-logshow="${esc(l.id)}">Show</button></td></tr>`).join("") || `<tr><td class="muted">${logView.day ? `No log entries on ${esc(new Date(logView.day + "T00:00").toLocaleDateString())}.` : "No log entries."}</td></tr>`}</table>${logPager(logs.total ?? logs.rows.length)}`;
 }
+// Show: one log entry in a popup, with its full detail (error text, peer, path …).
+function showLog(l) {
+  $("log-title").textContent = l.message;
+  $("log-fields").innerHTML = [["Time", new Date(l.ts).toLocaleString()], ["Level", l.level], ["Component", l.component], ["Pod", l.pod || "—"], ["Log ID", l.id]]
+    .map(([k, v]) => `<tr><th style="width:120px">${esc(k)}</th><td>${esc(v)}</td></tr>`).join("");
+  const detail = l.detail && Object.keys(l.detail).length ? JSON.stringify(l.detail, null, 2) : "(no detail)";
+  $("log-detail").textContent = detail;
+  $("log-copy").onclick = () => navigator.clipboard?.writeText(JSON.stringify(l, null, 2)).then(() => { $("log-copy").textContent = "Copied"; setTimeout(() => $("log-copy").textContent = "Copy", 1500); }).catch(() => {});
+  $("log-dialog").showModal();
+}
+// Show all: every entry of the current day filter and sort order in a large popup, 200 at a time.
+const LOG_ALL_BATCH = 200;
+const logAll = { rows: [], total: 0 };
+async function loadAllLogs() {
+  const page = await get(`api/logs?limit=${LOG_ALL_BATCH}&offset=${logAll.rows.length}&order=${logView.order}${logPeriod()}`);
+  logAll.rows.push(...page.rows); logAll.total = page.total;
+  $("logs-all-list").innerHTML = `<table class="log">${logAll.rows.map((l) => `<tr><td class="muted" style="white-space:nowrap">${esc(new Date(l.ts).toLocaleString())}</td>
+    <td class="${l.level === "info" ? "" : "warn"}">${esc(l.level)}</td><td>${esc(l.component)}</td><td><code>${esc(l.pod || "")}</code></td>
+    <td>${esc(l.message)}</td><td style="text-align:right"><button type="button" data-logshow="${esc(l.id)}">Show</button></td></tr>`).join("") || `<tr><td class="muted">No log entries.</td></tr>`}</table>`;
+  $("logs-all-count").textContent = `${logAll.rows.length} of ${logAll.total} · ${logView.order === "asc" ? "oldest first" : "newest first"}`;
+  $("logs-all-more").hidden = logAll.rows.length >= logAll.total;
+}
+async function showAllLogs() {
+  logAll.rows = []; logAll.total = 0;
+  $("logs-all-title").textContent = logView.day ? `Logs · ${new Date(logView.day + "T00:00").toLocaleDateString()}` : "Logs · all days";
+  $("logs-all-list").innerHTML = `<p class="muted" style="padding:8px">Loading…</p>`;
+  $("logs-all").showModal();
+  try { await loadAllLogs(); } catch (error) { $("logs-all-list").innerHTML = `<p class="bad" style="padding:8px">${esc(error.message)}</p>`; }
+}
+$("logs-all-more").addEventListener("click", () => loadAllLogs().catch((error) => alert(error.message)));
+$("logs-all-list").addEventListener("click", (e) => {
+  const show = e.target.closest("button[data-logshow]");
+  const l = show && logAll.rows.find((x) => String(x.id) === show.dataset.logshow);
+  if (l) showLog(l);
+});
+$("logs").addEventListener("click", (e) => {
+  if (e.target.closest("button[data-logall]")) { showAllLogs(); return; }
+  const show = e.target.closest("button[data-logshow]");
+  if (show) { const l = (logView.rows || []).find((x) => String(x.id) === show.dataset.logshow); if (l) showLog(l); return; }
+  const b = e.target.closest("button[data-logpage]");
+  if (!b || b.disabled) return;
+  logView.page = Number(b.dataset.logpage);
+  renderOverview().catch(() => {});
+});
+$("log-day").addEventListener("change", (e) => { logView.day = e.target.value; logView.page = 0; renderOverview().catch(() => {}); });
+$("log-day-clear").addEventListener("click", () => { logView.day = ""; logView.page = 0; renderOverview().catch(() => {}); });
+$("log-order").addEventListener("change", (e) => {
+  logView.order = e.target.value; logView.page = 0;
+  try { localStorage.setItem("flora.logOrder", logView.order); } catch { /* storage blocked */ }
+  renderOverview().catch(() => {});
+});
 
 
 // ---------------------------------------------------------------- streams
@@ -971,11 +1225,36 @@ function editSite() {
 // ---------------------------------------------------------------- device monitor
 const dmon = { selected: null, rows: [], lastId: 0, paused: false, open: new Set(), pod: null };
 const BUCKET_LABEL = { 1: "per minute", 6: "per 5 minutes", 24: "per 15 minutes" };
+// Device popups: Monitor and the raw/decoded detail (row or card click) open in a dialog. The sections stay in the
+// page markup and move into the dialog while it is open; DETAIL_POPUP = false brings back the old inline view.
+const DETAIL_POPUP = true;
+let popupState = null;
+function showPopup(id, onClose) {
+  const pop = $("detail-pop"), section = $(id);
+  if (pop.open && popupState?.section.id === id) return;
+  if (pop.open) { pop.close(); restorePopup(); }
+  const mark = document.createComment(`${id} goes back here`);
+  section.before(mark); pop.querySelector(".pop-body").append(section);
+  popupState = { section, mark, onClose };
+  pop.showModal(); pop.scrollTop = 0;
+}
+function restorePopup() {   // the section back to its place in the page, then the owner's close action
+  const state = popupState; popupState = null;
+  if (!state) return;
+  state.mark.replaceWith(state.section);
+  state.onClose?.();
+}
+function closePopup(id) { const pop = $("detail-pop"); if (pop.open && popupState?.section.id === id) { pop.close(); restorePopup(); } }
+$("detail-pop").addEventListener("close", restorePopup);   // Esc or the dialog closing by itself
+$("detail-pop").addEventListener("click", (e) => { if (e.target === e.currentTarget) { e.currentTarget.close(); } });   // click outside
 function selectDevice(id) {
   Object.assign(dmon, { selected: id, rows: [], lastId: 0, paused: false, pod: null }); dmon.open.clear();
   $("dm-pause").textContent = "Pause";
   $("device-monitor").hidden = !id;
-  if (id) { renderDeviceMonitor(); $("device-monitor").scrollIntoView({ behavior: "smooth", block: "start" }); }
+  if (!id) return closePopup("device-monitor");
+  renderDeviceMonitor();
+  if (DETAIL_POPUP) showPopup("device-monitor", () => { if (dmon.selected) selectDevice(null); });
+  else $("device-monitor").scrollIntoView({ behavior: "smooth", block: "start" });   // old inline view
 }
 function toggleDevicePause() { dmon.paused = !dmon.paused; $("dm-pause").textContent = dmon.paused ? "Resume" : "Pause"; }
 function openPodStream() { if (!dmon.pod) return; show("streams"); setTimeout(() => selectStream(dmon.pod), 300); }
@@ -1081,16 +1360,108 @@ async function pushAlerts() {
 }
 
 // ---------------------------------------------------------------- live data
-const live = { selected: null, paused: false, rows: [], page: 0, lastMinute: {} };
+const live = { selected: null, paused: false, rows: [], page: 0, lastMinute: {}, view: "cards" };
+try { live.view = localStorage.getItem("flora.liveView") === "list" ? "list" : "cards"; } catch { /* storage blocked */ }
+const LIST_PAGE_SIZE = 25;
+// Search (next to Add device), Installed devices only: every word must appear in the device's name, ID, type, pod, port, Leaf, IP, station or location.
+live.query = "";
+// Every searchable field of a device as [label, value].
+function deviceFields(d) {
+  const info = cache.devices.find((x) => x.device_id === d.device_id) || d;
+  const type = cache.types.find((t) => t.code === d.device_type) || {};
+  const c = d.connection || {};
+  return [["Name", d.label], ["Device ID", d.device_id], ["Type code", d.device_type], ["Type", type.label], ["Manufacturer", type.manufacturer_name],
+    ["Pod", d.pod], ["Leaf", d.leaf_id], ["IP", d.source_ip ?? info.options?.source_ip], ["Station", info.station], ["Location", info.location],
+    ["Serial number", info.serial_number], ["Asset tag", info.asset_tag], ["Port", c.port_name], ["Port path", c.host_path],
+    ["LAN port", (c.host_ports || []).join(", ")]].filter(([, v]) => v);
+}
+const searchWords = () => live.query.toLowerCase().split(/\s+/).filter(Boolean);
+function deviceMatches(d) {
+  const words = searchWords();
+  if (!words.length) return true;
+  const text = deviceFields(d).map(([, v]) => String(v)).join(" ").toLowerCase();
+  return words.every((w) => text.includes(w));
+}
+// Marks the search words in each shown device; a word found only in a field the card/row does not show
+// (manufacturer, serial number …) is named under the device instead.
+function markSearch(root) {
+  const words = searchWords();
+  if (!words.length) return;
+  const re = new RegExp([...words].sort((a, b) => b.length - a.length).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "gi");
+  // Wraps every match in the text of `el` (not in buttons) in <mark>; returns the matched strings.
+  const markText = (el) => {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT,
+      { acceptNode: (n) => n.parentElement.closest("button, mark, svg") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    const found = new Set();
+    for (const node of nodes) {
+      const text = node.nodeValue;
+      if (!text.match(re)) continue;
+      const frag = document.createDocumentFragment();
+      let last = 0;
+      for (const m of text.matchAll(re)) {
+        frag.append(text.slice(last, m.index));
+        const mark = document.createElement("mark"); mark.textContent = m[0]; frag.append(mark);
+        found.add(m[0].toLowerCase()); last = m.index + m[0].length;
+      }
+      frag.append(text.slice(last));
+      node.replaceWith(frag);
+    }
+    return found;
+  };
+  for (const item of root.querySelectorAll("[data-id]")) {
+    const found = markText(item);
+    const hidden = words.filter((w) => ![...found].some((f) => f.includes(w)));
+    if (!hidden.length) continue;
+    const d = live.rows.find((x) => x.device_id === item.dataset.id);
+    const hits = d ? deviceFields(d).filter(([, v]) => hidden.some((w) => String(v).toLowerCase().includes(w))) : [];
+    if (!hits.length) continue;
+    const hint = document.createElement("div");
+    hint.className = "matchhint";
+    hint.innerHTML = "matched " + hits.map(([label, v]) => `${esc(label)}: <span>${esc(v)}</span>`).join(" · ");
+    item.matches("tr") ? item.cells[1].append(hint) : item.querySelector(".nums").after(hint);
+    hint.querySelectorAll("span").forEach(markText);
+  }
+}
+$("device-search").addEventListener("input", (e) => {
+  live.query = e.target.value; live.page = 0;
+  renderLive().catch(() => {});
+});
+document.querySelectorAll(".viewtoggle button").forEach((b) => b.addEventListener("click", () => {
+  live.view = b.dataset.view; live.page = 0;
+  try { localStorage.setItem("flora.liveView", live.view); } catch { /* storage blocked */ }
+  renderLive().catch(() => {});
+}));
+// One row per device in the list view: same state, connection and actions as a card, without the graph.
+function liveRow(d) {
+  const [cls, text, alarm, why] = liveState(d);
+  const vals = d.parameters.slice(0, 4).map((p) => `<span class="chip val" title="${esc(p.raw_code ?? "")} · ${esc(ago(p.system_ts))}"><small>${esc(p.ivy_param)}</small> <b>${esc(fmtVal(p.value))}</b> <small>${esc(p.unit ?? "")}</small></span>`).join("");
+  const more = d.parameters.length > 4 ? ` <span class="muted">+${d.parameters.length - 4}</span>` : "";
+  const info = cache.devices.find((x) => x.device_id === d.device_id) || {};
+  const where = [info.station, info.location].filter(Boolean).join(" · ");
+  return `<tr data-id="${esc(d.device_id)}" tabindex="0" class="${live.selected === d.device_id ? "sel" : ""} ${alarm ? "alarm" : ""}" aria-label="Show raw and decoded data of ${esc(d.label || d.device_id)}">
+    <td><span class="state ${cls}"><i></i>${esc(text)}</span>${why ? `<div class="why">${esc(why)}</div>` : ""}</td>
+    <td><b>${esc(d.label || d.device_id)}</b><div class="sub">${esc(d.device_id)} · ${esc(d.device_type)}</div>${where ? `<div class="sub">${esc(where)}</div>` : ""}</td>
+    <td><div class="conn">${connBadge(d.connection)}</div><div class="sub"><code>${esc(d.pod)}</code> → ${esc(d.leaf_id || "unassigned")}${d.source_ip ? ` · ${esc(d.source_ip)}` : ""}</div></td>
+    <td class="sub">raw ${esc(ago(d.ingress.last_in_ts))}<br>value ${esc(ago(d.last_value_ts))}</td>
+    <td>${vals || '<span class="muted" style="font-size:12px">—</span>'}${more}</td>
+    <td>${deviceActions(d.device_id, true)}</td></tr>`;
+}
 const LIVE_PAGE_SIZE = 6;
-const LIVE_FRESH_MS = 60_000;
 const fmtVal = (v) => v === null || v === undefined ? "—" : typeof v === "number" ? String(Math.round(v * 1000) / 1000) : typeof v === "string" ? v : JSON.stringify(v);
+// The device's own state, worked out by the gateway (api/live -> status): [css class, label, alarm on card].
+const DEVICE_STATES = {
+  receiving: ["live", "Receiving · in use"], standby: ["standby", "Powered on · waiting for use"],
+  plugged_in: ["stale", "Plugged in · waiting for data"],
+  unplugged: ["silent", "Unplugged / off"], not_connected: ["silent", "Not connected", true],
+  connection_lost: ["silent", "Connection lost", true], port_error: ["off", "Port error", true],
+  parser_down: ["off", "Parser stopped", true], disabled: ["off", "Disabled"],
+};
 function liveState(d) {
-  const running = d.enabled && d.container?.status === "running", now = Date.now();
-  if (!running) return ["off", d.enabled ? "parser not running" : "disabled"];
-  if (d.last_value_ts && now - d.last_value_ts < LIVE_FRESH_MS) return ["live", "receiving"];
-  if (d.ingress.last_in_ts && now - d.ingress.last_in_ts < LIVE_FRESH_MS) return ["stale", "raw in, no values"];
-  return ["silent", "no data"];
+  const [cls, text, alarm] = DEVICE_STATES[d.status?.state] || ["off", d.status?.state || "unknown"];
+  const since = d.status?.since && !["receiving", "standby"].includes(d.status.state) ? ` · last data ${ago(d.status.since)}` : "";
+  return [cls, text, alarm, (d.status?.detail || "") + since];
 }
 function connBadge(c) {
   if (!c) return '<span class="port virt">pod not in config</span>';
@@ -1107,9 +1478,18 @@ function connBadge(c) {
   }
   return `<span class="port lan">polls ${esc(c.url || "")}</span>`;
 }
+// Restart: replaces the device's parser container; the icon spins until the gateway answers.
+async function restartDevice(id, button) {
+  button.classList.add("busy"); button.disabled = true;
+  try { await api(`api/instances/${enc(id)}/restart`, "POST"); } catch (error) { alert(error.message); }
+  finally { button.classList.remove("busy"); button.disabled = false; }
+  render();
+}
 function deviceActions(id, enabled) {
   const q = JSON.stringify(id);
-  return `<div class="acts"><button onclick='selectDevice(${q})'>Monitor</button>
+  return `<div class="acts"><button class="icon" title="Restart parser" aria-label="Restart parser of ${esc(id)}" onclick='restartDevice(${q}, this)'>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button>
+    <button onclick='selectDevice(${q})'>Monitor</button>
     <button onclick='editDevice(cache.devices.find((x) => x.device_id === ${q}))'>Edit</button>
     <button title="New device with these settings" onclick='editDevice(null, cache.devices.find((x) => x.device_id === ${q}))'>Duplicate</button>
     <button onclick="act('api/instances/${enc(id)}/enabled/${!enabled}')">${enabled ? "Disable" : "Enable"}</button>
@@ -1120,6 +1500,7 @@ function graphBlock(d) {
   if (g.mode === "disabled") return `<div class="nograph">disabled · no graph</div>`;
   if (g.mode === "no_source_ip") return `<div class="nograph" title="Parser options: {&quot;source_ip&quot;: &quot;&lt;IP&gt;&quot;}">set source_ip to show this device's graph</div><div class="nums">${when}</div>`;
   const rows = g.series, n = rows.length, last = rows[n - 1]?.[0];
+  if (!n) return `<div class="nograph">no data from this device yet</div><div class="nums">${when}</div>`;
   // One point per complete minute: when a new minute lands, slide the line left by one step.
   const prev = live.lastMinute[d.device_id], slide = prev !== undefined && last !== undefined && prev !== last;
   live.lastMinute[d.device_id] = last;
@@ -1146,32 +1527,48 @@ async function renderLive() {
   const data = await get("api/live");
   live.rows = data.rows;
   $("live-note").textContent = `values from the last ${Math.round(data.window_ms / 60000)} min · graphs: 1 point per minute · refreshes every 2 s${live.paused ? " (paused)" : ""}`;
-  const shown = data.rows.filter((d) => d.enabled)
+  // Network devices that are not connected get a banner above the cards, whatever page they are on.
+  const lost = data.rows.filter((d) => d.status?.network && ["not_connected", "connection_lost"].includes(d.status.state));
+  $("net-alarm").innerHTML = lost.length ? `<div class="netalarm"><b>${lost.length} network device${lost.length > 1 ? "s" : ""} not connected:</b> ${lost.map((d) =>
+    `${esc(d.label || d.device_id)} <span class="muted">(${esc(DEVICE_STATES[d.status.state][1].toLowerCase())}${d.status.since ? ", last data " + esc(ago(d.status.since)) : ""})</span>`).join(", ")}</div>` : "";
+  const shown = data.rows.filter((d) => d.enabled && deviceMatches(d))
     .sort((a, b) => a.controller.localeCompare(b.controller) || a.device_id.localeCompare(b.device_id));
-  const pages = Math.max(1, Math.ceil(shown.length / LIVE_PAGE_SIZE));
+  document.querySelectorAll(".viewtoggle button").forEach((b) => { b.classList.toggle("cur", b.dataset.view === live.view); b.setAttribute("aria-pressed", b.dataset.view === live.view); });
+  const size = live.view === "list" ? LIST_PAGE_SIZE : LIVE_PAGE_SIZE;
+  const pages = Math.max(1, Math.ceil(shown.length / size));
   live.page = Math.min(live.page, pages - 1);
   const groups = {};
-  for (const d of shown.slice(live.page * LIVE_PAGE_SIZE, (live.page + 1) * LIVE_PAGE_SIZE)) (groups[d.controller] ||= []).push(d);
+  const pageRows = shown.slice(live.page * size, (live.page + 1) * size);
+  for (const d of pageRows) (groups[d.controller] ||= []).push(d);
   const pager = pages > 1 ? `<div class="pager"><button data-page="${live.page - 1}" ${live.page ? "" : "disabled"}>‹ Prev</button>
     ${Array.from({ length: pages }, (_, i) => `<button data-page="${i}" class="${i === live.page ? "cur" : ""}" aria-current="${i === live.page}">${i + 1}</button>`).join("")}
     <button data-page="${live.page + 1}" ${live.page < pages - 1 ? "" : "disabled"}>Next ›</button>
-    <span class="muted">${live.page * LIVE_PAGE_SIZE + 1}–${Math.min(shown.length, (live.page + 1) * LIVE_PAGE_SIZE)} of ${shown.length} devices</span></div>` : "";
+    <span class="muted">${live.page * size + 1}–${Math.min(shown.length, (live.page + 1) * size)} of ${shown.length} devices</span></div>` : "";
+  if (live.view === "list") {
+    $("live-table").innerHTML = pager + (pageRows.length ? `<div class="livelist"><table><tr><th>Status</th><th>Device</th><th>Connection</th><th>Last data</th><th>Latest values</th><th></th></tr>
+      ${pageRows.map(liveRow).join("")}</table></div>` : `<p class="muted">${live.query.trim() ? `No device matches “${esc(live.query.trim())}”.` : data.rows.length ? "No enabled devices — enable one below." : "No devices installed yet."}</p>`);
+    markSearch($("live-table"));
+    if (live.selected) await renderLiveDetail();
+    return;
+  }
   $("live-table").innerHTML = pager + (data.rows.length ? Object.entries(groups).map(([controller, list]) => `<div class="group"><h3>${esc(controller)}-controller</h3>
     <div class="livecards">${list.map((d) => {
-      const [cls, text] = liveState(d);
+      const [cls, text, alarm, why] = liveState(d);
       const vals = d.parameters.map((p) => `<span class="chip val" title="${esc(p.raw_code ?? "")} · ${esc(ago(p.system_ts))}"><small>${esc(p.ivy_param)}</small> <b>${esc(fmtVal(p.value))}</b> <small>${esc(p.unit ?? "")}</small></span>`).join("");
       const info = cache.devices.find((x) => x.device_id === d.device_id) || {};
       const where = [info.station, info.location].filter(Boolean).join(" · "), asset = [info.serial_number, info.asset_tag].filter(Boolean).join(" · ");
-      return `<div class="stream livecard ${live.selected === d.device_id ? "sel" : ""}" data-id="${esc(d.device_id)}" tabindex="0" role="button" aria-label="Show raw and decoded data of ${esc(d.label || d.device_id)}">
+      return `<div class="stream livecard ${live.selected === d.device_id ? "sel" : ""} ${alarm ? "alarm" : ""}" data-id="${esc(d.device_id)}" tabindex="0" role="button" aria-label="Show raw and decoded data of ${esc(d.label || d.device_id)}">
         <div class="row"><b>${esc(d.label || d.device_id)}</b><span class="muted"><span class="state ${cls}"><i></i>${esc(text)}</span></span></div>
         <div class="nums">${esc(d.device_id)} · ${esc(d.device_type)}</div>
+        ${why ? `<div class="why">${esc(why)}</div>` : ""}
         <div class="conn">${connBadge(d.connection)}<span class="muted"><code>${esc(d.pod)}</code> → ${esc(d.leaf_id || "unassigned")}</span></div>
         ${sourcesLine(d)}
         ${graphBlock(d)}
         <div class="vals">${vals || '<span class="muted" style="font-size:12px">no values in the last 10 min</span>'}</div>
         ${where || asset || info.installed_at ? `<div class="meta">${esc(where || "")}${asset ? ` · ${esc(asset)}` : ""}${info.installed_at ? ` · installed ${day(info.installed_at)}` : ""}</div>` : ""}
         ${deviceActions(d.device_id, true)}</div>`;
-    }).join("")}</div></div>`).join("") : "") + (shown.length ? "" : `<p class="muted">${data.rows.length ? "No enabled devices — enable one below." : "No devices installed yet."}</p>`);
+    }).join("")}</div></div>`).join("") : "") + (shown.length ? "" : `<p class="muted">${live.query.trim() ? `No device matches “${esc(live.query.trim())}”.` : data.rows.length ? "No enabled devices — enable one below." : "No devices installed yet."}</p>`);
+  markSearch($("live-table"));
   if (live.selected) await renderLiveDetail();
 }
 async function renderLiveDetail() {
@@ -1197,7 +1594,7 @@ async function renderLiveDetail() {
       <td class="muted">${esc(ago(f.value_ts ?? f.system_ts))}</td></tr>`).join("")}</table>` : '<p class="muted">No decoded values in the last 10 minutes.</p>';
 }
 function toggleLivePause() { live.paused = !live.paused; $("ld-pause").textContent = live.paused ? "Resume" : "Pause"; renderLive().catch(() => {}); }
-function closeLive() { live.selected = null; $("live-detail").hidden = true; renderLive().catch(() => {}); }
+function closeLive() { live.selected = null; $("live-detail").hidden = true; closePopup("live-detail"); renderLive().catch(() => {}); }
 $("live-table").addEventListener("click", (e) => {
   const pageBtn = e.target.closest("button[data-page]");
   if (pageBtn) { live.page = Number(pageBtn.dataset.page); renderLive().catch(() => {}); return; }
@@ -1205,9 +1602,10 @@ $("live-table").addEventListener("click", (e) => {
   const row = e.target.closest("[data-id]");
   if (!row) return;
   live.selected = row.dataset.id;
-  renderLive().then(() => $("live-detail").scrollIntoView({ behavior: "smooth", block: "start" })).catch(() => {});
+  if (DETAIL_POPUP) renderLive().then(() => showPopup("live-detail", () => { if (live.selected) closeLive(); })).catch(() => {});
+  else renderLive().then(() => $("live-detail").scrollIntoView({ behavior: "smooth", block: "start" })).catch(() => {});   // old inline view
 });
-$("live-table").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches("div.livecard")) { e.preventDefault(); e.target.click(); } });
+$("live-table").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches("div.livecard, tr[data-id]")) { e.preventDefault(); e.target.click(); } });
 ["ld-view", "ld-dir"].forEach((id) => $(id).addEventListener("change", () => live.selected && renderLiveDetail().catch(() => {})));
 
 async function render() {

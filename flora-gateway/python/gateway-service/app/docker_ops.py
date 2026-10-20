@@ -62,6 +62,14 @@ def stop_parser(device_id: str) -> None:
     container.remove(force=True)
 
 
+def image_tags(container) -> list[str]:
+    """Tags of the image a container was created from; none when that image was since rebuilt or removed."""
+    try:
+        return container.image.tags[:1]
+    except (ImageNotFound, NotFound):
+        return []
+
+
 def parser_states() -> dict[str, dict[str, Any]]:
     try:
         containers = client().containers.list(all=True, filters={"label": f"flora.gateway.id={settings.GATEWAY_ID}"})
@@ -69,7 +77,7 @@ def parser_states() -> dict[str, dict[str, Any]]:
         return {"_error": {"status": str(error)}}
     return {
         container.labels.get("flora.gateway.device_id", container.name): {
-            "container": container.name, "status": container.status, "image": container.image.tags[:1],
+            "container": container.name, "status": container.status, "image": image_tags(container),
             "image_ref": container.attrs["Config"]["Image"],
         }
         for container in containers
