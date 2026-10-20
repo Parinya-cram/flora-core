@@ -11,6 +11,7 @@ const SETTING_FIELDS: { key: string; label: string; placeholder: string }[] = [
   { key: "root_registry_url", label: "Root registry URL (mirror source)", placeholder: "http://root-registry.flora-root.svc.cluster.local:5000" },
   { key: "registry_public", label: "Hospital registry (nodes pull)", placeholder: "172.22.19.81:7205" },
   { key: "canopy_sync_url", label: "Canopy sync URL", placeholder: "http://sync-api.flora-canopy.svc.cluster.local:8000" },
+  { key: "canopy_sync_public", label: "Canopy URL for new Leafs (LAN)", placeholder: "https://172.22.19.81:9443" },
   { key: "tenant_id", label: "Tenant ID", placeholder: "hospital-01" },
   { key: "sync_interval", label: "Root sync interval (s)", placeholder: "15" },
 ];

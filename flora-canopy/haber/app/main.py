@@ -647,6 +647,7 @@ class SettingsIn(BaseModel):
     root_registry_url: str | None = None
     registry_public: str | None = None
     canopy_sync_url: str | None = None
+    canopy_sync_public: str | None = None   # Canopy sync URL handed to new Leafs on the LAN
     tenant_id: str | None = None
     tenant_key: str | None = None   # write-only; blank keeps the current value
     sync_interval: int | str | None = None   # blank string resets to the env default (like the URL fields)
