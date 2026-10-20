@@ -17,10 +17,7 @@ data_bits = 8
 parity = "even"
 stop_bits = 1
 flow_control = "none"
-rts = true
-dtr = true
 idle_ms = 20
-max_frame_bytes = 16384
 
 [[serial.pods]]
 id = "COM2"
