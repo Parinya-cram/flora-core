@@ -1,0 +1,73 @@
+/* Put supporting copy below its heading across the site.
+   The Product page intentionally keeps its existing editorial layout. */
+body:not([data-page="platform"]) .section-head,
+body:not([data-page="platform"]) .why-lead {
+  display: block;
+}
+
+body:not([data-page="platform"]) .section-head > div,
+body:not([data-page="platform"]) .why-lead > h2 {
+  width: 100%;
+  max-width: 100%;
+}
+
+body:not([data-page="platform"]) .section-head h2,
+body:not([data-page="platform"]) .why-lead h2 {
+  font-size: clamp(1.6rem, 2vw, 1.85rem) !important;
+  line-height: 1.3;
+}
+
+/* Use one predictable H2 scale everywhere except the Product page. */
+body:not([data-page="platform"]) main h2 {
+  font-size: clamp(1.6rem, 2vw, 1.85rem) !important;
+}
+
+body:not([data-page="platform"]) .section-head > p,
+body:not([data-page="platform"]) .why-lead > p {
+  width: 100%;
+  max-width: 100%;
+  margin: clamp(18px, 2.4vw, 30px) 0 0;
+  font-size: clamp(1rem, 1.2vw, 1.15rem);
+  line-height: 1.8;
+}
+
+body:not([data-page="platform"]) .why-lead .kicker {
+  display: inline-flex;
+  margin-bottom: clamp(18px, 2vw, 24px);
+}
+
+body:not([data-page="platform"]) .why-lead {
+  margin-bottom: clamp(52px, 6vw, 78px);
+}
+
+/* Thai marks need more vertical breathing room than the Latin heading rhythm. */
+html[lang="th"] body:not([data-page="platform"]) .section-head .kicker,
+html[lang="th"] body:not([data-page="platform"]) .why-lead .kicker {
+  display: flex;
+  width: fit-content;
+  margin-bottom: clamp(20px, 2.4vw, 30px);
+}
+
+html[lang="th"] body:not([data-page="platform"]) .section-head h2,
+html[lang="th"] body:not([data-page="platform"]) .why-lead h2 {
+  line-height: 1.32;
+}
+
+@media (max-width: 620px) {
+  body:not([data-page="platform"]) .section-head > p,
+  body:not([data-page="platform"]) .why-lead > p {
+    margin-top: 16px;
+    font-size: 1rem;
+    line-height: 1.72;
+  }
+
+  html[lang="th"] body:not([data-page="platform"]) .section-head .kicker,
+  html[lang="th"] body:not([data-page="platform"]) .why-lead .kicker {
+    margin-bottom: 18px;
+  }
+
+  html[lang="th"] body:not([data-page="platform"]) .section-head h2,
+  html[lang="th"] body:not([data-page="platform"]) .why-lead h2 {
+    line-height: 1.36;
+  }
+}
