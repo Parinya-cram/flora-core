@@ -156,11 +156,8 @@ export default function DeviceDistributionView() {
     return map;
   }, [releases]);
 
-  // Device "app store": each licensed device type with its definition version + parser image version,
-  // how many are installed/running on gateways, and whether its parser is downloadable (gateway release).
-  const gatewayReleaseId = releases?.latest?.gateway;
-  const gatewayRelease = useMemo(() => (releases?.rows || []).find((r) => r.release_id === gatewayReleaseId), [releases, gatewayReleaseId]);
-  const gatewayApproved = approvals.gateway === gatewayReleaseId;
+  // Device "app store": licensed device types, which the hospital has downloaded (adopted), and
+  // how many are installed/running on gateways.
   const devices = useMemo(() => {
     const licensed = new Set(data?.bundle?.entitlements?.device_types || []);
     const adopted = new Set(data?.adopted || []);
