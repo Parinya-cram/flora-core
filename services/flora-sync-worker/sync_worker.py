@@ -138,7 +138,10 @@ def synchronize() -> None:
             case_id = str(case["case_id"])
             if LAST_DIGEST.get(case_id) != digest:
                 pending.append((message, digest, case_id))
-            if case_id in active_ids:
+            # Active cases, and recently closed ones (their final copy, e.g. a case moved out of the OR room that a
+            # recovery bed's Leaf continues). Unchanged copies are not sent again (digest).
+            recently_closed = str(case.get("status") or "").upper() == "DISCHARGED" and int(case.get("discharge_time") or 0) >= recent_after
+            if case_id in active_ids or case_id in PREVIOUS_ACTIVE_IDS or recently_closed:
                 export = get_json(client, f"/api/ward/cases/{case_id}/export")
                 export_digest = hashlib.sha256(json.dumps(export, sort_keys=True, default=str).encode()).hexdigest()
                 if LAST_EXPORT_DIGEST.get(case_id) != export_digest:

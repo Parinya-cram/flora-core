@@ -3,6 +3,9 @@ import { createPortal } from "react-dom";
 import {
   archiveCase,
   dischargeCase,
+  getCaseOrSession,
+  moveOutCase,
+  recoverInRoom,
   getSuggestedCaseEndTime,
   updateCaseStartTime,
   type CaseStatus,
@@ -1222,6 +1225,22 @@ export default function ClinicalChartView({
   );
 
   const caseScores = useCaseScores(caseId, caseStatus.status === "ACTIVE");
+  // OR ward journey: in the OR room the case "moves out" (continues in recovery) instead of being discharged.
+  const [orStage, setOrStage] = useState<"or" | "or_recovery" | "recovery" | null>(null);
+  // Patient Out / Start Recovery recorded on the chart in an OR room: ask what happens to the patient.
+  const [orPrompt, setOrPrompt] = useState<{ kind: "patient_out" | "start_recovery"; ts: number } | null>(null);
+  const [orPromptBusy, setOrPromptBusy] = useState(false);
+  const [orPromptError, setOrPromptError] = useState("");
+  /** In an OR room (also while recovering there) the case moves out instead of being discharged. */
+  const movingOut = orStage === "or" || orStage === "or_recovery";
+  const [destination, setDestination] = useState("");
+  const [destinationNote, setDestinationNote] = useState("");
+  useEffect(() => {
+    if (caseId == null) return;
+    let alive = true;
+    void getCaseOrSession(caseId).then(result => { if (alive) setOrStage(result.stage); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [caseId]);
   const gridIvyRows = useMemo(() => [...visibleIvyRows, ...caseScores.rows], [visibleIvyRows, caseScores.rows]);
   const [scoreDialog, setScoreDialog] = useState<{ scoreId: string; ts: number; resultId: number | null } | null>(null);
 
@@ -4335,6 +4354,12 @@ export default function ClinicalChartView({
           actor,
           reason: "clinical-chart timeline event modal",
         });
+        const inOrRoom = caseStatus.status === "ACTIVE" && (orStage === "or" || orStage === "or_recovery");
+        if (eventModalMode === "event" && inOrRoom && normalizedEventTitle === "patient out") {
+          setOrPromptError(""); setOrPrompt({ kind: "patient_out", ts: editedTs });
+        } else if (eventModalMode === "event" && caseStatus.status === "ACTIVE" && orStage === "or" && normalizedEventTitle === "start recovery") {
+          setOrPromptError(""); setOrPrompt({ kind: "start_recovery", ts: editedTs });
+        }
       }
       window.dispatchEvent(
         new CustomEvent("flora:case-events-changed", { detail: { caseId } }),
@@ -5091,6 +5116,8 @@ export default function ClinicalChartView({
 
   const openDischargeModal = () => {
     if (caseStatus.status !== "ACTIVE") return;
+    setDestination("");
+    setDestinationNote("");
     const current = Date.now();
     setDischargeDateDraft(formatDDMMYYYY(current));
     setDischargeTimeDraft(formatHHMM(current));
@@ -5117,10 +5144,16 @@ export default function ClinicalChartView({
       setDischargeError("Discharge time cannot be in the future.");
       return;
     }
+    if (orStage === "recovery" && !destination) {
+      setDischargeError("Choose where the patient goes.");
+      return;
+    }
     setDischargeSaving(true);
     setDischargeError("");
     try {
-      const result = await dischargeCase(caseStatus.case_id, dischargeTime) as {
+      const result = (movingOut
+        ? await moveOutCase(caseStatus.case_id, dischargeTime).then(value => ({ discharge_time: value.moved_out_at }))
+        : await dischargeCase(caseStatus.case_id, dischargeTime, destination ? { destination, note: destinationNote } : undefined)) as {
         discharge_time?: number;
       };
       const confirmedTime = Number(result.discharge_time);
@@ -5133,6 +5166,29 @@ export default function ClinicalChartView({
       setDischargeError(error instanceof Error ? error.message : "Failed to discharge case.");
     } finally {
       setDischargeSaving(false);
+    }
+  };
+
+  const runOrPrompt = async (choice: "move_out" | "recover_here") => {
+    if (!orPrompt || caseStatus.status !== "ACTIVE") return;
+    setOrPromptBusy(true);
+    setOrPromptError("");
+    try {
+      if (choice === "recover_here") {
+        await recoverInRoom(caseStatus.case_id, orPrompt.ts);
+        setOrStage("or_recovery");
+      } else {
+        // Patient Out was just recorded by the nurse; Start Recovery still needs Patient Out on the timeline.
+        const result = await moveOutCase(caseStatus.case_id, orPrompt.ts, orPrompt.kind === "start_recovery");
+        window.dispatchEvent(new CustomEvent("flora:case-io-changed", { detail: { caseId: caseStatus.case_id } }));
+        onCaseDischargeTimeUpdated?.(caseStatus.case_id, result.moved_out_at);
+      }
+      window.dispatchEvent(new CustomEvent("flora:case-events-changed", { detail: { caseId: caseStatus.case_id } }));
+      setOrPrompt(null);
+    } catch (error) {
+      setOrPromptError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setOrPromptBusy(false);
     }
   };
 
@@ -5590,7 +5646,7 @@ export default function ClinicalChartView({
                 <path d="M3.5 17V9.5m0 4h17V17h-17Zm3-3.5V8h5a3 3 0 0 1 3 3v2.5M3.5 17v2m17-2v2" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="m15.5 7 1.7 1.7 3.3-3.4" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              Discharge
+              {movingOut ? "Move out" : "Discharge"}
             </button>
           ) : caseStatus.status === "DISCHARGED" ? (
             <>
@@ -5985,6 +6041,36 @@ export default function ClinicalChartView({
           )
         : null}
 
+      {orPrompt && caseStatus.status === "ACTIVE" && typeof document !== "undefined"
+        ? createPortal(
+            <div className="app-theme-scope case-modal-backdrop" onMouseDown={() => !orPromptBusy && setOrPrompt(null)}>
+              <div className="case-modal max-w-lg" role="dialog" aria-modal="true" aria-labelledby="or-prompt-title" onMouseDown={event => event.stopPropagation()}>
+                <header className="case-modal__header">
+                  <div>
+                    <div className="case-modal__eyebrow">OR room · {formatHHMM(orPrompt.ts)}</div>
+                    <h2 id="or-prompt-title" className="case-modal__title">{orPrompt.kind === "patient_out" ? "Move the patient out of this room?" : "Where does the patient recover?"}</h2>
+                    <p className="case-modal__context">{orPrompt.kind === "patient_out"
+                      ? "Patient Out is recorded. Moving out closes the case on this workstation (not a discharge): it continues on the recovery bed and this room is free."
+                      : "Start Recovery is recorded. Move to the recovery room (the case continues on the recovery bed), or recover in this OR room for now."}</p>
+                  </div>
+                  <button type="button" className="case-modal__close" onClick={() => setOrPrompt(null)} disabled={orPromptBusy} aria-label="Close">×</button>
+                </header>
+                <div className="case-modal__body space-y-3">
+                  {orPromptError ? <p className="case-modal__error">{orPromptError}</p> : null}
+                  <footer className="case-modal__actions flex-wrap">
+                    <button type="button" className="case-modal__button" disabled={orPromptBusy} onClick={() => setOrPrompt(null)}>Just record the event</button>
+                    {orPrompt.kind === "start_recovery" ? <button type="button" className="case-modal__button" disabled={orPromptBusy} onClick={() => void runOrPrompt("recover_here")}>Recover in this room</button> : null}
+                    <button type="button" className="case-modal__button border-red-600 bg-red-600 text-white hover:bg-red-700" disabled={orPromptBusy} onClick={() => void runOrPrompt("move_out")}>
+                      {orPromptBusy ? "Working…" : orPrompt.kind === "patient_out" ? "Move out" : "Move to recovery room"}
+                    </button>
+                  </footer>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+
       {dischargeModalOpen && caseStatus.status === "ACTIVE" && typeof document !== "undefined"
         ? createPortal(
             <div className="app-theme-scope case-modal-backdrop" onMouseDown={() => !dischargeSaving && setDischargeModalOpen(false)}>
@@ -6006,8 +6092,10 @@ export default function ClinicalChartView({
                     </span>
                     <div>
                       <div className="case-modal__eyebrow">Case lifecycle</div>
-                      <h2 id="case-discharge-title" className="case-modal__title">Discharge patient</h2>
-                      <p className="case-modal__context">End live clinical recording for this case.</p>
+                      <h2 id="case-discharge-title" className="case-modal__title">{movingOut ? "Move out of the OR room" : "Discharge patient"}</h2>
+                      <p className="case-modal__context">{movingOut
+                        ? "The patient leaves this room for recovery. The case is not discharged: it continues on the recovery bed, and this room is free for the next patient."
+                        : "End live clinical recording for this case."}</p>
                     </div>
                   </div>
                   <button type="button" className="case-modal__close" onClick={() => setDischargeModalOpen(false)} disabled={dischargeSaving} aria-label="Close">×</button>
@@ -6058,7 +6146,7 @@ export default function ClinicalChartView({
                         <div className="text-sm font-bold text-[var(--app-text)]">Active infusions</div>
                         <div className="mt-0.5 text-xs text-[var(--app-muted)]">
                           {activeDripsAtDischarge.length > 0
-                            ? "These infusions will be stopped at the discharge time."
+                            ? movingOut ? "These infusions keep running and continue on the recovery bed." : "These infusions will be stopped at the discharge time."
                             : "No active infusion needs to be stopped."}
                         </div>
                       </div>
@@ -6075,11 +6163,25 @@ export default function ClinicalChartView({
                     ) : null}
                   </div>
 
+                  {orStage === "recovery" ? <div className="rounded-lg border border-[var(--app-border)] bg-[var(--app-control-bg)] p-3">
+                    <div className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--app-muted)]">Out of the OR ward to</div>
+                    <div className="grid grid-cols-[10rem_minmax(0,1fr)] gap-3 max-[520px]:grid-cols-1">
+                      <label className="case-modal__field">Destination
+                        <select value={destination} onChange={event => { setDestination(event.target.value); setDischargeError(""); }}>
+                          <option value="">Choose…</option>{["ICU", "IPD ward", "Home", "Other hospital", "Other"].map(item => <option key={item}>{item}</option>)}
+                        </select>
+                      </label>
+                      <label className="case-modal__field">Ward / bed
+                        <input value={destinationNote} onChange={event => setDestinationNote(event.target.value)} maxLength={200} />
+                      </label>
+                    </div>
+                  </div> : null}
+
                   {dischargeError ? <p className="case-modal__error">{dischargeError}</p> : null}
                   <footer className="case-modal__actions">
                     <button type="button" className="case-modal__button" disabled={dischargeSaving} onClick={() => setDischargeModalOpen(false)}>Cancel</button>
                     <button type="submit" disabled={dischargeSaving} className="case-modal__button border-red-600 bg-red-600 text-white hover:bg-red-700">
-                      {dischargeSaving ? "Discharging…" : "Confirm discharge"}
+                      {dischargeSaving ? (movingOut ? "Moving out…" : "Discharging…") : movingOut ? "Confirm move out" : "Confirm discharge"}
                     </button>
                   </footer>
                 </div>

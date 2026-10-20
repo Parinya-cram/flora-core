@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 
-from .. import ai_service, billing, central_auth, device_registry, device_types, directory, form_sync, io_catalog, ldap_auth, workflows
+from .. import ai_service, billing, central_auth, tenancy, device_registry, device_types, directory, form_sync, io_catalog, ldap_auth, workflows
 from ..database import connection, pool
 
 
@@ -55,6 +55,12 @@ class PersonalThemeSync(BaseModel):
 
 
 def require_sync_secret(authorization: str | None = Header(default=None)) -> None:
+    """Leafs and Haber prove their account with its sync secret (unique per account); the account
+    middleware has already resolved it, so an unknown secret leaves the request without an account."""
+    if tenancy.MULTI_ACCOUNT:
+        if tenancy.current_account() is None:
+            raise HTTPException(status_code=401, detail="invalid synchronization credentials")
+        return
     expected = os.getenv("FLORA_SYNC_SHARED_SECRET", "").strip()
     supplied = ""
     if authorization and authorization.lower().startswith("bearer "):
@@ -490,7 +496,9 @@ class AdmissionExchange(BaseModel):
     claims: list[dict[str, Any]] = Field(default_factory=list, max_length=500)
 
 
-def _admission_for_leaf(row: dict[str, Any]) -> dict[str, Any]:
+def _admission_for_leaf(row: dict[str, Any], database: Connection | None = None) -> dict[str, Any]:
+    from .. import or_sessions
+    session = or_sessions.leaf_header(database, row) if database is not None else None
     return {
         "id": str(row["id"]),
         "header": {
@@ -498,20 +506,30 @@ def _admission_for_leaf(row: dict[str, Any]) -> dict[str, Any]:
             "admission": row["admission"] or {}, "unit_key": row["unit_key"], "unit_name": row.get("unit_name"),
             "target_leaf_id": row["target_leaf_id"], "scheduled_at": row["scheduled_at"], "note": row["note"],
             "created_by": row["created_by"],
+            **({"or_session": session} if session else {}),
         },
         "form_values": row["form_values"] or {},
         "form_versions": row["form_versions"] or {},
     }
 
 
+def _requests(row: dict[str, Any]) -> dict[str, Any]:
+    from .. import or_sessions
+    found = or_sessions.leaf_requests(row)
+    return {"requests": found} if found else {}
+
+
 def _claim(database: Connection, admission_id: str, leaf_id: str, case: dict[str, Any] | None = None) -> str:
-    """claimed | already | taken | missing"""
+    """claimed | already | previous | taken | missing"""
     row = database.execute(
         "SELECT * FROM canopy_admission WHERE id::text=%s FOR UPDATE", (admission_id,)
     ).fetchone()
     if row is None:
         return "missing"
     if row["claimed_leaf_id"] and row["claimed_leaf_id"] != leaf_id:
+        from .. import or_sessions
+        if or_sessions.is_previous_leaf(database, str(row["id"]), leaf_id):
+            return "previous"  # the OR room's Leaf, after the case moved on to recovery
         if case is not None and row["status"] != "conflict":
             # Started offline at two Leafs: keep the first, flag for review.
             database.execute("UPDATE canopy_admission SET status='conflict',updated_at=%s WHERE id=%s",
@@ -525,6 +543,8 @@ def _claim(database: Connection, admission_id: str, leaf_id: str, case: dict[str
              claimed_leaf_id=%s, claimed_at=coalesce(claimed_at,%s), updated_at=%s WHERE id=%s""",
         (leaf_id, current, current, row["id"]),
     )
+    from .. import or_sessions
+    or_sessions.on_leaf_claim(database, str(row["id"]), leaf_id, case)
     return "already" if row["claimed_leaf_id"] == leaf_id else "claimed"
 
 
@@ -545,10 +565,16 @@ def exchange_admissions(payload: AdmissionExchange, database: Connection = Depen
     with database.transaction():
         for claim in payload.claims:
             result = _claim(database, str(claim.get("admission_id")), payload.leaf_id, case=claim)
+            if result == "previous":
+                acknowledged.append(str(claim.get("admission_id")))
+                continue
             (conflicts if result in {"taken", "missing"} else acknowledged).append(str(claim.get("admission_id")))
         for case in payload.cases:
             admission_id = str(case.get("admission_id") or "")
             result = _claim(database, admission_id, payload.leaf_id, case=case)
+            if result == "previous":
+                acknowledged.append(admission_id)
+                continue
             if result in {"taken", "missing"}:
                 conflicts.append(admission_id)
                 continue
@@ -568,25 +594,32 @@ def exchange_admissions(payload: AdmissionExchange, database: Connection = Depen
                  _global_case_id(hospital, payload.leaf_id, str(case.get("case_id"))), case.get("status"),
                  directory.now_ms(), admission_id),
             )
+            from .. import or_sessions
+            or_sessions.on_leaf_case(database, admission_id, payload.leaf_id, case)
         unit = directory.leaf_unit(database, payload.leaf_id)
         pending = database.execute(
             """SELECT a.*, unit.name AS unit_name FROM canopy_admission a
                LEFT JOIN canopy_location unit ON unit.id::text=a.unit_key
-               WHERE a.status='pending' AND a.claimed_leaf_id IS NULL
-                 AND (a.target_leaf_id=%s OR (a.target_leaf_id IS NULL AND a.unit_key=%s))
+               WHERE ((a.status='pending' AND a.claimed_leaf_id IS NULL)
+                      OR to_jsonb(a) ->> 'journey_state' = 'assigned_recovery')
+                 AND (a.target_leaf_id=%s OR (a.target_leaf_id IS NULL AND a.unit_key=%s
+                      -- An OR-schedule booking reaches a Leaf only once the ward desk assigns its bed.
+                      AND to_jsonb(a) ->> 'room_location_id' IS NULL)
+                      -- Recovery: the moved-out case waits for this recovery bed's Leaf.
+                      OR (to_jsonb(a) ->> 'journey_state' = 'assigned_recovery' AND a.target_leaf_id=%s))
                ORDER BY a.scheduled_at NULLS LAST, a.created_at""",
-            (payload.leaf_id, (unit or {}).get("key")),
+            (payload.leaf_id, (unit or {}).get("key"), payload.leaf_id),
         ).fetchall()
         linked = database.execute(
-            """SELECT id, form_values, form_versions FROM canopy_admission
+            """SELECT * FROM canopy_admission
                WHERE claimed_leaf_id=%s AND status IN ('started','conflict')
                  AND coalesce(case_status,'active') <> 'archived'""",
             (payload.leaf_id,),
         ).fetchall()
     return {
-        "pending": [_admission_for_leaf(row) for row in pending],
+        "pending": [_admission_for_leaf(row, database) for row in pending],
         "linked": [{"admission_id": str(row["id"]), "values": row["form_values"] or {},
-                    "versions": row["form_versions"] or {}} for row in linked],
+                    "versions": row["form_versions"] or {}, **_requests(row)} for row in linked],
         "acknowledged": acknowledged,
         "conflicts": conflicts,
     }

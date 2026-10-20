@@ -1,0 +1,372 @@
+<title>FLORA iCIS Business Model</title>
+<meta charset="utf-8">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600&family=IBM+Plex+Sans+Thai:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a briefing page in a 74rem column — insight first, then the 9-block canvas as a true grid, then risks and next moves. FLORA iCIS Clinical Calm palette. */
+:root {
+  --bg: #f4f8f8; --surface: #ffffff; --ink: #0d3b3a; --muted: #4c6a69; --line: #d3e3e2;
+  --teal: #0a7c78; --teal-soft: #e1f3f2; --blue: #1f6fd1; --magenta: #d62f7c; --lime: #4a9e2a; --amber: #b7791f;
+  --font-display: "Prompt", "IBM Plex Sans Thai", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans Thai", "Noto Sans Thai", system-ui, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #0a1a1b; --surface: #102527; --ink: #e2f1f0; --muted: #94b4b2; --line: #21393a; --teal: #2fc4bb; --teal-soft: #12312f; --blue: #5fa8ff; --magenta: #ff5aa0; --lime: #8cd43f; --amber: #f0b44a; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #0a1a1b; --surface: #102527; --ink: #e2f1f0; --muted: #94b4b2; --line: #21393a; --teal: #2fc4bb; --teal-soft: #12312f; --blue: #5fa8ff; --magenta: #ff5aa0; --lime: #8cd43f; --amber: #f0b44a; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15.5px; line-height: 1.7; }
+.wrap { max-width: 74rem; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.25; margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(1.9rem, 1.3rem + 2.4vw, 2.9rem); font-weight: 600; }
+h2 { font-size: clamp(1.4rem, 1.1rem + 1.2vw, 1.9rem); font-weight: 600; }
+h3 { font-size: 1.05rem; font-weight: 600; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font: 500 0.75rem var(--font-data); letter-spacing: 0.1em; text-transform: uppercase; color: var(--blue); }
+.muted { color: var(--muted); }
+.note { font-size: 0.82rem; color: var(--muted); }
+section { padding-block: clamp(2rem, 4vw, 3.5rem); }
+section + section { border-top: 1px solid var(--line); }
+.stack { display: flex; flex-direction: column; gap: 1rem; }
+.stack-lg { display: flex; flex-direction: column; gap: 1.8rem; }
+.head { padding-block: clamp(2rem, 5vw, 3.5rem) 1.5rem; }
+.rule { height: 4px; width: 9rem; border-radius: 4px; background: linear-gradient(90deg, #e2337f, #19c6e6 45%, #8cd43f 75%, #1f6fd1); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+nav.toc a { text-decoration: none; color: var(--ink); font-size: 0.85rem; border: 1px solid var(--line); background: var(--surface); padding: 0.2rem 0.8rem; border-radius: 999px; }
+a:focus-visible, input:focus-visible { outline: 2px solid var(--magenta); outline-offset: 2px; }
+
+/* insights */
+.insights { display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); }
+.insight { border-top: 2px solid var(--teal); padding-top: 0.9rem; display: flex; flex-direction: column; gap: 0.45rem; min-width: 0; }
+.insight .k { font: 500 0.72rem var(--font-data); color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+.insight p { color: var(--muted); }
+.insight b { color: var(--ink); font-weight: 600; }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; padding: 0.65rem 0.85rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 500 0.72rem var(--font-data); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); white-space: nowrap; }
+tr:last-child td { border-bottom: none; }
+
+.split { display: grid; gap: 2rem; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+@media (max-width: 860px) { .split { grid-template-columns: minmax(0, 1fr); } }
+
+/* 2x2 */
+.quad svg { width: 100%; height: auto; display: block; }
+
+/* edition ladder */
+.ladder { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
+@media (max-width: 760px) { .ladder { grid-template-columns: minmax(0, 1fr); } }
+.rung { padding: 1.1rem 1.2rem; display: flex; flex-direction: column; gap: 0.45rem; }
+.rung + .rung { border-left: 1px solid var(--line); }
+@media (max-width: 760px) { .rung + .rung { border-left: none; border-top: 1px solid var(--line); } }
+.rung .tag { font: 500 0.72rem var(--font-data); text-transform: uppercase; letter-spacing: 0.06em; }
+.rung p { font-size: 0.9rem; color: var(--muted); }
+.rung.paid { background: var(--teal-soft); }
+
+/* canvas */
+.bmc { display: grid; gap: 0; border: 2px solid var(--ink); border-radius: 14px; overflow: hidden; background: var(--surface);
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  grid-template-areas:
+    "kp kp ka ka vp vp cr cr cs cs"
+    "kp kp kr kr vp vp ch ch cs cs"
+    "co co co co co rv rv rv rv rv"; }
+@media (max-width: 900px) { .bmc { grid-template-columns: minmax(0, 1fr); grid-template-areas: "cs" "vp" "ch" "cr" "rv" "ka" "kr" "kp" "co"; } }
+.blk { padding: 1rem 1.05rem 1.1rem; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 0.55rem; min-width: 0; }
+.blk h3 { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
+.blk h3 small { font: 500 0.68rem var(--font-data); color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+.blk ul { margin: 0; padding-left: 1.05rem; display: grid; gap: 0.35rem; font-size: 0.88rem; }
+.blk li::marker { color: var(--teal); }
+.blk.vp { background: var(--teal-soft); }
+.blk.vp h3 { color: var(--teal); }
+.kp { grid-area: kp; } .ka { grid-area: ka; } .kr { grid-area: kr; } .vp { grid-area: vp; } .cr { grid-area: cr; } .ch { grid-area: ch; } .cs { grid-area: cs; } .co { grid-area: co; } .rv { grid-area: rv; }
+.seg { display: inline-block; font: 500 0.66rem var(--font-data); padding: 0 0.4rem; border-radius: 4px; border: 1px solid currentColor; margin-right: 0.25rem; vertical-align: 1px; }
+.seg.t1 { color: var(--blue); } .seg.t2 { color: var(--lime); } .seg.com { color: var(--magenta); }
+
+/* calculator */
+.calc { display: grid; gap: 1.5rem; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; }
+@media (max-width: 860px) { .calc { grid-template-columns: minmax(0, 1fr); } }
+.fields { display: grid; gap: 0.8rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 520px) { .fields { grid-template-columns: minmax(0, 1fr); } }
+.field { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+.field label { font-size: 0.82rem; font-weight: 600; }
+.field input { font: inherit; font-variant-numeric: tabular-nums; padding: 0.5rem 0.65rem; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); width: 100%; }
+.result { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 1.2rem; display: flex; flex-direction: column; gap: 0.8rem; }
+.row { display: flex; justify-content: space-between; gap: 1rem; font-variant-numeric: tabular-nums; border-bottom: 1px dashed var(--line); padding-bottom: 0.45rem; }
+.row:last-child { border-bottom: none; }
+.row b { font-family: var(--font-display); font-weight: 600; }
+.row.big b { font-size: 1.5rem; color: var(--teal); }
+.pill { display: inline-block; font: 500 0.7rem var(--font-data); color: var(--amber); border: 1px solid currentColor; border-radius: 999px; padding: 0 0.5rem; }
+
+/* risks */
+.risk { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: 0.4rem 1rem; padding-block: 0.8rem; border-top: 1px solid var(--line); }
+.risk:first-child { border-top: none; }
+.sev { font: 500 0.7rem var(--font-data); padding: 0.1rem 0.5rem; border-radius: 999px; border: 1px solid currentColor; align-self: start; justify-self: start; }
+.sev.high { color: var(--magenta); } .sev.med { color: var(--amber); }
+@media (max-width: 520px) { .risk { grid-template-columns: minmax(0, 1fr); } }
+ol.moves { margin: 0; padding-left: 1.3rem; display: grid; gap: 0.6rem; }
+ol.moves li::marker { font-family: var(--font-display); color: var(--teal); font-weight: 600; }
+</style>
+
+<header class="head">
+  <div class="wrap stack">
+    <span class="eyebrow">FLORA iCIS · E.S.M. Solution · ร่างเพื่อหารือภายใน · 19 ต.ค. 2026</span>
+    <h1>Business Insight และ Business Model Canvas ของ FLORA iCIS</h1>
+    <div class="rule"></div>
+    <p class="muted">FLORA iCIS ชนะได้ในช่วงที่ระบบบันทึกวิสัญญีต่างประเทศรุ่นเก่ากำลังหมดอายุ โดยขายว่า "ใช้เครื่องที่มีอยู่ ทำงานได้แม้ออฟไลน์ และโรงพยาบาลแก้ฟอร์มเองได้" เข้าตลาดผ่าน POC หนึ่งห้อง แล้วต่อยอดเป็นรายได้ประจำจากไลเซนส์และบริการดูแลการเชื่อมต่อ</p>
+    <nav class="toc" aria-label="On this page">
+      <a href="#insight">Business insight</a><a href="#position">ตำแหน่งการแข่งขัน</a><a href="#revenue">โมเดลรายได้</a><a href="#canvas">Business Model Canvas</a><a href="#sizing">ประเมินขนาดตลาด</a><a href="#risks">ความเสี่ยงและก้าวต่อไป</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section id="insight">
+    <div class="wrap stack-lg">
+      <div class="stack">
+        <span class="eyebrow">Business insight</span>
+        <h2>หกข้อค้นพบที่กำหนดกลยุทธ์</h2>
+      </div>
+      <div class="insights">
+        <div class="insight"><span class="k">ช่วงเวลา · Why now</span><h3>ระบบเดิมกำลังหมดอายุ</h3><p>Dräger Innovian ทยอยเลิกซัพพอร์ตทีละรุ่น (6.x หมดอายุปี 2022) และการอัปเกรดมีค่าใช้จ่าย ส่วน Philips ทำการตลาดโดยนำด้วย Capsule แล้ว <b>โรงพยาบาล tier-1 ที่ใช้ระบบเหล่านี้จึงกำลังหาตัวแทน</b></p></div>
+        <div class="insight"><span class="k">ปัญหาลูกค้า</span><h3>เครื่องหลายยี่ห้อ แต่ซอฟต์แวร์ผูกยี่ห้อเดียว</h3><p>ห้องผ่าตัดไทยมี GE, Dräger, Mindray และ Philips ปนกัน ระบบคู่แข่งต้องใช้มิดเดิลแวร์ของตัวเอง หรือรองรับเฉพาะเครื่องของผู้ผลิตตัวเอง <b>Tendril ที่ไม่ผูกยี่ห้อคือเหตุผลหลักที่ลูกค้าจะซื้อ</b></p></div>
+        <div class="insight"><span class="k">ปัญหาหน้างาน</span><h3>เครือข่ายล่มในห้องผ่าตัดเกิดขึ้นจริง</h3><p>การทดสอบใน OR 508 และ OR 701 พบว่าสภาพเครือข่ายและเครื่องลูกข่ายต่างกันไปทีละห้อง <b>Leaf ที่มีฐานข้อมูลในเครื่องเปลี่ยนจุดอ่อนของโรงพยาบาลให้เป็นจุดขาย</b></p></div>
+        <div class="insight"><span class="k">ต้นทุนการเปลี่ยนแปลง</span><h3>แก้ฟอร์มทีไรต้องรอผู้ขาย</h3><p>ระบบต่างประเทศให้ผู้ขายเป็นคนตั้งค่า และแทบไม่มีภาษาไทย <b>Form/Report Builder และ Flora Agent ลดค่าใช้จ่ายที่ซ่อนอยู่ในสัญญา MA</b> และทำให้หัวหน้าวิสัญญีเป็นผู้ผลักดันการซื้อ</p></div>
+        <div class="insight"><span class="k">พฤติกรรมการซื้อ</span><h3>ซื้อด้วย TOR และหลักฐาน</h3><p>โรงพยาบาลรัฐซื้อผ่าน TOR และ e-GP ส่วน tier-2 มักได้ซอฟต์แวร์ "แถมฟรี" กับเครื่อง <b>คนที่เขียนเกณฑ์ใน TOR ได้ก่อน และพิสูจน์ด้วย POC ได้ จะได้เปรียบ</b></p></div>
+        <div class="insight"><span class="k">ช่องทางที่ถูกกว่า</span><h3>รุ่นชุมชนสร้างความคุ้นเคยตั้งแต่ต้นทาง</h3><p>แผนรุ่น RCAT Community และ E for L Partner ทำให้แพทย์ประจำบ้านและเครือข่ายวิชาชีพคุ้นกับ FLORA <b>ก่อนที่โรงพยาบาลจะเริ่มเขียน TOR</b></p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="position">
+    <div class="wrap split">
+      <div class="stack">
+        <span class="eyebrow">ตำแหน่งการแข่งขัน</span>
+        <h2>เราอยู่ช่องที่ยังว่าง: ไม่ผูกยี่ห้อเครื่อง และปรับให้เข้ากับโรงพยาบาลไทยได้</h2>
+        <p class="muted">คู่แข่งต่างประเทศเชื่อมเครื่องได้ดีแต่ปรับให้เข้ากับบริบทไทยได้น้อย ส่วนผู้ขายไทยปรับได้แต่ไม่มีการเชื่อมเครื่องหรือผูกกับยี่ห้อเดียว ลูกศรของ FLORA หมายถึงงาน validation ที่ต้องทำให้ครบ ก่อนจะอ้างตำแหน่งนี้ได้เต็มปาก</p>
+        <p class="note">ประเมินเชิงคุณภาพจาก docs/competitor/feature-matrix.md ไม่ใช่การวัดเชิงปริมาณ</p>
+      </div>
+      <figure class="quad" style="margin:0" aria-label="Competitive 2x2">
+        <svg viewBox="0 0 520 440" role="img" aria-label="แผนภาพ 2x2: แกนนอนคือการไม่ผูกยี่ห้อเครื่อง แกนตั้งคือการปรับให้เข้ากับโรงพยาบาลไทย">
+          <rect x="60" y="20" width="440" height="360" fill="none" stroke="var(--line)" stroke-width="1.5" rx="10"/>
+          <line x1="280" y1="20" x2="280" y2="380" stroke="var(--line)" stroke-dasharray="4 4"/>
+          <line x1="60" y1="200" x2="500" y2="200" stroke="var(--line)" stroke-dasharray="4 4"/>
+          <rect x="282" y="22" width="216" height="176" fill="var(--teal-soft)" rx="8"/>
+          <text x="490" y="44" text-anchor="end" font-family="IBM Plex Mono" font-size="11" fill="var(--teal)">ช่องที่ยังว่าง</text>
+          <text x="280" y="412" text-anchor="middle" font-family="IBM Plex Sans Thai" font-size="13" fill="var(--muted)">ไม่ผูกยี่ห้อเครื่องมือแพทย์ →</text>
+          <text x="22" y="200" text-anchor="middle" font-family="IBM Plex Sans Thai" font-size="13" fill="var(--muted)" transform="rotate(-90 22 200)">ปรับให้เข้ากับโรงพยาบาลไทย →</text>
+          <g font-family="IBM Plex Sans Thai" font-size="13" fill="var(--ink)">
+            <circle cx="150" cy="320" r="7" fill="var(--blue)"/><text x="162" y="324">Dräger Innovian</text>
+            <circle cx="220" cy="285" r="7" fill="var(--blue)"/><text x="232" y="289">Philips ICCA</text>
+            <circle cx="420" cy="300" r="7" fill="var(--blue)"/><text x="410" y="290" text-anchor="end">Picis (อ้าง 420+ ไดรเวอร์)</text>
+            <circle cx="120" cy="240" r="7" fill="var(--lime)"/><text x="132" y="244">Mediplex (Mindray)</text>
+            <circle cx="100" cy="90" r="7" fill="var(--lime)"/><text x="112" y="94">Mind Medical (ไม่มีเครื่อง)</text>
+            <circle cx="350" cy="110" r="9" fill="var(--magenta)"/><text x="364" y="115" font-weight="600">FLORA iCIS วันนี้</text>
+            <circle cx="440" cy="70" r="9" fill="none" stroke="var(--magenta)" stroke-width="2" stroke-dasharray="3 3"/><text x="430" y="62" text-anchor="end" font-size="12" fill="var(--muted)">เป้าหมาย 2027</text>
+            <line x1="358" y1="104" x2="430" y2="76" stroke="var(--magenta)" stroke-width="1.5"/>
+          </g>
+          <g font-family="IBM Plex Mono" font-size="11" fill="var(--muted)">
+            <circle cx="80" cy="432" r="5" fill="var(--blue)"/><text x="90" y="436">ต่างประเทศ</text>
+            <circle cx="180" cy="432" r="5" fill="var(--lime)"/><text x="190" y="436">ผู้ขายไทย</text>
+          </g>
+        </svg>
+      </figure>
+    </div>
+  </section>
+
+  <section id="revenue">
+    <div class="wrap stack-lg">
+      <div class="stack">
+        <span class="eyebrow">โมเดลรายได้</span>
+        <h2>แจกรุ่นชุมชนเพื่อสร้างความคุ้นเคย แล้วขายรุ่นเต็มพร้อมบริการรายปี</h2>
+        <p class="muted">ใช้ codebase เดียวกันทุกรุ่น และควบคุมรุ่นด้วย edition config กับไลเซนส์จาก Root ซึ่งกำหนดโมดูล จำนวน Leaf จำนวน Tendril และจำนวนเครื่องได้</p>
+      </div>
+      <div class="ladder">
+        <div class="rung"><span class="tag" style="color:var(--magenta)">ฟรี · Community</span><h3>FLORA RCAT Community</h3><p>บันทึกวิสัญญีพื้นฐานสำหรับราชวิทยาลัยและงานวิชาการ จำกัดพารามิเตอร์ ใช้สร้างความคุ้นเคยในกลุ่มแพทย์ประจำบ้าน</p></div>
+        <div class="rung"><span class="tag" style="color:var(--lime)">พันธมิตร · Partner</span><h3>FLORA E for L</h3><p>รุ่นสำหรับพันธมิตร ทำได้มากกว่ารุ่นชุมชน แต่ยังจำกัดกว่ารุ่นเต็ม ขายผ่านพันธมิตรด้วยแบรนด์ร่วม</p></div>
+        <div class="rung paid"><span class="tag" style="color:var(--teal)">รายได้หลัก · Full</span><h3>FLORA iCIS</h3><p>Tendril, Leaf, Canopy, Studio และ Agent พร้อมการเชื่อม HIS ขายตรงให้โรงพยาบาล tier-1 และ tier-2</p></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ช่องทางรายได้</th><th>คิดเงินจาก</th><th>ลักษณะ</th><th>ข้อมูลที่ยังขาด</th></tr></thead>
+          <tbody>
+            <tr><td><b>ราคาต่อเตียง</b></td><td><b>500,000 บาท</b> ต่อเตียง / ห้องผ่าตัด รวมฮาร์ดแวร์ Tendril gateway และ client station (Leaf)</td><td>ครั้งเดียว</td><td>ราคาปัจจุบัน</td></tr>
+            <tr><td><b>Canopy + เชื่อม HIS</b></td><td>ต่อโรงพยาบาล</td><td>ค่าติดตั้งครั้งเดียว</td><td>ขอบเขตงานเชื่อม HIS แต่ละแห่งไม่เท่ากัน</td></tr>
+            <tr><td><b>MA / Integration as a Service</b></td><td><b>20%</b> ของราคาต่อเตียงต่อปี (100,000 บาท / เตียง / ปี)</td><td>รายได้ประจำ</td><td>ราคาปัจจุบัน</td></tr>
+            <tr><td><b>Customization</b></td><td>ต่องาน (ฟอร์ม รายงาน workflow)</td><td>ตามโครงการ</td><td>อัตราต่อวันทำงาน</td></tr>
+            <tr><td><b>Flora Agent</b></td><td>ส่วนเสริมต่อโรงพยาบาล</td><td>รายปี</td><td>Report Agent ยังเป็นตัวอย่างแรก</td></tr>
+            <tr><td><b>ฮาร์ดแวร์</b></td><td>รวมอยู่ในราคาต่อเตียงแล้ว</td><td>เป็นต้นทุน ไม่ได้เป็นรายได้แยก</td><td>ต้นทุนต่อชุดจาก gateway-hardware-comparison</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="canvas">
+    <div class="wrap stack-lg">
+      <div class="stack">
+        <span class="eyebrow">Business Model Canvas</span>
+        <h2>FLORA iCIS บนผืนผ้าใบเดียว</h2>
+        <p class="note"><span class="seg t1">T1</span>โรงพยาบาล tier-1 <span class="seg t2">T2</span>โรงพยาบาล tier-2 <span class="seg com">COM</span>ชุมชนวิชาชีพ</p>
+      </div>
+      <div class="bmc">
+        <div class="blk kp"><h3>Key Partners <small>พันธมิตร</small></h3><ul>
+          <li>โรงพยาบาลมหาวิทยาลัยที่ใช้งานจริง (ร่วมพัฒนาและเป็นไซต์อ้างอิง)</li>
+          <li>ราชวิทยาลัยวิสัญญีแพทย์ฯ (RCAT) สำหรับรุ่นชุมชน</li>
+          <li>พันธมิตร E for L และผู้ขาย HIS เช่น Porjai</li>
+          <li>ตัวแทนจำหน่ายเครื่องมือแพทย์ (GE, Dräger, B. Braun)</li>
+          <li>ผู้ผลิตฮาร์ดแวร์เกตเวย์</li>
+        </ul></div>
+        <div class="blk ka"><h3>Key Activities <small>กิจกรรมหลัก</small></h3><ul>
+          <li>พัฒนาและ validate ไดรเวอร์เครื่องมือแพทย์</li>
+          <li>ติดตั้ง เชื่อม HIS และทำ POC</li>
+          <li>ทำชุดฟอร์มและรายงานมาตรฐานภาษาไทย</li>
+          <li>เฝ้าดูการเชื่อมต่อและซัพพอร์ต</li>
+          <li>พัฒนา Flora Agent</li>
+        </ul></div>
+        <div class="blk kr"><h3>Key Resources <small>ทรัพยากรหลัก</small></h3><ul>
+          <li>แพลตฟอร์ม Tendril / Leaf / Canopy / Root</li>
+          <li>คลังไดรเวอร์และแคตตาล็อกเครื่อง 115 รุ่นใน Root</li>
+          <li>หลักฐานการใช้งานจริงในห้องผ่าตัด</li>
+          <li>ทีมและผลงาน ESM (EMR LIFE, SCOPE LIFE, PCM LIFE)</li>
+        </ul></div>
+        <div class="blk vp"><h3>Value Propositions <small>คุณค่าที่ส่งมอบ</small></h3><ul>
+          <li><span class="seg t1">T1</span>ใช้เครื่องหลายยี่ห้อที่มีอยู่ ไม่ต้องซื้อมิดเดิลแวร์ต่อเตียง</li>
+          <li><span class="seg t1">T1</span><span class="seg t2">T2</span>บันทึกทุกนาที แม้เครือข่ายล่ม</li>
+          <li><span class="seg t1">T1</span>ทีมแก้ฟอร์มและรายงานภาษาไทยได้เอง ลดค่า change request</li>
+          <li><span class="seg t1">T1</span>ข้อมูลอยู่ในโรงพยาบาล ส่งออกได้ครบ ย้ายข้อมูลจากระบบเดิมได้</li>
+          <li><span class="seg t2">T2</span>แพ็กเกจห้องผ่าตัดติดตั้งเร็ว ราคาต่อห้อง</li>
+          <li><span class="seg com">COM</span>เครื่องมือบันทึกวิสัญญีฟรีสำหรับงานวิชาการ</li>
+        </ul></div>
+        <div class="blk cr"><h3>Customer Relationships <small>ความสัมพันธ์</small></h3><ul>
+          <li>เริ่มจาก POC หนึ่งห้องบนเครื่องจริง</li>
+          <li>ทีมในประเทศติดตั้งและอบรมหน้างาน</li>
+          <li>Integration as a Service: รู้ว่าข้อมูลขาดก่อนลูกค้าแจ้ง</li>
+          <li>เครือข่ายผู้ใช้ผ่านรุ่นชุมชน</li>
+        </ul></div>
+        <div class="blk ch"><h3>Channels <small>ช่องทาง</small></h3><ul>
+          <li>ทีมขายตรงของ ESM และ TOR kit</li>
+          <li>ประกวดราคา e-GP</li>
+          <li>งานประชุมวิสัญญีและเวชบำบัดวิกฤต</li>
+          <li>พันธมิตร E for L และผู้ขาย HIS</li>
+          <li>เว็บไซต์ one-pager และวิดีโอ</li>
+        </ul></div>
+        <div class="blk cs"><h3>Customer Segments <small>กลุ่มลูกค้า</small></h3><ul>
+          <li><span class="seg t1">T1</span>โรงเรียนแพทย์ ศูนย์ระดับเขต สธ. และเอกชนขนาดใหญ่ ทั้ง OR และ ICU</li>
+          <li><span class="seg t2">T2</span>โรงพยาบาลเอกชนและรัฐขนาดกลาง</li>
+          <li><span class="seg com">COM</span>วิสัญญีแพทย์ แพทย์ประจำบ้าน และสถาบันฝึกอบรม</li>
+          <li>ผู้ตัดสินใจ: หัวหน้าวิสัญญี IT วิศวกรรมการแพทย์ ผู้บริหาร จัดซื้อ</li>
+        </ul></div>
+        <div class="blk co"><h3>Cost Structure <small>โครงสร้างต้นทุน</small></h3><ul>
+          <li>ทีมวิศวกร (Python, Rust, frontend) และงาน validate ไดรเวอร์ ซึ่งเป็นต้นทุนหลัก</li>
+          <li>ทีมติดตั้งหน้างานและซัพพอร์ต รวมเวรนอกเวลา</li>
+          <li>ฮาร์ดแวร์ gateway และ client station ทุกเตียง (รวมอยู่ในราคาขาย)</li>
+          <li>ชุด POC และอะไหล่สำรอง</li>
+          <li>การรับรองมาตรฐานในอนาคต (อย., ISO 13485, IEC 62304)</li>
+          <li>คลาวด์ Root งานประชุม และการขาย</li>
+        </ul></div>
+        <div class="blk rv"><h3>Revenue Streams <small>รายได้</small></h3><ul>
+          <li><b>500,000 บาทต่อเตียง</b> รวมฮาร์ดแวร์ gateway และ client station</li>
+          <li><b>MA 20% ต่อปี</b> (100,000 บาทต่อเตียง) ซึ่งเป็นรายได้ประจำหลัก</li>
+          <li>ค่าติดตั้ง Canopy และการเชื่อม HIS</li>
+                    <li>งาน customization ฟอร์ม รายงาน workflow</li>
+          <li>ส่วนเสริม Flora Agent</li>
+        </ul></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sizing">
+    <div class="wrap stack-lg">
+      <div class="stack">
+        <span class="eyebrow">ประเมินขนาดตลาด</span>
+        <h2>รายได้ต่อปีจากสมมติฐานที่ปรับได้</h2>
+        <p class="muted">ราคาต่อเตียงและ MA เป็น<b>ราคาปัจจุบัน</b> ส่วนจำนวนโรงพยาบาล จำนวนเตียง และส่วนแบ่งตลาดยังเป็น<b>ค่าสมมติ</b> ต้องแทนด้วยข้อมูลจากฝ่ายขายและสถิติ สธ. ก่อนนำไปใช้</p>
+      </div>
+      <div class="calc">
+        <form class="fields" id="calc" onsubmit="return false">
+          <div class="field"><label for="h1">โรงพยาบาล tier-1 เป้าหมาย</label><input id="h1" type="number" min="0" value="60"></div>
+          <div class="field"><label for="u1">ห้องผ่าตัด + เตียง ICU ต่อแห่ง (T1)</label><input id="u1" type="number" min="0" value="30"></div>
+          <div class="field"><label for="h2">โรงพยาบาล tier-2 เป้าหมาย</label><input id="h2" type="number" min="0" value="150"></div>
+          <div class="field"><label for="u2">ห้องผ่าตัด + เตียง ICU ต่อแห่ง (T2)</label><input id="u2" type="number" min="0" value="10"></div>
+          <div class="field"><label for="lic">ราคาต่อเตียง รวมฮาร์ดแวร์ (บาท) · ราคาจริง</label><input id="lic" type="number" min="0" step="10000" value="500000"></div>
+          <div class="field"><label for="ma">MA ต่อปี (% ของราคาต่อเตียง) · ราคาจริง</label><input id="ma" type="number" min="0" max="100" value="20"></div>
+          <div class="field"><label for="share">ส่วนแบ่งที่ได้ใน 5 ปี (%)</label><input id="share" type="number" min="0" max="100" value="10"></div>
+          <div class="field"><label for="setup">ค่าเชื่อม HIS / ติดตั้งเพิ่มต่อโรงพยาบาล (บาท)</label><input id="setup" type="number" min="0" step="10000" value="0"></div>
+        </form>
+        <div class="result" aria-live="polite">
+          <span class="pill">ราคาจริง + ค่าสมมติด้านตลาด</span>
+          <div class="row"><span>หน่วยทั้งหมดในตลาดเป้าหมาย</span><b id="r-units">–</b></div>
+          <div class="row"><span>มูลค่าตลาดเป้าหมาย (SAM)</span><b id="r-sam">–</b></div>
+          <div class="row"><span>โรงพยาบาลที่ได้ใน 5 ปี</span><b id="r-wins">–</b></div>
+          <div class="row"><span>รายได้ครั้งเดียว (ขายเตียง + ติดตั้งเพิ่ม)</span><b id="r-once">–</b></div>
+          <div class="row big"><span>รายได้ MA ต่อปี เมื่อครบ 5 ปี</span><b id="r-arr">–</b></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="risks">
+    <div class="wrap split">
+      <div class="stack">
+        <span class="eyebrow">ความเสี่ยง</span>
+        <h2>สิ่งที่คู่แข่งจะใช้โจมตีเรา</h2>
+        <div>
+          <div class="risk"><span class="sev high">สูง</span><div><b>ยังไม่มีการรับรองทางกฎหมาย</b><p class="muted">ไม่มี อย. / ISO 13485 / IEC 62304 อาจตกเกณฑ์ใน TOR บางฉบับ</p></div></div>
+          <div class="risk"><span class="sev high">สูง</span><div><b>ยังไม่มีรุ่นเครื่องที่ validated อย่างเป็นทางการ</b><p class="muted">มีไดรเวอร์ 19 รุ่น แต่ยังรอปิดชุดหลักฐาน</p></div></div>
+          <div class="risk"><span class="sev med">กลาง</span><div><b>ยังไม่มีไดรเวอร์ Philips / Mindray และไม่มี waveform</b><p class="muted">ICCA กับ Mediplex จะยกเรื่องนี้ขึ้นมาเป็นจุดต่าง</p></div></div>
+          <div class="risk"><span class="sev med">กลาง</span><div><b>มีไซต์อ้างอิงแห่งเดียว และยังเปิดชื่อไม่ได้</b><p class="muted">ต้องได้รับอนุญาตก่อนใช้ในการขาย</p></div></div>
+          <div class="risk"><span class="sev med">กลาง</span><div><b>ฮาร์ดแวร์อยู่ในราคาต่อเตียง</b><p class="muted">ต้นทุน gateway และ client station กินกำไรทุกเตียง ควรคุมรุ่นฮาร์ดแวร์ให้เป็นมาตรฐาน</p></div></div>
+          <div class="risk"><span class="sev med">กลาง</span><div><b>ทีมเล็ก ขยายงานซัพพอร์ตได้จำกัด</b><p class="muted">ถ้าชนะพร้อมกันหลายโรงพยาบาล การติดตั้งจะเป็นคอขวด</p></div></div>
+        </div>
+      </div>
+      <div class="stack">
+        <span class="eyebrow">ก้าวต่อไป</span>
+        <h2>ห้าเรื่องที่ควรทำภายในไตรมาสแรก</h2>
+        <ol class="moves">
+          <li><b>ทำแพ็กเกจ tier-2</b> ราคาต่อเตียงที่สู้ซอฟต์แวร์ "แถมฟรี" ได้ (ราคาปัจจุบัน 500,000 บาท รวมฮาร์ดแวร์ + MA 20%)</li>
+          <li><b>ปิดชุดหลักฐาน validation</b> ให้ GE Carestation 750 และ CARESCAPE B650/B850 เป็นรุ่นแรก</li>
+          <li><b>ขออนุญาตไซต์อ้างอิง</b> และทำกรณีศึกษาฉบับแรก</li>
+          <li><b>ทำ TOR kit</b> 7 ข้อที่วัดผลด้วย POC ได้</li>
+          <li><b>วางแผนการรับรอง</b> เริ่มจาก ISO 13485 / IEC 62304 gap assessment</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap" style="padding-block:1.5rem;border-top:1px solid var(--line)">
+    <p class="note">แหล่งข้อมูล: docs/competitor/, docs/competitor/scope/flora.md, docs/DEVICE-COMPATIBILITY-CATALOG.md, docs/FLORA-Edition-Architecture-Plan.md, FLORA iCIS Catalog (ต.ค. 2026) · ข้อมูลคู่แข่งหลายข้อยังไม่ได้ยืนยัน</p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var ids = ['h1', 'u1', 'h2', 'u2', 'lic', 'ma', 'share', 'setup'];
+  function num(id) { var v = parseFloat(document.getElementById(id).value); return isFinite(v) && v > 0 ? v : 0; }
+  function baht(v) {
+    if (v >= 1e9) return (v / 1e9).toFixed(2) + ' พันล้านบาท';
+    if (v >= 1e6) return (v / 1e6).toFixed(1) + ' ล้านบาท';
+    return Math.round(v).toLocaleString('th-TH') + ' บาท';
+  }
+  function calc() {
+    var units = num('h1') * num('u1') + num('h2') * num('u2');
+    var sam = units * num('lic');
+    var share = num('share') / 100;
+    var wins = (num('h1') + num('h2')) * share;
+    var once = sam * share + wins * num('setup');
+    var arr = sam * share * num('ma') / 100;
+    document.getElementById('r-units').textContent = Math.round(units).toLocaleString('th-TH') + ' หน่วย';
+    document.getElementById('r-sam').textContent = baht(sam);
+    document.getElementById('r-wins').textContent = wins.toFixed(0) + ' แห่ง';
+    document.getElementById('r-once').textContent = baht(once);
+    document.getElementById('r-arr').textContent = baht(arr);
+  }
+  ids.forEach(function (id) { document.getElementById(id).addEventListener('input', calc); });
+  calc();
+})();
+</script>

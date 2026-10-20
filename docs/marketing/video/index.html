@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+@font-face { font-family: 'IBM Plex Sans Thai'; font-weight: 400; font-style: normal; src: url('fonts/IBMPlexSansThai-400-thai.woff2') format('woff2'); unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC; }
+@font-face { font-family: 'IBM Plex Sans Thai'; font-weight: 400; font-style: normal; src: url('fonts/IBMPlexSansThai-400-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'IBM Plex Sans Thai'; font-weight: 400; font-style: normal; src: url('fonts/IBMPlexSansThai-400-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'IBM Plex Sans Thai'; font-weight: 500; font-style: normal; src: url('fonts/IBMPlexSansThai-500-thai.woff2') format('woff2'); unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC; }
+@font-face { font-family: 'IBM Plex Sans Thai'; font-weight: 500; font-style: normal; src: url('fonts/IBMPlexSansThai-500-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'IBM Plex Sans Thai'; font-weight: 500; font-style: normal; src: url('fonts/IBMPlexSansThai-500-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'IBM Plex Sans Thai'; font-weight: 600; font-style: normal; src: url('fonts/IBMPlexSansThai-600-thai.woff2') format('woff2'); unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC; }
+@font-face { font-family: 'IBM Plex Sans Thai'; font-weight: 600; font-style: normal; src: url('fonts/IBMPlexSansThai-600-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'IBM Plex Sans Thai'; font-weight: 600; font-style: normal; src: url('fonts/IBMPlexSansThai-600-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Prompt'; font-weight: 500; font-style: normal; src: url('fonts/Prompt-500-thai.woff2') format('woff2'); unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC; }
+@font-face { font-family: 'Prompt'; font-weight: 500; font-style: normal; src: url('fonts/Prompt-500-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Prompt'; font-weight: 500; font-style: normal; src: url('fonts/Prompt-500-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Prompt'; font-weight: 600; font-style: normal; src: url('fonts/Prompt-600-thai.woff2') format('woff2'); unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC; }
+@font-face { font-family: 'Prompt'; font-weight: 600; font-style: normal; src: url('fonts/Prompt-600-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Prompt'; font-weight: 600; font-style: normal; src: url('fonts/Prompt-600-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Prompt'; font-weight: 700; font-style: normal; src: url('fonts/Prompt-700-thai.woff2') format('woff2'); unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC; }
+@font-face { font-family: 'Prompt'; font-weight: 700; font-style: normal; src: url('fonts/Prompt-700-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Prompt'; font-weight: 700; font-style: normal; src: url('fonts/Prompt-700-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+  /* FLORA iCIS · Clinical Calm on a light canvas. Rhythm: hook(fast) – record(HOLD) – devices(fast) – tiers(build) – studio+agent(fast) – end card(hold). */
+  :root {
+    --bg: #f4f8f8; --bg-2: #e1f3f2; --ink: #0d3b3a; --muted: #3f5f5d; --line: #b9d3d1;
+    --teal: #0a7c78; --cyan: #0aa6c4; --blue: #1f6fd1; --magenta: #d62f7c; --lime: #4a9e2a; --card: #ffffff;
+  }
+  body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: "IBM Plex Sans Thai", sans-serif; color: var(--ink); }
+  .scene { position: absolute; inset: 0; width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); }
+  #s2, #s3, #s4, #s5, #s6 { opacity: 0; }
+  .scene-content { position: relative; z-index: 2; width: 100%; height: 100%; box-sizing: border-box; padding: 110px 140px; display: flex; flex-direction: column; gap: 28px; }
+  .display { font-family: "Prompt", sans-serif; font-weight: 600; line-height: 1.15; margin: 0; }
+  .en { font-family: "Prompt", sans-serif; font-weight: 500; color: var(--muted); font-size: 36px; margin: 0; }
+  .eyebrow { font-family: "IBM Plex Mono", monospace; font-size: 24px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--blue); }
+  .glow { position: absolute; border-radius: 50%; filter: blur(60px); z-index: 0; }
+  .ghost { position: absolute; font-family: "Prompt", sans-serif; font-weight: 700; color: var(--teal); opacity: 0.08; z-index: 0; white-space: nowrap; }
+  .rule { height: 6px; border-radius: 6px; background: linear-gradient(90deg, #e2337f, #19c6e6 40%, #8cd43f 70%, #1f5fbf); transform-origin: left center; }
+  .meta { position: absolute; z-index: 3; font-family: "IBM Plex Mono", monospace; font-size: 22px; color: var(--muted); letter-spacing: 0.06em; }
+
+  /* S1 hook */
+  #s1 .scene-content { justify-content: center; }
+  #s1 h1 { font-size: 120px; max-width: 1500px; }
+  .pill { white-space: nowrap; display: inline-flex; align-items: center; gap: 18px; font-family: "IBM Plex Mono", monospace; font-size: 34px; padding: 16px 32px; border-radius: 999px; border: 3px solid var(--teal); color: var(--teal); background: var(--card); align-self: flex-start; }
+  .pill i { width: 22px; height: 22px; border-radius: 50%; background: var(--teal); display: inline-block; }
+  #s1-off { border-color: var(--magenta); color: var(--magenta); position: absolute; left: 0; top: 0; opacity: 0; }
+  #s1-off i { background: var(--magenta); }
+  .pill-wrap { position: relative; align-self: flex-start; }
+
+  /* S2 record */
+  #s2 .scene-content { gap: 22px; }
+  #s2 h2 { font-size: 84px; }
+  .record { background: var(--card); border: 3px solid var(--line); border-radius: 28px; padding: 30px 36px; display: flex; flex-direction: column; gap: 16px; flex: 1; }
+  .record-head { display: flex; justify-content: space-between; font-family: "IBM Plex Mono", monospace; font-size: 26px; color: var(--muted); }
+  #s2-status { font-weight: 500; }
+  .legend { display: flex; gap: 40px; font-family: "IBM Plex Mono", monospace; font-size: 24px; }
+
+  /* S3 devices */
+  #s3 .scene-content { flex-direction: row; align-items: center; gap: 80px; }
+  .col-copy { flex: 0 0 640px; display: flex; flex-direction: column; gap: 26px; }
+  #s3 h2 { font-size: 88px; }
+  .devices { flex: 1; position: relative; height: 760px; }
+  .chip { position: absolute; left: 0; width: 360px; padding: 22px 28px; background: var(--card); border: 3px solid var(--line); border-radius: 20px; font-size: 30px; font-family: "Prompt", sans-serif; font-weight: 500; }
+  .chip small { display: block; font-family: "IBM Plex Mono", monospace; font-size: 20px; color: var(--muted); font-weight: 400; }
+  .hub { position: absolute; right: 0; top: 270px; width: 340px; height: 220px; border-radius: 28px; background: var(--teal); color: #fff; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 6px; }
+  .hub b { font-family: "Prompt", sans-serif; font-size: 58px; font-weight: 600; }
+  .hub span { font-family: "IBM Plex Mono", monospace; font-size: 22px; letter-spacing: 0.08em; }
+  .wire { position: absolute; left: 360px; top: 0; width: 360px; height: 760px; overflow: visible; }
+
+  /* S4 tiers */
+  #s4 h2 { font-size: 84px; }
+  #s4 .scene-content { justify-content: center; }
+  .tiers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; align-items: stretch; margin-top: 30px; }
+  .tier { background: var(--card); border: 3px solid var(--line); border-radius: 26px; padding: 36px 32px; display: flex; flex-direction: column; gap: 14px; position: relative; }
+  .tier .where { font-family: "IBM Plex Mono", monospace; font-size: 22px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--blue); }
+  .tier b { font-family: "Prompt", sans-serif; font-size: 56px; font-weight: 600; color: var(--teal); }
+  .tier p { margin: 0; font-size: 34px; line-height: 1.45; color: var(--muted); }
+  .tier.root { border-style: dashed; }
+  .tagline { font-family: "Prompt", sans-serif; font-size: 40px; font-weight: 500; display: flex; align-items: center; gap: 18px; }
+  .tagline i { width: 16px; height: 16px; background: var(--magenta); border-radius: 50%; display: inline-block; }
+
+  /* S5 studio + agent */
+  #s5 .scene-content { flex-direction: row; gap: 60px; align-items: stretch; }
+  .panel { background: var(--card); border: 3px solid var(--line); border-radius: 28px; padding: 44px; display: flex; flex-direction: column; gap: 26px; flex: 1; min-width: 0; justify-content: center; }
+  .panel h3 { font-family: "Prompt", sans-serif; font-size: 60px; font-weight: 600; margin: 0; color: var(--teal); }
+  .panel .num { font-family: "Prompt", sans-serif; font-size: 40px; color: var(--magenta); font-weight: 600; }
+  .field { border: 3px solid var(--line); border-radius: 14px; padding: 18px 22px; font-size: 30px; display: flex; justify-content: space-between; }
+  .field span { color: var(--muted); font-family: "IBM Plex Mono", monospace; font-size: 22px; align-self: center; }
+  .bubble { align-self: flex-start; background: var(--bg-2); border-radius: 26px 26px 26px 6px; padding: 22px 28px; font-size: 32px; max-width: 640px; }
+  .bars { display: flex; align-items: flex-end; gap: 22px; height: 240px; border-bottom: 3px solid var(--line); padding: 0 10px; }
+  .bar { flex: 1; border-radius: 10px 10px 0 0; transform-origin: bottom center; }
+  .confirm { font-family: "IBM Plex Mono", monospace; font-size: 24px; color: var(--lime); }
+
+  /* S6 end */
+  #s6 .scene-content { align-items: center; justify-content: center; text-align: center; gap: 34px; }
+  #s6 img { width: 1100px; }
+  #s6 h2 { font-size: 72px; }
+  .cta { font-family: "Prompt", sans-serif; font-size: 40px; font-weight: 600; background: var(--teal); color: #fff; padding: 20px 52px; border-radius: 999px; }
+  .contact { font-family: "IBM Plex Mono", monospace; font-size: 30px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-width="1920" data-height="1080" data-start="0" data-duration="42">
+
+  <!-- S1 · hook -->
+  <div id="s1" class="scene">
+    <div class="glow" style="width:900px;height:900px;left:1150px;top:-200px;background:#19c6e6;opacity:0.22"></div>
+    <div class="ghost" style="font-size:420px;left:-40px;bottom:-120px">02:00</div>
+    <div class="meta" style="right:140px;top:60px">OR 3 · 02:00 · ANESTHESIA RECORD</div>
+    <div class="scene-content">
+      <span class="eyebrow" id="s1-eye">FLORA iCIS</span>
+      <h1 class="display" id="s1-title">ตีสอง ห้องผ่าตัด เครือข่ายโรงพยาบาลล่ม</h1>
+      <p class="en" id="s1-en">2 a.m. in the OR. The hospital network goes down.</p>
+      <div class="pill-wrap">
+        <div class="pill" id="s1-on"><i></i>NETWORK · ONLINE</div>
+        <div class="pill" id="s1-off"><i></i>NETWORK · OFFLINE</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S2 · record keeps charting -->
+  <div id="s2" class="scene" data-layout-allow-overflow>
+    <div class="glow" style="width:700px;height:700px;left:-200px;top:500px;background:#8cd43f;opacity:0.18"></div>
+    <div class="meta" style="right:140px;top:60px">LEAF · LOCAL DATABASE</div>
+    <div class="scene-content">
+      <h2 class="display" id="s2-title">FLORA iCIS บันทึกต่อทุกนาที</h2>
+      <p class="en" id="s2-en">FLORA iCIS keeps charting, minute by minute.</p>
+      <div class="record" id="s2-record">
+        <div class="record-head"><span>09:00 → 10:00 · HR · SpO₂ · NIBP</span><span id="s2-status" style="color:#0a7c78">● SYNCED TO CANOPY</span></div>
+        <svg id="s2-chart" viewBox="0 0 1560 420" width="100%" height="420">
+          <g stroke="#dce9e8" stroke-width="2">
+            <line x1="0" y1="70" x2="1560" y2="70"/><line x1="0" y1="170" x2="1560" y2="170"/><line x1="0" y1="270" x2="1560" y2="270"/><line x1="0" y1="370" x2="1560" y2="370"/>
+          </g>
+          <rect id="s2-band" x="900" y="0" width="360" height="420" fill="#d62f7c" opacity="0.14"/>
+          <text id="s2-band-label" x="1080" y="404" text-anchor="middle" font-family="IBM Plex Mono" font-size="24" fill="#d62f7c">OFFLINE · RECORDING LOCALLY</text>
+          <path id="s2-hr" fill="none" stroke="#4a9e2a" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+          <path id="s2-spo2" fill="none" stroke="#0aa6c4" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div class="legend"><span style="color:#4a9e2a">━ HR</span><span style="color:#08889f">━ SpO₂</span><span style="color:#d62f7c">▮ offline</span><span style="color:#3f5f5d">simulated data</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S3 · devices -->
+  <div id="s3" class="scene" data-layout-allow-overflow>
+    <div class="glow" style="width:800px;height:800px;left:1100px;top:300px;background:#0aa6c4;opacity:0.18"></div>
+    <div class="ghost" style="font-size:300px;right:-60px;top:-60px">TENDRIL</div>
+    <div class="scene-content">
+      <div class="col-copy">
+        <span class="eyebrow" id="s3-eye">Flora Tendril · Medical Device Gateway</span>
+        <h2 class="display" id="s3-title">ใช้เครื่องมือแพทย์ที่มีอยู่แล้ว</h2>
+        <p class="en" id="s3-en">Use the devices you already own. RS-232 · TCP · UDP · HL7 v2.</p>
+        <div class="rule" id="s3-rule" style="width:420px"></div>
+      </div>
+      <div class="devices">
+        <svg class="wire" viewBox="0 0 360 760" id="s3-wires">
+          <path d="M0 70 C180 70 180 380 360 380" fill="none" stroke="#0a7c78" stroke-width="4"/>
+          <path d="M0 260 C180 260 180 380 360 380" fill="none" stroke="#0a7c78" stroke-width="4"/>
+          <path d="M0 450 C180 450 180 380 360 380" fill="none" stroke="#0a7c78" stroke-width="4"/>
+          <path d="M0 640 C180 640 180 380 360 380" fill="none" stroke="#0a7c78" stroke-width="4"/>
+        </svg>
+        <div class="chip" id="s3-c1" style="top:20px">GE HealthCare<small>Carestation · CARESCAPE</small></div>
+        <div class="chip" id="s3-c2" style="top:210px">Dräger<small>Primus · Evita · Infinity</small></div>
+        <div class="chip" id="s3-c3" style="top:400px">B. Braun<small>Space · SpaceCom</small></div>
+        <div class="chip" id="s3-c4" style="top:590px">HL7 v2<small>central stations</small></div>
+        <div class="hub" id="s3-hub"><b>Tendril</b><span>→ LEAF</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S4 · tiers -->
+  <div id="s4" class="scene">
+    <div class="glow" style="width:900px;height:900px;left:-300px;top:-300px;background:#19c6e6;opacity:0.16"></div>
+    <div class="meta" style="right:140px;top:60px">TENDRIL → LEAF → CANOPY ⇢ ROOT</div>
+    <div class="scene-content">
+      <h2 class="display" id="s4-title">หนึ่งแพลตฟอร์ม สี่ส่วนที่เติบโตร่วมกัน</h2>
+      <p class="en" id="s4-en">One platform, four parts that grow together.</p>
+      <div class="tiers">
+        <div class="tier" id="s4-t1"><span class="where">At the device</span><b>Tendril</b><p>รับค่าจากเครื่องมือแพทย์ทุกนาที</p></div>
+        <div class="tier" id="s4-t2"><span class="where">At the bedside</span><b>Leaf</b><p>บันทึกวิสัญญีและ ICU ทำงานได้แม้ออฟไลน์</p></div>
+        <div class="tier" id="s4-t3"><span class="where">In the hospital</span><b>Canopy</b><p>ทุกห้อง ทุกเตียง รายงาน และ HIS</p></div>
+        <div class="tier root" id="s4-t4"><span class="where">Cloud</span><b>Root</b><p>ไลเซนส์และอัปเดตที่ลงลายเซ็น</p></div>
+      </div>
+      <div class="tagline" id="s4-tag"><i></i>ข้อมูลผู้ป่วยอยู่ในโรงพยาบาล · Patient data stays in your hospital</div>
+    </div>
+  </div>
+
+  <!-- S5 · customization + agent -->
+  <div id="s5" class="scene">
+    <div class="glow" style="width:800px;height:800px;left:600px;top:500px;background:#d62f7c;opacity:0.12"></div>
+    <div class="scene-content">
+      <div class="panel" id="s5-p1">
+        <span class="num">02 · Customization</span>
+        <h3>แก้ฟอร์มเองได้</h3>
+        <p class="en" style="font-size:30px">Your team edits Thai forms and reports.</p>
+        <div class="field" id="s5-f1">Airway · Mallampati<span>CHOICE</span></div>
+        <div class="field" id="s5-f2">Blood loss<span>ml</span></div>
+        <div class="field" id="s5-f3">Aldrete score<span>/10</span></div>
+      </div>
+      <div class="panel" id="s5-p2">
+        <span class="num">03 · The Agent</span>
+        <h3>ถามเป็นภาษาคน</h3>
+        <div class="bubble" id="s5-q">ช่วยสรุปจำนวนเคสรายเดือน แยกตาม ASA</div>
+        <div class="bars" id="s5-bars">
+          <div class="bar" style="height:46%;background:#0a7c78"></div>
+          <div class="bar" style="height:62%;background:#0aa6c4"></div>
+          <div class="bar" style="height:55%;background:#1f6fd1"></div>
+          <div class="bar" style="height:78%;background:#0a7c78"></div>
+          <div class="bar" style="height:70%;background:#0aa6c4"></div>
+          <div class="bar" style="height:88%;background:#1f6fd1"></div>
+        </div>
+        <span class="confirm" id="s5-ok">✓ ทีมยืนยันก่อนบันทึก · staff confirm before saving</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- S6 · end card -->
+  <div id="s6" class="scene">
+    <div class="glow" style="width:1200px;height:900px;left:360px;top:100px;background:#19c6e6;opacity:0.14"></div>
+    <div class="scene-content">
+      <img src="flora-icis-logo.png" alt="FLORA iCIS" id="s6-logo" />
+      <h2 class="display" id="s6-title">เริ่มจาก POC หนึ่งห้อง กับเครื่องจริงของคุณ</h2>
+      <div class="cta" id="s6-cta">นัดเดโม · Book a demo</div>
+      <div class="contact" id="s6-contact">sales@esm-solution.com · esm-solution.com · E.S.M. Solution Co., Ltd.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  window.__timelines = window.__timelines || {};
+  var tl = gsap.timeline({ paused: true });
+
+  // chart paths (deterministic)
+  (function () {
+    var hr = "", sp = "";
+    for (var i = 0; i <= 60; i++) {
+      var x = i * 26, t = i / 9;
+      var h = 74 + 8 * Math.sin(t) + 3 * Math.sin(i * 1.7);
+      var s = 98 + Math.sin(i * 0.9);
+      var yh = 420 - (h - 40) / 160 * 420;
+      var ys = 420 - (40 + s * 1.5 - 40) / 160 * 420;
+      hr += (i ? "L" : "M") + x + " " + yh.toFixed(1);
+      sp += (i ? "L" : "M") + x + " " + ys.toFixed(1);
+    }
+    document.getElementById("s2-hr").setAttribute("d", hr);
+    document.getElementById("s2-spo2").setAttribute("d", sp);
+    ["s2-hr", "s2-spo2"].forEach(function (id) {
+      var p = document.getElementById(id), L = p.getTotalLength();
+      p.style.strokeDasharray = L; p.style.strokeDashoffset = L;
+    });
+  })();
+
+  // ---------- S1 hook (0–5) ----------
+  tl.from("#s1-eye", { y: -30, opacity: 0, duration: 0.5, ease: "power2.out" }, 0.2);
+  tl.from("#s1-title", { y: 70, opacity: 0, duration: 0.8, ease: "expo.out" }, 0.35);
+  tl.from("#s1-en", { x: -40, opacity: 0, duration: 0.6, ease: "power3.out" }, 0.8);
+  tl.from("#s1-on", { scale: 0.85, opacity: 0, duration: 0.5, ease: "back.out(2)" }, 1.2);
+  tl.to("#s1-on", { opacity: 0, duration: 0.15, ease: "none" }, 2.6);
+  tl.to("#s1-off", { opacity: 1, duration: 0.15, ease: "none" }, 2.6);
+  tl.fromTo("#s1-off", { x: 0 }, { x: 10, duration: 0.06, repeat: 5, yoyo: true, ease: "none" }, 2.75);
+
+  // T1 4.6 blur crossfade → S2
+  tl.to("#s1", { filter: "blur(10px)", scale: 1.03, opacity: 0, duration: 0.5, ease: "power2.inOut" }, 4.6);
+  tl.fromTo("#s2", { filter: "blur(10px)", scale: 0.97, opacity: 0 }, { filter: "blur(0px)", scale: 1, opacity: 1, duration: 0.5, ease: "power2.inOut" }, 4.7);
+
+  // ---------- S2 record (5–12) ----------
+  tl.from("#s2-title", { y: 50, opacity: 0, duration: 0.6, ease: "power3.out" }, 5.0);
+  tl.from("#s2-en", { y: 24, opacity: 0, duration: 0.5, ease: "power2.out" }, 5.3);
+  tl.from("#s2-record", { y: 60, opacity: 0, duration: 0.7, ease: "expo.out" }, 5.4);
+  tl.to(["#s2-hr", "#s2-spo2"], { strokeDashoffset: 0, duration: 5.2, ease: "none" }, 5.8);
+  tl.from("#s2-band", { scaleX: 0, transformOrigin: "left center", duration: 1.2, ease: "none" }, 8.8);
+  tl.from("#s2-band-label", { opacity: 0, duration: 0.3, ease: "power1.out" }, 8.9);
+  tl.set("#s2-status", { textContent: "● OFFLINE · RECORDING LOCALLY", color: "#d62f7c" }, 8.9);
+  tl.set("#s2-status", { textContent: "● BACK ONLINE · SYNCED TO CANOPY", color: "#0a7c78" }, 10.3);
+  tl.fromTo("#s2-status", { scale: 1.12 }, { scale: 1, duration: 0.4, ease: "back.out(2)" }, 10.3);
+
+  // T2 11.6 push slide → S3
+  tl.to("#s2", { x: -1920, duration: 0.6, ease: "power3.inOut" }, 11.6);
+  tl.fromTo("#s3", { x: 1920, opacity: 1 }, { x: 0, duration: 0.6, ease: "power3.inOut" }, 11.6);
+
+  // ---------- S3 devices (12–20) ----------
+  tl.from("#s3-eye", { opacity: 0, x: -30, duration: 0.5, ease: "power2.out" }, 12.3);
+  tl.from("#s3-title", { y: 60, opacity: 0, duration: 0.7, ease: "expo.out" }, 12.45);
+  tl.from("#s3-en", { opacity: 0, duration: 0.6, ease: "sine.out" }, 12.9);
+  tl.from("#s3-rule", { scaleX: 0, duration: 0.8, ease: "power4.out" }, 13.1);
+  tl.from(["#s3-c1", "#s3-c2", "#s3-c3", "#s3-c4"], { x: -80, opacity: 0, duration: 0.5, ease: "back.out(1.6)", stagger: 0.18 }, 13.4);
+  tl.from("#s3-wires path", { opacity: 0, duration: 0.4, ease: "power1.out", stagger: 0.15 }, 14.2);
+  tl.from("#s3-hub", { scale: 0.6, opacity: 0, duration: 0.6, ease: "elastic.out(1, 0.6)" }, 14.9);
+  tl.fromTo("#s3-hub", { boxShadow: "0 0 0 0 rgba(10,124,120,0.45)" }, { boxShadow: "0 0 0 40px rgba(10,124,120,0)", duration: 1.2, ease: "power1.out", repeat: 2 }, 15.6);
+
+  // T3 19.4 vertical push → S4
+  tl.to("#s3", { y: -1080, duration: 0.6, ease: "power3.inOut" }, 19.4);
+  tl.fromTo("#s4", { y: 1080, opacity: 1 }, { y: 0, duration: 0.6, ease: "power3.inOut" }, 19.4);
+
+  // ---------- S4 tiers (20–28) ----------
+  tl.from("#s4-title", { y: 50, opacity: 0, duration: 0.7, ease: "power3.out" }, 20.1);
+  tl.from("#s4-en", { opacity: 0, duration: 0.5, ease: "sine.out" }, 20.5);
+  tl.from("#s4-t1", { y: 120, opacity: 0, duration: 0.6, ease: "expo.out" }, 21.0);
+  tl.from("#s4-t2", { y: 120, opacity: 0, duration: 0.6, ease: "expo.out" }, 21.6);
+  tl.from("#s4-t3", { y: 120, opacity: 0, duration: 0.6, ease: "expo.out" }, 22.2);
+  tl.from("#s4-t4", { y: -80, opacity: 0, duration: 0.7, ease: "back.out(1.4)" }, 22.9);
+  tl.from("#s4-tag", { x: -60, opacity: 0, duration: 0.6, ease: "power2.out" }, 24.0);
+
+  // T4 27.4 blur crossfade → S5
+  tl.to("#s4", { filter: "blur(10px)", scale: 1.03, opacity: 0, duration: 0.5, ease: "power2.inOut" }, 27.4);
+  tl.fromTo("#s5", { filter: "blur(10px)", scale: 0.97, opacity: 0 }, { filter: "blur(0px)", scale: 1, opacity: 1, duration: 0.5, ease: "power2.inOut" }, 27.5);
+
+  // ---------- S5 studio + agent (28–35) ----------
+  tl.from("#s5-p1", { x: -100, opacity: 0, duration: 0.7, ease: "expo.out" }, 27.9);
+  tl.from(["#s5-f1", "#s5-f2", "#s5-f3"], { x: -40, opacity: 0, duration: 0.4, ease: "power3.out", stagger: 0.25 }, 28.6);
+  tl.from("#s5-p2", { x: 100, opacity: 0, duration: 0.7, ease: "expo.out" }, 29.4);
+  tl.from("#s5-q", { scale: 0.8, opacity: 0, transformOrigin: "left bottom", duration: 0.5, ease: "back.out(2)" }, 30.2);
+  tl.from("#s5-bars .bar", { scaleY: 0, duration: 0.6, ease: "power2.out", stagger: 0.1 }, 31.0);
+  tl.from("#s5-ok", { opacity: 0, y: 16, duration: 0.5, ease: "sine.out" }, 32.4);
+
+  // T5 34.4 crossfade → S6
+  tl.to("#s5", { opacity: 0, duration: 0.6, ease: "power2.inOut" }, 34.4);
+  tl.fromTo("#s6", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power2.inOut" }, 34.4);
+
+  // ---------- S6 end card (35–42) ----------
+  tl.from("#s6-logo", { scale: 0.9, opacity: 0, duration: 0.9, ease: "expo.out" }, 34.8);
+  tl.from("#s6-title", { y: 40, opacity: 0, duration: 0.6, ease: "power3.out" }, 35.6);
+  tl.from("#s6-cta", { scale: 0.8, opacity: 0, duration: 0.5, ease: "back.out(2)" }, 36.2);
+  tl.from("#s6-contact", { opacity: 0, duration: 0.6, ease: "sine.out" }, 36.7);
+  tl.to("#s6 .scene-content", { opacity: 0, duration: 0.8, ease: "power1.in" }, 41.0);
+
+  window.__timelines["main"] = tl;
+</script>
+</body>
+</html>

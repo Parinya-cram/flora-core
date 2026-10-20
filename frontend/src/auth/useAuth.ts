@@ -8,6 +8,7 @@ import {
   readStoredAuthToken,
   writeStoredAuthToken,
 } from "../api/authApi";
+import { writeAccountCookie, writeSessionAccount } from "../api/accountApi";
 
 export type AuthUser = AuthApiUser;
 
@@ -45,8 +46,11 @@ export function useAuth() {
     return () => window.removeEventListener("flora:auth-changed", refreshStoredUser);
   }, []);
 
-  const login = useCallback(async (username: string, password: string) => {
-    const session = await loginWithPassword(username, password);
+  const login = useCallback(async (username: string, password: string, accountCode?: string) => {
+    const session = await loginWithPassword(username, password, accountCode);
+    // Canopy remembers the account for the next sign-in; the session token carries it from now on.
+    if (session.account) writeAccountCookie(session.account.code);
+    writeSessionAccount(session.account ?? null);
 
     writeStoredAuthToken(session.sessionToken);
     localStorage.setItem("flora_user", JSON.stringify(session.user));
@@ -61,6 +65,7 @@ export function useAuth() {
     });
     clearStoredAuthToken();
     localStorage.removeItem("flora_user");
+    writeSessionAccount(null);
     window.dispatchEvent(new Event("flora:auth-changed"));
     setUser(null);
   }, []);

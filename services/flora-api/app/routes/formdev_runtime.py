@@ -14,13 +14,14 @@ import tempfile
 import threading
 import time
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from typing import Any, Callable
 
 from fastapi import HTTPException, Request
 from psycopg import Connection
 from psycopg_pool import PoolTimeout
 
+from .. import tenancy
 from ..database import job_pool, pool
 from ..formdev.logic import permission
 from ..formdev import FormDevServices, services_for
@@ -186,12 +187,29 @@ def write_guard(services: FormDevServices, principal: Principal, access: RecordA
 
 
 # Background work ---------------------------------------------------------------------------------
+_next_account = 0
+
+
+def _poll_account():
+    """Multi-account Canopy: each worker poll serves the next account in turn, so every
+    account's jobs run against (and only against) that account's schema."""
+    global _next_account
+    accounts = tenancy.accounts() if tenancy.MULTI_ACCOUNT else []
+    if not accounts:
+        return None
+    _next_account = (_next_account + 1) % len(accounts)
+    return accounts[_next_account]
+
+
 @contextmanager
 def _job_services() -> Iterator[FormDevServices]:
     if STORAGE.startswith(("sqlite:", "json:", "mysql://")):
         yield services_on(sqlite_adapter())
         return
-    with job_pool.connection(timeout=10) as connection:
+    account = tenancy.current_account() or _poll_account()
+    if tenancy.MULTI_ACCOUNT and account is None:
+        raise RuntimeError("no active account")
+    with (tenancy.using(account) if account else nullcontext()), job_pool.connection(timeout=10) as connection:
         yield services_on(PostgreSQLAdapter(connection))
 
 
@@ -211,9 +229,18 @@ def _flush_loop() -> None:
 
 def flush_stats() -> None:
     def write(rows: list[dict[str, Any]]) -> None:
-        with _job_services() as services:
-            with services.adapter.transaction():
-                services.adapter.flush_query_stats(rows)
+        # Statistics are collected in memory for all accounts: each row carries the account of the
+        # request that ran the query and is written to that account only.
+        by_account: dict[str, list[dict[str, Any]]] = {}
+        for row in rows:
+            by_account.setdefault(row.pop("_account", None) or "", []).append(row)
+        for code, part in by_account.items():
+            account = tenancy.by_code(code) if code else None
+            if tenancy.MULTI_ACCOUNT and account is None:
+                continue
+            with (tenancy.using(account) if account else nullcontext()), _job_services() as services:
+                with services.adapter.transaction():
+                    services.adapter.flush_query_stats(part)
 
     runtime().stats.flush(write)
 

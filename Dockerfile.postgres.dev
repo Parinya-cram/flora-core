@@ -64,6 +64,8 @@ COPY infrastructure/postgres/0081-billing-templates.sql /docker-entrypoint-initd
 COPY infrastructure/postgres/0082-device-management.sql /docker-entrypoint-initdb.d/0082-device-management.sql
 COPY infrastructure/postgres/0083-location-zone.sql /docker-entrypoint-initdb.d/0083-location-zone.sql
 COPY infrastructure/postgres/0086-leaf-beds-device-bed.sql /docker-entrypoint-initdb.d/0086-leaf-beds-device-bed.sql
+COPY infrastructure/postgres/0088-digital-twin.sql /docker-entrypoint-initdb.d/0088-digital-twin.sql
+COPY infrastructure/postgres/0089-or-schedule.sql /docker-entrypoint-initdb.d/0089-or-schedule.sql
 COPY infrastructure/postgres/0084-scoring.sql /docker-entrypoint-initdb.d/0084-scoring.sql
 COPY infrastructure/postgres/0085-staff-sync.sql /docker-entrypoint-initdb.d/0085-staff-sync.sql
 COPY infrastructure/postgres/0087-formdev-template.sql /docker-entrypoint-initdb.d/0087-formdev-template.sql

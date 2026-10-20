@@ -1,0 +1,26 @@
+# Demo only: run several lean Leaf stacks (leaf-db, leaf-api, leaf-sync) on ONE docker network
+# (flora-demo-leaves) instead of one network each, for machines whose docker address pool is full.
+# On a shared network the service names (leaf-db, leaf-api) would resolve to every project, so each
+# service also gets a name prefixed with its Leaf id and the stack refers to those names only.
+#   docker network create flora-demo-leaves   (once; demo/workstations.sh does it)
+#   docker compose -f flora-leaf/compose.yaml -f flora-leaf/compose.demo-shared.yaml -p flora-<leaf> \
+#     --env-file flora-leaf/env/<leaf>.env up -d leaf-db leaf-api leaf-sync
+services:
+  leaf-db:
+    networks:
+      default:
+        aliases: ["${FLORA_LEAF_ID}-db"]
+  leaf-api:
+    environment:
+      FLORA_DATABASE_URL: postgresql://flora_app:${LEAF_DB_APP_PASSWORD:-flora-leaf-app-local-only}@${FLORA_LEAF_ID}-db:5432/flora
+      FLORA_STT_URL: http://${FLORA_LEAF_ID}-stt:8000
+    networks:
+      default:
+        aliases: ["${FLORA_LEAF_ID}-api"]
+  leaf-sync:
+    environment:
+      FLORA_LEAF_API_URL: http://${FLORA_LEAF_ID}-api:8000
+networks:
+  default:
+    name: flora-demo-leaves
+    external: true

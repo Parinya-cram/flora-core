@@ -209,6 +209,8 @@ class HandoverClaim(BaseModel):
     global_case_id: str
     move_devices: bool = False
     actor: str | None = None
+    # OR ward: a recovery bed's Leaf moving in a case that moved out of the OR room.
+    admission_id: str | None = None
 
 
 @router.post("/handover/claim")
@@ -222,13 +224,19 @@ def claim_handover(payload: HandoverClaim, database: Connection = Depends(connec
                 raise HTTPException(404, "case not known to Canopy")
             if index["leaf_id"] == payload.leaf_id:
                 raise HTTPException(409, "this Leaf already owns the case")
-            if index["status"] != "ACTIVE":
+            if index["status"] != "ACTIVE" and not payload.admission_id:
                 raise HTTPException(409, f"only an active case can be taken over (status {index['status']})")
             export = database.execute(
                 "SELECT export, revision FROM canopy_case_export WHERE global_case_id::text=%s",
                 (payload.global_case_id,)).fetchone()
             if export is None:
                 raise HTTPException(409, "Canopy has no complete copy of this case yet; wait for the Leaf to sync")
+            if payload.admission_id:
+                from .. import or_sessions
+                try:
+                    or_sessions.recovery_claim(database, payload.admission_id, payload.leaf_id, index, export["export"])
+                except ValueError as error:
+                    raise HTTPException(409, str(error)) from None
             moved = move_devices(database, index["leaf_id"], payload.leaf_id,
                                  f"handover {index['leaf_id']} -> {payload.leaf_id}") if payload.move_devices else []
             handover = database.execute(
@@ -270,6 +278,8 @@ def handover_cancel(handover_id: int, payload: HandoverResult, database: Connect
                              (row["global_case_id"],))
             if row["move_devices"]:
                 move_devices(database, row["to_leaf_id"], row["from_leaf_id"], f"handover {handover_id} cancelled")
+            from .. import or_sessions
+            or_sessions.recovery_cancel(database, row)
     return {"ok": True, "cancelled": bool(row)}
 
 

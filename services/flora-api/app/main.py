@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 import os
 
@@ -8,6 +9,8 @@ from psycopg import Connection
 
 from .bootstrap_admin import ensure_bootstrap_admin
 from .database import close_pool, connection, open_pool, pool
+from . import tenancy
+from .account_middleware import AccountMiddleware
 from .device_writer import device_writer
 from .routes.cases_read import router as cases_read_router
 from .routes.auth_canopy import router as canopy_auth_router
@@ -38,6 +41,8 @@ from .routes.billing_templates import router as billing_templates_router
 from .routes.scores_canopy import router as scores_canopy_router
 from .routes.scores_leaf import router as scores_leaf_router
 from .routes.staff_canopy import router as staff_canopy_router
+from .routes.or_schedule import router as or_schedule_router
+from .routes.or_leaf import router as or_leaf_router
 from .routes.staff_sync_leaf import router as staff_sync_leaf_router
 from .score_writer import score_writer
 from .routes.canopy_admissions import router as canopy_admissions_router
@@ -52,6 +57,8 @@ from .routes.gateway_alerts import fleet_router as gateway_alerts_fleet_router, 
 from .routes.device_management import (control_router as device_control_router, fleet_router as device_fleet_router,
                                        sync_router as device_sync_router)
 from .routes.topology_physical import router as topology_physical_router
+from .routes.digital_twin import control_router as twin_control_router, router as twin_router
+from .routes.platform import router as platform_router
 from .routes.workstation import router as workstation_router
 from .routes.terminology import router as terminology_router
 from .routes.formdev import router as formdev_router
@@ -67,9 +74,18 @@ from .formdev.errors import FormDevError
 async def lifespan(_: FastAPI):
     open_pool()
     api_mode = os.getenv("FLORA_API_MODE", "leaf").strip().lower()
-    if api_mode in {"leaf", "canopy"}:
+    if api_mode == "leaf":
         with pool.connection() as database:
             ensure_bootstrap_admin(database)
+    elif api_mode == "canopy":
+        # Multi-account Canopy: each account's schema gets its first administrator at creation;
+        # this only covers accounts whose schema was set up without one.
+        try:
+            for account in tenancy.accounts():
+                with tenancy.using(account), pool.connection() as database:
+                    ensure_bootstrap_admin(database)
+        except Exception:  # noqa: BLE001 - no account registry yet (before adopt-public)
+            logging.getLogger("flora.accounts").warning("account registry unavailable at start-up", exc_info=True)
     if api_mode == "leaf":
         device_writer.start()
         score_writer.start()
@@ -105,6 +121,7 @@ if API_MODE == "leaf" and os.getenv("FLORA_LEAF_WRITE_API", "false").lower() == 
     app.include_router(billing_leaf_router)
     app.include_router(scores_leaf_router)
     app.include_router(staff_sync_leaf_router)  # before catalog_write's /staff/* routes
+    app.include_router(or_leaf_router)
     app.include_router(case_workflow_router)
     app.include_router(cases_lifecycle_router)
     app.include_router(clinical_write_router)
@@ -121,6 +138,7 @@ if API_MODE == "canopy":
     app.include_router(canopy_preferences_router)
     app.include_router(canopy_users_router)
     app.include_router(build_ai_settings_router())
+    app.include_router(or_schedule_router)  # before admissions: /admissions/or/* is not an admission id
     app.include_router(canopy_admissions_router)
     app.include_router(hl7_webhook_router)
     app.include_router(hl7_admin_router)
@@ -131,6 +149,9 @@ if API_MODE == "canopy":
     app.include_router(device_fleet_router)
     app.include_router(device_control_router)
     app.include_router(topology_physical_router)
+    app.include_router(twin_router)
+    app.include_router(platform_router)
+    app.include_router(twin_control_router)
     app.include_router(fleet_control_router)
     app.include_router(device_distribution_router)
     app.include_router(legacy_archive_router)
@@ -170,6 +191,8 @@ async def enforce_canopy_read_only(request: Request, call_next):
         formdev_write = formdev_write or request.url.path.startswith("/api/ai-studio/")
         # Device Distribution console: image rollout / registry settings / device adopt (admin, via Haber).
         formdev_write = formdev_write or request.url.path.startswith("/api/fleet/distribution")
+        # Platform console (account management; platform administrators only).
+        formdev_write = formdev_write or request.url.path.startswith("/api/platform/")
         if request.url.path not in {"/api/auth/login", "/api/auth/logout"} and not request.url.path.startswith("/api/fleet/control") and not canopy_preference_write and not report_generation and not formdev_write:
             return JSONResponse(
                 status_code=403,
@@ -217,3 +240,7 @@ async def formdev_error(_: Request, error: FormDevError) -> JSONResponse:
 def health(database: Connection = Depends(connection)) -> dict:
     database.execute("SELECT 1").fetchone()
     return {"status": "OK", "data_ready": True, "data_mode": "local" if API_MODE == "leaf" else "server", "api_mode": API_MODE}
+
+
+# Outermost: every canopy / sync request runs as its account (tenant); see app/account_middleware.py.
+app.add_middleware(AccountMiddleware)

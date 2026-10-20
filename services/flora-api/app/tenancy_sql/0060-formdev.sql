@@ -1,0 +1,176 @@
+-- FormDev data engine (Phase 3): form definitions, versioned schemas, hybrid records,
+-- record index, sync receipts, conflicts, assets and the style/font registry.
+-- Mirrors services/flora-api/app/formdev/adapters/sqlite_schema.sql.
+-- Registry seed rows are generated from formdev/registry/*.json (scripts/sync_registry_seed.py).
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS formdev_form (
+  form_id text PRIMARY KEY CHECK (form_id ~ '^[a-z][a-z0-9_]{1,63}$'),
+  title text NOT NULL,
+  latest_version integer NOT NULL DEFAULT 0,
+  published_version integer,
+  created_at bigint NOT NULL,
+  created_by text NOT NULL,
+  updated_at bigint NOT NULL,
+  updated_by text NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS formdev_schema_version (
+  form_id text NOT NULL REFERENCES formdev_form(form_id),
+  schema_version integer NOT NULL CHECK (schema_version > 0),
+  status text NOT NULL CHECK (status IN ('draft','published','archived')),
+  definition jsonb NOT NULL,
+  checksum text NOT NULL,
+  created_at bigint NOT NULL,
+  created_by text NOT NULL,
+  published_at bigint,
+  published_by text,
+  PRIMARY KEY (form_id, schema_version)
+);
+
+CREATE OR REPLACE FUNCTION formdev_guard_published_version() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF OLD.status IN ('published','archived') THEN
+    IF TG_OP = 'DELETE' OR NEW.definition IS DISTINCT FROM OLD.definition
+       OR NEW.checksum IS DISTINCT FROM OLD.checksum OR NEW.status = 'draft' THEN
+      RAISE EXCEPTION 'published form versions are immutable' USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+  RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END $$;
+
+DROP TRIGGER IF EXISTS formdev_schema_version_immutable ON formdev_schema_version;
+CREATE TRIGGER formdev_schema_version_immutable
+BEFORE UPDATE OR DELETE ON formdev_schema_version
+FOR EACH ROW EXECUTE FUNCTION formdev_guard_published_version();
+
+CREATE TABLE IF NOT EXISTS formdev_record (
+  record_id text PRIMARY KEY CHECK (length(record_id) BETWEEN 8 AND 64),
+  form_id text NOT NULL,
+  schema_version integer NOT NULL,
+  status text NOT NULL CHECK (status IN ('draft','submitted','deleted')),
+  data jsonb NOT NULL,
+  created_at bigint NOT NULL,
+  created_by text NOT NULL,
+  updated_at bigint NOT NULL,
+  updated_by text NOT NULL,
+  sync_id text,
+  version integer NOT NULL CHECK (version > 0),
+  FOREIGN KEY (form_id, schema_version) REFERENCES formdev_schema_version(form_id, schema_version)
+);
+CREATE INDEX IF NOT EXISTS formdev_record_recent ON formdev_record(form_id, updated_at DESC, record_id DESC);
+CREATE INDEX IF NOT EXISTS formdev_record_status_recent ON formdev_record(form_id, status, updated_at DESC, record_id DESC);
+
+CREATE TABLE IF NOT EXISTS formdev_record_revision (
+  record_id text NOT NULL REFERENCES formdev_record(record_id) ON DELETE CASCADE,
+  version integer NOT NULL,
+  schema_version integer NOT NULL,
+  status text NOT NULL,
+  data jsonb NOT NULL,
+  updated_at bigint NOT NULL,
+  updated_by text NOT NULL,
+  sync_id text,
+  PRIMARY KEY (record_id, version)
+);
+
+CREATE TABLE IF NOT EXISTS formdev_record_index (
+  record_id text NOT NULL REFERENCES formdev_record(record_id) ON DELETE CASCADE,
+  form_id text NOT NULL,
+  field_id text NOT NULL,
+  value_text text COLLATE "C",
+  value_num double precision,
+  PRIMARY KEY (record_id, field_id)
+);
+-- C collation: byte order keeps ISO dates sortable and lets one B-tree serve =, ranges and LIKE prefix.
+CREATE INDEX IF NOT EXISTS formdev_record_index_text ON formdev_record_index(form_id, field_id, value_text);
+CREATE INDEX IF NOT EXISTS formdev_record_index_num ON formdev_record_index(form_id, field_id, value_num);
+
+CREATE TABLE IF NOT EXISTS formdev_sync_receipt (
+  op_id text PRIMARY KEY,
+  record_id text NOT NULL,
+  result jsonb NOT NULL,
+  processed_at bigint NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS formdev_conflict (
+  conflict_id text PRIMARY KEY,
+  seq bigint GENERATED ALWAYS AS IDENTITY UNIQUE,
+  record_id text NOT NULL,
+  op_id text NOT NULL,
+  strategy text NOT NULL,
+  resolution text NOT NULL CHECK (resolution IN ('local_wins','remote_wins')),
+  base_version integer NOT NULL,
+  server_version integer NOT NULL,
+  local_data jsonb,
+  server_data jsonb,
+  created_at bigint NOT NULL
+);
+CREATE INDEX IF NOT EXISTS formdev_conflict_record ON formdev_conflict(record_id, created_at);
+
+CREATE TABLE IF NOT EXISTS formdev_asset (
+  form_id text NOT NULL REFERENCES formdev_form(form_id),
+  path text NOT NULL,
+  media_type text NOT NULL,
+  sha256 text NOT NULL,
+  size integer NOT NULL,
+  content_b64 text NOT NULL,
+  created_at bigint NOT NULL,
+  PRIMARY KEY (form_id, path)
+);
+
+CREATE TABLE IF NOT EXISTS formdev_style (
+  style_id text PRIMARY KEY,
+  version integer NOT NULL,
+  definition jsonb NOT NULL,
+  updated_at bigint NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS formdev_font (
+  font_id text PRIMARY KEY,
+  metadata jsonb NOT NULL,
+  updated_at bigint NOT NULL
+);
+
+-- BEGIN registry seed (generated by formdev/scripts/sync_registry_seed.py)
+INSERT INTO formdev_font (font_id, metadata, updated_at) VALUES
+  ('noto-sans-thai', '{"family":"Noto Sans Thai Variable","display_name":"Noto Sans Thai","category":"ui","official":false,"scripts":["thai","latin"],"weights":[100,900],"styles":["normal"],"license":"OFL-1.1","license_verified":true,"assets":[{"kind":"bundled","package":"@fontsource-variable/noto-sans-thai","installed":true}],"fallback":["Noto Sans Thai Variable","Noto Sans Thai","Tahoma","sans-serif"]}'::jsonb, 0),
+  ('inter', '{"family":"Inter Variable","display_name":"Inter","category":"ui","official":false,"scripts":["latin"],"weights":[100,900],"styles":["normal"],"license":"OFL-1.1","license_verified":true,"assets":[{"kind":"bundled","package":"@fontsource-variable/inter","installed":true}],"fallback":["Inter Variable","Inter","system-ui","sans-serif"]}'::jsonb, 0),
+  ('th-sarabun-new', '{"family":"TH Sarabun New","display_name":"TH Sarabun New","category":"official-th","official":true,"scripts":["thai","latin"],"weights":[400,700],"styles":["normal","italic"],"license":"Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.","license_verified":false,"note":"TH Sarabun New (2011 update of TH SarabunPSK) is the font named for Thai government documents; it is the +1 beside the 13 national fonts.","assets":[{"kind":"system","family":"TH Sarabun New","note":"Use the copy installed on the workstation (no file is shipped)"},{"kind":"web_alternative","family":"Sarabun","package":"@fontsource/sarabun","license":"OFL-1.1","installed":false,"note":"Open-licence redesign of the same typeface; not installed (no packages are downloaded)"}],"fallback":["TH Sarabun New","Sarabun","Noto Sans Thai Variable","Noto Sans Thai","Tahoma","sans-serif"]}'::jsonb, 0),
+  ('th-sarabun-psk', '{"family":"TH SarabunPSK","display_name":"TH SarabunPSK","category":"official-th","official":true,"scripts":["thai","latin"],"weights":[400,700],"styles":["normal","italic"],"license":"Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.","license_verified":false,"assets":[{"kind":"system","family":"TH SarabunPSK","note":"Use the copy installed on the workstation (no file is shipped)"},{"kind":"web_alternative","family":"Sarabun","package":"@fontsource/sarabun","license":"OFL-1.1","installed":false,"note":"Open-licence redesign of the same typeface; not installed (no packages are downloaded)"}],"fallback":["TH SarabunPSK","Sarabun","Noto Sans Thai Variable","Noto Sans Thai","Tahoma","sans-serif"]}'::jsonb, 0),
+  ('th-chakra-petch', '{"family":"TH Chakra Petch","display_name":"TH Chakra Petch","category":"official-th","official":true,"scripts":["thai","latin"],"weights":[400,700],"styles":["normal","italic"],"license":"Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.","license_verified":false,"assets":[{"kind":"system","family":"TH Chakra Petch","note":"Use the copy installed on the workstation (no file is shipped)"},{"kind":"web_alternative","family":"Chakra Petch","package":"@fontsource/chakra-petch","license":"OFL-1.1","installed":false,"note":"Open-licence redesign of the same typeface; not installed (no packages are downloaded)"}],"fallback":["TH Chakra Petch","Chakra Petch","Noto Sans Thai Variable","Noto Sans Thai","Tahoma","sans-serif"]}'::jsonb, 0),
+  ('th-baijam', '{"family":"TH Baijam","display_name":"TH Baijam","category":"official-th","official":true,"scripts":["thai","latin"],"weights":[400,700],"styles":["normal","italic"],"license":"Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.","license_verified":false,"assets":[{"kind":"system","family":"TH Baijam","note":"Use the copy installed on the workstation (no file is shipped)"},{"kind":"web_alternative","family":"Bai Jamjuree","package":"@fontsource/bai-jamjuree","license":"OFL-1.1","installed":false,"note":"Open-licence redesign of the same typeface; not installed (no packages are downloaded)"}],"fallback":["TH Baijam","Bai Jamjuree","Noto Sans Thai Variable","Noto Sans Thai","Tahoma","sans-serif"]}'::jsonb, 0),
+  ('th-charm-of-au', '{"family":"TH Charm of AU","display_name":"TH Charm of AU","category":"official-th","official":true,"scripts":["thai","latin"],"weights":[400,700],"styles":["normal","italic"],"license":"Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.","license_verified":false,"assets":[{"kind":"system","family":"TH Charm of AU","note":"Use the copy installed on the workstation (no file is shipped)"},{"kind":"web_alternative","family":"Charm","package":"@fontsource/charm","license":"OFL-1.1","installed":false,"note":"Open-licence redesign of the same typeface; not installed (no packages are downloaded)"}],"fallback":["TH Charm of AU","Charm","Noto Sans Thai Variable","Noto Sans Thai","Tahoma","sans-serif"]}'::jsonb, 0),
+  ('th-charmonman', '{"family":"TH Charmonman","display_name":"TH Charmonman","category":"official-th","official":true,"scripts":["thai","latin"],"weights":[400,700],"styles":["normal","italic"],"license":"Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.","license_verified":false,"assets":[{"kind":"system","family":"TH Charmonman","note":"Use the copy installed on the workstation (no file is shipped)"},{"kind":"web_alternative","family":"Charmonman","package":"@fontsource/charmonman","license":"OFL-1.1","installed":false,"note":"Open-licence redesign of the same typeface; not installed (no packages are downloaded)"}],"fallback":["TH Charmonman","Charmonman","Noto Sans Thai Variable","Noto Sans Thai","Tahoma","sans-serif"]}'::jsonb, 0),
+  ('th-fah-kwang', '{"family":"TH Fah kwang","display_name":"TH Fah kwang","category":"official-th","official":true,"scripts":["thai","latin"],"weights":[400,700],"styles":["normal","italic"],"license":"Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.","license_verified":false,"assets":[{"kind":"system","family":"TH Fah kwang","note":"Use the copy installed on the workstation (no file is shipped)"},{"kind":"web_alternative","family":"Fahkwang","package":"@fontsource/fahkwang","license":"OFL-1.1","installed":false,"note":"Open-licence redesign of the same typeface; not installed (no packages are downloaded)"}],"fallback":["TH Fah kwang","Fahkwang","Noto Sans Thai Variable","Noto Sans Thai","Tahoma","sans-serif"]}'::jsonb, 0),
+  ('th-k2d-july8', '{"family":"TH K2D July8","display_name":"TH K2D July8","category":"official-th","official":true,"scripts":["thai","latin"],"weights":[400,700],"styles":["normal","italic"],"license":"Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.","license_verified":false,"assets":[{"kind":"system","family":"TH K2D July8","note":"Use the copy installed on the workstation (no file is shipped)"},{"kind":"web_alternative","family":"K2D","package":"@fontsource/k2d","license":"OFL-1.1","installed":false,"note":"Open-licence redesign of the same typeface; not installed (no packages are downloaded)"}],"fallback":["TH K2D July8","K2D","Noto Sans Thai Variable","Noto Sans Thai","Tahoma","sans-serif"]}'::jsonb, 0),
+  ('th-kodchasal', '{"family":"TH Kodchasal","display_name":"TH Kodchasal","category":"official-th","official":true,"scripts":["thai","latin"],"weights":[400,700],"styles":["normal","italic"],"license":"Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.","license_verified":false,"assets":[{"kind":"system","family":"TH Kodchasal","note":"Use the copy installed on the workstation (no file is shipped)"},{"kind":"web_alternative","family":"Kodchasan","package":"@fontsource/kodchasan","license":"OFL-1.1","installed":false,"note":"Open-licence redesign of the same typeface; not installed (no packages are downloaded)"}],"fallback":["TH Kodchasal","Kodchasan","Noto Sans Thai Variable","Noto Sans Thai","Tahoma","sans-serif"]}'::jsonb, 0),
+  ('th-koho', '{"family":"TH KoHo","display_name":"TH KoHo","category":"official-th","official":true,"scripts":["thai","latin"],"weights":[400,700],"styles":["normal","italic"],"license":"Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.","license_verified":false,"assets":[{"kind":"system","family":"TH KoHo","note":"Use the copy installed on the workstation (no file is shipped)"},{"kind":"web_alternative","family":"KoHo","package":"@fontsource/koho","license":"OFL-1.1","installed":false,"note":"Open-licence redesign of the same typeface; not installed (no packages are downloaded)"}],"fallback":["TH KoHo","KoHo","Noto Sans Thai Variable","Noto Sans Thai","Tahoma","sans-serif"]}'::jsonb, 0),
+  ('th-krub', '{"family":"TH Krub","display_name":"TH Krub","category":"official-th","official":true,"scripts":["thai","latin"],"weights":[400,700],"styles":["normal","italic"],"license":"Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.","license_verified":false,"assets":[{"kind":"system","family":"TH Krub","note":"Use the copy installed on the workstation (no file is shipped)"},{"kind":"web_alternative","family":"Krub","package":"@fontsource/krub","license":"OFL-1.1","installed":false,"note":"Open-licence redesign of the same typeface; not installed (no packages are downloaded)"}],"fallback":["TH Krub","Krub","Noto Sans Thai Variable","Noto Sans Thai","Tahoma","sans-serif"]}'::jsonb, 0),
+  ('th-mali-grade6', '{"family":"TH Mali Grade6","display_name":"TH Mali Grade6","category":"official-th","official":true,"scripts":["thai","latin"],"weights":[400,700],"styles":["normal","italic"],"license":"Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.","license_verified":false,"assets":[{"kind":"system","family":"TH Mali Grade6","note":"Use the copy installed on the workstation (no file is shipped)"},{"kind":"web_alternative","family":"Mali","package":"@fontsource/mali","license":"OFL-1.1","installed":false,"note":"Open-licence redesign of the same typeface; not installed (no packages are downloaded)"}],"fallback":["TH Mali Grade6","Mali","Noto Sans Thai Variable","Noto Sans Thai","Tahoma","sans-serif"]}'::jsonb, 0),
+  ('th-niramit-as', '{"family":"TH Niramit AS","display_name":"TH Niramit AS","category":"official-th","official":true,"scripts":["thai","latin"],"weights":[400,700],"styles":["normal","italic"],"license":"Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.","license_verified":false,"assets":[{"kind":"system","family":"TH Niramit AS","note":"Use the copy installed on the workstation (no file is shipped)"},{"kind":"web_alternative","family":"Niramit","package":"@fontsource/niramit","license":"OFL-1.1","installed":false,"note":"Open-licence redesign of the same typeface; not installed (no packages are downloaded)"}],"fallback":["TH Niramit AS","Niramit","Noto Sans Thai Variable","Noto Sans Thai","Tahoma","sans-serif"]}'::jsonb, 0),
+  ('th-srisakdi', '{"family":"TH Srisakdi","display_name":"TH Srisakdi","category":"official-th","official":true,"scripts":["thai","latin"],"weights":[400,700],"styles":["normal","italic"],"license":"Thai National Fonts released by SIPA/DIP for free use. FormDev ships no font files; verify the licence text distributed with the font before bundling it.","license_verified":false,"assets":[{"kind":"system","family":"TH Srisakdi","note":"Use the copy installed on the workstation (no file is shipped)"},{"kind":"web_alternative","family":"Srisakdi","package":"@fontsource/srisakdi","license":"OFL-1.1","installed":false,"note":"Open-licence redesign of the same typeface; not installed (no packages are downloaded)"}],"fallback":["TH Srisakdi","Srisakdi","Noto Sans Thai Variable","Noto Sans Thai","Tahoma","sans-serif"]}'::jsonb, 0)
+ON CONFLICT (font_id) DO NOTHING;
+
+INSERT INTO formdev_style (style_id, version, definition, updated_at) VALUES
+  ('style.base', 1, '{"name":"Base","category":"base","tokens":{"fontId":"noto-sans-thai","fontSize":11,"fontWeight":400,"lineHeight":1.4,"color":"#1f2937","background":"transparent","align":"left","labelPosition":"top","border":"solid","borderColor":"#cbd5e1","radius":1.5,"padding":1.5,"gap":3,"columns":2,"inputHeight":8,"rule":"solid","uppercase":false,"pageMarginTop":15,"pageMarginRight":15,"pageMarginBottom":15,"pageMarginLeft":15},"components":{"label":{"fontSize":10,"fontWeight":600,"color":"#475569"},"section":{"fontSize":12,"fontWeight":700,"color":"#0f172a"},"header":{"fontSize":9,"color":"#64748b"},"footer":{"fontSize":9,"color":"#64748b"}}}'::jsonb, 0),
+  ('style.a4.default', 1, '{"name":"A4 default","category":"form","inherit":"style.base","paper":"A4","tokens":{"fontSize":11}}'::jsonb, 0),
+  ('style.a4.medical', 1, '{"name":"A4 medical record","category":"form","inherit":"style.a4.default","paper":"A4","tokens":{"fontSize":10,"pageMarginTop":12,"pageMarginRight":12,"pageMarginBottom":14,"pageMarginLeft":12,"rule":"solid"},"components":{"label":{"fontSize":9},"section":{"fontSize":11}}}'::jsonb, 0),
+  ('style.a4.official', 1, '{"name":"A4 official document","category":"form","inherit":"style.a4.default","paper":"A4","tokens":{"fontId":"th-sarabun-new","fontSize":16,"columns":1,"rule":"none","border":"underline","pageMarginTop":25,"pageMarginRight":20,"pageMarginBottom":20,"pageMarginLeft":30},"components":{"label":{"fontSize":16,"fontWeight":400,"color":"#000000"},"section":{"fontSize":16,"fontWeight":700,"color":"#000000"}}}'::jsonb, 0),
+  ('style.a4.compact', 1, '{"name":"A4 compact","category":"form","inherit":"style.a4.default","paper":"A4","tokens":{"fontSize":9,"gap":1.5,"padding":1,"inputHeight":6,"columns":3,"pageMarginTop":10,"pageMarginRight":10,"pageMarginBottom":10,"pageMarginLeft":10},"components":{"label":{"fontSize":8},"section":{"fontSize":10}}}'::jsonb, 0),
+  ('field.text.default', 1, '{"name":"Text field","category":"field","tokens":{"border":"solid","inputHeight":8}}'::jsonb, 0),
+  ('field.number.large', 1, '{"name":"Large number","category":"field","inherit":"field.text.default","tokens":{"fontSize":16,"fontWeight":700,"align":"right"}}'::jsonb, 0),
+  ('section.header', 1, '{"name":"Header section","category":"section","tokens":{"rule":"card","background":"#f1f5f9","padding":3},"components":{"section":{"fontSize":13,"uppercase":true}}}'::jsonb, 0),
+  ('form.a4.medical', 2, '{"name":"A4 medical record (alias of style.a4.medical)","category":"form","inherit":"style.a4.medical","paper":"A4","tokens":{}}'::jsonb, 0),
+  ('form.a4.official', 2, '{"name":"A4 official document (alias of style.a4.official)","category":"form","inherit":"style.a4.official","paper":"A4","tokens":{}}'::jsonb, 0),
+  ('form.screen.default', 2, '{"name":"Screen default","category":"form","inherit":"style.base","paper":"screen","tokens":{"fontId":"inter","rule":"card"}}'::jsonb, 0)
+ON CONFLICT (style_id) DO NOTHING;
+-- END registry seed
+
+-- Canopy (flora_view) designs forms and receives synced records; Leaf (flora_app) may host them.
+GRANT SELECT, INSERT, UPDATE ON formdev_form, formdev_schema_version, formdev_record,
+  formdev_record_revision, formdev_sync_receipt, formdev_conflict, formdev_asset,
+  formdev_style, formdev_font TO flora_view, flora_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON formdev_record_index TO flora_view, flora_app;
+
+COMMIT;

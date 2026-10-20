@@ -39,6 +39,8 @@ services:
       FLORA_API_ENV: development
       FLORA_API_MODE: canopy
       FLORA_CANOPY_SESSION_SECRET: ${CANOPY_SESSION_SECRET:-flora-canopy-demo-session-secret-change-me}
+      # Database owner, for the platform console only (create / migrate accounts = schemas).
+      FLORA_PLATFORM_DATABASE_URL: postgresql://flora_admin:${CANOPY_DB_ADMIN_PASSWORD:-flora-canopy-admin-local-only}@canopy-db:5432/flora
       FLORA_BOOTSTRAP_ADMIN_ENABLED: "true"
       FLORA_BOOTSTRAP_ADMIN_USERNAME: ${CANOPY_ADMIN_USERNAME:-admin}
       FLORA_BOOTSTRAP_ADMIN_PASSWORD: ${CANOPY_ADMIN_PASSWORD:-admin}

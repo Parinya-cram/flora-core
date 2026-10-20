@@ -13,6 +13,7 @@ import CanopyTopologyView from "../views/CanopyTopologyView";
 import CanopyGatewayAlertsView from "../views/CanopyGatewayAlertsView";
 import CanopyDeviceManagementView from "../views/CanopyDeviceManagementView";
 import DeviceDistributionView from "../views/DeviceDistributionView";
+import CanopyDigitalTwinView from "../views/CanopyDigitalTwinView";
 import IdleCaseLanding from "../views/IdleCaseLanding";
 import AccountView from "../views/AccountView";
 import CanopyReportsView from "../views/CanopyReportsView";
@@ -22,6 +23,7 @@ import CanopyReportStudioView from "../views/CanopyReportStudioView";
 import CanopyAiStudioView from "../views/CanopyAiStudioView";
 import WorkflowStudioView from "../views/WorkflowStudioView";
 import CanopyStaffView from "../views/CanopyStaffView";
+import CanopyOrScheduleView from "../views/CanopyOrScheduleView";
 import { getSurfaceInfo } from "../edition/config";
 import CaseHeaderStrip from "../components/case/CaseHeaderStrip";
 
@@ -56,13 +58,15 @@ interface Props {
     | "gateway-alerts"
     | "devices"
     | "distribution"
+    | "twin"
     | "formdev"
     | "workflows"
     | "report-studio"
     | "ai-studio"
     | "history"
     | "billing"
-    | "staff-directory";
+    | "staff-directory"
+    | "or-schedule";
   sessionUser: AuthUser | null;
   onCaseDischargeTimeUpdated?: (caseId: number, dischargeTime: number) => void;
   onCaseArchived?: (caseId: number) => void;
@@ -186,6 +190,8 @@ export default function MainArea({
         <CanopyFleetView />
       ) : activeView === "topology" ? (
         <CanopyTopologyView sessionUser={sessionUser} />
+      ) : activeView === "twin" ? (
+        <CanopyDigitalTwinView sessionUser={sessionUser} />
       ) : activeView === "devices" ? (
         <CanopyDeviceManagementView sessionUser={sessionUser} />
       ) : activeView === "distribution" ? (
@@ -200,6 +206,8 @@ export default function MainArea({
         <CanopyReportStudioView sessionUser={sessionUser} />
       ) : activeView === "ai-studio" ? (
         <CanopyAiStudioView sessionUser={sessionUser} />
+      ) : activeView === "or-schedule" ? (
+        <CanopyOrScheduleView sessionUser={sessionUser} />
       ) : activeView === "staff-directory" ? (
         <CanopyStaffView sessionUser={sessionUser} />
       ) : activeView === "workflows" ? (

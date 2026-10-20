@@ -56,6 +56,9 @@ class CaseId(BaseModel):
 
 class Discharge(CaseId):
     discharge_time: int | None = Field(default=None, gt=0)
+    # Where the patient goes (OR ward journey): ICU, IPD ward, home, ...
+    destination: str | None = Field(default=None, max_length=120)
+    destination_note: str | None = Field(default=None, max_length=500)
 
 
 class EndTime(BaseModel):
@@ -231,6 +234,9 @@ def start_case(payload: StartCase, actor: dict = Depends(require_permission("cas
                    WHERE id=%s""",
                 (case_id, current, admission["id"]),
             )
+            if isinstance(header.get("or_session"), dict):
+                apply_or_session(database, case_id, header["or_session"], start, actor)
+                database.execute("UPDATE cases SET or_stage='or' WHERE id=%s", (case_id,))
         elif payload.admission_source in {"manual", "emergency"}:
             database.execute(
                 """INSERT INTO case_his_patient
@@ -254,6 +260,36 @@ def start_case(payload: StartCase, actor: dict = Depends(require_permission("cas
             "admission_source":payload.admission_source,"identity_status":identity_status,
             "device_capture_start_time":capture,"overlap_policy":payload.overlap_policy if overlap else None,
             "workflow_id":workflow.get("id") if workflow else None}
+
+
+def apply_or_session(database: Connection, case_id: int, session: dict, start: int, actor: dict) -> None:
+    """A case started from an OR-schedule booking: the patient moved in (timeline event) and the booked team
+    becomes the case staff (directory people by their staff code; others by name and role)."""
+    from .clinical_write import write_event
+    room = " · ".join(filter(None, [session.get("room_name"), session.get("bed_name")]))
+    write_event(database, case_id, {"title": "Patient In", "event_ts": start, "event_type": "event",
+                                    "detail": f"Moved in to {room}" if room else None}, actor)
+    current = now_ms()
+    seq = 0
+    for member in session.get("team") or []:
+        if not isinstance(member, dict) or not member.get("role_id"):
+            continue
+        role = database.execute("SELECT id, display_name FROM staff_role WHERE id=%s", (member["role_id"],)).fetchone()
+        if role is None:
+            continue
+        code = str(member.get("staff_code") or "").strip() or None
+        person = database.execute("SELECT * FROM staff_directory WHERE lower(staff_code)=lower(%s)", (code,)).fetchone() if code else None
+        name = (person or {}).get("staff_name") or str(member.get("name") or "").strip()
+        if not name:
+            continue
+        seq += 1
+        database.execute(
+            """INSERT INTO case_staff (case_id, hospital_id, th_first_name, th_last_name, en_first_name, en_last_name,
+                 staff_role_id, staff_role, staff_name, staff_code, seq, created_by, created_at, updated_at, profile_data)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+            (case_id, (person or {}).get("hospital_id"), (person or {}).get("th_first_name"), (person or {}).get("th_last_name"),
+             (person or {}).get("en_first_name"), (person or {}).get("en_last_name"), role["id"], role["display_name"], name, code,
+             seq, actor["username"], current, current, Jsonb((person or {}).get("profile_data") or {"display_name": name})))
 
 
 def validate_end(database: Connection, case: dict, end: int) -> None:
@@ -301,6 +337,9 @@ def discharge(payload: Discharge, actor: dict = Depends(require_permission("case
         validate_end(database,case,end)
         stopped = stop_drips(database,payload.case_id,end,actor)
         database.execute("UPDATE cases SET status='discharged',discharge_time=%s,updated_at=%s WHERE id=%s",(end,now_ms(),payload.case_id))
+        if payload.destination or payload.destination_note:
+            database.execute("UPDATE cases SET discharge_reason='discharged',discharge_destination=%s,discharge_note=%s WHERE id=%s",
+                             ((payload.destination or "").strip() or None,(payload.destination_note or "").strip() or None,payload.case_id))
     return {"ok":True,"case_id":payload.case_id,"discharge_time":end,"stopped_drips":stopped}
 
 

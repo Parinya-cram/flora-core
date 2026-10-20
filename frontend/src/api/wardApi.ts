@@ -25,6 +25,14 @@ export type WardAdmission = {
   admission?: { operation?: string; diagnosis?: string };
   scheduledAt?: number | null;
   targetLeafId?: string | null;
+  /** OR schedule booking assigned to this bed by the ward desk. */
+  orSession?: {
+    room_name?: string | null; bed_name?: string | null; journey_state?: string; duration_min?: number | null;
+    /** "recovery": the case moved out of the OR room and continues on this bed. */
+    stage?: "or" | "recovery"; global_case_id?: string;
+    team?: Array<{ name?: string | null; staff_code?: string | null; role_id: string }>;
+    move_in_requested_at?: number | null; move_in_requested_by?: string | null;
+  } | null;
 };
 
 export type WardPeerCase = {

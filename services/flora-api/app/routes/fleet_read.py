@@ -410,11 +410,23 @@ def case_snapshot(
 HABER_URL = os.getenv("FLORA_HABER_URL", "http://haber:8000").rstrip("/")
 
 
+def _haber_url() -> str | None:
+    """Each account has its own Haber (its hospital's licence and registry)."""
+    from .. import tenancy
+    if not tenancy.MULTI_ACCOUNT:
+        return HABER_URL
+    account = tenancy.current_account()
+    return account.haber_url.rstrip("/") if account and account.haber_url else None
+
+
 def _haber_overview() -> tuple[dict[str, Any] | None, str | None]:
     """Gateways and their devices come from Haber, the hospital device registry."""
+    base = _haber_url()
+    if not base:
+        return None, "no Haber configured for this account"
     credentials = f"{os.getenv('HABER_ADMIN_USERNAME', 'admin')}:{os.getenv('HABER_ADMIN_PASSWORD', 'admin')}"
     request = urllib.request.Request(
-        f"{HABER_URL}/api/haber/v1/overview",
+        f"{base}/api/haber/v1/overview",
         headers={"Authorization": "Basic " + base64.b64encode(credentials.encode()).decode(), "Accept": "application/json"},
     )
     try:

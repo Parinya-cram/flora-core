@@ -9,7 +9,10 @@ import { getSurfaceInfo } from "../edition/config";
 import floraIcisLogo from "../assets/logos/flora-icis-icon.png";
 import ClinicalReferenceTooltip from "../components/common/ClinicalReferenceTooltip";
 import WardSwitcher from "../components/WardSwitcher";
+import { readSessionAccount } from "../api/accountApi";
 import type { CanopyWardState } from "../hooks/useCanopyWard";
+import WorkstationSwitcher from "../demo/WorkstationSwitcher";
+import { currentDemoWorkstation } from "../demo/workstations";
 
 type Props = {
   setActiveView: (view: AppView) => void;
@@ -38,6 +41,8 @@ export default function TopBar({ setActiveView, sessionUser, caseStatus, ward = 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const sessionLabel = sessionUser?.name || sessionUser?.username || "Current User";
+  const account = surface.code === "canopy" ? readSessionAccount() : null;
+  const workstation = currentDemoWorkstation();
   const sessionInitials = sessionLabel.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join("").toUpperCase() || "U";
 
   useEffect(() => {
@@ -59,6 +64,8 @@ export default function TopBar({ setActiveView, sessionUser, caseStatus, ward = 
     {isIdleLeaf ? <span className="hidden items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold text-emerald-500 sm:inline-flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />{t("topbar.readyNextCase")}</span> : null}
     {caseStatus.status !== "IDLE" && caseStatus.identity_status === "pending" ? <span className="hidden items-center gap-1.5 rounded-full border border-rose-400/35 bg-rose-500/10 px-2.5 py-1 text-[10px] font-bold text-rose-400 sm:inline-flex"><span className="h-1.5 w-1.5 rounded-full bg-rose-400" />{t("topbar.identityPending")}</span> : null}
     <div className="ml-auto flex shrink-0 items-center gap-2">
+      {account ? <span title={`Account ${account.code}`} className="hidden max-w-[180px] items-center gap-1.5 truncate rounded-full border border-[var(--app-nav-border)] px-2.5 py-1 text-[11px] font-bold text-[var(--app-text)] md:inline-flex"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--app-accent)]" /><span className="truncate">{account.name}</span></span> : null}
+      {workstation ? <span title={`Demo workstation ${workstation.id}`} className="hidden items-center gap-1.5 rounded-full border border-dashed border-[var(--app-nav-border)] px-2.5 py-1 text-[11px] font-bold text-[var(--app-text)] md:inline-flex">{workstation.name}</span> : null}
       {surface.code === "canopy" && ward ? <WardSwitcher ward={ward} /> : null}
       <LanguagePicker compact />
       <ThemePicker compact />
@@ -72,6 +79,7 @@ export default function TopBar({ setActiveView, sessionUser, caseStatus, ward = 
           <div className="border-b border-[var(--app-border)] p-4"><div className="truncate text-sm font-bold text-[var(--app-text)]">{sessionLabel}</div><div className="truncate text-xs text-[var(--app-muted)]">@{sessionUser?.username || "user"} · {sessionUser?.role || t("topbar.clinicalUser")}</div></div>
           <div className="p-2">
             <button role="menuitem" type="button" onClick={() => { setUserMenuOpen(false); setActiveView("account"); }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[var(--app-text)] hover:bg-[var(--app-control-bg)]"><Icon kind="account" />{t("topbar.accountSettings")}</button>
+            {surface.code === "leaf" ? <div className="px-3 py-2"><WorkstationSwitcher compact /></div> : null}
             <button role="menuitem" type="button" onClick={() => { setUserMenuOpen(false); onLogout(); }} className="mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-xs font-semibold text-rose-400 hover:bg-rose-500/10"><Icon kind="logout" />{t("topbar.signOut")}</button>
           </div>
         </div> : null}

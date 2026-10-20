@@ -5,12 +5,13 @@ import ThemePicker from "../components/ThemePicker";
 import LanguagePicker from "../components/LanguagePicker";
 import { useLanguage } from "../context/LanguageContext";
 import { getLdapStatus } from "../api/authApi";
+import { lookupAccount, readAccountCookie, type CanopyAccount } from "../api/accountApi";
 import BranchNetwork from "./BranchNetwork";
 import { ReadinessRow, type Readiness } from "./ReadinessRow";
 import "./canopyLogin.css";
 
 type Props = {
-  onLogin: (username: string, password: string) => Promise<boolean> | boolean;
+  onLogin: (username: string, password: string, accountCode?: string) => Promise<boolean> | boolean;
   loginEnabled?: boolean;
   bootstrapStatus?: BootstrapStatus;
 };
@@ -25,6 +26,13 @@ const COPY = {
     leaves: "Leaves sync here from every bedside",
     localTime: "Hospital time",
     secure: "Sign-ins are checked against the hospital directory and recorded.",
+    account: "Hospital account",
+    accountDefault: "Default account",
+    accountChange: "Change",
+    accountHide: "Done",
+    accountHint: "Account code given by your hospital. Each account keeps its own patients and settings.",
+    accountChecking: "Checking…",
+    accountUnknown: "No active account with this code",
   },
   th: {
     title: "เข้าสู่ระบบ Canopy",
@@ -34,6 +42,13 @@ const COPY = {
     leaves: "ข้อมูลจากทุกเตียงซิงก์มาที่นี่",
     localTime: "เวลาโรงพยาบาล",
     secure: "การเข้าสู่ระบบตรวจสอบกับฐานข้อมูลผู้ใช้ของโรงพยาบาลและถูกบันทึกไว้",
+    account: "บัญชีโรงพยาบาล",
+    accountDefault: "บัญชีเริ่มต้น",
+    accountChange: "เปลี่ยน",
+    accountHide: "เสร็จ",
+    accountHint: "รหัสบัญชีที่โรงพยาบาลกำหนด แต่ละบัญชีแยกข้อมูลผู้ป่วยและการตั้งค่าของตนเอง",
+    accountChecking: "กำลังตรวจสอบ…",
+    accountUnknown: "ไม่พบบัญชีที่ใช้งานด้วยรหัสนี้",
   },
 } as const;
 
@@ -57,6 +72,23 @@ export default function CanopyLoginPage({ onLogin, loginEnabled = true, bootstra
   const [showPassword, setShowPassword] = useState(false);
   const [capsLock, setCapsLock] = useState(false);
   const [ldapEnabled, setLdapEnabled] = useState(false);
+  // Account code: collapsed by default, prefilled from the cookie of the last sign-in.
+  const [accountCode, setAccountCode] = useState(() => readAccountCookie());
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [lookup, setLookup] = useState<{ code: string; account: CanopyAccount | null } | null>(null);
+  const normalizedAccount = accountCode.trim().toLowerCase();
+  const accountState = !normalizedAccount ? "none" : lookup?.code !== normalizedAccount ? "checking" : lookup.account ? "found" : "unknown";
+
+  useEffect(() => {
+    if (!normalizedAccount) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void lookupAccount(normalizedAccount, controller.signal)
+        .then(account => setLookup({ code: normalizedAccount, account }))
+        .catch(() => { if (!controller.signal.aborted) setLookup({ code: normalizedAccount, account: null }); });
+    }, 300);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [normalizedAccount]);
 
   useEffect(() => {
     if (!loginEnabled) return;
@@ -77,7 +109,7 @@ export default function CanopyLoginPage({ onLogin, loginEnabled = true, bootstra
     setIsLoggingIn(true);
     setError("");
     try {
-      const ok = await onLogin(username.trim(), password);
+      const ok = await onLogin(username.trim(), password, normalizedAccount || undefined);
       if (!ok) setError(t("login.failed"));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("login.failedRetry"));
@@ -119,6 +151,31 @@ export default function CanopyLoginPage({ onLogin, loginEnabled = true, bootstra
                   <h1 id="login-title" className="text-[26px] font-extrabold leading-[32px] tracking-[-0.02em] text-[var(--app-text)]">{copy.title}</h1>
                   <p className="mt-[6px] text-[13.5px] leading-[20px] text-[var(--app-muted)]">{copy.lede}</p>
                 </div>
+                <div className="rounded-[11px] border border-[var(--app-border)] bg-[var(--app-control-bg)]/50 px-[13px] py-[9px]">
+                  <div className="flex items-center gap-[10px]">
+                    <svg className="shrink-0 text-[var(--app-muted)]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-5h6v5M12 8v4M10 10h4" /></svg>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[var(--app-muted)]">{copy.account}</div>
+                      <div className="truncate text-[13px] font-semibold text-[var(--app-text)]" aria-live="polite">
+                        {accountState === "none" ? copy.accountDefault
+                          : accountState === "found" ? <>{lookup?.account?.name} <span className="font-mono text-[11.5px] font-normal text-[var(--app-muted)]">{normalizedAccount}</span></>
+                          : accountState === "checking" ? <span className="font-mono">{normalizedAccount}</span>
+                          : <span className="text-rose-600 dark:text-rose-300"><span className="font-mono">{normalizedAccount}</span> · {copy.accountUnknown}</span>}
+                      </div>
+                    </div>
+                    <button type="button" onClick={() => setAccountOpen(open => !open)} aria-expanded={accountOpen} aria-controls="flora-account-field"
+                      className="shrink-0 rounded-md px-[8px] py-[4px] text-[11.5px] font-semibold text-[var(--app-accent)] hover:bg-[var(--app-control-bg-hover)]">
+                      {accountOpen ? copy.accountHide : copy.accountChange}
+                    </button>
+                  </div>
+                  {accountOpen ? <div id="flora-account-field" className="mt-[9px]">
+                    <label htmlFor="flora-account" className="sr-only">{copy.account}</label>
+                    <input id="flora-account" name="account" autoComplete="organization" autoCapitalize="none" spellCheck={false} autoFocus
+                      value={accountCode} onChange={event => setAccountCode(event.target.value.replace(/\s/g, "").toLowerCase())}
+                      placeholder="kcmh" maxLength={31} disabled={!loginEnabled || isLoggingIn} className={`${inputClass} font-mono`} />
+                    <p className="mt-[6px] text-[11.5px] leading-[16px] text-[var(--app-muted)]">{accountState === "checking" ? copy.accountChecking : copy.accountHint}</p>
+                  </div> : null}
+                </div>
                 <div>
                   <label htmlFor="flora-username" className="mb-[6px] block text-[12px] font-semibold text-[var(--app-text)]">{t("login.username")}</label>
                   <input id="flora-username" name="username" autoComplete="username" autoCapitalize="none" spellCheck={false}
@@ -141,7 +198,7 @@ export default function CanopyLoginPage({ onLogin, loginEnabled = true, bootstra
 
                 {error ? <p role="alert" className="rounded-xl border border-rose-400/40 bg-rose-500/10 px-[14px] py-[10px] text-[13px] text-rose-600 dark:text-rose-300">{error}</p> : null}
 
-                <button type="submit" disabled={!loginEnabled || isLoggingIn || !username.trim() || !password}
+                <button type="submit" disabled={!loginEnabled || isLoggingIn || !username.trim() || !password || accountState === "unknown"}
                   className="canopy-submit flex h-[46px] w-full items-center justify-center gap-[10px] rounded-[12px] px-[14px] text-[14px] font-bold text-[var(--app-accent-contrast)] transition hover:-translate-y-px hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--app-accent)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-55 disabled:shadow-none">
                   {isLoggingIn ? <span className="canopy-spin" aria-hidden="true" /> : null}
                   {isLoggingIn ? t("login.submitting") : !loginEnabled ? t("login.waiting") : t("login.submit")}

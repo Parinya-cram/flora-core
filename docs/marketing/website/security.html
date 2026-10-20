@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="th" class="page">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Security · FLORA iCIS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600&family=IBM+Plex+Sans+Thai:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header class="site-header" data-page="security"></header>
+
+<main>
+  <section class="page-head">
+    <div class="wrap stack">
+      <span class="eyebrow"><span class="th">ความปลอดภัยและการติดตั้ง</span><span class="en">Security &amp; deployment</span></span>
+      <h1><span class="th">ข้อมูลผู้ป่วยอยู่ในโรงพยาบาลของคุณ</span><span class="en">Patient data stays in your hospital</span></h1>
+      <p class="lede"><span class="th">FLORA iCIS ติดตั้งบนเครื่องและเซิร์ฟเวอร์ของโรงพยาบาล ฝ่าย IT ควบคุมเครือข่าย สิทธิ์ผู้ใช้ และการอัปเดตได้เอง</span><span class="en">FLORA iCIS runs on the hospital's own workstations and servers. Your IT team controls the network, user access and updates.</span></p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:0">
+    <div class="wrap">
+      <div class="detail">
+        <div class="label"><span class="where"><span class="th">ที่เก็บข้อมูล</span><span class="en">Data location</span></span><h2><span class="th">ติดตั้งในโรงพยาบาล</span><span class="en">On your premises</span></h2></div>
+        <div class="body">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th><span class="th">ชั้น</span><span class="en">Tier</span></th><th><span class="th">ติดตั้งที่</span><span class="en">Runs on</span></th><th><span class="th">ข้อมูลผู้ป่วย</span><span class="en">Patient data</span></th></tr></thead>
+              <tbody>
+                <tr><td><b>Tendril</b></td><td><span class="th">เครื่องในเครือข่ายห้องผ่าตัด / ICU</span><span class="en">A machine on the OR / ICU network</span></td><td><span class="th">ค่าจากเครื่องมือแพทย์ ส่งต่อให้ Leaf</span><span class="en">Device values, passed to Leaf</span></td></tr>
+                <tr><td><b>Leaf</b></td><td><span class="th">เครื่องข้างเตียง</span><span class="en">Bedside workstation</span></td><td><span class="th">เคสที่กำลังดำเนินอยู่</span><span class="en">Active cases</span></td></tr>
+                <tr><td><b>Canopy</b></td><td><span class="th">เซิร์ฟเวอร์ของโรงพยาบาล</span><span class="en">Hospital server</span></td><td><span class="th">ข้อมูลทั้งหมดของโรงพยาบาล</span><span class="en">All hospital records</span></td></tr>
+                <tr><td><b>Root</b></td><td><span class="th">คลาวด์</span><span class="en">Cloud</span></td><td><b><span class="th">ไม่มี</span><span class="en">None</span></b> <span class="note"><span class="th">เก็บเฉพาะไลเซนส์และไฟล์อัปเดต</span><span class="en">licences and update files only</span></span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail">
+        <div class="label"><span class="where"><span class="th">ความต่อเนื่อง</span><span class="en">Continuity</span></span><h2><span class="th">ทำงานต่อได้เมื่อระบบล่ม</span><span class="en">Keeps working through outages</span></h2></div>
+        <div class="body">
+          <ul class="ticks">
+            <li><span class="th">Leaf มีฐานข้อมูลของตัวเอง บันทึกเคสต่อได้แม้เครือข่ายหรือ Canopy ล่ม</span><span class="en">Leaf has its own database and keeps charting when the network or Canopy is down</span></li>
+            <li><span class="th">ซิงก์แบบส่งซ้ำได้โดยไม่ซ้ำซ้อน (idempotent) เมื่อกลับมาเชื่อมต่อ</span><span class="en">Idempotent sync when the connection returns, with no duplicates</span></li>
+            <li><span class="th">พิมพ์ด้วยเสียงประมวลผลในเครื่อง ไม่ต้องใช้อินเทอร์เน็ต</span><span class="en">Voice dictation runs locally without the internet</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="detail">
+        <div class="label"><span class="where"><span class="th">การเข้าถึง</span><span class="en">Access</span></span><h2><span class="th">สิทธิ์และการตรวจสอบย้อนหลัง</span><span class="en">Permissions and audit</span></h2></div>
+        <div class="body">
+          <ul class="ticks">
+            <li><span class="th">สิทธิ์ตามบทบาท (RBAC) เช่น วิสัญญีแพทย์ พยาบาล ผู้ดูแลระบบ และผู้ดูแลฟอร์ม</span><span class="en">Role-based access for anesthesiologists, nurses, administrators and form authors</span></li>
+            <li><span class="th">บันทึก audit ทุกการแก้ไขข้อมูลทางคลินิกและการส่งออกข้อมูล</span><span class="en">Audit trail for every clinical edit and data export</span></li>
+            <li><span class="th">ปิดบังข้อมูลส่วนบุคคล (รวมชื่อภาษาไทย) ใน API และ AI Studio</span><span class="en">Personal-data masking, including Thai names, in the API and AI Studio</span></li>
+            <li><span class="th">ออกแบบเพื่อช่วยโรงพยาบาลปฏิบัติตาม พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล (PDPA)</span><span class="en">Built to help hospitals meet Thailand's PDPA obligations</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="detail">
+        <div class="label"><span class="where"><span class="th">การอัปเดต</span><span class="en">Updates</span></span><h2><span class="th">โรงพยาบาลอนุมัติทุกรุ่น</span><span class="en">The hospital approves every release</span></h2></div>
+        <div class="body">
+          <div class="pipe">
+            <div class="node"><b>Root</b><small><span class="th">สร้างและเซ็นรุ่นใหม่</span><span class="en">builds and signs</span></small></div><span class="arrow">→</span>
+            <div class="node"><b><span class="th">ฝ่าย IT โรงพยาบาล</span><span class="en">Hospital IT</span></b><small><span class="th">ตรวจและอนุมัติ</span><span class="en">reviews and approves</span></small></div><span class="arrow">→</span>
+            <div class="node"><b>Updater</b><small><span class="th">ตรวจลายเซ็นแล้วติดตั้ง</span><span class="en">verifies signature, installs</span></small></div>
+          </div>
+          <p class="muted"><span class="th">ไลเซนส์และรุ่นซอฟต์แวร์ลงลายเซ็นดิจิทัลแบบ Ed25519 เครื่องจะไม่ติดตั้งไฟล์ที่ลายเซ็นไม่ถูกต้อง</span><span class="en">Licences and releases are signed with Ed25519. Machines refuse any file whose signature does not verify.</span></p>
+        </div>
+      </div>
+
+      <div class="detail">
+        <div class="label"><span class="where"><span class="th">ความเป็นเจ้าของข้อมูล</span><span class="en">Data ownership</span></span><h2><span class="th">ไม่ผูกขาด</span><span class="en">No lock-in</span></h2></div>
+        <div class="body">
+          <ul class="ticks">
+            <li><span class="th">ส่งออกข้อมูลเป็น CSV, XLSX และ PDF ได้ครบ</span><span class="en">Full export to CSV, XLSX and PDF</span></li>
+            <li><span class="th">ใช้ PostgreSQL ซึ่งเป็นฐานข้อมูลมาตรฐานแบบเปิด</span><span class="en">Built on PostgreSQL, an open standard database</span></li>
+            <li><span class="th">นำเข้าข้อมูลจากระบบเดิม เช่น ไฟล์ PDF จากระบบบันทึกวิสัญญีรุ่นก่อน</span><span class="en">Imports from legacy systems, such as PDF archives from a previous anesthesia system</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<section class="cta-band">
+  <div class="wrap">
+    <h2><span class="th">ขอเอกสารสถาปัตยกรรมสำหรับฝ่าย IT</span><span class="en">Get the architecture pack for your IT team</span></h2>
+    <a class="btn" href="contact.html"><span class="th">ขอเอกสาร</span><span class="en">Request documents</span></a>
+  </div>
+</section>
+<footer class="site-footer"></footer>
+<script src="site.js"></script>
+</body>
+</html>

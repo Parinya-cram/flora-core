@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CaseStatus } from "../api/caseApi";
 import type { AuthUser } from "../auth/useAuth";
 import { useLanguage } from "../context/LanguageContext";
-import { getWardOverview, requestWardSync, takeOverCase, type WardOverview, type WardPeer } from "../api/wardApi";
+import { getWardOverview, requestWardSync, takeOverCase, type WardAdmission, type WardOverview, type WardPeer } from "../api/wardApi";
+import { moveInRecovery, startCase } from "../api/caseApi";
 import GatewayWizard from "../components/ward/GatewayWizard";
 
 type Props = {
@@ -25,6 +26,7 @@ const TEXT = {
     confirmBody: "Canopy moves the case here and the other workstation locks its copy when it next connects. Entries made there after its last sync are not included.",
     confirm: "Take over", cancel: "Cancel", copyAge: "Canopy copy is", old: "old", noCopy: "Canopy has no complete copy yet",
     busyHere: "Discharge the case on this workstation first",
+    moveIn: "Move in", waitingHere: "Waiting for this room", moveInRequested: "Move-in requested by", fromOr: "From the OR, for recovery",
   },
   th: {
     ward: "หอผู้ป่วย", thisLeaf: "เครื่องนี้", noCase: "ไม่มีเคสที่กำลังทำอยู่บนเครื่องนี้", openCase: "เปิดเคส",
@@ -38,6 +40,7 @@ const TEXT = {
     confirmBody: "Canopy จะย้ายเคสมาที่เครื่องนี้ และเครื่องเดิมจะล็อกเคสเมื่อเชื่อมต่อครั้งถัดไป ข้อมูลที่บันทึกที่เครื่องเดิมหลัง sync ครั้งล่าสุดจะไม่ถูกนำมา",
     confirm: "รับเคส", cancel: "ยกเลิก", copyAge: "สำเนาใน Canopy อายุ", old: "", noCopy: "Canopy ยังไม่มีสำเนาเคสที่สมบูรณ์",
     busyHere: "ต้อง discharge เคสบนเครื่องนี้ก่อน",
+    moveIn: "ย้ายเข้าห้อง", waitingHere: "รอเข้าห้องนี้", moveInRequested: "สั่งย้ายเข้าโดย", fromOr: "จากห้องผ่าตัด รอเข้า recovery",
   },
 };
 
@@ -111,6 +114,21 @@ export default function WardView({ sessionUser, onOpenCase, onCaseChanged }: Pro
       window.setTimeout(() => setSyncing(null), 30000);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  // OR schedule: the patient assigned to this bed enters the room; the case starts now.
+  const moveIn = async (item: WardAdmission) => {
+    setBusy(true);
+    try {
+      if (item.orSession?.stage === "recovery") await moveInRecovery(item.id);
+      else await startCase(item.hn || "", Date.now(), { admissionSource: "prepared", canopyAdmissionId: item.id, overlapPolicy: "exclude" });
+      await onCaseChanged();
+      onOpenCase();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -193,8 +211,13 @@ export default function WardView({ sessionUser, onOpenCase, onCaseChanged }: Pro
               <div className="min-w-0">
                 <div className="truncate font-semibold">{item.patient?.patient_name || item.hn}</div>
                 <div className="truncate text-xs text-[var(--app-muted)]">HN {item.hn}{item.admissionNumber ? ` · AN ${item.admissionNumber}` : ""}{item.admission?.operation ? ` · ${item.admission.operation}` : ""}</div>
+                {item.orSession ? <div className="truncate text-xs font-semibold text-orange-600 dark:text-orange-300">
+                  {item.orSession.stage === "recovery" ? L.fromOr : L.waitingHere}{item.orSession.bed_name ? ` · ${item.orSession.bed_name}` : ""}
+                  {item.orSession.move_in_requested_at ? ` · ${L.moveInRequested} ${item.orSession.move_in_requested_by || "Canopy"}` : ""}
+                </div> : null}
               </div>
-              {!activeCase && canStart ? <button type="button" className={button} onClick={onOpenCase}>{L.startCase}</button> : null}
+              {!activeCase && canStart && item.orSession ? <button type="button" className={primary} disabled={busy} onClick={() => void moveIn(item)}>{L.moveIn}</button>
+                : !activeCase && canStart ? <button type="button" className={button} onClick={onOpenCase}>{L.startCase}</button> : null}
             </li>)}
           </ul> : <div className="text-sm text-[var(--app-muted)]">{L.none}</div>}
         </Card>
