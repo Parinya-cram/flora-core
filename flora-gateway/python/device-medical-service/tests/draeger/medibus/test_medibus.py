@@ -162,3 +162,36 @@ def test_lan_reconnect_restarts_handshake_and_drops_partial_frame():
     # The rest of the old frame must not complete a measurement on the new session.
     assert parser.feed(raw(half[5:], pod="socket.p2500", connection=2)) == []
     assert command_bytes(parser.poll()[0]) == packet(0x51)
+
+
+def test_medibus_probes_slowly_while_no_device_answers(monkeypatch):
+    clock = [100.0]
+    monkeypatch.setattr('device_medical_service.parsers.draeger.medibus.parser.time.monotonic', lambda: clock[0])
+    parser = medibus(probe_after=3, probe_interval_sec=10)
+    sent = []
+    for _ in range(30):                     # 30 s with nothing on the line, one poll per second
+        sent += parser.poll()
+        clock[0] += 1
+    # 3 handshakes at the response timeout (3 s), then one ICC per 10 s probe interval
+    assert parser.probing
+    assert len(sent) == 5
+    assert all(command_bytes(c) == packet(0x51) for c in sent)
+    # The device is plugged in and answers the next probe: normal polling resumes at once
+    clock[0] = 136
+    assert command_bytes(parser.poll()[0]) == packet(0x51)
+    parser.feed(raw(packet(0x51, response=True)))
+    assert not parser.probing
+    assert command_bytes(parser.drain_commands()[0]) == packet(0x52)
+    parser.feed(raw(packet(0x52, response=True)))
+    assert parser.ready and command_bytes(parser.poll()[0]) == packet(0x24)
+
+
+def test_medibus_reconnect_event_probes_immediately(monkeypatch):
+    clock = [100.0]
+    monkeypatch.setattr('device_medical_service.parsers.draeger.medibus.parser.time.monotonic', lambda: clock[0])
+    parser = medibus(probe_after=1, probe_interval_sec=60)
+    parser.poll()
+    clock[0] += 4
+    assert parser.poll() == [] and parser.probing
+    parser.feed(raw(b"", event="connected"))
+    assert command_bytes(parser.poll()[0]) == packet(0x51)

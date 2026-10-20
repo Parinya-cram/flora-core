@@ -39,6 +39,11 @@ class MedibusParser(Parser):
         self.pages = [0x24, 0x2B, 0x29]
         self.timeout = float(self.options.get("response_timeout_sec", 3))
         self.session_timeout = float(self.options.get("session_timeout_sec", 10))
+        # Probe mode: after `probe_after` handshakes go unanswered (nothing on the line), the ICC is sent only every
+        # `probe_interval_sec` instead of every poll, until the device answers; then polling is back to normal.
+        self.probe_after = int(self.options.get("probe_after", 3))
+        self.probe_interval = float(self.options.get("probe_interval_sec", 10))
+        self.unanswered = 0
         self.max_frame = int(self.options.get("max_frame_bytes", 16384))
         if not (0 < self.poll_interval < self.session_timeout and 0 < self.timeout < self.session_timeout):
             raise ValueError("MEDIBUS poll and response timeouts must be positive and below session_timeout_sec")
@@ -72,13 +77,22 @@ class MedibusParser(Parser):
             if now - self.sent_at < self.timeout:
                 return []
             # A missing response starts a fresh handshake, including after reconnect.
+            self.pending = None
             self.ready = False
             self.next_page = 0
+            self.unanswered += 1
         if not self.ready:
+            if self.probing and now - self.sent_at < self.probe_interval:
+                return []
             return [self._request(0x51)]
         code = self.pages[self.next_page]
         self.next_page = (self.next_page + 1) % len(self.pages)
         return [self._request(code)]
+
+    @property
+    def probing(self) -> bool:
+        """No device has answered the last handshakes: poll slowly until one does."""
+        return self.unanswered >= self.probe_after
 
     def drain_commands(self):
         result, self.outgoing = self.outgoing, []
@@ -94,6 +108,7 @@ class MedibusParser(Parser):
             self.last_receive = 0
             self.buffer.clear()
             self.next_page = 0
+            self.unanswered = 0   # a new connection is probed at once
             return []
         rows = []
         # Serial controller chunks may split or combine protocol messages.
@@ -123,6 +138,7 @@ class MedibusParser(Parser):
         start, code = body[:2]
         data = body[2:]
         self.last_receive = time.monotonic()
+        self.unanswered = 0       # the device is there: back to normal polling
         if start == ESC:
             if code == 0x51:  # Initialize communication, initiated by the device.
                 self.ready = False

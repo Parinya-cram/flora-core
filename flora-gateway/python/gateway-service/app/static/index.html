@@ -108,7 +108,7 @@
   .port { font:600 12px ui-monospace,Menlo,monospace; padding:1px 7px; border-radius:6px; background:var(--chip); border:1px solid var(--line) }
   .port.lan { color:var(--series-in) } .port.com { color:var(--series-out) } .port.virt { color:var(--muted); border-style:dashed }
   .livecard .vals { margin-top:6px; min-height:22px } .livecard .row b { font-size:14px }
-  div.livecard { cursor:pointer } div.livecard:focus-visible { outline:2px solid var(--accent) }
+  div.livecard { cursor:default } div.livecard:focus-visible { outline:2px solid var(--accent) }
   .livecard .acts { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; padding-top:8px; border-top:1px solid var(--line) }
   .livecard .acts .danger { margin-left:auto }
   button.icon { display:inline-flex; align-items:center; justify-content:center; padding:4px 7px }
@@ -130,7 +130,8 @@
   .state { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600 }
   .state i { width:9px; height:9px; border-radius:50% } .state.live i { background:var(--st-ok) } .state.stale i { background:#fab219 }
   .state.silent i { background:var(--st-down) } .state.off i { background:var(--st-stopped) }
-  .state.standby i { background:#4ea1ff } .state.silent { color:var(--st-down) }
+  .state.standby i { background:#4ea1ff }
+  .state.online i { background:#a6e3b0; box-shadow:0 0 0 2px color-mix(in srgb, #a6e3b0 30%, transparent) }   /* light green: on, not in use */ .state.silent { color:var(--st-down) }
   .combo { position:relative } .combo input { width:100% }
   .combo-list { position:absolute; z-index:20; left:0; right:0; top:calc(100% + 2px); max-height:260px; overflow-y:auto;
                 background:var(--panel); border:1px solid var(--line); border-radius:7px; box-shadow:0 8px 24px rgba(0,0,0,.35); padding:4px }
@@ -151,7 +152,7 @@
   .head .devsearch + button { margin-left:-6px; height:30px; border-radius:999px; padding:0 14px }   /* one space after the search box */
   .viewtoggle { display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; margin-right:8px }
   .viewtoggle button { border:0; border-radius:0; background:none } .viewtoggle button.cur { background:var(--accent); color:#fff; font-weight:600 }
-  .livelist { overflow-x:auto } .livelist table { font-size:13px } .livelist tr[data-id] { cursor:pointer }
+  .livelist { overflow-x:auto } .livelist table { font-size:13px } .livelist tr[data-id] { cursor:default }
   .livelist tr[data-id]:hover td { background:color-mix(in srgb, var(--accent) 6%, transparent) } .livelist tr.sel td { background:color-mix(in srgb, var(--accent) 12%, transparent) }
   .livelist tr.alarm td:first-child { box-shadow:inset 3px 0 0 var(--st-down) } .livelist tr.alarm .why { color:var(--st-down) }
   .livelist .why, .livelist .sub { font-size:12px; color:var(--muted) } .livelist .acts { display:flex; gap:4px; flex-wrap:nowrap; margin:0; padding:0; border:0 }
@@ -232,7 +233,7 @@
       <button class="admin-only" onclick="editCanopyLink()">Canopy connection</button>
       <button class="admin-only" id="edit-site" onclick="editSite()">Edit location</button></span></div><div id="site"></div></section>
   <section><div class="head"><h2>Installed devices</h2><span id="live-note" class="muted" style="margin-left:auto"></span><span class="viewtoggle" role="group" aria-label="View"><button data-view="cards">Cards</button><button data-view="list">List</button></span><span class="devsearch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><input type="search" id="device-search" placeholder="Search devices…" aria-label="Search devices" autocomplete="off"></span>&#32;<button class="primary" onclick="editDevice()">Add device</button></div>
-    <div class="legend"><span><span class="state live"><i></i></span>receiving · in use</span><span><span class="state standby"><i></i></span>powered on · waiting for use</span><span><span class="state stale"><i></i></span>plugged in · waiting for data</span>
+    <div class="legend"><span><span class="state live"><i></i></span>receiving · in use</span><span><span class="state online"><i></i></span>online · not in use</span>
       <span><span class="state silent"><i></i></span>unplugged / off (serial) · not connected / connection lost (network)</span><span><span class="state off"><i></i></span>parser or port problem</span></div>
     <div id="net-alarm"></div>
     <div id="live-table"></div></section>
@@ -584,7 +585,7 @@ async function editDevice(device, copyOf) {
   ], start, async (values) => {
     // Type settings first, so the device's pod follows the edited type when the device is saved.
     const t = cache.types.find((x) => x.code === values.device_type);
-    if (t && typeStart !== null) {
+    if (TYPE_EDIT_IN_DEVICE_FORM && t && typeStart !== null) {
       const edited = readType(t);
       if (JSON.stringify(edited) !== typeStart) {
         const result = await api(`api/device-types/${enc(t.code)}`, "PUT", { ...t, ...edited });
@@ -647,6 +648,9 @@ async function editDevice(device, copyOf) {
   typeBox.className = "field wide conn";
   form.elements.device_type.closest(".field").after(typeBox);
   let typeStart = null;   // settings as first drawn: the type is saved only when they changed
+  // false: the box only shows the type's settings (they are edited in Device types, as before);
+  // true: they can be edited here and are saved to the type.
+  const TYPE_EDIT_IN_DEVICE_FORM = false;
   function readType(t) {
     let options = t.default_options || {};
     const raw = form.elements.type_default_options;
@@ -669,7 +673,15 @@ async function editDevice(device, copyOf) {
         ${connectionInputs(t.controller, t.connection_defaults || {})}
         <div class="field wide"><label>Default parser options (JSON)</label><textarea name="type_default_options" ${haber ? "disabled" : ""}>${esc(JSON.stringify(t.default_options || {}, null, 2))}</textarea></div>
       </div>
-      <div class="muted" style="font-size:12px">Saved to the device type${others.length ? ` — also applies to ${esc(others.join(", "))}` : " (no other device uses it)"}.</div>`;
+      <div class="muted" style="font-size:12px">${TYPE_EDIT_IN_DEVICE_FORM
+        ? `Saved to the device type${others.length ? ` — also applies to ${esc(others.join(", "))}` : " (no other device uses it)"}.`
+        : `From the device type (read-only here): change it in System → Device types${others.length ? ` · also used by ${esc(others.join(", "))}` : ""}.`}</div>`;
+    if (!TYPE_EDIT_IN_DEVICE_FORM) {
+      // Not editable here, so not shown: it stays in the form (hidden) only for the pod preview below.
+      typeBox.querySelectorAll("input, select, textarea").forEach((el) => { el.disabled = true; });
+      typeBox.hidden = true;
+      typeBox.style.display = "none";   // .field sets display, which would override [hidden]
+    }
     typeStart = JSON.stringify(readType(t));
   }
   drawType();
@@ -1228,6 +1240,7 @@ const BUCKET_LABEL = { 1: "per minute", 6: "per 5 minutes", 24: "per 15 minutes"
 // Device popups: Monitor and the raw/decoded detail (row or card click) open in a dialog. The sections stay in the
 // page markup and move into the dialog while it is open; DETAIL_POPUP = false brings back the old inline view.
 const DETAIL_POPUP = true;
+const ROW_CLICK_DETAIL = false;   // true: clicking a device row/card opens its raw/decoded detail again
 let popupState = null;
 function showPopup(id, onClose) {
   const pop = $("detail-pop"), section = $(id);
@@ -1440,7 +1453,8 @@ function liveRow(d) {
   const more = d.parameters.length > 4 ? ` <span class="muted">+${d.parameters.length - 4}</span>` : "";
   const info = cache.devices.find((x) => x.device_id === d.device_id) || {};
   const where = [info.station, info.location].filter(Boolean).join(" · ");
-  return `<tr data-id="${esc(d.device_id)}" tabindex="0" class="${live.selected === d.device_id ? "sel" : ""} ${alarm ? "alarm" : ""}" aria-label="Show raw and decoded data of ${esc(d.label || d.device_id)}">
+  const clickable = ROW_CLICK_DETAIL ? ` tabindex="0" aria-label="Show raw and decoded data of ${esc(d.label || d.device_id)}"` : "";
+  return `<tr data-id="${esc(d.device_id)}"${clickable} class="${ROW_CLICK_DETAIL && live.selected === d.device_id ? "sel" : ""} ${alarm ? "alarm" : ""}">
     <td><span class="state ${cls}"><i></i>${esc(text)}</span>${why ? `<div class="why">${esc(why)}</div>` : ""}</td>
     <td><b>${esc(d.label || d.device_id)}</b><div class="sub">${esc(d.device_id)} · ${esc(d.device_type)}</div>${where ? `<div class="sub">${esc(where)}</div>` : ""}</td>
     <td><div class="conn">${connBadge(d.connection)}</div><div class="sub"><code>${esc(d.pod)}</code> → ${esc(d.leaf_id || "unassigned")}${d.source_ip ? ` · ${esc(d.source_ip)}` : ""}</div></td>
@@ -1452,8 +1466,8 @@ const LIVE_PAGE_SIZE = 6;
 const fmtVal = (v) => v === null || v === undefined ? "—" : typeof v === "number" ? String(Math.round(v * 1000) / 1000) : typeof v === "string" ? v : JSON.stringify(v);
 // The device's own state, worked out by the gateway (api/live -> status): [css class, label, alarm on card].
 const DEVICE_STATES = {
-  receiving: ["live", "Receiving · in use"], standby: ["standby", "Powered on · waiting for use"],
-  plugged_in: ["stale", "Plugged in · waiting for data"],
+  receiving: ["live", "Receiving · in use"], standby: ["online", "Online · not in use"],
+  plugged_in: ["online", "Online · not in use"], connected: ["online", "Online · not in use"],
   unplugged: ["silent", "Unplugged / off"], not_connected: ["silent", "Not connected", true],
   connection_lost: ["silent", "Connection lost", true], port_error: ["off", "Port error", true],
   parser_down: ["off", "Parser stopped", true], disabled: ["off", "Disabled"],
@@ -1557,7 +1571,8 @@ async function renderLive() {
       const vals = d.parameters.map((p) => `<span class="chip val" title="${esc(p.raw_code ?? "")} · ${esc(ago(p.system_ts))}"><small>${esc(p.ivy_param)}</small> <b>${esc(fmtVal(p.value))}</b> <small>${esc(p.unit ?? "")}</small></span>`).join("");
       const info = cache.devices.find((x) => x.device_id === d.device_id) || {};
       const where = [info.station, info.location].filter(Boolean).join(" · "), asset = [info.serial_number, info.asset_tag].filter(Boolean).join(" · ");
-      return `<div class="stream livecard ${live.selected === d.device_id ? "sel" : ""} ${alarm ? "alarm" : ""}" data-id="${esc(d.device_id)}" tabindex="0" role="button" aria-label="Show raw and decoded data of ${esc(d.label || d.device_id)}">
+      const clickable = ROW_CLICK_DETAIL ? ` tabindex="0" role="button" aria-label="Show raw and decoded data of ${esc(d.label || d.device_id)}"` : "";
+      return `<div class="stream livecard ${ROW_CLICK_DETAIL && live.selected === d.device_id ? "sel" : ""} ${alarm ? "alarm" : ""}" data-id="${esc(d.device_id)}"${clickable}>
         <div class="row"><b>${esc(d.label || d.device_id)}</b><span class="muted"><span class="state ${cls}"><i></i>${esc(text)}</span></span></div>
         <div class="nums">${esc(d.device_id)} · ${esc(d.device_type)}</div>
         ${why ? `<div class="why">${esc(why)}</div>` : ""}
@@ -1599,6 +1614,7 @@ $("live-table").addEventListener("click", (e) => {
   const pageBtn = e.target.closest("button[data-page]");
   if (pageBtn) { live.page = Number(pageBtn.dataset.page); renderLive().catch(() => {}); return; }
   if (e.target.closest("button")) return;
+  if (!ROW_CLICK_DETAIL) return;   // row/card click no longer opens the raw/decoded detail (use Monitor)
   const row = e.target.closest("[data-id]");
   if (!row) return;
   live.selected = row.dataset.id;
