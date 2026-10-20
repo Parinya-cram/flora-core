@@ -298,7 +298,13 @@ function renderTopology() {
   if (topoTenant && window.tenants[topoTenant]) { box.innerHTML = siteTopology(window.tenants[topoTenant]); $("topoTitle").textContent = "Topology · " + window.tenants[topoTenant].name; return; }
   topoTenant = null; $("topoTitle").textContent = "Topology · all hospitals";
   if (!tenants.length) { box.innerHTML = `<span class="muted">No hospitals yet.</span>`; return; }
-  const cw = 230, ch = 132, gap = 28, per = Math.max(1, Math.min(tenants.length, 4));
+  // Full hospital names, wrapped onto as many lines as they need (never cut).
+  const wrap = (text, max = 30) => String(text || "").split(/(?<=\s)|(?=\()/).reduce((lines, word) => {
+    const last = lines[lines.length - 1];
+    if (last && (last + word).trim().length <= max) lines[lines.length - 1] = last + word; else lines.push(word);
+    return lines; }, []).map((l) => l.trim()).filter(Boolean);
+  const nameLines = Math.max(1, ...tenants.map((t) => wrap(t.name).length));
+  const cw = 250, ch = 116 + nameLines * 16, gap = 28, per = Math.max(1, Math.min(tenants.length, 4));
   const width = Math.max(per * cw + (per - 1) * gap + 40, 520), rows = Math.ceil(tenants.length / per);
   const rootX = width / 2 - 110;
   let svg = tNode(rootX, 16, 220, 46, "Flora iCIS Root", "control plane · licenses · releases", "root");
@@ -309,11 +315,13 @@ function renderTopology() {
     svg += tEdge(width / 2, 62, x + cw / 2, y, "net");
     svg += `<g class="cluster click" onclick="topoOpen('${esc(t.tenant_id)}')" transform="translate(${x},${y})"><rect width="${cw}" height="${ch}" rx="12"/>
       <circle class="dot ${isOnline(t.last_seen_at) ? "ok" : "off"}" cx="${cw - 16}" cy="18" r="5"/>
-      <text x="14" y="24" font-weight="700">${esc(t.tenant_id)}</text><text class="sub" x="14" y="41">${esc(String(t.name).slice(0, 34))}</text>
+      <text x="14" y="24" font-weight="700">${esc(t.tenant_id)}</text>
+      ${wrap(t.name).map((line, k) => `<text class="sub" x="14" y="${41 + k * 16}">${esc(line)}</text>`).join("")}
+      <g transform="translate(0,${nameLines * 16 - 16})">
       <text x="14" y="66">Canopy ${esc(t.canopy_version || "—")}</text>
       <text x="14" y="84">${u.leaves ?? 0} Leaf · ${u.gateways ?? 0} gateway · ${devs} devices</text>
       <text class="sub" x="14" y="104">appliance seen ${esc(ago(t.last_seen_at))}</text>
-      <text class="sub" x="14" y="121" fill="var(--accent)">Open topology ›</text></g>`;
+      <text class="sub" x="14" y="121" fill="var(--accent)">Open topology ›</text></g><title>${esc(t.name)}</title></g>`;
   });
   box.innerHTML = `<div class="topo"><svg style="max-width:${width * 1.15}px;margin:0 auto" viewBox="0 0 ${width} ${120 + rows * (ch + 40)}">${svg}</svg>${legend}</div>`;
 }

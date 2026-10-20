@@ -6,6 +6,8 @@ import ThemePicker from "../components/ThemePicker";
 import LanguagePicker from "../components/LanguagePicker";
 import { useLanguage } from "../context/LanguageContext";
 import { getSurfaceInfo } from "../edition/config";
+import { useHospitalProfile } from "../hooks/useHospitalProfile";
+import { hospitalDisplayName } from "../formdev/core/hospital";
 import floraIcisLogo from "../assets/logos/flora-icis-icon.png";
 import ClinicalReferenceTooltip from "../components/common/ClinicalReferenceTooltip";
 import WardSwitcher from "../components/WardSwitcher";
@@ -37,6 +39,7 @@ function Icon({ kind }: { kind: "account" | "logout" | "power" }) {
 export default function TopBar({ setActiveView, sessionUser, caseStatus, ward = null, onLogout, onShutdown, onToggleNavigation }: Props) {
   const { t } = useLanguage();
   const surface = getSurfaceInfo();
+  const hospitalName = hospitalDisplayName(useHospitalProfile());
   const isIdleLeaf = surface.code === "leaf" && caseStatus.status === "IDLE";
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -61,6 +64,7 @@ export default function TopBar({ setActiveView, sessionUser, caseStatus, ward = 
       <div className="truncate text-[15px] font-extrabold text-[var(--app-text)]">Flora iCIS</div>
       <div className="truncate text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--app-muted)]">{surface.code === "canopy" ? "Canopy" : "Leaf"}</div>
     </div>
+    {hospitalName ? <div className="hidden min-w-0 shrink border-l border-[var(--app-border)] pl-3 text-[13px] font-semibold leading-tight text-[var(--app-text)] md:block" title={hospitalName}>{hospitalName}</div> : null}
     {isIdleLeaf ? <span className="hidden items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold text-emerald-500 sm:inline-flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />{t("topbar.readyNextCase")}</span> : null}
     {caseStatus.status !== "IDLE" && caseStatus.identity_status === "pending" ? <span className="hidden items-center gap-1.5 rounded-full border border-rose-400/35 bg-rose-500/10 px-2.5 py-1 text-[10px] font-bold text-rose-400 sm:inline-flex"><span className="h-1.5 w-1.5 rounded-full bg-rose-400" />{t("topbar.identityPending")}</span> : null}
     <div className="ml-auto flex shrink-0 items-center gap-2">

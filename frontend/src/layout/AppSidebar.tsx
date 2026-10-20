@@ -24,6 +24,8 @@ import canopyInfrastructureIcon from "../assets/menu/canopy-menu-infrastructure.
 import canopyMonitoringIcon from "../assets/menu/canopy-menu-monitoring.png";
 import canopyFormDevIcon from "../assets/menu/canopy-menu-formdev.png";
 import { canAuthorStudio, canUseAiStudio } from "../auth/studioAccess";
+import { useHospitalProfile } from "../hooks/useHospitalProfile";
+import { hospitalDisplayName } from "../formdev/core/hospital";
 
 export type AppView = "ward" | "case" | "form" | "diagnosis" | "staff" | "io" | "patient" | "report" | "master" | "account" | "dashboard" | "admissions" | "monitoring" | "fleet" | "infrastructure" | "topology" | "gateway-alerts" | "devices" | "distribution" | "twin" | "formdev" | "workflows" | "report-studio" | "ai-studio" | "history" | "billing" | "staff-directory" | "or-schedule";
 
@@ -164,16 +166,18 @@ function SystemMenu({ collapsed, canSettings, activeView, sessionUser, navigate,
     setOpen(false);
     action();
   };
+  const hospitalName = hospitalDisplayName(useHospitalProfile(), workstation.hospitalName);
   const location = surface.code === "leaf"
     ? [workstation.careUnitName, workstation.roomName, workstation.bedName].filter(Boolean).join(" · ")
-    : workstation.hospitalName;
+    : "";
   const itemClass = "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-xs font-semibold hover:bg-[var(--app-control-bg)]";
 
   return <div ref={rootRef} className="relative shrink-0 border-t border-[var(--app-border)] p-2">
     {open ? createPortal(<div ref={menuRef} role="menu" aria-label={t("system.menu")} style={menuStyle} className="fixed z-[1200] w-64 rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-2 shadow-2xl">
       <div className="mb-1 border-b border-[var(--app-border)] px-3 pb-2 pt-1">
         <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--app-muted)]">{surface.code === "leaf" ? t("system.workstation") : surface.productName}</div>
-        {location ? <div className="truncate text-xs font-semibold">{location}</div> : null}
+        {hospitalName ? <div className="break-words text-xs font-semibold leading-snug">{hospitalName}</div> : null}
+        {location ? <div className="break-words text-[11px] font-semibold text-[var(--app-muted)]">{location}</div> : null}
         <div className="truncate text-[11px] text-[var(--app-muted)]">{sessionUser?.name || sessionUser?.username}</div>
       </div>
       {(surface.code === "canopy" || surface.code === "leaf") && canSettings ? <button role="menuitem" type="button" onClick={() => choose(() => navigate("distribution"))} className={itemClass}><span className="inline-flex h-5 w-5 items-center justify-center"><DistributionIcon /></span>{t("system.distribution")}</button> : null}

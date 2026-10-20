@@ -39,3 +39,9 @@ export function hospitalName(language?: string): string {
   if (!current) return "";
   return language && !language.toLowerCase().startsWith("th") ? current.name_en || current.name_th : current.name_th || current.name_en;
 }
+
+/** "ชื่อไทย (English name)" for headers and menus; either half alone when only one is set. */
+export function hospitalDisplayName(profile: HospitalProfile | null | undefined, fallback?: string | null): string {
+  const th = profile?.name_th?.trim() || "", en = profile?.name_en?.trim() || "";
+  return th && en ? `${th} (${en})` : th || en || fallback?.trim() || "";
+}
