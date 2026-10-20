@@ -43,7 +43,8 @@ if docker ps -a --format '{{.Label "com.docker.compose.project"}} {{.Label "com.
   die "this machine already runs a Flora gateway (another folder); one gateway per machine"
 fi
 echo "Gateway $GW_ID ($NAME)"
-install -d -m 750 "$DIR" "$DIR/certs" "$DIR/.release" "$DIR/config" "$DIR/kong" "$DIR/edge" "$DIR/db"
+install -d -m 755 "$DIR" "$DIR/config" "$DIR/kong" "$DIR/edge" "$DIR/db"   # read by Kong / nginx / Postgres users
+install -d -m 750 "$DIR/certs" "$DIR/.release"
 
 say "2/7 Fetching the approved gateway release"
 DESIRED=$(curl -fsS -H "authorization: Bearer $TOKEN" "$HABER/api/haber/v1/nodes/$GW_ID/desired?component=gateway") || die "cannot ask the appliance for the release"
@@ -111,6 +112,7 @@ ENV
   chmod 600 "$DIR/.env"
 fi
 envget() { sed -n "s/^$1=//p" "$DIR/.env" | tr -d '"'; }
+chmod -R a+rX "$DIR/config" "$DIR/kong" "$DIR/edge" "$DIR/db"   # no secrets in these
 GATEWAY_HTTPS_PORT=$(envget GATEWAY_HTTPS_PORT); GATEWAY_ADMIN_PASSWORD=$(envget GATEWAY_ADMIN_PASSWORD)
 
 say "5/7 Certificates"
@@ -125,10 +127,12 @@ say "6/7 Starting the gateway (pulling images from the appliance; first time tak
 cd "$DIR"
 COMPOSE="docker compose -p $PROJECT --project-directory $DIR -f $DIR/compose.yaml -f $DIR/compose.devices.yaml --env-file $DIR/.env --env-file $DIR/.release/$PROJECT.env"
 $COMPOSE pull -q || die "cannot pull the gateway images from $REGISTRY"
-$COMPOSE up -d || die "docker compose up failed"
+# The updater starts last, once the stack is healthy, so it never recreates services mid-start.
+$COMPOSE up -d --scale updater=0 || die "docker compose up failed"
 i=0; until [ "$(docker inspect -f '{{.State.Health.Status}}' "$($COMPOSE ps -q kong)" 2>/dev/null)" = healthy ] \
   && curl -fsS -o /dev/null http://127.0.0.1:7400/health 2>/dev/null; do
   i=$((i + 1)); [ $i -le 90 ] || die "the gateway did not come up: $($COMPOSE logs --tail 20 gateway-service 2>&1 | tail -5)"; sleep 5; done
+$COMPOSE up -d updater >/dev/null || die "the updater did not start"
 
 say "7/7 Reporting to the appliance and Root"
 curl -fsS -X POST -H 'content-type: application/json' -d "$(printf '{"code":"%s","status":"installed"}' "$CODE")" \

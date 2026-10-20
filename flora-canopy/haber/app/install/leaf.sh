@@ -126,9 +126,11 @@ say "6/7 Starting the Leaf (pulling images from the appliance; first time takes 
 cd "$DIR"
 COMPOSE="docker compose -p $PROJECT --project-directory $DIR -f $DIR/compose.yaml --env-file $DIR/.env --env-file $DIR/.release/$PROJECT.env"
 $COMPOSE pull -q || die "cannot pull the Leaf images from $REGISTRY"
-$COMPOSE up -d || die "docker compose up failed"
+# The updater starts last, once the stack is healthy, so it never recreates services mid-start.
+$COMPOSE up -d --scale updater=0 || die "docker compose up failed"
 i=0; until [ "$(docker inspect -f '{{.State.Health.Status}}' "$($COMPOSE ps -q leaf-api)" 2>/dev/null)" = healthy ]; do
   i=$((i + 1)); [ $i -le 60 ] || die "leaf-api did not become healthy: $($COMPOSE logs --tail 20 leaf-api 2>&1 | tail -5)"; sleep 5; done
+$COMPOSE up -d updater >/dev/null || die "the updater did not start"
 
 say "7/7 Reporting to the appliance and Root"
 curl -fsS -X POST -H 'content-type: application/json' -d "$(printf '{"code":"%s","status":"installed"}' "$CODE")" \
