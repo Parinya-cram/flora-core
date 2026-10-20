@@ -160,6 +160,8 @@ app = FastAPI(title="Flora Root", lifespan=lifespan)
 auth.install(app, pool, [
     r"/health", r"/api/v1/keys", r"/api/v1/tenants/[^/]+/(bundle|heartbeat|releases)",  # Canopy, tenant key auth
     r"/api/auth/status",                                                                # login page status panel
+    r"/api/v1/tenants/[^/]+/installs/(pending|[^/]+/report)",                           # appliance, tenant key auth
+    r"/api/v1/install/redeem",                                                          # new site server, one-time code
 ])
 app.include_router(auth.router)
 require_admin = auth.require_admin  # signed-in admin operator, or Root CI with x-root-key / Basic
@@ -393,6 +395,157 @@ def create_tenant(body: TenantIn):
         bundle_id = issue_license(connection, body.tenant_id, LicenseIn(device_types=DEMO_DEVICE_TYPES))
     # The key is shown once; Root stores only its hash.
     return {"tenant_id": body.tenant_id, "api_key": api_key, "bundle_id": bundle_id}
+
+
+# ------------------------------------------------------------------ installs
+# Root plans every machine of a hospital: the site server (Canopy + appliance) and each Leaf / gateway.
+# A one-time code (shown once, stored hashed) is typed on the new machine. The site code is redeemed at
+# Root for the hospital's credentials; Leaf / gateway codes are checked by the appliance on the LAN
+# against the signed pending list it pulls, so those machines never need the internet.
+
+INSTALL_KINDS = {"site", "leaf", "gateway"}
+NODE_ID = r"^[a-z0-9][a-z0-9-]{2,59}$"
+ROOT_PUBLIC_URL = os.getenv("ROOT_PUBLIC_URL", "").rstrip("/")
+
+
+class InstallIn(BaseModel):
+    kind: str = Field(pattern=r"^(site|leaf|gateway)$")
+    node_id: str | None = Field(None, pattern=NODE_ID)
+    label: str | None = Field(None, max_length=200)
+    ward: str | None = Field(None, max_length=200)
+    room: str | None = Field(None, max_length=200)
+    bed: str | None = Field(None, max_length=200)
+    valid_hours: int = Field(72, ge=1, le=720)
+
+
+def install_code() -> str:
+    raw = base64.b32encode(secrets.token_bytes(10)).decode()          # 80 bits, no ambiguous padding
+    return "-".join(raw[i:i + 4] for i in range(0, 16, 4))
+
+
+def install_doc(row: dict[str, Any]) -> dict[str, Any]:
+    status = row["status"]
+    if status == "pending" and row["expires_at"] < now_ms():
+        status = "expired"
+    return {key: row[key] for key in ("install_id", "tenant_id", "kind", "node_id", "label", "ward", "room", "bed",
+                                      "created_at", "created_by", "expires_at", "updated_at", "detail")} | {"status": status}
+
+
+def install_commands(kind: str, code: str, root_url: str) -> dict[str, str]:
+    if kind == "site":
+        return {"run_on": "the hospital's site server (it needs internet to reach Root)",
+                "command": f"curl -fsSL {root_url}/install/site.sh | sudo sh -s -- --root {root_url} --code {code}"}
+    return {"run_on": f"the new {kind} machine on the hospital LAN (no internet needed; it installs from the appliance)",
+            "command": f"curl -fsSL http://<appliance>:7204/install/{kind}.sh | sudo sh -s -- --code {code}"}
+
+
+@app.post("/api/v1/tenants/{tenant_id}/installs", dependencies=[Depends(require_admin)], status_code=201)
+def create_install(tenant_id: str, body: InstallIn, request: Request):
+    if body.kind != "site" and not body.node_id:
+        raise HTTPException(422, f"a {body.kind} needs a node id (the id it registers with in Canopy)")
+    user = auth.current_user(request)
+    code, current = install_code(), now_ms()
+    install_id = "ins-" + secrets.token_hex(6)
+    with pool.connection() as connection:
+        if not connection.execute("SELECT 1 FROM root_tenant WHERE tenant_id=%s", (tenant_id,)).fetchone():
+            raise HTTPException(404, "unknown tenant")
+        if body.node_id and connection.execute(
+                """SELECT 1 FROM root_install WHERE tenant_id=%s AND node_id=%s AND status IN ('pending','claimed','installed')
+                     AND (status <> 'pending' OR expires_at > %s)""", (tenant_id, body.node_id, current)).fetchone():
+            raise HTTPException(409, f"{body.node_id} is already planned or installed for this hospital")
+        connection.execute(
+            """INSERT INTO root_install (install_id, tenant_id, kind, node_id, label, ward, room, bed, code_hash, created_at,
+                   created_by, expires_at, updated_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (install_id, tenant_id, body.kind, body.node_id, body.label, body.ward, body.room, body.bed, key_hash(code),
+             current, user.get("username"), current + body.valid_hours * 3_600_000, current))
+    auth.audit(user.get("username"), "install.create", tenant_id, auth.client_ip(request),
+               {"install_id": install_id, "kind": body.kind, "node_id": body.node_id})
+    root_url = ROOT_PUBLIC_URL or str(request.base_url).rstrip("/")
+    # The code is shown once; Root keeps only its hash.
+    return {"install_id": install_id, "code": code, **install_commands(body.kind, code, root_url)}
+
+
+@app.get("/api/v1/tenants/{tenant_id}/installs")
+def list_installs(tenant_id: str):
+    with pool.connection() as connection:
+        rows = connection.execute("SELECT * FROM root_install WHERE tenant_id=%s ORDER BY created_at DESC", (tenant_id,)).fetchall()
+    return {"rows": [install_doc(row) for row in rows]}
+
+
+@app.post("/api/v1/installs/{install_id}/revoke", dependencies=[Depends(require_admin)])
+def revoke_install(install_id: str, request: Request):
+    with pool.connection() as connection:
+        row = connection.execute(
+            "UPDATE root_install SET status='revoked', updated_at=%s WHERE install_id=%s AND status IN ('pending','claimed') RETURNING tenant_id",
+            (now_ms(), install_id)).fetchone()
+    if not row:
+        raise HTTPException(409, "only a pending or claimed install can be revoked")
+    auth.audit(auth.current_user(request).get("username"), "install.revoke", row["tenant_id"], auth.client_ip(request),
+               {"install_id": install_id})
+    return {"ok": True}
+
+
+@app.get("/api/v1/tenants/{tenant_id}/installs/pending")
+def pending_installs(tenant_id: str, request: Request):
+    """The appliance's copy of this hospital's open Leaf / gateway installs (hashes only), signed by Root so
+    a code it accepts offline is one Root issued."""
+    require_tenant(tenant_id, request)
+    with pool.connection() as connection:
+        rows = connection.execute(
+            """SELECT * FROM root_install WHERE tenant_id=%s AND kind <> 'site' AND status IN ('pending','claimed')
+                 AND expires_at > %s ORDER BY created_at""", (tenant_id, now_ms())).fetchall()
+    return sign({"tenant_id": tenant_id, "signed_at": now_ms(),
+                 "installs": [{key: row[key] for key in ("install_id", "kind", "node_id", "label", "ward", "room", "bed",
+                                                         "code_hash", "expires_at")} for row in rows]})
+
+
+class InstallReport(BaseModel):
+    status: str = Field(pattern=r"^(claimed|installed|failed)$")
+    detail: dict[str, Any] = {}
+
+
+@app.post("/api/v1/tenants/{tenant_id}/installs/{install_id}/report")
+def report_install(tenant_id: str, install_id: str, body: InstallReport, request: Request):
+    """The appliance reports a Leaf / gateway install it ran (claimed when the code was used, then installed / failed)."""
+    require_tenant(tenant_id, request)
+    with pool.connection() as connection:
+        row = connection.execute(
+            """UPDATE root_install SET status=%s, detail=detail || %s, updated_at=%s
+               WHERE install_id=%s AND tenant_id=%s AND status IN ('pending','claimed') RETURNING install_id""",
+            (body.status, Jsonb(body.detail), now_ms(), install_id, tenant_id)).fetchone()
+    if not row:
+        raise HTTPException(409, "install is not open")
+    return {"ok": True}
+
+
+class RedeemIn(BaseModel):
+    code: str = Field(min_length=10, max_length=40)
+
+
+@app.post("/api/v1/install/redeem")
+def redeem_site(body: RedeemIn, request: Request):
+    """A new site server trades its one-time code for the hospital's appliance credentials (the tenant key is
+    rotated, so the key only ever lives on that server) plus what it needs to verify and pull from Root."""
+    code = body.code.strip().upper()
+    current = now_ms()
+    with pool.connection() as connection:
+        with connection.transaction():
+            row = connection.execute(
+                """SELECT * FROM root_install WHERE code_hash=%s AND kind='site' AND status='pending' AND expires_at > %s
+                   FOR UPDATE""", (key_hash(code), current)).fetchone()
+            if not row:
+                raise HTTPException(403, "invalid, used or expired install code")
+            api_key = secrets.token_urlsafe(24)
+            tenant = connection.execute(
+                "UPDATE root_tenant SET api_key_hash=%s, updated_at=%s WHERE tenant_id=%s RETURNING tenant_id, name",
+                (key_hash(api_key), current, row["tenant_id"])).fetchone()
+            connection.execute("UPDATE root_install SET status='claimed', updated_at=%s, detail=detail || %s WHERE install_id=%s",
+                               (current, Jsonb({"redeemed_from": auth.client_ip(request)}), row["install_id"]))
+            key = connection.execute("SELECT key_id, public_raw FROM root_signing_key WHERE active ORDER BY created_at DESC LIMIT 1").fetchone()
+    auth.audit(None, "install.redeem", row["tenant_id"], auth.client_ip(request), {"install_id": row["install_id"]})
+    return {"install_id": row["install_id"], "tenant_id": tenant["tenant_id"], "name": tenant["name"], "tenant_key": api_key,
+            "root_url": ROOT_PUBLIC_URL or str(request.base_url).rstrip("/"), "registry": REGISTRY_URL,
+            "signing_key": {"key_id": key["key_id"], "public_raw": key["public_raw"]}}
 
 
 @app.put("/api/v1/tenants/{tenant_id}/license", dependencies=[Depends(require_admin)])

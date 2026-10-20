@@ -198,3 +198,25 @@ CREATE TABLE IF NOT EXISTS device_protocol_lane (
   note               text,
   source_id          text REFERENCES device_type_source(source_id)
 );
+
+-- Installs planned at Root, one row per machine: a hospital site (Canopy + appliance), a Leaf or a gateway.
+-- Only Root operators create them. The one-time code is shown once and stored as a hash; the hospital's
+-- appliance pulls the pending list (signed) so Leafs and gateways on the LAN install without internet.
+CREATE TABLE IF NOT EXISTS root_install (
+  install_id    text PRIMARY KEY,
+  tenant_id     text NOT NULL REFERENCES root_tenant(tenant_id) ON DELETE CASCADE,
+  kind          text NOT NULL CHECK (kind IN ('site', 'leaf', 'gateway')),
+  node_id       text,                       -- leaf_id / gateway_id the machine will register as
+  label         text,
+  ward          text,
+  room          text,
+  bed           text,
+  code_hash     text NOT NULL UNIQUE,
+  status        text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'claimed', 'installed', 'failed', 'revoked')),
+  detail        jsonb NOT NULL DEFAULT '{}',
+  created_at    bigint NOT NULL,
+  created_by    text,
+  expires_at    bigint NOT NULL,
+  updated_at    bigint NOT NULL
+);
+CREATE INDEX IF NOT EXISTS root_install_tenant_idx ON root_install (tenant_id, created_at DESC);
