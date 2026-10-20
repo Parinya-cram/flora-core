@@ -28,7 +28,7 @@ if not TAG:
 
 REGISTRY = os.getenv("ROOT_REGISTRY_PUSH", "172.22.19.81:7105")          # root-registry hostPort (http)
 ROOT_URL = os.getenv("FLORA_ROOT_PUBLISH_URL", "https://172.22.19.81:8443")  # Root edge
-VERSION = os.getenv("RELEASE_VERSION", f"k8s-{TAG}")
+VERSION = os.getenv("RELEASE_VERSION") or f"1.0.{os.getenv('CI_PIPELINE_IID', TAG)}"   # clean version, e.g. 1.0.145
 CHANNEL = os.getenv("RELEASE_CHANNEL", "stable")
 USER = os.getenv("ROOT_ADMIN_USERNAME", "admin")
 PASSWORD = os.getenv("ROOT_ADMIN_PASSWORD", "admin")
