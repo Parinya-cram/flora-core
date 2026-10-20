@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   approveRelease, getDistributionOverview, holdComponent, mirrorRelease, rootSync,
-  getDistSettings, saveDistSettings,
+  getDistSettings, saveDistSettings, adoptDevice, unadoptDevice,
   type DistributionOverview, type DistributionNode, type ReleaseRow,
 } from "../api/deviceDistributionApi";
 
@@ -163,6 +163,7 @@ export default function DeviceDistributionView() {
   const gatewayApproved = approvals.gateway === gatewayReleaseId;
   const devices = useMemo(() => {
     const licensed = new Set(data?.bundle?.entitlements?.device_types || []);
+    const adopted = new Set(data?.adopted || []);
     const installed: Record<string, number> = {}, running: Record<string, number> = {};
     for (const g of data?.gateways || []) for (const dv of g.devices || []) {
       if (!dv.device_type) continue;
@@ -172,6 +173,7 @@ export default function DeviceDistributionView() {
     return (data?.gateway_catalog || []).map((t) => ({
       ...t,
       licensed: licensed.has(t.code),
+      adopted: adopted.has(t.code),
       installed: installed[t.code] || 0,
       running: running[t.code] || 0,
     })).sort((a, b) => Number(b.licensed) - Number(a.licensed) || (a.label || a.code).localeCompare(b.label || b.code));
@@ -228,51 +230,53 @@ export default function DeviceDistributionView() {
       <section className="mb-5">
         <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--app-muted)]">Devices</h2>
 
-        <div className="mb-1.5 text-xs font-semibold">On your gateways</div>
-        {devices.some((d) => d.installed > 0) ? (
+        <div className="mb-1.5 text-xs font-semibold">Downloaded — in use by Canopy &amp; Leaf</div>
+        {devices.some((d) => d.adopted) ? (
           <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {devices.filter((d) => d.installed > 0).map((dv) => (
-              <div key={dv.code} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-3">
-                <div className="truncate text-sm font-bold">{dv.label || dv.code}</div>
-                <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px] text-[var(--app-muted)]">
-                  <span>v{dv.version || "1"}</span>
-                  <span>· {dv.installed} installed</span>
-                  <span className={dv.running ? "font-semibold text-emerald-500" : "text-rose-400"}>· {dv.running} running</span>
+            {devices.filter((d) => d.adopted).map((dv) => (
+              <div key={dv.code} className="rounded-xl border border-emerald-600/40 bg-[var(--app-panel-bg)] p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-bold">{dv.label || dv.code}</div>
+                    <div className="truncate text-[11px] text-[var(--app-muted)]">v{dv.version || "1"} · {dv.installed} installed · <span className={dv.running ? "text-emerald-500" : ""}>{dv.running} running</span></div>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">downloaded</span>
+                </div>
+                <div className="mt-2.5">
+                  <button type="button" disabled={busy === `dev-${dv.code}`}
+                    onClick={() => act(`dev-${dv.code}`, () => unadoptDevice(dv.code), `${dv.label || dv.code}: removed from this hospital.`)}
+                    className="rounded-lg border border-[var(--app-border)] px-3 py-1 text-xs font-semibold text-rose-400 disabled:opacity-50">Remove</button>
                 </div>
               </div>
             ))}
           </div>
-        ) : <div className="mb-4 text-xs text-[var(--app-muted)]">No devices installed on your gateways yet.</div>}
+        ) : <div className="mb-4 text-xs text-[var(--app-muted)]">No devices downloaded yet — pick from the central catalog below.</div>}
 
         <div className="mb-1.5 text-xs font-semibold">Available from central (Root)</div>
-        {devices.length ? (
+        {devices.some((d) => !d.adopted) ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {devices.map((dv) => {
-              const parserVer = gatewayRelease?.version || null;
-              const canInstall = dv.licensed && !!gatewayRelease && !gatewayApproved;
-              return (
-                <div key={dv.code} className={`rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-3 ${dv.licensed ? "" : "opacity-60"}`}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-bold">{dv.label || dv.code}</div>
-                      <div className="truncate text-[11px] text-[var(--app-muted)]">v{dv.version || "1"}{parserVer ? ` · parser ${parserVer}` : ""}</div>
-                    </div>
-                    {dv.licensed
-                      ? <span className="shrink-0 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">licensed</span>
-                      : <span className="shrink-0 rounded-full bg-slate-500 px-2 py-0.5 text-[10px] font-bold text-white">locked</span>}
+            {devices.filter((d) => !d.adopted).map((dv) => (
+              <div key={dv.code} className={`rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-3 ${dv.licensed ? "" : "opacity-60"}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-bold">{dv.label || dv.code}</div>
+                    <div className="truncate text-[11px] text-[var(--app-muted)]">v{dv.version || "1"}{dv.category ? ` · ${dv.category}` : ""}</div>
                   </div>
-                  <div className="mt-2.5">
-                    {!dv.licensed ? <span className="text-[11px] text-[var(--app-muted)]">License at Root to enable</span>
-                      : dv.installed > 0 && gatewayApproved ? <span className="text-[11px] font-semibold text-emerald-500">✓ installed</span>
-                      : !gatewayRelease ? <span className="text-[11px] text-[var(--app-muted)]">No parser release yet</span>
-                      : canInstall ? <button type="button" disabled={busy === `dev-${dv.code}`} onClick={() => act(`dev-${dv.code}`, () => approveRelease(gatewayRelease.release_id), `${dv.label || dv.code}: ${dv.installed > 0 ? "updated" : "installed"} — gateways update on next check-in.`)} className="rounded-lg border border-[var(--app-accent)] bg-[var(--app-accent)] px-3 py-1 text-xs font-bold text-[var(--app-accent-contrast)] disabled:opacity-50">{dv.installed > 0 ? "Update" : "Download"}</button>
-                      : <span className="text-[11px] font-semibold text-emerald-500">✓ up to date</span>}
-                  </div>
+                  {dv.licensed
+                    ? <span className="shrink-0 rounded-full bg-sky-600 px-2 py-0.5 text-[10px] font-bold text-white">licensed</span>
+                    : <span className="shrink-0 rounded-full bg-slate-500 px-2 py-0.5 text-[10px] font-bold text-white">locked</span>}
                 </div>
-              );
-            })}
+                <div className="mt-2.5">
+                  {dv.licensed ? (
+                    <button type="button" disabled={busy === `dev-${dv.code}`}
+                      onClick={() => act(`dev-${dv.code}`, () => adoptDevice(dv.code), `${dv.label || dv.code}: downloaded — Canopy & Leaf can use it.`)}
+                      className="rounded-lg border border-[var(--app-accent)] bg-[var(--app-accent)] px-3 py-1 text-xs font-bold text-[var(--app-accent-contrast)] disabled:opacity-50">Download</button>
+                  ) : <span className="text-[11px] text-[var(--app-muted)]">License at Root to unlock</span>}
+                </div>
+              </div>
+            ))}
           </div>
-        ) : <div className="text-xs text-[var(--app-muted)]">No device types in the central catalog yet.</div>}
+        ) : <div className="text-xs text-[var(--app-muted)]">All catalog devices are downloaded.</div>}
       </section>
 
       <section className="mb-5">

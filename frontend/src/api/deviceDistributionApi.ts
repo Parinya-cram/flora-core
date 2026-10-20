@@ -44,6 +44,7 @@ export type DistributionOverview = {
     rows: ReleaseRow[];
   };
   nodes: DistributionNode[];
+  adopted?: string[];
   gateway_catalog?: DeviceTypeCatalog[];
   bundle?: { entitlements?: { device_types?: string[]; max_gateway_devices?: number } } | null;
   gateways?: Array<{ gateway_id: string; version?: string; devices?: Array<{ device_id: string; device_type?: string; label?: string | null; enabled?: boolean; parser_status?: string | null }> }>;
@@ -106,4 +107,11 @@ export async function getDistSettings(): Promise<DistSettings> {
 
 export async function saveDistSettings(body: Record<string, unknown>): Promise<unknown> {
   return unwrap(await fetch(`${BASE}/settings`, { method: "PUT", headers: authHeaders(true), body: JSON.stringify(body) }));
+}
+
+export async function adoptDevice(code: string): Promise<{ codes: string[] }> {
+  return unwrap(await fetch(`${BASE}/devices/${encodeURIComponent(code)}/adopt`, { method: "POST", headers: authHeaders() }));
+}
+export async function unadoptDevice(code: string): Promise<{ codes: string[] }> {
+  return unwrap(await fetch(`${BASE}/devices/${encodeURIComponent(code)}/adopt`, { method: "DELETE", headers: authHeaders() }));
 }

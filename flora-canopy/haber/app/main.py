@@ -663,6 +663,36 @@ def put_settings(body: SettingsIn, request: Request):
     return {"changed": changed, "settings": current_settings()}
 
 
+# ---- adopted device types: which licensed device types this hospital has "downloaded" for Canopy/Leaf use
+def adopted_types() -> list[str]:
+    return kv_get("adopted_types") or []
+
+
+@app.get("/api/haber/v1/adopted")
+def get_adopted():
+    return {"codes": adopted_types()}
+
+
+@app.post("/api/haber/v1/adopted/{code}")
+def adopt_type(code: str, request: Request):
+    user = basic_auth.username_of(request)
+    codes = adopted_types()
+    if code not in codes:
+        codes.append(code)
+        kv_set("adopted_types", codes)
+        log.info("%s adopted device type %s", user, code)
+    return {"codes": codes}
+
+
+@app.delete("/api/haber/v1/adopted/{code}")
+def unadopt_type(code: str, request: Request):
+    user = basic_auth.username_of(request)
+    codes = [c for c in adopted_types() if c != code]
+    kv_set("adopted_types", codes)
+    log.info("%s removed device type %s", user, code)
+    return {"codes": codes}
+
+
 @app.get("/api/haber/v1/device-types")
 def device_types():
     return {"rows": CATALOG["device_types"]}
@@ -689,6 +719,7 @@ def overview():
         "gateway_catalog": gateway_catalog()[0],
         "releases": release_overview(),
         "nodes": nodes(),
+        "adopted": adopted_types(),
     }
 
 

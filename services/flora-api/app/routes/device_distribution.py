@@ -70,6 +70,17 @@ def put_settings(body: dict[str, Any] = Body(...)) -> Any:
     return _haber("PUT", "/api/haber/v1/settings", body)
 
 
+@router.post("/devices/{code}/adopt")
+def adopt_device(code: str) -> Any:
+    """Download/adopt a licensed device type for this hospital (Canopy/Leaf start using it)."""
+    return _haber("POST", f"/api/haber/v1/adopted/{_safe(code, 'code')}")
+
+
+@router.delete("/devices/{code}/adopt")
+def unadopt_device(code: str) -> Any:
+    return _haber("DELETE", f"/api/haber/v1/adopted/{_safe(code, 'code')}")
+
+
 @router.get("/overview")
 def overview() -> Any:
     """Full rollout state: releases (channel, latest, mirror status, approvals), nodes (applied
