@@ -1,0 +1,11 @@
+# Kong (DB-less). `data-api` is the only thing a Leaf talks to; a Leaf asks for its own devices
+# with ?leaf_id=<leaf-id>. Per-Leaf routes (/data-api/<leaf-id>) can be added here later.
+_format_version: "3.0"
+
+services:
+  - name: data-api
+    url: http://server:8080
+    routes:
+      - name: data-api-all
+        paths: ["/data-api"]
+        strip_path: true

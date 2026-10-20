@@ -9,8 +9,8 @@ mirror -> approve -> node-pull chain works. Run by CI (needs sudo nerdctl).
 
     sudo python3 flora-root/scripts/publish_k8s_releases.py <TAG>
 
-Gateway images live on the gateway box, not in k8s, so the gateway release is
-published from there with flora-root/scripts/publish_release.py instead.
+The gateway release is built here too (CI deploy-k8s), with the third-party images a
+gateway runs, so a gateway machine installs from the hospital appliance alone.
 """
 from __future__ import annotations
 
@@ -39,6 +39,11 @@ PUBLISH = {
     # Everything a Leaf machine installed from the appliance runs (flora-haber app/install/leaf/compose.yaml).
     "leaf": {"api": f"flora-canopy-canopy-api:{TAG}", "sync": f"flora-leaf-sync-worker:{TAG}",
              "web": f"flora-leaf-leaf-web:{TAG}", "db": f"flora-db:{TAG}", "updater": f"flora-updater:{TAG}"},
+    # Everything a gateway machine installed from the appliance runs (flora-haber app/install/gateway/compose.yaml).
+    "gateway": {"rust": f"flora-gateway-rust:{TAG}", "service": f"flora-gateway-service:{TAG}",
+                "parser": f"flora-gateway-parser:{TAG}", "updater": f"flora-updater:{TAG}",
+                "kafka": "docker.io/apache/kafka:3.9.1", "db": "docker.io/library/postgres:17.6-alpine",
+                "kong": "docker.io/library/kong:3.9", "edge": "docker.io/library/nginx:1.27-alpine"},
 }
 DEVICE_TYPES_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "flora-gateway", "device-types.json")
 

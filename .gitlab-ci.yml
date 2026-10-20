@@ -20,6 +20,8 @@ compose-config:
   script:
     - docker compose -f compose.dev.yaml --profile canopy --profile multi-leaf config >/dev/null
     - docker compose -f flora-gateway/compose.yaml config >/dev/null
+    # The appliance hands new gateways copies of these; they must not drift from flora-gateway/.
+    - for f in db/0001-gateway.sql db/0002-device-measurements.sql edge/nginx.conf; do cmp flora-gateway/$f flora-canopy/haber/app/install/gateway/$(basename $f); done
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
     - if: $CI_COMMIT_BRANCH
@@ -164,6 +166,12 @@ deploy-k8s:
     # Leaf machines installed from the appliance run images only: their database and updater too.
     - sudo nerdctl -n k8s.io build -t flora-db:$TAG -f Dockerfile.postgres.dev .
     - sudo nerdctl -n k8s.io build -t flora-updater:$TAG flora-updater
+    # Gateway machines installed from the appliance: Flora's gateway images plus the third-party ones it runs
+    # (mirrored into the hospital registry so a gateway installs without internet).
+    - sudo nerdctl -n k8s.io build -t flora-gateway-rust:$TAG flora-gateway/rust
+    - sudo nerdctl -n k8s.io build -t flora-gateway-service:$TAG flora-gateway/python/gateway-service
+    - sudo nerdctl -n k8s.io build -t flora-gateway-parser:$TAG flora-gateway/python/device-medical-service
+    - for image in apache/kafka:3.9.1 postgres:17.6-alpine kong:3.9 nginx:1.27-alpine; do sudo nerdctl -n k8s.io pull -q docker.io/$(echo $image | grep -q / || echo library/)$image; done
     - echo "roll out new images"
     - kubectl apply -f deploy/k8s/flora-leaf-sync-worker.yaml
     - kubectl -n flora-canopy set image deploy/canopy-api canopy-api=flora-canopy-canopy-api:$TAG

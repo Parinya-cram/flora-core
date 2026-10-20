@@ -931,14 +931,15 @@ def install_overview() -> list[dict[str, Any]]:
 def install_script(kind: str, request: Request):
     if kind not in INSTALL_KINDS:
         raise HTTPException(404, "no such installer")
-    # Leaf: full install (images from this appliance). Gateway: claim only until gateway images are published.
-    script = "leaf.sh" if kind == "leaf" else "node.sh"
+    script = f"{kind}.sh"          # full install from this appliance's registry (images only)
     return PlainTextResponse((Path(__file__).parent / "install" / script).read_text()
                              .replace("__HABER_URL__", str(request.base_url).rstrip("/")).replace("__KIND__", kind),
                              media_type="text/x-shellscript")
 
 
-INSTALL_FILES = {"leaf": {"compose.yaml", "https.conf.template"}}
+INSTALL_FILES = {"leaf": {"compose.yaml", "https.conf.template"},
+                 "gateway": {"compose.yaml", "gateway.toml", "instances.json", "kong.yaml", "nginx.conf",
+                             "0001-gateway.sql", "0002-device-measurements.sql"}}
 
 
 @app.get("/install/files/{kind}/{name}")
