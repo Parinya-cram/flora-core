@@ -21,10 +21,11 @@ from fastapi.responses import Response
 
 from .. import ai_service
 from ..database import pool
-from ..formdev import FormDevServices, ai_builder, documents
+from ..formdev import FormDevServices, ai_builder, documents, uploads
 from ..formdev.attachments import INLINE_TYPES
 from ..formdev.definition import FORMAT, FORM_ID, describe_issues, validate_definition
 from ..formdev.errors import FormDevError
+from ..formdev.reading import draft as reading_draft
 from .auth_canopy import read_token
 from .auth_leaf import attach_entitlements
 from .formdev import formdev, strict_json, username
@@ -33,7 +34,7 @@ from .studio_access import can_author, require_studio_author
 
 router = APIRouter(prefix="/api/formdev", tags=["formdev ai"])
 log = logging.getLogger("flora.formdev.ai")
-MAX_UPLOAD_BYTES = 48 * 1024 * 1024  # base64 of documents.MAX_TOTAL_BYTES plus page images and JSON
+MAX_UPLOAD_BYTES = 8 * 1024 * 1024  # JSON requests (a form definition, instructions); files come through /uploads
 MAX_INSTRUCTIONS = 4000
 
 
@@ -78,9 +79,13 @@ def _validator() -> Any:
     return lambda definition: describe_issues(definition, validate_definition(definition, style_ids, font_ids))
 
 
-def _inspected(body: dict[str, Any]) -> list[documents.SourceFile]:
+def _inspected(body: dict[str, Any], user: dict[str, Any]) -> list[documents.SourceFile]:
+    """The documents of a build, by the ids of files already uploaded (POST /uploads), inspected again."""
+    ids = body.get("uploads")
+    if not isinstance(ids, list) or not all(isinstance(item, str) for item in ids):
+        raise FormDevError("invalid_request", "uploads: the ids of the uploaded documents (POST /api/formdev/uploads)", 422)
     try:
-        return documents.inspect(documents.read_upload(body))
+        return documents.inspect(documents.check_request([uploads.source(uploads.owner_of(user), item) for item in ids]))
     except documents.DocumentError as error:
         raise FormDevError("invalid_documents", str(error), 422) from None
 
@@ -107,10 +112,32 @@ def _status(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def _check_for_ai(files: list[documents.SourceFile], config: dict[str, Any]) -> None:
+    """OpenAI-compatible hosts cannot read PDF files: their pages are rendered here as images."""
     if ai_builder.needs_page_images(config):
+        left = documents.MAX_PAGE_IMAGES
         for source in files:
-            if source.kind == "pdf" and not source.page_images and not source.scan_images:
-                source.note("error", "This AI host cannot read PDF files: Form Studio sends the pages as images (reload the page and try again)")
+            if source.kind == "pdf" and not source.scan_images and source.status != "error" and left > 0:
+                try:
+                    source.page_images = documents.render_pages(source.content, left)
+                    left -= len(source.page_images)
+                except Exception as error:  # noqa: BLE001 - a PDF the renderer cannot open is reported, not sent
+                    source.note("error", f"The pages of this PDF could not be rendered for the AI ({type(error).__name__})")
+
+
+def _measured_draft(files: list[documents.SourceFile], form_id: str | None, title: str | None) -> dict[str, Any] | None:
+    """The first scanned or PDF document read by the tools first (reading/, no AI): the paper's layout, tables and paper
+    measured, for the AI to correct rather than guess. None when there is no such document or it cannot be read."""
+    from ..formdev.reading import jobs as reading_jobs
+
+    page = next((source for source in files if source.kind in ("pdf", "image") and source.status != "error"), None)
+    if page is None or any(source.definition is not None for source in files):
+        return None
+    job = reading_jobs.Job("ai-builder", page.name, page.content, {"ai": False, "title": title, "form_id": form_id})
+    reading_jobs._run(job, lambda: {})
+    if job.status != "done" or not job.result:
+        log.info("measured draft of %s not made: %s", page.name, job.error)
+        return None
+    return job.result["definition"]
 
 
 @router.get("/ai/status")
@@ -118,23 +145,12 @@ def ai_status(_: dict = Depends(ai_author)) -> dict[str, Any]:
     return _status(_ai_config())
 
 
-@router.post("/ai/inspect")
-def ai_inspect(_: dict = Depends(ai_author), body: dict = Depends(upload_body)) -> dict[str, Any]:
-    """Check the documents without calling the AI service; form JSON files are validated."""
-    files = _inspected(body)
-    validate = _validator()
-    report = documents.summary(files)
-    for source, entry in zip(files, report["files"]):
-        if source.definition is not None:
-            entry["issues"] = validate(source.definition)[:100]
-    return report
-
-
 @router.post("/ai/generate")
 def ai_generate(user: dict = Depends(ai_author), body: dict = Depends(upload_body)) -> dict[str, Any]:
-    """Build a form from the documents and keep it as a draft template: {template, issues, inspection, usage}."""
+    """Build a form from uploaded documents and keep it as a draft template: {uploads: [ids], instructions?, form_id?,
+    title?} -> {template, issues, inspection, usage}."""
     instructions, form_id, title = _options(body)
-    files = _inspected(body)
+    files = _inspected(body, user)
     config = _ai_config()
     validate = _validator()
     # A file added twice is reported in the inspection but read and sent once.
@@ -151,10 +167,15 @@ def ai_generate(user: dict = Depends(ai_author), body: dict = Depends(upload_bod
         result = {"definition": definition, "report": None, "issues": validate(definition), "attempts": 0, "usage": None, "model": None}
         origin = "import"
     else:
+        measured = _measured_draft(usable, form_id, title)
         try:
-            result = ai_builder.build(config, usable, instructions=instructions, form_id=form_id, title=title, validate=validate)
+            result = ai_builder.build(config, usable, instructions=instructions, form_id=form_id, title=title, validate=validate,
+                                      start=measured, measured=measured is not None)
         except ai_builder.BuildError as error:
             raise FormDevError("ai_failed", str(error), 502, inspection) from None
+        if measured is not None:
+            result["definition"] = reading_draft.keep_paper(result["definition"], measured)
+            result["issues"] = validate(result["definition"])
         origin = "ai"
     sources = [{key: entry[key] for key in ("name", "kind", "media_type", "size", "sha256", "pages", "status", "notes")} for entry in inspection["files"]]
     if result["report"] is not None:

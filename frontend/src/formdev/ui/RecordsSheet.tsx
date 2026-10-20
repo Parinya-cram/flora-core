@@ -5,7 +5,7 @@
  */
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import type { FormDevClient } from "../index";
-import { FormDevError, type FieldDefinition, type FormDefinition, type Issue, type JsonValue, type LocalRecord } from "../core/types";
+import { FormDevError, type LeafLink, type FieldDefinition, type FormDefinition, type Issue, type JsonValue, type LocalRecord } from "../core/types";
 import { describePath, fieldKey, issueText } from "../core/validate";
 import { readCsv, readXlsx, writeXlsx } from "../core/xlsx";
 import { fieldPermissions, recordAllows } from "../logic/permission";
@@ -16,6 +16,8 @@ type Props = {
   client: FormDevClient; definition: FormDefinition; schemaVersion: number; codes: string[]; isAdmin: boolean; language: string;
   /** Changes when records may have changed elsewhere (sync, a saved form). */
   refreshKey: number;
+  /** Records that are Flora Leaf case forms: shown with the patient's HN and changed only by amendment (open the record). */
+  leafLinks?: Record<string, LeafLink>;
   onOpen: (record: LocalRecord) => void; onNew: () => void; onChanged: () => void;
 };
 type Sort = { key: string; dir: 1 | -1 } | null;
@@ -44,7 +46,7 @@ const messageOf = (error: unknown, language: string, definition?: FormDefinition
   }).join("; ") || error.message
   : error instanceof Error ? error.message : String(error);
 
-export default function RecordsSheet({ client, definition, schemaVersion, codes, isAdmin, language, refreshKey, onOpen, onNew, onChanged }: Props) {
+export default function RecordsSheet({ client, definition, schemaVersion, codes, isAdmin, language, refreshKey, leafLinks = {}, onOpen, onNew, onChanged }: Props) {
   const th = language.toLowerCase().startsWith("th");
   const t = (thai: string, english: string) => (th ? thai : english);
   const formId = definition.form_id;
@@ -120,7 +122,7 @@ export default function RecordsSheet({ client, definition, schemaVersion, codes,
 
   const toggleSort = (key: string) => setSort(current => (current?.key !== key ? { key, dir: 1 } : current.dir === 1 ? { key, dir: -1 } : null));
 
-  const editable = (record: LocalRecord, field: FieldDefinition) => canEdit && INLINE.has(field.type) && field.readonly !== true && field.derive === undefined
+  const editable = (record: LocalRecord, field: FieldDefinition) => canEdit && !leafLinks[record.record_id] && INLINE.has(field.type) && field.readonly !== true && field.derive === undefined
     && record.status !== "deleted" && record.schema_version === schemaVersion && grant(fieldKey(field)).edit;
 
   const commit = async (record: LocalRecord, field: FieldDefinition, text: string) => {
@@ -198,6 +200,7 @@ export default function RecordsSheet({ client, definition, schemaVersion, codes,
         const existing = row.recordId ? byId.get(row.recordId) ?? await client.records.get(row.recordId).catch(() => undefined) : undefined;
         if (existing && existing.form_id === formId) {
           if (!canEdit) throw new Error(t("ไม่มีสิทธิ์แก้ไข", "You may not edit records"));
+          if (leafLinks[existing.record_id]) throw new Error(t("กรอกจาก Flora Leaf: เปิดรายการเพื่อแก้ไขพร้อมเหตุผล", "Filled on Flora Leaf: open the record to amend it with a reason"));
           await client.records.update(existing.record_id, { ...existing.data, ...row.data }, existing.version);
           updated += 1;
         } else {
@@ -290,7 +293,9 @@ export default function RecordsSheet({ client, definition, schemaVersion, codes,
         </thead>
         <tbody>
           {shown.map((record, index) => <tr key={record.record_id} className="hover:bg-[var(--app-control-bg)]">
-            <td className={`${td} cursor-pointer text-right text-[var(--app-muted)]`} title={t("เปิดฟอร์ม", "Open the form")} onClick={() => onOpen(record)}>{index + 1} ↗</td>
+            <td className={`${td} cursor-pointer text-right text-[var(--app-muted)]`} title={t("เปิดฟอร์ม", "Open the form")} onClick={() => onOpen(record)}>
+              {leafLinks[record.record_id] ? <span className="mr-1 rounded bg-sky-600 px-1 text-[9px] font-bold text-white" title={t("กรอกจาก Flora Leaf: แก้ไขได้ด้วยการเปิดรายการและระบุเหตุผล", "Filled on Flora Leaf: open the record to amend it with a reason")}>
+                Leaf · {leafLinks[record.record_id].hn || "—"}</span> : null}{index + 1} ↗</td>
             {columns.map(field => {
               const key = fieldKey(field);
               const active = editing?.recordId === record.record_id && editing.key === key;

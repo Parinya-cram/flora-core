@@ -212,7 +212,26 @@ function getEditionCode(model) {
   return "full";
 }
 
-async function loadBrandAssets(pdfDoc) {
+/** Text the fonts can draw: without the Thai font, Helvetica (WinAnsi) cannot encode Thai, so it is left out. */
+function printable(text, fonts) {
+  const clean = getText(text);
+  return fonts && fonts.custom ? clean : /^[\x20-\x7e\u00a0-\u00ff]*$/.test(clean) ? clean : "";
+}
+
+/** The hospital's logo set in Canopy (a PNG or JPEG data URL in the model), or null. */
+async function embedHospitalLogo(pdfDoc, model) {
+  const logo = model && model.hospital && model.hospital.logo;
+  const match = typeof logo === "string" ? /^data:image\/(png|jpeg);base64,(.+)$/s.exec(logo) : null;
+  if (!match) return null;
+  try {
+    const bytes = Buffer.from(match[2], "base64");
+    return match[1] === "png" ? await pdfDoc.embedPng(bytes) : await pdfDoc.embedJpg(bytes);
+  } catch {
+    return null;
+  }
+}
+
+async function loadBrandAssets(pdfDoc, model) {
   const eforlLogoPath = findFirstExisting([
     process.resourcesPath ? path.join(process.resourcesPath, "assets", "eforllogo.png") : null,
     path.resolve(__dirname, "..", "frontend", "src", "assets", "eforllogo.png"),
@@ -223,6 +242,7 @@ async function loadBrandAssets(pdfDoc) {
 
   return {
     eforlLogo: eforlLogoPath ? await pdfDoc.embedPng(fs.readFileSync(eforlLogoPath)) : null,
+    hospitalLogo: await embedHospitalLogo(pdfDoc, model),
   };
 }
 
@@ -525,6 +545,30 @@ function drawBarcodeBox(page, value, x, top, width, height, fonts) {
 }
 
 function drawReportLogo(page, x, top, fonts, model, brandAssets) {
+  // The hospital's own name and logo, set in Canopy, replace the edition's built-in header.
+  const hospital = model && model.hospital;
+  if (hospital) {
+    const names = [printable(hospital.nameTh, fonts), printable(hospital.nameEn, fonts)].filter(Boolean);
+    const image = brandAssets && brandAssets.hospitalLogo;
+    if (image || names.length) {
+      let textX = x;
+      if (image) {
+        const scaled = image.scale(Math.min(28 / image.height, 60 / image.width));
+        page.drawImage(image, { x, y: toPdfY(top + 1, scaled.height), width: scaled.width, height: scaled.height });
+        textX = x + scaled.width + 6;
+      }
+      const textWidth = Math.max(40, x + 150 - textX);
+      names.slice(0, 2).forEach((name, index) => {
+        drawTextLine(page, name, textX, top + 3 + index * 12, {
+          font: index === 0 ? fonts.bold : fonts.regular,
+          size: 7.4,
+          color: BLACK,
+          width: textWidth,
+        });
+      });
+      return;
+    }
+  }
   if (getEditionCode(model) === "eforl") {
     if (brandAssets && brandAssets.eforlLogo) {
       const image = brandAssets.eforlLogo;
@@ -668,16 +712,47 @@ function drawPageHeader(page, model, pageNum, subtitle, totalPageCount, fonts, b
   return PAGE_MARGIN_TOP + 65;
 }
 
+/** Signature lines for the anesthesiologist and the nurse anesthetist, under the staff list (when there is room above
+ * the footer): the name when the case has one, a dotted blank otherwise, and a date / time to fill by hand. */
+function drawSignatureLines(page, model, fonts, x, top, width) {
+  const footerTop = A4_HEIGHT - PAGE_MARGIN_BOTTOM - 12;
+  const blockHeight = 34;
+  const signers = (model && model.signers) || {};
+  const lines = [["Anesthesiologist", signers.anesthetist], ["Nurse anesthetist", signers.nurse]];
+  const start = Math.max(top, footerTop - 6 - lines.length * blockHeight);
+  if (start + lines.length * blockHeight > footerTop - 4) return;
+  lines.forEach(([role, name], index) => {
+    const lineTop = start + index * blockHeight + 16;
+    drawRule(page, x, lineTop, width, 0.6, BLACK);
+    drawTextLine(page, `${role}: ${printable(name, fonts) || "..............................."}`, x, lineTop + 3, {
+      font: fonts.regular,
+      size: 6.8,
+      color: BLACK,
+      width,
+    });
+    drawTextLine(page, "Date / time ..............................", x, lineTop + 11, {
+      font: fonts.regular,
+      size: 6.4,
+      color: MUTED,
+      width,
+    });
+  });
+}
+
 function drawPageFooter(page, model, pageNum, totalPageCount, fonts) {
   const footerTop = A4_HEIGHT - PAGE_MARGIN_BOTTOM - 12;
   drawRule(page, PAGE_MARGIN_X, footerTop, PAGE_CONTENT_WIDTH, 0.75, BORDER);
-  drawTextLine(page, "ANESTHESIA RECORD - CONFIDENTIAL MEDICAL DOCUMENT", PAGE_MARGIN_X, footerTop + 4, {
+  const printer = printable(model.printedBy, fonts);
+  const printed = `CONFIDENTIAL - Printed ${formatDateTime(model.generatedAt || Date.now())}${printer ? ` - ${printer}` : ""}`;
+  drawTextLine(page, printed, PAGE_MARGIN_X, footerTop + 4, {
     font: fonts.regular,
     size: 7.5,
     color: MUTED,
     width: 200,
   });
-  drawTextLine(page, `HN: ${model.currentCase && model.currentCase.hn || "-"} | AN: ${safeText(model.form.an)} | ${model.currentCase ? formatDateDDMMYYYY(model.currentCase.start_time) : "-"}`, PAGE_MARGIN_X + 180, footerTop + 4, {
+  const dob = getText(model.form.dob);
+  const dobText = /^\d{4}-\d{2}-\d{2}$/.test(dob) ? formatDateDDMMYYYY(new Date(`${dob}T12:00:00`).getTime()) : dob || "-";
+  drawTextLine(page, `HN: ${model.currentCase && model.currentCase.hn || "-"} | AN: ${safeText(model.form.an)} | DOB: ${dobText} | ${model.currentCase ? formatDateDDMMYYYY(model.currentCase.start_time) : "-"}`, PAGE_MARGIN_X + 180, footerTop + 4, {
     font: fonts.regular,
     size: 7.5,
     color: MUTED,
@@ -1569,6 +1644,7 @@ function drawSummaryPage(page, model, fonts, totalPageCount, brandAssets) {
     fontSize: 6.8,
     rows: staffRows,
   });
+  drawSignatureLines(page, model, fonts, staffX, top + staffTitleHeight + 4 + staffRows.length * 15 + 8, staffWidth);
 
   const eventsTitleHeight = drawSectionHeading(page, "Events / Notes", eventsX, top, eventsWidth, fonts);
   const eventSourceRows = (model.caseEventsAll || [])
@@ -1652,7 +1728,7 @@ async function buildReportPdfBuffer(model) {
 
   const pdfDoc = await PDFDocument.create();
   const fonts = await loadFonts(pdfDoc);
-  const brandAssets = await loadBrandAssets(pdfDoc);
+  const brandAssets = await loadBrandAssets(pdfDoc, model);
   const totalPageCount = 1 + Math.max(1, (model.timelinePages || []).length);
 
   const summaryPage = pdfDoc.addPage([A4_WIDTH, A4_HEIGHT]);

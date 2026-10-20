@@ -5,7 +5,7 @@ import { validateDefinition } from "../../src/formdev/core/validate";
 import { anesthesiaForm } from "../../src/formdev/designer/templates";
 import { caseValues, fillFromCase, toIsoDate, type CaseData } from "../../src/formdev/leaf/caseData";
 import { conceptOf } from "../../src/formdev/leaf/concepts";
-import { orderCaseTabs, workflowFormTabs } from "../../src/components/workflow/caseWorkflow";
+import { incompleteRequiredForms, orderCaseTabs, workflowFormTabs } from "../../src/components/workflow/caseWorkflow";
 import { DEFAULT_FONTS, DEFAULT_STYLES } from "../../src/formdev/registry/defaults";
 
 const START = new Date(2026, 9, 14, 9, 0).getTime();
@@ -112,5 +112,37 @@ describe("report-only workflow forms", () => {
     const tabs = workflowFormTabs(workflow as never);
     expect(tabs.map(tab => tab.formId)).toEqual(["a"]);
     expect(orderCaseTabs(["pacu"], tabs)).toHaveLength(2);
+  });
+});
+
+describe("repeatable workflow forms", () => {
+  const record = (status: "draft" | "completed") => ({ data: { note: "x" }, status });
+  const value = (max?: number) => ({
+    workflow: { forms: [{ form_id: "blood", version: 1, title: "Transfusion", required: true, repeatable: true, ...(max ? { max_instances: max } : {}) },
+      { form_id: "once", version: 1, title: "Once" }] },
+    forms: {
+      blood: { definition: anesthesiaForm("blood", "Transfusion"), record: record("completed") },
+      "blood~2": { definition: anesthesiaForm("blood", "Transfusion"), record: record("draft"), of: "blood", instance: 2 },
+      once: { definition: anesthesiaForm("once", "Once"), record: null },
+    },
+  });
+
+  it("have a tab per copy, numbered, and offer the next copy after the last", () => {
+    const tabs = workflowFormTabs(value() as never);
+    expect(tabs.map(tab => [tab.formId, tab.title, tab.instance, tab.nextCopy])).toEqual([
+      ["blood", "Transfusion (1)", 1, null], ["blood~2", "Transfusion (2)", 2, "blood~3"], ["once", "Once", 1, null]]);
+  });
+
+  it("a copy opened here shows before it is saved, and the max is kept", () => {
+    const tabs = workflowFormTabs(value(3) as never, ["blood~3"]);
+    expect(tabs.filter(tab => tab.of === "blood").map(tab => [tab.formId, tab.status, tab.nextCopy])).toEqual([
+      ["blood", "completed", null], ["blood~2", "draft", null], ["blood~3", "empty", null]]);
+  });
+
+  it("every started copy of a required form must be completed, an empty one need not", () => {
+    expect(incompleteRequiredForms(value() as never).map(tab => tab.formId)).toEqual(["blood~2"]);
+    const done = value();
+    done.forms["blood~2"].record = record("completed");
+    expect(incompleteRequiredForms(done as never)).toEqual([]);
   });
 });

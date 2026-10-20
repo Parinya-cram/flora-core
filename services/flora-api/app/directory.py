@@ -7,6 +7,7 @@ keeps working offline. Both sides may edit; every identity change stamps
 
 Records are matched by username: database ids differ on every node.
 """
+import hmac
 import os
 import re
 import secrets
@@ -153,6 +154,29 @@ def set_admin_pin(database: Connection, user_id: int, pin: str | None) -> None:
     touch(database, user_id)
 
 
+def set_sign_pin(database: Connection, user_id: int, pin: str | None) -> None:
+    """The user's signing PIN (4-8 digits): confirms a signature drawn in a form (case_workflow sign). Cleared with None."""
+    if pin is None or pin == "":
+        database.execute("UPDATE auth_user SET sign_pin_salt=NULL,sign_pin_hash=NULL WHERE id=%s", (user_id,))
+        touch(database, user_id)
+        return
+    if PIN_PATTERN.fullmatch(pin) is None:
+        raise HTTPException(status_code=400, detail="PIN must be 4-8 digits")
+    salt = secrets.token_hex(16)
+    database.execute("UPDATE auth_user SET sign_pin_salt=%s,sign_pin_hash=%s WHERE id=%s", (salt, _pin_hash(pin, salt), user_id))
+    touch(database, user_id)
+
+
+def verify_sign_pin(database: Connection, user_id: int, pin: str | None) -> bool:
+    row = database.execute("SELECT sign_pin_salt,sign_pin_hash FROM auth_user WHERE id=%s", (user_id,)).fetchone()
+    if not row or not row["sign_pin_salt"] or not row["sign_pin_hash"] or not pin or PIN_PATTERN.fullmatch(pin) is None:
+        return False
+    try:
+        return hmac.compare_digest(_pin_hash(pin, row["sign_pin_salt"]), row["sign_pin_hash"])
+    except (TypeError, ValueError):
+        return False
+
+
 def approve_with_pin(database: Connection, pin: str | None) -> dict[str, Any]:
     """Return the administrator whose PIN was supplied, or reject the change."""
     if not pin:
@@ -184,6 +208,8 @@ def record(database: Connection, row: dict[str, Any]) -> dict[str, Any]:
         "all_units": int(row.get("all_units") or 0),
         "admin_pin_salt": row.get("admin_pin_salt"),
         "admin_pin_hash": row.get("admin_pin_hash"),
+        "sign_pin_salt": row.get("sign_pin_salt"),
+        "sign_pin_hash": row.get("sign_pin_hash"),
         "role_codes": [item["role_code"] for item in roles],
         "units": user_units(database, row["id"]),
         "directory_version": int(row.get("directory_version") or 0),
@@ -281,6 +307,9 @@ def apply_record(database: Connection, incoming: dict[str, Any], *, from_canopy:
                  existing["id"]),
             ).fetchone()
         user_id = row["id"]
+        if "sign_pin_hash" in incoming:  # nodes before signing PINs (0090) do not send it: keep ours
+            database.execute("UPDATE auth_user SET sign_pin_salt=%s,sign_pin_hash=%s WHERE id=%s",
+                             (incoming.get("sign_pin_salt"), incoming.get("sign_pin_hash"), user_id))
         if from_canopy and is_leaf():
             database.execute(
                 "UPDATE auth_user SET directory_managed=1,directory_pending=0 WHERE id=%s", (user_id,)

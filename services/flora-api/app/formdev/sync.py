@@ -65,20 +65,24 @@ class SyncService:
 
     def apply(self, ops: list[Any], user: str, protected: Callable[[str], set[str]] | None = None,
               locked: Callable[[str], set[str]] | None = None, allows: Callable[..., bool] | None = None,
-              present: Callable[[dict[str, Any]], dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+              present: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+              linked: Callable[[dict[str, Any], str, dict[str, Any]], dict[str, Any] | None] | None = None) -> list[dict[str, Any]]:
         """protected(form_id) -> fields the writer may not read; they are removed from acknowledgements.
         locked(form_id) -> fields the writer may not change (defaults to protected): their stored values are kept
         on update and they are dropped on create. allows(form_id, action) gates create / edit / delete; a refused
         operation is acknowledged as rejected with ``forbidden``; it is called as allows(form_id, action, current)
         with the stored record for edit / delete. present(record) -> the record as the caller may see it in an
-        acknowledgement (masked, or without data when the caller may not read it); it replaces masking by protected."""
+        acknowledgement (masked, or without data when the caller may not read it); it replaces masking by protected.
+        linked(op, user, current) handles a change to a record kept elsewhere (a Flora Leaf case form: an amendment with
+        a reason, app/case_forms.py) after the access checks; it returns the acknowledgement, or None for an ordinary
+        record, and raises FormDevError to reject the operation."""
         if not isinstance(ops, list) or len(ops) > MAX_BATCH:
             raise FormDevError("invalid_batch", f"Send between 1 and {MAX_BATCH} operations")
-        self._protected, self._locked, self._allows = protected, locked, allows
+        self._protected, self._locked, self._allows, self._linked = protected, locked, allows, linked
         try:
             acks = [self.apply_one(op, user) for op in ops]
         finally:
-            self._protected = self._locked = self._allows = None
+            self._protected = self._locked = self._allows = self._linked = None
         if present is not None:
             return [{**ack, "record": present(ack["record"])} if ack.get("record") else ack for ack in acks]
         return [self._mask_ack(ack, protected) for ack in acks] if protected else acks
@@ -86,6 +90,7 @@ class SyncService:
     _protected: Callable[[str], set[str]] | None = None
     _locked: Callable[[str], set[str]] | None = None
     _allows: Callable[[str, str], bool] | None = None
+    _linked: Callable[[dict[str, Any], str, dict[str, Any]], dict[str, Any] | None] | None = None
 
     def _hidden(self, form_id: str | None) -> set[str]:
         return self._protected(form_id) if self._protected and form_id else set()
@@ -153,6 +158,12 @@ class SyncService:
 
         # Before any version comparison: a caller who may not change this record learns nothing about it.
         self._require(current["form_id"], "delete" if op["kind"] == "delete" else "edit", current)
+        if self._linked is not None:
+            fixed = self._fixed(current["form_id"])
+            guarded = {**op, "data": _keep(op["data"], current["data"], fixed)} if isinstance(op.get("data"), dict) else op
+            handled = self._linked(guarded, user, current)
+            if handled is not None:
+                return {**handled, "record": _public(handled.get("record"))}
         base_version = int(op.get("base_version") or 0)
         if current["version"] == base_version:
             record = self._write(op, user, base_version, edited_at)

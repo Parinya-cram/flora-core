@@ -1,15 +1,19 @@
 /**
  * AI form builder (Form Studio): drop the source documents, see what the server found in each one, add instructions,
- * and build. The result is kept as a draft template and opened for review; nothing is published from here.
+ * and build. Each file is uploaded once, as it is, when it is added (the server checks it then); the build sends only
+ * their ids. The result is kept as a draft template and opened for review; nothing is published from here.
  */
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import type { RestApiAdapter } from "../data/RestApiAdapter";
 import { tr, type Lang } from "../designer/catalog";
 import { input, label, panel, primary, secondary, small } from "../designer/styles";
-import { ACCEPT, errorMessage, sizeLabel, uploadFiles } from "./files";
-import type { AiStatus, GenerateResult, Inspection, InspectedFile } from "./types";
+import { ACCEPT, errorMessage, sizeLabel } from "./files";
+import type { AiStatus, GenerateResult, Inspection, InspectedFile, Upload } from "./types";
 
 type Props = { remote: RestApiAdapter; lang: Lang; onBuilt: (result: GenerateResult) => void; onCancel: () => void };
+/** A file added here: uploaded (and checked by the server), or the reason it could not be. */
+type Entry = { key: string; file: File; upload?: Upload; report?: InspectedFile; error?: string };
+const keyOf = (file: File) => `${file.name}:${file.size}:${file.lastModified}`;
 
 const KIND: Record<string, [string, string]> = {
   pdf: ["PDF", "PDF"], image: ["รูปภาพ", "Image"], docx: ["Word", "Word"], xlsx: ["Excel", "Excel"], text: ["ข้อความ", "Text"],
@@ -21,9 +25,8 @@ const ICON = { ok: "✓", warning: "⚠", error: "✕" };
 export default function AiBuilder({ remote, lang, onBuilt, onCancel }: Props) {
   const t = (th: string, en: string) => tr(lang, th, en);
   const [status, setStatus] = useState<AiStatus | null>(null);
-  const [files, setFiles] = useState<File[]>([]);
-  const [inspection, setInspection] = useState<Inspection | null>(null);
-  const [checking, setChecking] = useState(false);
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const [built, setBuilt] = useState<Inspection | null>(null);
   const [instructions, setInstructions] = useState("");
   const [title, setTitle] = useState("");
   const [formId, setFormId] = useState("");
@@ -32,7 +35,6 @@ export default function AiBuilder({ remote, lang, onBuilt, onCancel }: Props) {
   const [error, setError] = useState("");
   const [dragging, setDragging] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
-  const checkRun = useRef(0);
 
   useEffect(() => {
     let live = true;
@@ -46,35 +48,43 @@ export default function AiBuilder({ remote, lang, onBuilt, onCancel }: Props) {
     return () => clearInterval(timer);
   }, [building]);
 
-  const check = async (next: File[]) => {
-    setFiles(next);
-    setInspection(null);
-    setError("");
-    if (!next.length) return;
-    const run = ++checkRun.current;
-    setChecking(true);
-    try {
-      const report = await remote.aiInspect(await uploadFiles(next, { pageImages: false, maxPages: 0 }));
-      if (run === checkRun.current) setInspection(report);
-    } catch (caught) {
-      if (run === checkRun.current) setError(errorMessage(caught));
-    } finally {
-      if (run === checkRun.current) setChecking(false);
-    }
-  };
+  const update = (key: string, change: Partial<Entry>) => setEntries(current => current.map(entry => entry.key === key ? { ...entry, ...change } : entry));
   const add = (list: FileList | null) => {
     if (!list?.length) return;
-    const known = new Set(files.map(file => `${file.name}:${file.size}`));
-    void check([...files, ...Array.from(list).filter(file => !known.has(`${file.name}:${file.size}`))]);
+    const known = new Set(entries.map(entry => entry.key));
+    const fresh = Array.from(list).filter(file => !known.has(keyOf(file))).map(file => ({ key: keyOf(file), file }));
+    setEntries(current => [...current, ...fresh]);
+    setBuilt(null);
+    setError("");
+    for (const entry of fresh) {
+      void remote.upload(entry.file, entry.file.name)
+        .then(result => update(entry.key, { upload: result.upload, report: result.file }))
+        .catch(caught => update(entry.key, { error: errorMessage(caught) }));
+    }
   };
-  const remove = (index: number) => void check(files.filter((_, at) => at !== index));
+  const remove = (key: string) => {
+    const gone = entries.find(entry => entry.key === key);
+    const rest = entries.filter(entry => entry.key !== key);
+    setEntries(rest);
+    setBuilt(null);
+    // The server keeps a file once per content: only drop it when no other entry is the same file.
+    if (gone?.upload && !rest.some(entry => entry.upload?.id === gone.upload!.id)) void remote.removeUpload(gone.upload.id).catch(() => undefined);
+  };
+  const checking = entries.some(entry => !entry.report && !entry.error);
+  const reports = entries.map(entry => entry.report);
+  const inspection: Inspection | null = built ?? (entries.length && !checking ? {
+    files: reports.filter((report): report is InspectedFile => Boolean(report)),
+    ok: entries.every(entry => entry.report && entry.report.status !== "error"),
+    errors: entries.filter(entry => entry.error || entry.report?.status === "error").length,
+    warnings: entries.filter(entry => entry.report?.status === "warning").length,
+  } : null);
   const onDrop = (event: DragEvent) => { event.preventDefault(); setDragging(false); add(event.dataTransfer.files); };
 
   const validId = !formId || /^[a-z][a-z0-9_]{1,63}$/.test(formId);
   const onlyForms = Boolean(inspection?.files.length) && inspection!.files.every(file => file.kind === "form_json");
   const needsAi = !onlyForms || instructions.trim() !== "";
-  const blocked = !files.length || checking || !inspection?.ok || !validId || building !== null || (needsAi && !status?.configured)
-    || Boolean(status && files.length > status.limits.files);
+  const blocked = !entries.length || checking || !inspection?.ok || !validId || building !== null || (needsAi && !status?.configured)
+    || Boolean(status && entries.length > status.limits.files);
 
   const build = async () => {
     if (!status) return;
@@ -82,12 +92,12 @@ export default function AiBuilder({ remote, lang, onBuilt, onCancel }: Props) {
     setBuilding(Date.now());
     setElapsed(0);
     try {
-      const upload = await uploadFiles(files, { pageImages: status.needsPageImages && needsAi, maxPages: status.limits.pageImages });
-      onBuilt(await remote.aiGenerate({ files: upload, instructions: instructions.trim() || undefined, form_id: formId || undefined, title: title.trim() || undefined }));
+      onBuilt(await remote.aiGenerate({ uploads: entries.map(entry => entry.upload!.id), instructions: instructions.trim() || undefined,
+        form_id: formId || undefined, title: title.trim() || undefined }));
     } catch (caught) {
       setError(errorMessage(caught));
       const details = (caught as { details?: unknown }).details;
-      if (details && typeof details === "object" && Array.isArray((details as Inspection).files)) setInspection(details as Inspection);
+      if (details && typeof details === "object" && Array.isArray((details as Inspection).files)) setBuilt(details as Inspection);
     } finally {
       setBuilding(null);
     }
@@ -114,24 +124,26 @@ export default function AiBuilder({ remote, lang, onBuilt, onCancel }: Props) {
         <input ref={picker} type="file" multiple accept={ACCEPT} hidden onChange={event => { add(event.target.files); event.target.value = ""; }} />
       </div>
 
-      {files.length ? <div className="space-y-1.5" aria-live="polite">
+      {entries.length ? <div className="space-y-1.5" aria-live="polite">
         <div className="flex items-center justify-between text-xs font-semibold text-[var(--app-muted)]">
           <span>{t("ผลการตรวจเอกสาร", "Document check")}</span>
           {checking ? <span>{t("กำลังตรวจ…", "Checking…")}</span> : inspection ? <span className={inspection.ok ? TONE.ok : TONE.error}>
             {inspection.ok ? t(`ใช้ได้ทั้งหมด${inspection.warnings ? ` (ข้อควรระวัง ${inspection.warnings})` : ""}`, `All usable${inspection.warnings ? ` (${inspection.warnings} warning(s))` : ""}`)
               : t(`ใช้ไม่ได้ ${inspection.errors} ไฟล์`, `${inspection.errors} file(s) cannot be used`)}</span> : null}
         </div>
-        {files.map((file, index) => {
-          const found: InspectedFile | undefined = inspection?.files[index];
-          return <div key={`${file.name}:${file.size}`} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-bg)] px-3 py-2">
+        {entries.map((entry, index) => {
+          const { file } = entry;
+          const found: InspectedFile | undefined = built?.files[index] ?? entry.report;
+          return <div key={entry.key} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-bg)] px-3 py-2">
             <div className="flex items-center gap-2 text-sm">
-              <span className={`w-4 text-center font-bold ${found ? TONE[found.status] : "text-[var(--app-muted)]"}`}>{found ? ICON[found.status] : "…"}</span>
+              <span className={`w-4 text-center font-bold ${found ? TONE[found.status] : entry.error ? TONE.error : "text-[var(--app-muted)]"}`}>{found ? ICON[found.status] : entry.error ? ICON.error : "…"}</span>
               <span className="min-w-0 flex-1 truncate font-semibold text-[var(--app-text)]" title={file.name}>{file.name}</span>
               <span className="shrink-0 text-[11px] text-[var(--app-muted)]">
                 {found ? tr(lang, ...(KIND[found.kind] ?? KIND.unknown)) : ""}{found?.pages ? ` · ${found.pages} ${t("หน้า", "p.")}` : ""}{found?.text_chars ? ` · ${found.text_chars.toLocaleString()} ${t("ตัวอักษร", "chars")}` : ""} · {sizeLabel(file.size)}
               </span>
-              <button type="button" className="text-xs text-rose-600 dark:text-rose-300" aria-label={t(`นำ ${file.name} ออก`, `Remove ${file.name}`)} onClick={() => remove(index)}>✕</button>
+              <button type="button" className="text-xs text-rose-600 dark:text-rose-300" aria-label={t(`นำ ${file.name} ออก`, `Remove ${file.name}`)} onClick={() => remove(entry.key)}>✕</button>
             </div>
+            {entry.error ? <div className={`ml-6 text-[11px] ${TONE.error}`}>{entry.error}</div> : !found ? <div className="ml-6 text-[11px] text-[var(--app-muted)]">{t("กำลังส่งและตรวจ…", "Uploading and checking…")}</div> : null}
             {found?.notes.map(note => <div key={note} className={`ml-6 text-[11px] ${TONE[found.status]}`}>{note}</div>)}
             {found?.issues?.length ? <div className="ml-6 text-[11px] text-amber-600 dark:text-amber-300">
               {t(`ฟอร์มมี ${found.issues.length} จุดที่ต้องแก้ — AI จะช่วยแก้ถ้าใส่คำสั่งเพิ่ม หรือแก้ในตัวออกแบบภายหลัง`, `The form has ${found.issues.length} problem(s) — the AI fixes them if you add instructions, or fix them in the designer`)}

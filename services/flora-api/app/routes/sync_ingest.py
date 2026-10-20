@@ -6,16 +6,36 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 
-from .. import ai_service, billing, central_auth, device_registry, device_types, directory, form_sync, io_catalog, ldap_auth, workflows
+from .. import ai_service, billing, case_forms, central_auth, device_registry, device_types, directory, form_sync, io_catalog, ldap_auth, workflows
 from ..database import connection, pool
 
 
 router = APIRouter(prefix="/api/sync/v1", tags=["leaf-canopy-sync"])
+# This Canopy's sync protocol and features (answered to every batch; the Leaf's are kept in sync_leaf_node.metadata).
+PROTOCOL_VERSION = 2
+CAPABILITIES = ["case_snapshot", "case_forms", "case_form_files"]
+# The oldest Leaf sync protocol this Canopy takes (FLORA_SYNC_MIN_PROTOCOL; 1, the default, takes every worker, also
+# those from before the handshake). Raising it turns away a Leaf whose worker is too old with 426 and the reason (kept
+# in sync_leaf_node.metadata.protocol_refused for the fleet view) instead of reading data in a shape Canopy has dropped.
+MIN_PROTOCOL_VERSION = max(1, int(os.getenv("FLORA_SYNC_MIN_PROTOCOL", "1") or 1))
+
+
+def require_protocol(database: Connection, leaf_id: str, version: int | None) -> None:
+    """Refuse a Leaf whose sync protocol is older than MIN_PROTOCOL_VERSION (426 Upgrade Required)."""
+    version = int(version or 1)
+    if version >= MIN_PROTOCOL_VERSION:
+        return
+    refused = {"code": "protocol_unsupported", "protocol_version": version, "minimum": MIN_PROTOCOL_VERSION,
+               "canopy_protocol": PROTOCOL_VERSION,
+               "message": f"Canopy needs Leaf sync protocol {MIN_PROTOCOL_VERSION} or newer; this Leaf uses {version}. Update Flora Leaf."}
+    database.execute("UPDATE sync_leaf_node SET metadata = metadata || %s WHERE leaf_id = %s",
+                     (Jsonb({"protocol_refused": {**refused, "at": int(time.time() * 1000)}}), leaf_id))
+    raise HTTPException(status_code=426, detail=refused)
 
 
 class SyncMessage(BaseModel):
@@ -33,6 +53,9 @@ class SyncBatch(BaseModel):
     hospital_id: str = Field(min_length=1, max_length=120)
     display_name: str = Field(min_length=1, max_length=160)
     software_version: str | None = Field(default=None, max_length=80)
+    # Sync protocol of the Leaf's worker (1 when absent: workers before the handshake) and what it supports.
+    protocol_version: int = Field(default=1, ge=1, le=1000)
+    capabilities: list[str] = Field(default_factory=list, max_length=50)
     observed_location: dict[str, Any] | None = None
     applied_config_version: int = Field(default=0, ge=0)
     messages: list[SyncMessage] = Field(default_factory=list, max_length=500)
@@ -67,9 +90,31 @@ def _global_case_id(hospital_id: str, leaf_id: str, source_case_id: str) -> uuid
     return uuid.uuid5(uuid.NAMESPACE_URL, f"flora:{hospital_id}:{leaf_id}:case:{source_case_id}")
 
 
+# sync_message keeps every message a Leaf sent so a message sent again is not applied twice; the payloads are read only
+# when they arrive. Payloads older than this many days are emptied (the rows stay: duplicates are still recognised),
+# at most once an hour and a batch at a time, so the table does not grow by every snapshot for ever. 0 keeps them.
+MESSAGE_KEEP_DAYS = int(os.getenv("FLORA_SYNC_MESSAGE_KEEP_DAYS", "30"))
+_compacted = {"at": 0.0}
+
+
+def compact_messages(database: Connection, batch_size: int = 5000) -> int:
+    """Empty the payloads of messages older than MESSAGE_KEEP_DAYS (one batch); the number emptied."""
+    if MESSAGE_KEEP_DAYS <= 0:
+        return 0
+    result = database.execute(
+        """UPDATE sync_message SET payload = '{}'::jsonb
+           WHERE id IN (SELECT id FROM sync_message WHERE received_at < now() - make_interval(days => %s) AND payload <> '{}'::jsonb
+                        ORDER BY id LIMIT %s)""", (MESSAGE_KEEP_DAYS, batch_size))
+    return result.rowcount or 0
+
+
 @router.post("/batch", dependencies=[Depends(require_sync_secret)])
 def ingest_batch(batch: SyncBatch, database: Connection = Depends(connection)) -> dict[str, Any]:
+    require_protocol(database, batch.leaf_id, batch.protocol_version)
     now = datetime.now(timezone.utc)
+    if time.time() - _compacted["at"] > 3600:
+        _compacted["at"] = time.time()
+        compact_messages(database)
     accepted = 0
     duplicates = 0
     workflow_forms: list[dict[str, Any]] = []
@@ -92,7 +137,8 @@ def ingest_batch(batch: SyncBatch, database: Connection = Depends(connection)) -
                 batch.display_name,
                 batch.software_version,
                 now,
-                Jsonb({"observed_location": batch.observed_location or {}}),
+                Jsonb({"observed_location": batch.observed_location or {}, "protocol_version": batch.protocol_version,
+                       "capabilities": [str(item)[:40] for item in batch.capabilities], "protocol_refused": None}),
             ),
         )
         database.execute(
@@ -187,7 +233,8 @@ def ingest_batch(batch: SyncBatch, database: Connection = Depends(connection)) -
                 with database.transaction():
                     billing.project_snapshot(database, global_case_id, batch.leaf_id, message.entity_id,
                                              message.payload, message.revision, int(time.time() * 1000))
-            if message.payload.get("workflow_forms"):
+            # Leafs with the case form exchange (app/case_forms.py) send their forms there, field by field with receipts.
+            if message.payload.get("workflow_forms") and not message.payload.get("case_forms_channel"):
                 workflow_forms.append({"global_case_id": str(global_case_id), "hn": case.get("hn"),
                                        "workflow_forms": message.payload["workflow_forms"]})
         assignment = database.execute(
@@ -207,6 +254,8 @@ def ingest_batch(batch: SyncBatch, database: Connection = Depends(connection)) -
         "accepted": accepted,
         "duplicates": duplicates,
         "server_time": now,
+        "protocol_version": PROTOCOL_VERSION,
+        "capabilities": CAPABILITIES,
         "configuration": assignment["desired_config"] if assignment else None,
         "desired_config_version": assignment["desired_version"] if assignment else 0,
         "applied_config_version": assignment["applied_version"] if assignment else 0,
@@ -590,3 +639,115 @@ def exchange_admissions(payload: AdmissionExchange, database: Connection = Depen
         "acknowledged": acknowledged,
         "conflicts": conflicts,
     }
+
+
+# --- Workflow (Form Studio) forms of Leaf cases, field by field both ways (app/case_forms.py) ---
+
+class CaseFormExchange(BaseModel):
+    leaf_id: str = Field(min_length=1, max_length=120)
+    hospital_id: str | None = Field(default=None, max_length=120)
+    protocol_version: int = Field(default=1, ge=1, le=1000)
+    forms: list[dict[str, Any]] = Field(default_factory=list, max_length=500)
+    cases: list[dict[str, Any]] = Field(default_factory=list, max_length=500)
+    acks: list[dict[str, Any]] = Field(default_factory=list, max_length=2000)
+
+
+def _hospital(database: Connection, leaf_id: str, given: str | None) -> str:
+    if given:
+        return given
+    row = database.execute("SELECT hospital_id FROM sync_leaf_node WHERE leaf_id=%s", (leaf_id,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=409, detail="unknown Leaf: send a case batch first")
+    return row["hospital_id"]
+
+
+@router.post("/case-forms", dependencies=[Depends(require_sync_secret)])
+def exchange_case_forms(payload: CaseFormExchange, database: Connection = Depends(connection)) -> dict[str, Any]:
+    """The Leaf's changed case forms in, a receipt for each and Canopy's changes for the Leaf's cases out."""
+    require_protocol(database, payload.leaf_id, payload.protocol_version)
+    hospital = _hospital(database, payload.leaf_id, payload.hospital_id)
+    return case_forms.exchange(database, payload.leaf_id, hospital, payload.model_dump(), directory.now_ms())
+
+
+@router.put("/case-forms/files/{sha256}", dependencies=[Depends(require_sync_secret)])
+async def put_case_form_file(sha256: str, request: Request, leaf_id: str = Query(min_length=1, max_length=120),
+                             database: Connection = Depends(connection)) -> dict[str, Any]:
+    """A file of a Leaf form (file / image field) that Canopy asked for (`need_files`); checked against its SHA-256."""
+    from ..formdev.errors import FormDevError
+
+    wanted = database.execute(
+        """SELECT 1 FROM canopy_case_form WHERE leaf_id=%s AND record_state='waiting_files' AND strpos(data::text, %s) > 0 LIMIT 1""",
+        (leaf_id, f"att:{sha256}")).fetchone()
+    if wanted is None:
+        raise HTTPException(status_code=404, detail="no form of this Leaf is waiting for this file")
+    content = await request.body()
+    media_type = (request.headers.get("content-type") or "application/octet-stream").split(";")[0].strip().lower()
+    try:
+        meta = case_forms.formdev_services(database).records.attachments.put(sha256, media_type, content, f"leaf:{leaf_id}"[:120])
+    except FormDevError as error:
+        raise HTTPException(status_code=error.status, detail=error.message) from None
+    return {"ok": True, "sha256": sha256, "created": meta.get("created", False)}
+
+
+class CaseDocument(BaseModel):
+    """The details of a document attached to a case on a Leaf (0092); the file itself goes to PUT …/content."""
+    leaf_id: str = Field(min_length=1, max_length=120)
+    hospital_id: str | None = Field(default=None, max_length=120)
+    protocol_version: int = Field(default=1, ge=1, le=1000)
+    case_id: int
+    global_case_id: str | None = None
+    hn: str | None = None
+    document_id: int
+    title: str = Field(min_length=1, max_length=200)
+    pages: int = Field(ge=1)
+    bytes: int = Field(ge=1)
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    created_at: int
+    created_by: str | None = None
+    removed_at: int | None = None
+    removed_by: str | None = None
+    removed_reason: str | None = None
+
+
+CASE_DOCUMENT_MAX_BYTES = 30 * 1024 * 1024
+
+
+@router.put("/case-documents", dependencies=[Depends(require_sync_secret)])
+def receive_case_document(payload: CaseDocument, database: Connection = Depends(connection)) -> dict[str, Any]:
+    """A document's details, or its removal; kept by the case's global id. needs_content says whether Canopy still
+    needs the file (PUT /case-documents/{leaf_id}/{document_id}/content): never again once it has it."""
+    require_protocol(database, payload.leaf_id, payload.protocol_version)
+    hospital = _hospital(database, payload.leaf_id, payload.hospital_id)
+    global_id = payload.global_case_id or case_forms.global_case_id(hospital, payload.leaf_id, payload.case_id)
+    row = database.execute(
+        """INSERT INTO canopy_case_document (leaf_id, document_id, global_case_id, source_case_id, hn, title, pages, bytes, sha256,
+             created_at, created_by, removed_at, removed_by, removed_reason, received_at)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+           ON CONFLICT (leaf_id, document_id) DO UPDATE SET removed_at=excluded.removed_at, removed_by=excluded.removed_by,
+             removed_reason=excluded.removed_reason, received_at=excluded.received_at
+           RETURNING content IS NULL AS needs_content""",
+        (payload.leaf_id, payload.document_id, global_id, str(payload.case_id), payload.hn, payload.title, payload.pages, payload.bytes,
+         payload.sha256, payload.created_at, payload.created_by, payload.removed_at, payload.removed_by, payload.removed_reason,
+         directory.now_ms())).fetchone()
+    return {"ok": True, "global_case_id": global_id, "needs_content": row["needs_content"]}
+
+
+async def case_document_body(request: Request) -> bytes:
+    from ..request_body import read_limited
+
+    return await read_limited(request, CASE_DOCUMENT_MAX_BYTES)
+
+
+@router.put("/case-documents/{leaf_id}/{document_id}/content", dependencies=[Depends(require_sync_secret)])
+def receive_case_document_content(leaf_id: str, document_id: int, content: bytes = Depends(case_document_body),
+                                  database: Connection = Depends(connection)) -> dict[str, Any]:
+    """The file of a document whose details arrived first, as it is; it must match the sha256 sent with them."""
+    row = database.execute("SELECT sha256 FROM canopy_case_document WHERE leaf_id=%s AND document_id=%s", (leaf_id, document_id)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="send the document's details first (PUT /case-documents)")
+    if hashlib.sha256(content).hexdigest() != row["sha256"]:
+        raise HTTPException(status_code=422, detail="the document does not match its sha256")
+    database.execute("UPDATE canopy_case_document SET content=%s, bytes=%s, received_at=%s WHERE leaf_id=%s AND document_id=%s",
+                     (content, len(content), directory.now_ms(), leaf_id, document_id))
+    return {"ok": True}
+

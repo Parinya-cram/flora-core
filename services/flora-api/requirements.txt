@@ -6,3 +6,12 @@ ldap3==2.9.1
 anthropic
 # Only for FORMDEV_STORAGE=mysql://...; [rsa] adds cryptography for MySQL 8 caching_sha2_password logins.
 PyMySQL[rsa]==1.1.1
+# Reading documents (app/formdev/reading): PDF text layer, vector boxes and form fields, page images, Thai OCR
+# (models fetched into the image by scripts/fetch_ocr_models.py), line / box / checkbox detection and Thai text.
+pypdfium2==5.14.0
+pdfplumber==0.11.10
+pypdf==6.21.0
+rapidocr==3.10.0
+onnxruntime==1.31.0
+opencv-python-headless==5.0.0.93
+pythainlp==5.4.0

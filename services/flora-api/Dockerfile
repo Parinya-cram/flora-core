@@ -9,6 +9,12 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
+# Thai OCR models (PP-OCRv5 detector and Thai recogniser), checked by SHA256 and kept in the image: reading a
+# document never downloads anything at run time.
+COPY scripts/fetch_ocr_models.py ./scripts/
+RUN python scripts/fetch_ocr_models.py /opt/flora-ocr
+ENV FLORA_OCR_MODELS=/opt/flora-ocr \
+    PYTHAINLP_DATA=/tmp/pythainlp-data
 COPY app ./app
 
 EXPOSE 8000

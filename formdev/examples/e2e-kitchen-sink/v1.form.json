@@ -1,0 +1,537 @@
+{
+  "format": "flora.form/1",
+  "form_id": "e2e_kitchen_sink",
+  "schema_version": 1,
+  "title": "E2E แบบฟอร์มทุกชนิดช่อง / Every field type",
+  "description": "End-to-end test form: every field type of the registry, conditions, a calculation, Other inputs, a repeat and printed header elements. Used by tests/e2e_form_flow.py and frontend/tests/formdev/kitchenSink.test.ts.",
+  "paper": {
+    "size": "A4",
+    "orientation": "portrait",
+    "density": "compact",
+    "footer": {
+      "left": "{form_id} v{version}",
+      "right": "{page}/{pages}"
+    }
+  },
+  "style_id": "form.a4.medical",
+  "layout": {
+    "type": "grid",
+    "columns": 12
+  },
+  "extensions": {
+    "flora.subject_field": "hn",
+    "flora.leaf_placement": {
+      "phase": "intraop",
+      "after_section": "pacu"
+    }
+  },
+  "sections": [
+    {
+      "id": "header",
+      "title": "ผู้ป่วย / Patient",
+      "fields": [
+        {
+          "id": "hospital_logo",
+          "type": "logo",
+          "label": "Logo",
+          "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+          "height_mm": 10,
+          "align": "left",
+          "layout": {
+            "span": 4
+          }
+        },
+        {
+          "id": "hn_barcode",
+          "type": "barcode",
+          "label": "HN barcode",
+          "source": "hn",
+          "symbology": "code128",
+          "height_mm": 10,
+          "layout": {
+            "span": 8
+          }
+        },
+        {
+          "id": "hn",
+          "type": "text",
+          "label": "HN",
+          "required": true,
+          "bind": "patient.hn",
+          "layout": {
+            "span": 4
+          }
+        },
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "ชื่อ-สกุล / Name",
+          "required": true,
+          "bind": "patient.name",
+          "layout": {
+            "span": 8
+          }
+        },
+        {
+          "id": "dob",
+          "type": "date",
+          "label": "วันเกิด / DOB",
+          "bind": "patient.dob",
+          "layout": {
+            "span": 4
+          }
+        },
+        {
+          "id": "age",
+          "type": "integer",
+          "label": "อายุ / Age",
+          "unit": "y",
+          "min": 0,
+          "max": 130,
+          "layout": {
+            "span": 4
+          }
+        },
+        {
+          "id": "sex",
+          "type": "select",
+          "label": "เพศ / Sex",
+          "options": [
+            {
+              "value": "male",
+              "label": "ชาย / Male"
+            },
+            {
+              "value": "female",
+              "label": "หญิง / Female"
+            }
+          ],
+          "layout": {
+            "span": 4
+          }
+        },
+        {
+          "id": "visit_time",
+          "type": "time",
+          "label": "เวลา / Time",
+          "layout": {
+            "span": 4
+          }
+        },
+        {
+          "id": "assessed_at",
+          "type": "datetime",
+          "label": "ประเมินเมื่อ / Assessed at",
+          "required": true,
+          "layout": {
+            "span": 8
+          }
+        }
+      ]
+    },
+    {
+      "id": "assessment",
+      "title": "ประเมิน / Assessment",
+      "title_en": "Assessment",
+      "fields": [
+        {
+          "id": "assessment_heading",
+          "type": "heading",
+          "label": "การประเมินทางกายภาพ",
+          "label_en": "Physical assessment",
+          "level": 2
+        },
+        {
+          "id": "assessment_note",
+          "type": "paragraph",
+          "label": "คำอธิบาย",
+          "label_en": "Instructions",
+          "content": "ชั่งน้ำหนักก่อนวัดส่วนสูง / Weigh before measuring height.",
+          "align": "left"
+        },
+        {
+          "id": "weight_kg",
+          "type": "decimal",
+          "label": "น้ำหนัก / Weight",
+          "unit": "kg",
+          "decimals": 1,
+          "min": 1,
+          "max": 400,
+          "layout": {
+            "span": 3
+          }
+        },
+        {
+          "id": "height_cm",
+          "type": "number",
+          "label": "ส่วนสูง / Height",
+          "unit": "cm",
+          "min": 30,
+          "max": 260,
+          "layout": {
+            "span": 3
+          }
+        },
+        {
+          "id": "bmi",
+          "type": "calculated",
+          "label": "BMI",
+          "unit": "kg/m²",
+          "formula": "weight_kg / ((height_cm / 100) ^ 2)",
+          "decimals": 1,
+          "layout": {
+            "span": 3
+          }
+        },
+        {
+          "id": "smoker",
+          "type": "radio",
+          "label": "สูบบุหรี่ / Smoker",
+          "options": [
+            {
+              "value": "never",
+              "label": "ไม่เคย / Never"
+            },
+            {
+              "value": "former",
+              "label": "เคย / Former"
+            },
+            {
+              "value": "current",
+              "label": "ปัจจุบัน / Current"
+            },
+            {
+              "value": "other",
+              "label": "อื่นๆ / Other",
+              "has_input": true
+            }
+          ],
+          "layout": {
+            "span": 12
+          }
+        },
+        {
+          "id": "packs_per_day",
+          "type": "number",
+          "label": "ซอง/วัน / Packs a day",
+          "min": 0,
+          "max": 10,
+          "clear_when_hidden": true,
+          "visibility": {
+            "when": {
+              "field": "smoker",
+              "operator": "in",
+              "value": [
+                "former",
+                "current"
+              ]
+            }
+          },
+          "layout": {
+            "span": 4
+          }
+        },
+        {
+          "id": "symptoms",
+          "type": "multiselect",
+          "label": "อาการ / Symptoms",
+          "options": [
+            {
+              "value": "dizzy",
+              "label": "เวียนศีรษะ / Dizzy"
+            },
+            {
+              "value": "weak",
+              "label": "อ่อนแรง / Weak"
+            },
+            {
+              "value": "other",
+              "label": "อื่นๆ / Other",
+              "has_input": true,
+              "input_required": true
+            }
+          ],
+          "layout": {
+            "span": 8
+          }
+        },
+        {
+          "id": "has_fever",
+          "type": "switch",
+          "label": "มีไข้ / Fever",
+          "layout": {
+            "span": 4
+          }
+        },
+        {
+          "id": "temperature_c",
+          "type": "decimal",
+          "label": "อุณหภูมิ / Temperature",
+          "unit": "°C",
+          "decimals": 1,
+          "min": 34,
+          "max": 43,
+          "clear_when_hidden": true,
+          "visibility": {
+            "when": {
+              "field": "has_fever",
+              "operator": "equals",
+              "value": true
+            }
+          },
+          "validation": {
+            "required": true
+          },
+          "layout": {
+            "span": 4
+          }
+        },
+        {
+          "id": "consent",
+          "type": "checkbox",
+          "label": "ยินยอม / Consent given",
+          "required": true,
+          "layout": {
+            "span": 4
+          }
+        },
+        {
+          "id": "notes",
+          "type": "textarea",
+          "label": "บันทึก / Notes",
+          "max_length": 2000,
+          "layout": {
+            "span": 12
+          }
+        }
+      ]
+    },
+    {
+      "id": "attachments",
+      "title": "ไฟล์และลายเซ็น / Files and signature",
+      "fields": [
+        {
+          "id": "photo",
+          "type": "image",
+          "label": "ภาพ / Photo",
+          "max_size_kb": 2048,
+          "layout": {
+            "row": 1,
+            "col": 1,
+            "span": 4,
+            "row_span": 2
+          }
+        },
+        {
+          "id": "consent_pdf",
+          "type": "file",
+          "label": "ใบยินยอม / Consent PDF",
+          "accept": [
+            "application/pdf"
+          ],
+          "max_size_kb": 5120,
+          "layout": {
+            "row": 1,
+            "col": 5,
+            "span": 8
+          }
+        },
+        {
+          "id": "attachments_divider",
+          "type": "divider",
+          "label": "เส้นคั่น",
+          "layout": {
+            "row": 2,
+            "col": 5,
+            "span": 8
+          }
+        },
+        {
+          "id": "nurse_signature",
+          "type": "signature",
+          "label": "ลายเซ็นพยาบาล / Nurse signature",
+          "max_size_kb": 256,
+          "layout": {
+            "row": 3,
+            "col": 1,
+            "span": 12
+          }
+        }
+      ]
+    },
+    {
+      "id": "monitoring",
+      "title": "ติดตาม / Monitoring",
+      "fields": [
+        {
+          "id": "aldrete",
+          "type": "matrix",
+          "label": "Modified Aldrete",
+          "cell": {
+            "type": "integer",
+            "min": 0,
+            "max": 2
+          },
+          "rows": [
+            {
+              "id": "activity",
+              "label": "Activity"
+            },
+            {
+              "id": "spo2",
+              "label": "SpO2"
+            }
+          ],
+          "cols": [
+            {
+              "id": "admit",
+              "label": "Admit"
+            },
+            {
+              "id": "dc",
+              "label": "D/C"
+            }
+          ],
+          "totals": [
+            {
+              "id": "total",
+              "label": "Total",
+              "of": [
+                "activity",
+                "spo2"
+              ]
+            }
+          ],
+          "layout": {
+            "span": 12
+          }
+        },
+        {
+          "id": "trends",
+          "type": "timeline",
+          "label": "Trends",
+          "timeline": {
+            "parts": [
+              "events",
+              "chart",
+              "table"
+            ],
+            "rows": [
+              {
+                "id": "hr"
+              }
+            ],
+            "chart": [
+              "hr"
+            ],
+            "step_min": 5,
+            "source": "manual"
+          },
+          "layout": {
+            "span": 12
+          }
+        },
+        {
+          "id": "contact",
+          "type": "group",
+          "label": "ผู้ติดต่อ / Contact",
+          "columns": 12,
+          "fields": [
+            {
+              "id": "contact_name",
+              "type": "text",
+              "label": "ชื่อ / Name",
+              "layout": {
+                "span": 6
+              }
+            },
+            {
+              "id": "contact_phone",
+              "type": "text",
+              "label": "โทร / Phone",
+              "validation": {
+                "pattern": "^[0-9]{9,10}$",
+                "message": "9-10 digits"
+              },
+              "layout": {
+                "span": 6
+              }
+            }
+          ]
+        },
+        {
+          "id": "lines",
+          "type": "repeat",
+          "label": "สายน้ำเกลือ / IV lines",
+          "max_items": 4,
+          "fields": [
+            {
+              "id": "site",
+              "type": "text",
+              "label": "ตำแหน่ง / Site",
+              "required": true,
+              "layout": {
+                "span": 6
+              }
+            },
+            {
+              "id": "gauge",
+              "type": "select",
+              "label": "Gauge",
+              "options": [
+                {
+                  "value": "18",
+                  "label": "18G"
+                },
+                {
+                  "value": "20",
+                  "label": "20G"
+                },
+                {
+                  "value": "22",
+                  "label": "22G"
+                }
+              ],
+              "layout": {
+                "span": 3
+              }
+            },
+            {
+              "id": "inserted_at",
+              "type": "time",
+              "label": "เวลา / Time",
+              "layout": {
+                "span": 3
+              }
+            }
+          ]
+        },
+        {
+          "id": "meds_given",
+          "type": "case_block",
+          "label": "ยาที่ให้ / Medications given",
+          "block": "medications",
+          "block_columns": [
+            {
+              "key": "time",
+              "width": 15
+            },
+            {
+              "key": "name",
+              "width": 50
+            },
+            {
+              "key": "dose",
+              "width": 35
+            }
+          ],
+          "min_rows": 3,
+          "max_rows": 10,
+          "layout": {
+            "span": 12
+          }
+        }
+      ]
+    }
+  ]
+}

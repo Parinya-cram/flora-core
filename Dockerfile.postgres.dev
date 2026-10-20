@@ -67,5 +67,10 @@ COPY infrastructure/postgres/0086-leaf-beds-device-bed.sql /docker-entrypoint-in
 COPY infrastructure/postgres/0084-scoring.sql /docker-entrypoint-initdb.d/0084-scoring.sql
 COPY infrastructure/postgres/0085-staff-sync.sql /docker-entrypoint-initdb.d/0085-staff-sync.sql
 COPY infrastructure/postgres/0087-formdev-template.sql /docker-entrypoint-initdb.d/0087-formdev-template.sql
+COPY infrastructure/postgres/0088-case-form-exchange.sql /docker-entrypoint-initdb.d/0088-case-form-exchange.sql
+COPY infrastructure/postgres/0089-leaf-sync-state.sql /docker-entrypoint-initdb.d/0089-leaf-sync-state.sql
+COPY infrastructure/postgres/0090-form-review-signing-hospital.sql /docker-entrypoint-initdb.d/0090-form-review-signing-hospital.sql
+COPY infrastructure/postgres/0091-repeatable-case-forms.sql /docker-entrypoint-initdb.d/0091-repeatable-case-forms.sql
+COPY infrastructure/postgres/0092-case-documents.sql /docker-entrypoint-initdb.d/0092-case-documents.sql
 COPY infrastructure/postgres/0071-io-catalog-sync.sql /docker-entrypoint-initdb.d/0071-io-catalog-sync.sql
 COPY infrastructure/postgres/0079-ai-studio-dashboard.sql /docker-entrypoint-initdb.d/0079-ai-studio-dashboard.sql

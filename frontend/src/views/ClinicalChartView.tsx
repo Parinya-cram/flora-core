@@ -143,6 +143,7 @@ import {
 } from "../utils/chartPreferences";
 import { getHistoricalBolusSuggestion } from "../utils/medicationBolus";
 import DictationButton from "../components/common/DictationButton";
+import RequiredFormsNotice from "../components/workflow/RequiredFormsNotice";
 
 type IoPreparedModalState = {
   runId: number;
@@ -6075,6 +6076,7 @@ export default function ClinicalChartView({
                     ) : null}
                   </div>
 
+                  <RequiredFormsNotice caseId={caseStatus.case_id} />
                   {dischargeError ? <p className="case-modal__error">{dischargeError}</p> : null}
                   <footer className="case-modal__actions">
                     <button type="button" className="case-modal__button" disabled={dischargeSaving} onClick={() => setDischargeModalOpen(false)}>Cancel</button>

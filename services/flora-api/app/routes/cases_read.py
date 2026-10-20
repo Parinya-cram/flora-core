@@ -220,7 +220,7 @@ def events(
     case_row = get_case_range_row(database, case_id)
     from_ts, to_ts = resolve_case_range(case_row, request)
     requested_limit = number_or_none(request.query_params.get("limit"))
-    limit = int(max(1, min(1000, requested_limit))) if requested_limit is not None else 300
+    limit = int(max(1, min(5000, requested_limit))) if requested_limit is not None else 300
     rows = database.execute(
         """
         SELECT id, event_ts, event_type, title, detail,

@@ -11,6 +11,7 @@ import { getEditionInfo, getSurfaceInfo } from "./edition/config";
 import { useLanguage } from "./context/LanguageContext";
 import { useWorkstationSettings } from "./hooks/useWorkstationSettings";
 import { useCanopyWard } from "./hooks/useCanopyWard";
+import { loadHospitalProfile } from "./api/hospitalProfileApi";
 import DateTimePickerAssist from "./components/common/DateTimePickerAssist";
 
 const NAV_COLLAPSED_KEY = "flora.ui.navigationCollapsed";
@@ -88,6 +89,11 @@ export default function App() {
     if (!bootstrap.status.ready) return;
     void syncSession();
   }, [bootstrap.status.ready, syncSession]);
+
+  // The hospital's name and logo for printed reports and forms (set in Canopy, kept on the Leaf).
+  useEffect(() => {
+    if (isAuthenticated) void loadHospitalProfile(true);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (!user?.username) return;

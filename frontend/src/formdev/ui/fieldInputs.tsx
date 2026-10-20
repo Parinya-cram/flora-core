@@ -2,6 +2,7 @@
 import { useContext, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { AttachmentContext } from "./attachments";
 import { localIso } from "./renderUtils";
+import { SignatureContext } from "./signing";
 import type { FieldDefinition, FileValue, JsonValue, MatrixCell, MatrixValue, SignatureValue } from "../core/types";
 import { matrixCell, matrixTotals } from "../core/validate";
 
@@ -138,23 +139,50 @@ export function SignatureInput({ field, value, disabled, label, onChange }: Inpu
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const drawing = useRef(false);
   const drew = useRef(false);
+  const signing = useContext(SignatureContext);
   const [resigning, setResigning] = useState(false);
+  const [pending, setPending] = useState<string | null>(null);  // drawn, waiting for "Sign with PIN"
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const signature = value as SignatureValue | null | undefined;
+  const confirmed = signature?.verified === "pin";
   if (signature?.data && !resigning) {
+    const who = signature.signer_name || signature.signer;
     return <div style={{ display: "grid", gap: "1mm" }}>
       <img alt={label} src={signature.data} style={{ maxHeight: "25mm", border: "0.3mm solid #cbd5e1", background: "#ffffff" }} />
-      <span style={{ fontSize: "8pt", color: "#64748b" }}>{[signature.signer, signature.signed_at].filter(Boolean).join(" · ")}</span>
-      {!disabled ? <button type="button" onClick={() => { onChange(null); setResigning(true); }}>Sign again</button> : null}
+      <span style={{ fontSize: "8pt", color: confirmed ? "#047857" : "#64748b" }}>
+        {confirmed ? "🔒 " : ""}{[who, signature.signed_at, confirmed ? "PIN" : ""].filter(Boolean).join(" · ")}
+      </span>
+      {!disabled && (!confirmed || signing?.canResign) ? <button type="button" onClick={() => { if (!signing) onChange(null); setResigning(true); }}>Sign again</button> : null}
     </div>;
   }
   const point = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
     return [(event.clientX - box.left) * (event.currentTarget.width / box.width), (event.clientY - box.top) * (event.currentTarget.height / box.height)];
   };
+  const clear = () => {
+    canvas.current?.getContext("2d")?.clearRect(0, 0, canvas.current.width, canvas.current.height);
+    setPending(null);
+    setError("");
+  };
+  const sign = async () => {
+    if (!signing || !pending) return;
+    setBusy(true);
+    setError("");
+    try {
+      await signing.sign(field.key ?? field.id, pending);
+      setPending(null);
+      setResigning(false);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setBusy(false);
+    }
+  };
   return <div style={{ display: "grid", gap: "1mm" }}>
     <canvas ref={canvas} aria-label={label} width={600} height={180} style={{ width: "100%", height: "25mm", border: "0.3mm dashed #94a3b8", background: "#ffffff", touchAction: "none" }}
       onPointerDown={event => {
-        if (disabled) return;
+        if (disabled || busy) return;
         drawing.current = true;
         const context = event.currentTarget.getContext("2d");
         const [x, y] = point(event);
@@ -177,11 +205,21 @@ export function SignatureInput({ field, value, disabled, label, onChange }: Inpu
         drawing.current = false;
         if (canvas.current && drew.current) {
           drew.current = false;
-          setResigning(false);
-          onChange({ data: canvas.current.toDataURL("image/png"), signed_at: localIso() });
+          const data = canvas.current.toDataURL("image/png");
+          if (signing) setPending(data);  // signed with a PIN, not stored as drawn
+          else {
+            setResigning(false);
+            onChange({ data, signed_at: localIso() });
+          }
         }
       }} />
-    <span style={{ fontSize: "8pt", color: "#64748b" }}>{disabled ? "—" : `Sign inside the box${field.max_size_kb ? ` (max ${field.max_size_kb} KB)` : ""}`}</span>
+    {signing && pending && !disabled ? <span style={{ display: "flex", gap: "2mm" }}>
+      <button type="button" disabled={busy} onClick={() => void sign()}>{busy ? "Signing…" : "Sign with PIN"}</button>
+      <button type="button" disabled={busy} onClick={clear}>Clear</button>
+      {resigning ? <button type="button" disabled={busy} onClick={() => { clear(); setResigning(false); }}>Cancel</button> : null}
+    </span> : null}
+    {error ? <span style={{ fontSize: "8pt", color: "#be123c" }}>{error}</span> : null}
+    <span style={{ fontSize: "8pt", color: "#64748b" }}>{disabled ? "—" : `Sign inside the box${signing ? ", then confirm with your signing PIN" : ""}${field.max_size_kb ? ` (max ${field.max_size_kb} KB)` : ""}`}</span>
   </div>;
 }
 
@@ -228,7 +266,7 @@ export function MatrixInput({ field, value, disabled, css, label, onChange }: In
   }
   return <div style={{ overflowX: "auto" }} data-matrix={field.id}>
     <table aria-label={label} style={{ borderCollapse: "collapse", width: "100%", fontSize: "9.5pt" }}>
-      <thead><tr><th style={{ ...head, textAlign: "left", minWidth: "30mm" }} />{(field.cols ?? []).map(col => <th key={col.id} style={head}>{col.label}</th>)}</tr></thead>
+      <thead><tr><th style={{ ...head, textAlign: "left", minWidth: "30mm", width: field.label_width ? `${field.label_width}%` : undefined }} />{(field.cols ?? []).map(col => <th key={col.id} style={head}>{col.label}</th>)}</tr></thead>
       <tbody>
         {rows.map(row => <tr key={row.id} style={row.total ? { background: "#f8fafc", fontWeight: 700 } : undefined}>
           <td style={{ ...border, textAlign: "left" }}>{row.label}</td>

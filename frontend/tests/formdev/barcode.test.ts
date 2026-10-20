@@ -89,6 +89,17 @@ describe("logo and barcode on the form", () => {
     expect(all.some(op => op.kind === "text" && op.text === "HN barcode")).toBe(true);
   });
 
+  it("never prints bars thinner than 0.19 mm: a field too narrow for the value prints it as text", () => {
+    const MIN = 0.19 * 72 / 25.4;
+    const wide = ops(header([{ ...barcode, layout: { span: 12 } }]), { hn: "6512345" }).filter(op => op.kind === "fill");
+    expect(Math.min(...wide.map(op => (op as { w: number }).w))).toBeGreaterThanOrEqual(MIN - 1e-9);
+    const long = "AN-2026-0000123456789-XYZ";
+    const narrow = ops(header([{ ...barcode, source: "hn", layout: { span: 2 } }]), { hn: long });
+    expect(narrow.some(op => op.kind === "fill")).toBe(false);
+    expect(narrow.some(op => op.kind === "text" && op.text === long)).toBe(true);
+    expect(narrow.some(op => op.kind === "text" && op.text.includes("too narrow"))).toBe(true);
+  });
+
   it("the paper templates carry the HN barcode in the patient header", () => {
     const all = ops(pacuForm("pacu", "PACU"), { hn: "6512345" });
     expect(all.filter(op => op.kind === "fill").length).toBe(24);

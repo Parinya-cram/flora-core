@@ -2,7 +2,8 @@
  * Inspector for printed elements (Form Studio): the hospital logo (a picture kept in the form, scaled down in the
  * browser to stay under the size limit) and the barcode of another field (HN, AN...) with its symbology, size and text.
  */
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
+import { HOSPITAL_LOGO, hospitalProfile, logoSource, subscribeHospitalProfile } from "../core/hospital";
 import type { FieldDefinition } from "../core/types";
 import { BARCODE_HEIGHT_MM, LOGO_HEIGHT_MM, MAX_LOGO_CHARS } from "../core/validate";
 import { encodeBarcode } from "../render/barcode";
@@ -20,6 +21,7 @@ export default function PrintedEditor({ field, candidates, lang, onPatch }: Prop
   const t = (th: string, en: string) => tr(lang, th, en);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const hospital = useSyncExternalStore(subscribeHospitalProfile, hospitalProfile, hospitalProfile);
   const alignOptions = [{ value: "left", label: t("ชิดซ้าย", "Left") }, { value: "center", label: t("กึ่งกลาง", "Centre") }, { value: "right", label: t("ชิดขวา", "Right") }];
 
   if (field.type === "logo") {
@@ -35,15 +37,23 @@ export default function PrintedEditor({ field, candidates, lang, onPatch }: Prop
         setBusy(false);
       }
     };
+    const fromHospital = field.src === HOSPITAL_LOGO;
+    const shown = logoSource(field.src);
     return <div className="space-y-2">
-      {field.src ? <div className="flex justify-center rounded-lg border border-[var(--app-border)] bg-white p-2"><img src={field.src} alt={field.label} className="max-h-24 max-w-full object-contain" /></div>
+      <Toggle label={t("ใช้โลโก้ของโรงพยาบาล (ตั้งค่าใน Canopy)", "Use the hospital's logo (set in Canopy)")} checked={fromHospital}
+        onChange={on => onPatch({ src: on ? HOSPITAL_LOGO : undefined })} />
+      {shown ? <div className="flex justify-center rounded-lg border border-[var(--app-border)] bg-white p-2"><img src={shown} alt={field.label} className="max-h-24 max-w-full object-contain" /></div>
+        : fromHospital ? <p className="text-[11px] text-amber-600 dark:text-amber-300">{t("ยังไม่ได้ตั้งโลโก้ของโรงพยาบาล (Canopy → ตั้งค่า → โรงพยาบาล) — จะพิมพ์เป็นช่องว่างจนกว่าจะตั้ง", "No hospital logo is set yet (Canopy → Settings → Hospital): the field prints blank until one is")}</p>
         : <p className="text-[11px] text-amber-600 dark:text-amber-300">{t("ยังไม่มีรูป — เลือกไฟล์โลโก้ของโรงพยาบาล (PNG หรือ JPEG)", "No picture yet — choose the hospital's logo file (PNG or JPEG)")}</p>}
-      <label className={`${small} inline-block cursor-pointer`}>
+      {fromHospital ? <p className="text-[11px] text-[var(--app-muted)]">{t(
+        `ทุกเครื่อง Leaf พิมพ์โลโก้ที่ตั้งใน Canopy${hospital?.name_th || hospital?.name_en ? ` (${hospital.name_th || hospital.name_en})` : ""} แม้ออฟไลน์`,
+        `Every Leaf prints the logo set in Canopy${hospital?.name_en || hospital?.name_th ? ` (${hospital.name_en || hospital.name_th})` : ""}, offline too`)}</p> : null}
+      {fromHospital ? null : <label className={`${small} inline-block cursor-pointer`}>
         {busy ? "…" : field.src ? t("เปลี่ยนรูป", "Replace picture") : t("เลือกรูปโลโก้", "Choose a logo")}
         <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" hidden onChange={event => { void upload(event.target.files?.[0]); event.target.value = ""; }} />
-      </label>
+      </label>}
       {error ? <p role="alert" className="text-[11px] text-rose-600 dark:text-rose-300">{error}</p> : null}
-      <p className="text-[11px] text-[var(--app-muted)]">{t("รูปถูกเก็บไว้ในแบบฟอร์ม จึงพิมพ์ได้ทั้งออฟไลน์และบน Flora Leaf (ย่อขนาดอัตโนมัติ)", "The picture is kept in the form, so it prints offline and on Flora Leaf (scaled down automatically)")}</p>
+      {fromHospital ? null : <p className="text-[11px] text-[var(--app-muted)]">{t("รูปถูกเก็บไว้ในแบบฟอร์ม จึงพิมพ์ได้ทั้งออฟไลน์และบน Flora Leaf (ย่อขนาดอัตโนมัติ)", "The picture is kept in the form, so it prints offline and on Flora Leaf (scaled down automatically)")}</p>}
       <div className="grid grid-cols-2 gap-2">
         <NumberField label={t("ความสูง (มม.)", "Height (mm)")} value={field.height_mm ?? 14} min={LOGO_HEIGHT_MM[0]} max={LOGO_HEIGHT_MM[1]} onChange={value => onPatch({ height_mm: value })} />
         <SelectField label={t("ตำแหน่ง", "Position")} value={field.align ?? "left"} options={alignOptions} onChange={value => onPatch({ align: value })} />

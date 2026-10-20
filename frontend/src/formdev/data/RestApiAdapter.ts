@@ -2,10 +2,11 @@
  * Server adapter for the FormDev API (/api/formdev). Record writes are sent as idempotent
  * sync operations; design actions (create/publish/package) are admin-only server calls.
  */
-import { FormDevError, type FontEntry, type FormDefinition, type FormRecord, type FormSummary, type Issue, type JsonValue, type LookupTable, type RecordPage, type RecordQuery, type SchemaVersion, type StyleEntry, type SyncAck, type SyncOp } from "../core/types";
+import { FormDevError, type FontEntry, type FormDefinition, type FormRecord, type FormSummary, type Issue, type JsonValue, type LeafAmendment, type LeafLink, type LookupTable, type RecordPage, type RecordQuery, type SchemaVersion, type StyleEntry, type SyncAck, type SyncOp } from "../core/types";
 import type { FormDevJob, JobKind, PublicQueryCatalog, QueryBody, QueryIssue, QueryPolicy, QueryResult, QuerySource } from "../query/types";
 import type { RemoteDataAdapter } from "./DataAdapter";
-import type { AiStatus, GenerateRequest, GenerateResult, Inspection, TemplateRow, TemplateWithIssues, UploadFile } from "../ai/types";
+import type { AiStatus, GenerateRequest, GenerateResult, TemplateRow, TemplateWithIssues, UploadResult } from "../ai/types";
+import type { IdFinding, IdSuggestion, ReadingEvent, ReadingJob, ReadingResult, ReadingStatus } from "../reading/types";
 
 /** Thrown when the request did not get a usable answer; retriable errors keep the op queued. */
 export class TransportError extends Error {
@@ -175,6 +176,21 @@ export class RestApiAdapter implements RemoteDataAdapter {
     return result.font;
   }
 
+  /** Records of a form that are Flora Leaf case forms ({} where Canopy keeps none, e.g. another storage). */
+  async leafLinks(formId: string): Promise<Record<string, LeafLink>> {
+    return (await this.json<{ links: Record<string, LeafLink> }>("GET", `/leaf-links?form_id=${encodeURIComponent(formId)}`)).links || {};
+  }
+
+  /** The Leaf case form behind a record, with every amendment made in Canopy; null when it is not one. */
+  async leafLink(recordId: string): Promise<{ link: LeafLink; amendments: LeafAmendment[] } | null> {
+    try {
+      return await this.json<{ link: LeafLink; amendments: LeafAmendment[] }>("GET", `/leaf-links/${encodeURIComponent(recordId)}`);
+    } catch (error) {
+      if (error instanceof FormDevError && (error.code === "not_leaf_form" || error.code === "http_404")) return null;
+      throw error;
+    }
+  }
+
   async pushOps(ops: SyncOp[]): Promise<SyncAck[]> {
     try {
       return (await this.json<{ acks: SyncAck[] }>("POST", "/sync", { ops })).acks;
@@ -269,8 +285,14 @@ export class RestApiAdapter implements RemoteDataAdapter {
     return await this.json<AiStatus>("GET", "/ai/status");
   }
 
-  async aiInspect(files: UploadFile[]): Promise<Inspection> {
-    return await this.json<Inspection>("POST", "/ai/inspect", { files }, Math.max(this.timeoutMs, 120_000));
+  /** One file sent as it is (no base64) and checked by the server; later requests use its id (reading, AI builds). */
+  async upload(file: Blob, name: string): Promise<UploadResult> {
+    const response = await this.send("POST", `/uploads?name=${encodeURIComponent(name)}`, file, file.type || "application/octet-stream", Math.max(this.timeoutMs, 120_000));
+    return await response.json() as UploadResult;
+  }
+
+  async removeUpload(id: string): Promise<void> {
+    await this.send("DELETE", `/uploads/${encodeURIComponent(id)}`);
   }
 
   async aiGenerate(body: GenerateRequest): Promise<GenerateResult> {
@@ -303,5 +325,40 @@ export class RestApiAdapter implements RemoteDataAdapter {
 
   async formFromTemplate(templateId: string, formId: string, title?: string): Promise<{ form_id: string; version: SchemaVersion }> {
     return await this.json("POST", `/templates/${encodeURIComponent(templateId)}/forms`, { form_id: formId, title });
+  }
+
+  // Reading documents into forms and the variable-name standard -------------------------------
+  async readingStatus(): Promise<ReadingStatus> {
+    return await this.json<ReadingStatus>("GET", "/reading/status");
+  }
+
+  /** Read an uploaded document (upload()) into a draft form; the same upload can be read again, e.g. with the AI on. */
+  async startReading(body: { upload: string; ai: boolean; title?: string }): Promise<ReadingJob> {
+    return (await this.json<{ job: ReadingJob }>("POST", "/reading/jobs", body)).job;
+  }
+
+  async readingJob(jobId: string, after: number): Promise<{ job: ReadingJob; events: ReadingEvent[]; next: number }> {
+    return await this.json("GET", `/reading/jobs/${encodeURIComponent(jobId)}?after=${after}`);
+  }
+
+  async readingResult(jobId: string): Promise<ReadingResult> {
+    return await this.json<ReadingResult>("GET", `/reading/jobs/${encodeURIComponent(jobId)}/result`);
+  }
+
+  async cancelReading(jobId: string): Promise<void> {
+    await this.send("POST", `/reading/jobs/${encodeURIComponent(jobId)}/cancel`);
+  }
+
+  /** The designer's AI (create from a description, or revise the form / the selected fields), run in the background. */
+  async startAiJob(body: { mode: "create" | "revise"; instructions: string; definition?: FormDefinition; focus?: string[]; title?: string; form_id?: string }): Promise<ReadingJob> {
+    return (await this.json<{ job: ReadingJob }>("POST", "/ai/jobs", body, 60_000)).job;
+  }
+
+  async suggestIds(fields: Array<{ label: string; label_en?: string; bind?: string; type?: string; section?: string }>, taken: string[] = []): Promise<Array<IdSuggestion | null>> {
+    return (await this.json<{ suggestions: Array<IdSuggestion | null> }>("POST", "/ids/suggest", { fields, taken })).suggestions;
+  }
+
+  async checkIds(definition: FormDefinition): Promise<IdFinding[]> {
+    return (await this.json<{ findings: IdFinding[] }>("POST", "/ids/check", { definition })).findings;
   }
 }

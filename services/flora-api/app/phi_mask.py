@@ -27,6 +27,9 @@ OTHER_FIELDS = {
     "address", "legaladdress", "presentaddress", "homeaddress", "email",
 }
 SENSITIVE = NAME_FIELDS | ID_FIELDS | OTHER_FIELDS
+# Concept keys (app/concepts.py) that identify the patient, matched as written ("patient.name"): name or other.
+PATIENT_CONCEPTS = {"patient.name": "name", "patient.hn": "other", "patient.an": "other", "patient.id_card": "other",
+                    "patient.dob": "other"}
 # Thai and English titles stay readable in front of a masked name ("นางสุภ-------- สมบ--------").
 TITLES = ("นางสาว", "นาง", "นาย", "เด็กหญิง", "เด็กชาย", "ด.ญ.", "ด.ช.", "น.ส.", "พญ.", "นพ.", "ดร.",
           "Mrs.", "Miss", "Mrs", "Mr.", "Ms.", "Mr", "Ms", "Dr.")
@@ -70,7 +73,7 @@ def _mask_value(key: str, value: Any) -> Any:
         value = str(value)
     if not isinstance(value, str):
         return mask(value)
-    return mask_name(value) if _field(key) in NAME_FIELDS else mask_text(value)
+    return mask_name(value) if _field(key) in NAME_FIELDS or PATIENT_CONCEPTS.get(key) == "name" else mask_text(value)
 
 
 def mask(data: Any) -> Any:
@@ -81,7 +84,8 @@ def mask(data: Any) -> Any:
         return data
     out: dict[str, Any] = {}
     for key, value in data.items():
-        out[key] = _mask_value(key, value) if isinstance(key, str) and _field(key) in SENSITIVE else mask(value)
+        sensitive = isinstance(key, str) and (_field(key) in SENSITIVE or key in PATIENT_CONCEPTS)
+        out[key] = _mask_value(key, value) if sensitive else mask(value)
     # A case code embeds the HN ("<HN>_<date>_<n>"): mask that part too.
     for key in ("case_code", "caseCode"):
         code = out.get(key)

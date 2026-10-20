@@ -56,13 +56,15 @@ export type FieldLayout = {
   col?: number;
   row?: number;
   span?: number;
+  /** Grid rows the field covers (default 1). */
+  row_span?: number;
   page_break?: PageBreak;
   responsive?: Partial<Record<LayoutMode, { col?: number; span?: number; hidden?: boolean }>>;
 };
 export type ContainerLayout = { type?: "grid" | "row" | "column"; columns?: number; gap_mm?: number };
 
 /** has_input: Answer + Other, the text is stored in data._other.<key> (Phase 2.6). when: show the option only if true (Phase 2.3). */
-export type FieldOption = { value: string; label: string; has_input?: boolean; input_required?: boolean; when?: Condition };
+export type FieldOption = { value: string; label: string; label_en?: string; has_input?: boolean; input_required?: boolean; when?: Condition };
 
 /** lookup column -> field key whose value the column must equal. */
 export type LookupPairs = Record<string, string>;
@@ -85,6 +87,8 @@ export type FieldDefinition = {
   key?: string;
   type: FieldType;
   label: string;
+  /** The label in English when `label` is Thai (core/labels.ts picks one by the UI language). */
+  label_en?: string;
   description?: string;
   placeholder?: string;
   unit?: string;
@@ -123,6 +127,8 @@ export type FieldDefinition = {
   view?: "cards" | "table";
   /** radio, select, multiselect: options laid out in this many columns (1-6). */
   option_columns?: number;
+  /** matrix: the row names' column width, percent of the table (10-90). */
+  label_width?: number;
   /** matrix: fixed rows x cols of cells; a row may override the default cell; totals are computed rows. */
   rows?: MatrixRow[];
   cols?: Array<{ id: string; label: string }>;
@@ -134,6 +140,10 @@ export type FieldDefinition = {
   bind?: string;
   /** logo: the picture (PNG / JPEG data URL, kept in the definition). */
   src?: string;
+  /** heading: 1 (largest) to 3. */
+  level?: number;
+  /** paragraph: the text shown and printed. */
+  content?: string;
   /** logo / barcode: printed height in mm. */
   height_mm?: number;
   align?: "left" | "center" | "right";
@@ -142,10 +152,21 @@ export type FieldDefinition = {
   /** barcode: i2of5 = Interleaved 2 of 5 (digits; Flora Leaf's HN barcode), code128, code39. */
   symbology?: "i2of5" | "code128" | "code39";
   show_text?: boolean;
+  /** case_block: which case data the report component prints (core/caseBlocks.ts), e.g. diagnoses, medications. */
+  block?: string;
+  /** case_block: the block's columns in print order, each with its width in percent of the block. */
+  block_columns?: Array<{ key: string; width?: number; label?: string }>;
+  /** case_block: rows printed at most (default 20) and ruled rows at least (empty ones to write on). */
+  max_rows?: number;
+  min_rows?: number;
+  /** case_block: print the column headings (default true). */
+  show_header?: boolean;
 };
 
 /** A named sub-group between section and field (Phase 2.0); its fields share the section's data scope. */
 export type CategoryDefinition = {
+  /** The title in English when `title` is Thai. */
+  title_en?: string;
   id: string;
   title: string;
   description?: string;
@@ -186,6 +207,8 @@ export type MatrixValue = Record<string, Record<string, string | number | null>>
 export type PaperKeys = { print_style?: "plain" | "boxed"; hide_title?: boolean };
 
 export type SectionDefinition = {
+  /** The title in English when `title` is Thai. */
+  title_en?: string;
   id: string;
   title: string;
   description?: string;
@@ -212,7 +235,8 @@ export type CalculatorDefinition = {
 
 /** Stored value of file and image fields (the bytes live elsewhere; ref points at them). */
 export type FileValue = { name: string; mime: string; size: number; ref: string };
-export type SignatureValue = { data: string; signed_at?: string; signer?: string };
+/** verified "pin": signed on Flora Leaf with the signer's signing PIN (then locked; changing it is an amendment). */
+export type SignatureValue = { data: string; signed_at?: string; signer?: string; signer_name?: string; verified?: "pin" };
 
 export type MigrationOp =
   | { op: "rename_field"; from: string; to: string }
@@ -319,7 +343,25 @@ export type SyncOp = {
   data: RecordData;
   status: RecordStatus;
   client_updated_at: number;
+  /** Why a record filled on Flora Leaf is changed here (an amendment); the server refuses such a change without one. */
+  reason?: string;
 };
+
+/** A record that is a Flora Leaf case form (GET /api/formdev/leaf-links): the patient and case it belongs to, who
+ * changed each field (on a Leaf, or here with a reason) and Canopy's receipt for the Leaf. */
+export type LeafLinkAuthor = { by: string; at: number; via: "leaf" | "canopy"; leaf_id?: string; reason?: string };
+export type LeafLink = {
+  caseKey: string; formId: string; formVersion: number; hn: string | null; admissionId: string | null; leafId: string | null;
+  sourceCaseId: string | null; status: "draft" | "completed"; authors: Record<string, LeafLinkAuthor>; recordId: string;
+  recordState: "pending" | "stored" | "kept_as_draft" | "not_stored" | "waiting_files"; recordIssues: Issue[];
+  leafState: string | null; pendingToLeaf: boolean; updatedAt: number;
+  /** The form (formId without a copy number) and which copy of a repeatable form this is (1 = the form itself). */
+  form?: string; instance?: number;
+  /** Review in Canopy: holds for the copy reviewed (changed_since_review after any later change). */
+  review?: { state: "none" | "reviewed" | "approved" | "changed_since_review"; reviewedBy: string | null; reviewedAt: number | null;
+    approvedBy: string | null; approvedAt: number | null };
+};
+export type LeafAmendment = { changes: Record<string, { from: JsonValue | null; to: JsonValue | null }>; reason: string; by: string; at: number };
 
 export type SyncAck = {
   op_id: string;

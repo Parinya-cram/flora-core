@@ -287,6 +287,7 @@ def public_user(row: dict[str, Any]) -> dict[str, Any]:
     result["authSource"] = row.get("auth_source") or "local"
     result["wardAccess"] = ward_access(row)
     result["hasAdminPin"] = bool(row.get("admin_pin_hash"))
+    result["hasSignPin"] = bool(row.get("sign_pin_hash"))
     return result
 
 
@@ -1145,6 +1146,24 @@ def ldap_status(database: Connection = Depends(connection)) -> dict:
 @router.put("/self/admin-pin")
 def leaf_admin_pin(_: dict = Depends(current_user)) -> dict:
     raise HTTPException(status_code=409, detail="manage the admin PIN from Canopy")
+
+
+def password_confirmed(row: dict[str, Any], password: str) -> bool:
+    """The account's current password, for changes to its own credentials (the local hash; for LDAP accounts the
+    password cached at their last sign-in here)."""
+    salt, digest = row.get("password_salt"), row.get("password_hash")
+    return bool(salt and digest) and verify_password(password, salt, digest)
+
+
+@router.put("/self/sign-pin")
+def leaf_sign_pin(payload: AdminPinRequest, user: dict = Depends(current_user), database: Connection = Depends(connection)) -> dict:
+    """Set (or clear) your signing PIN: it confirms the signatures you draw in forms. Needs your current password."""
+    row = database.execute("SELECT * FROM auth_user WHERE id=%s", (user["id"],)).fetchone()
+    if row is None or not password_confirmed(row, payload.current_password):
+        raise HTTPException(status_code=400, detail="current password is incorrect")
+    with database.transaction():
+        directory.set_sign_pin(database, user["id"], (payload.pin or "").strip() or None)
+    return {"ok": True, "hasSignPin": bool((payload.pin or "").strip())}
 
 
 # --- directory synchronization (called by the Leaf sync worker) ---------------

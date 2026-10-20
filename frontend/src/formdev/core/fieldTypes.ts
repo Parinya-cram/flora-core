@@ -7,9 +7,9 @@
 export type ValueKind = "text" | "number" | "integer" | "decimal" | "date" | "datetime" | "time" | "option" | "options" | "boolean" | "file" | "signature" | "list" | "matrix" | "timeline";
 export type FieldTypeSpec = { value: ValueKind | null; query: string | null; index: "text" | "num" | "datetime" | null; props: readonly string[] };
 
-export const COMMON_PROPS = ["id", "key", "type", "label", "description", "required", "readonly", "hidden", "visible", "display", "layout", "style",
+export const COMMON_PROPS = ["id", "key", "type", "label", "label_en", "description", "required", "readonly", "hidden", "visible", "display", "layout", "style",
   "validation", "visibility", "clear_when_hidden", "permission", "indexed", "bind"] as const;
-export const COMMON_CONTAINER_PROPS = ["id", "type", "label", "description", "readonly", "hidden", "visible", "display", "layout", "style", "visibility",
+export const COMMON_CONTAINER_PROPS = ["id", "type", "label", "label_en", "description", "readonly", "hidden", "visible", "display", "layout", "style", "visibility",
   "clear_when_hidden", "permission"] as const;
 
 export const FIELD_TYPE_SPECS = {
@@ -32,12 +32,18 @@ export const FIELD_TYPE_SPECS = {
   calculated: { value: "number", query: "num", index: "num", props: ["unit", "formula", "calculator", "decimals"] },
   group: { value: null, query: null, index: null, props: ["fields", "columns"] },
   repeat: { value: "list", query: "list", index: null, props: ["fields", "columns", "min_items", "max_items", "view"] },
-  matrix: { value: "matrix", query: null, index: null, props: ["rows", "cols", "cell", "totals"] },
+  matrix: { value: "matrix", query: null, index: null, props: ["rows", "cols", "cell", "totals", "label_width"] },
   timeline: { value: "timeline", query: null, index: null, props: ["timeline"] },
   // Printed elements without a value: a picture kept in the definition (hospital logo) and a barcode of another
   // field's value (the patient's HN, as on wristbands and Flora Leaf).
   logo: { value: null, query: null, index: null, props: ["src", "height_mm", "align"] },
   barcode: { value: null, query: null, index: null, props: ["source", "symbology", "height_mm", "show_text", "align"] },
+  // A report component: a table of one kind of Flora Leaf case data, read when the template is printed.
+  case_block: { value: null, query: null, index: null, props: ["block", "block_columns", "max_rows", "min_rows", "show_header"] },
+  // Static elements without a value: a heading (its label), a paragraph of text and a dividing line.
+  heading: { value: null, query: null, index: null, props: ["level", "align"] },
+  paragraph: { value: null, query: null, index: null, props: ["content", "align"] },
+  divider: { value: null, query: null, index: null, props: [] },
 } as const satisfies Record<string, FieldTypeSpec>;
 
 export type FieldType = keyof typeof FIELD_TYPE_SPECS;

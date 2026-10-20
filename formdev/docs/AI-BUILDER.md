@@ -3,6 +3,10 @@
 Turns hospital documents into `flora.form/1` forms, checked by the same validator as every form, kept as
 templates for review before anything reaches data entry or Flora Leaf.
 
+> Reading a document with tools first (text layer, Thai OCR, shapes) and asking the AI only about the parts the tools
+> are unsure of, the designer's AI panel and the variable-name standard: [FORM-STUDIO-V2.md](FORM-STUDIO-V2.md).
+> The whole-document build below remains for documents the tools cannot read.
+
 ```
 documents ──► check every file ──► AI writes the form ──► validator (≤ 2 automatic corrections)
                                                               │

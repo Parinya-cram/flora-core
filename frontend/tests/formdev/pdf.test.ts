@@ -45,7 +45,7 @@ describe("PDF layout", () => {
   });
 
   it("places fields side by side on the grid, then wraps to the next row", () => {
-    const definition: FormDefinition = { ...admission, sections: [{ id: "s", title: "S", fields: [
+    const definition: FormDefinition = { ...admission, layout: { type: "grid", columns: 12 }, sections: [{ id: "s", title: "S", fields: [
       { id: "a", type: "text", label: "A", layout: { span: 6 } }, { id: "b", type: "text", label: "B", layout: { span: 6 } }, { id: "c", type: "text", label: "C", layout: { span: 4, col: 9 } },
     ] }] };
     const ops = layout(definition).pages[0].filter((op): op is Extract<Op, { kind: "text" }> => op.kind === "text");

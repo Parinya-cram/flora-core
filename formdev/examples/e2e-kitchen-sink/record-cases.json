@@ -1,0 +1,1315 @@
+[
+ {
+  "name": "complete record",
+  "status": "submitted",
+  "data": {
+   "hn": "E2E0001",
+   "full_name": "E2E Patient",
+   "dob": "1970-01-02",
+   "age": 56,
+   "sex": "female",
+   "visit_time": "09:30",
+   "assessed_at": "2026-10-16T09:30:00+07:00",
+   "weight_kg": 61.5,
+   "height_cm": 160,
+   "smoker": "other",
+   "symptoms": [
+    "dizzy",
+    "other"
+   ],
+   "_other": {
+    "smoker": "pipe",
+    "symptoms": "nausea"
+   },
+   "has_fever": true,
+   "temperature_c": 38.2,
+   "consent": true,
+   "notes": "every field type",
+   "photo": {
+    "name": "pixel.png",
+    "mime": "image/png",
+    "size": 70,
+    "ref": "att:c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77"
+   },
+   "nurse_signature": {
+    "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "signed_at": "2026-10-16T09:31:00+07:00"
+   },
+   "aldrete": {
+    "activity": {
+     "admit": 2,
+     "dc": 2
+    },
+    "spo2": {
+     "admit": 1,
+     "dc": 2
+    }
+   },
+   "trends": {
+    "step_min": 5,
+    "axis": [
+     1792112400000,
+     1792112700000
+    ],
+    "values": {
+     "hr": {
+      "1792112400000": 80,
+      "1792112700000": 82
+     }
+    },
+    "events": [
+     {
+      "ts": 1792112400000,
+      "title": "Start"
+     }
+    ],
+    "source": "manual"
+   },
+   "contact_name": "Kin",
+   "contact_phone": "0812345678",
+   "lines": [
+    {
+     "site": "L hand",
+     "gauge": "20",
+     "inserted_at": "09:00"
+    },
+    {
+     "site": "R arm",
+     "gauge": "18",
+     "inserted_at": "09:10"
+    }
+   ]
+  },
+  "issues": []
+ },
+ {
+  "name": "required fields missing",
+  "status": "submitted",
+  "data": {
+   "dob": "1970-01-02",
+   "age": 56,
+   "sex": "female",
+   "visit_time": "09:30",
+   "weight_kg": 61.5,
+   "height_cm": 160,
+   "smoker": "other",
+   "symptoms": [
+    "dizzy",
+    "other"
+   ],
+   "_other": {
+    "smoker": "pipe",
+    "symptoms": "nausea"
+   },
+   "has_fever": true,
+   "temperature_c": 38.2,
+   "notes": "every field type",
+   "photo": {
+    "name": "pixel.png",
+    "mime": "image/png",
+    "size": 70,
+    "ref": "att:c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77"
+   },
+   "nurse_signature": {
+    "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "signed_at": "2026-10-16T09:31:00+07:00"
+   },
+   "aldrete": {
+    "activity": {
+     "admit": 2,
+     "dc": 2
+    },
+    "spo2": {
+     "admit": 1,
+     "dc": 2
+    }
+   },
+   "trends": {
+    "step_min": 5,
+    "axis": [
+     1792112400000,
+     1792112700000
+    ],
+    "values": {
+     "hr": {
+      "1792112400000": 80,
+      "1792112700000": 82
+     }
+    },
+    "events": [
+     {
+      "ts": 1792112400000,
+      "title": "Start"
+     }
+    ],
+    "source": "manual"
+   },
+   "contact_name": "Kin",
+   "contact_phone": "0812345678",
+   "lines": [
+    {
+     "site": "L hand",
+     "gauge": "20",
+     "inserted_at": "09:00"
+    },
+    {
+     "site": "R arm",
+     "gauge": "18",
+     "inserted_at": "09:10"
+    }
+   ]
+  },
+  "issues": [
+   {
+    "path": "$.data.assessed_at",
+    "code": "required"
+   },
+   {
+    "path": "$.data.consent",
+    "code": "required"
+   },
+   {
+    "path": "$.data.full_name",
+    "code": "required"
+   },
+   {
+    "path": "$.data.hn",
+    "code": "required"
+   }
+  ]
+ },
+ {
+  "name": "a draft may leave required fields empty",
+  "status": "draft",
+  "data": {
+   "full_name": "E2E Patient",
+   "dob": "1970-01-02",
+   "age": 56,
+   "sex": "female",
+   "visit_time": "09:30",
+   "assessed_at": "2026-10-16T09:30:00+07:00",
+   "weight_kg": 61.5,
+   "height_cm": 160,
+   "smoker": "other",
+   "symptoms": [
+    "dizzy",
+    "other"
+   ],
+   "_other": {
+    "smoker": "pipe",
+    "symptoms": "nausea"
+   },
+   "has_fever": true,
+   "temperature_c": 38.2,
+   "notes": "every field type",
+   "photo": {
+    "name": "pixel.png",
+    "mime": "image/png",
+    "size": 70,
+    "ref": "att:c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77"
+   },
+   "nurse_signature": {
+    "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "signed_at": "2026-10-16T09:31:00+07:00"
+   },
+   "aldrete": {
+    "activity": {
+     "admit": 2,
+     "dc": 2
+    },
+    "spo2": {
+     "admit": 1,
+     "dc": 2
+    }
+   },
+   "trends": {
+    "step_min": 5,
+    "axis": [
+     1792112400000,
+     1792112700000
+    ],
+    "values": {
+     "hr": {
+      "1792112400000": 80,
+      "1792112700000": 82
+     }
+    },
+    "events": [
+     {
+      "ts": 1792112400000,
+      "title": "Start"
+     }
+    ],
+    "source": "manual"
+   },
+   "contact_name": "Kin",
+   "contact_phone": "0812345678",
+   "lines": [
+    {
+     "site": "L hand",
+     "gauge": "20",
+     "inserted_at": "09:00"
+    },
+    {
+     "site": "R arm",
+     "gauge": "18",
+     "inserted_at": "09:10"
+    }
+   ]
+  },
+  "issues": []
+ },
+ {
+  "name": "fever: temperature required and in range",
+  "status": "submitted",
+  "data": {
+   "hn": "E2E0001",
+   "full_name": "E2E Patient",
+   "dob": "1970-01-02",
+   "age": 56,
+   "sex": "female",
+   "visit_time": "09:30",
+   "assessed_at": "2026-10-16T09:30:00+07:00",
+   "weight_kg": 61.5,
+   "height_cm": 160,
+   "smoker": "other",
+   "symptoms": [
+    "dizzy",
+    "other"
+   ],
+   "_other": {
+    "smoker": "pipe",
+    "symptoms": "nausea"
+   },
+   "has_fever": true,
+   "consent": true,
+   "notes": "every field type",
+   "photo": {
+    "name": "pixel.png",
+    "mime": "image/png",
+    "size": 70,
+    "ref": "att:c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77"
+   },
+   "nurse_signature": {
+    "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "signed_at": "2026-10-16T09:31:00+07:00"
+   },
+   "aldrete": {
+    "activity": {
+     "admit": 2,
+     "dc": 2
+    },
+    "spo2": {
+     "admit": 1,
+     "dc": 2
+    }
+   },
+   "trends": {
+    "step_min": 5,
+    "axis": [
+     1792112400000,
+     1792112700000
+    ],
+    "values": {
+     "hr": {
+      "1792112400000": 80,
+      "1792112700000": 82
+     }
+    },
+    "events": [
+     {
+      "ts": 1792112400000,
+      "title": "Start"
+     }
+    ],
+    "source": "manual"
+   },
+   "contact_name": "Kin",
+   "contact_phone": "0812345678",
+   "lines": [
+    {
+     "site": "L hand",
+     "gauge": "20",
+     "inserted_at": "09:00"
+    },
+    {
+     "site": "R arm",
+     "gauge": "18",
+     "inserted_at": "09:10"
+    }
+   ]
+  },
+  "issues": [
+   {
+    "path": "$.data.temperature_c",
+    "code": "required"
+   }
+  ]
+ },
+ {
+  "name": "temperature out of range",
+  "status": "submitted",
+  "data": {
+   "hn": "E2E0001",
+   "full_name": "E2E Patient",
+   "dob": "1970-01-02",
+   "age": 56,
+   "sex": "female",
+   "visit_time": "09:30",
+   "assessed_at": "2026-10-16T09:30:00+07:00",
+   "weight_kg": 61.5,
+   "height_cm": 160,
+   "smoker": "other",
+   "symptoms": [
+    "dizzy",
+    "other"
+   ],
+   "_other": {
+    "smoker": "pipe",
+    "symptoms": "nausea"
+   },
+   "has_fever": true,
+   "temperature_c": 45.5,
+   "consent": true,
+   "notes": "every field type",
+   "photo": {
+    "name": "pixel.png",
+    "mime": "image/png",
+    "size": 70,
+    "ref": "att:c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77"
+   },
+   "nurse_signature": {
+    "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "signed_at": "2026-10-16T09:31:00+07:00"
+   },
+   "aldrete": {
+    "activity": {
+     "admit": 2,
+     "dc": 2
+    },
+    "spo2": {
+     "admit": 1,
+     "dc": 2
+    }
+   },
+   "trends": {
+    "step_min": 5,
+    "axis": [
+     1792112400000,
+     1792112700000
+    ],
+    "values": {
+     "hr": {
+      "1792112400000": 80,
+      "1792112700000": 82
+     }
+    },
+    "events": [
+     {
+      "ts": 1792112400000,
+      "title": "Start"
+     }
+    ],
+    "source": "manual"
+   },
+   "contact_name": "Kin",
+   "contact_phone": "0812345678",
+   "lines": [
+    {
+     "site": "L hand",
+     "gauge": "20",
+     "inserted_at": "09:00"
+    },
+    {
+     "site": "R arm",
+     "gauge": "18",
+     "inserted_at": "09:10"
+    }
+   ]
+  },
+  "issues": [
+   {
+    "path": "$.data.temperature_c",
+    "code": "out_of_range"
+   }
+  ]
+ },
+ {
+  "name": "no fever: the hidden temperature is not required",
+  "status": "submitted",
+  "data": {
+   "hn": "E2E0001",
+   "full_name": "E2E Patient",
+   "dob": "1970-01-02",
+   "age": 56,
+   "sex": "female",
+   "visit_time": "09:30",
+   "assessed_at": "2026-10-16T09:30:00+07:00",
+   "weight_kg": 61.5,
+   "height_cm": 160,
+   "smoker": "other",
+   "symptoms": [
+    "dizzy",
+    "other"
+   ],
+   "_other": {
+    "smoker": "pipe",
+    "symptoms": "nausea"
+   },
+   "has_fever": false,
+   "consent": true,
+   "notes": "every field type",
+   "photo": {
+    "name": "pixel.png",
+    "mime": "image/png",
+    "size": 70,
+    "ref": "att:c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77"
+   },
+   "nurse_signature": {
+    "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "signed_at": "2026-10-16T09:31:00+07:00"
+   },
+   "aldrete": {
+    "activity": {
+     "admit": 2,
+     "dc": 2
+    },
+    "spo2": {
+     "admit": 1,
+     "dc": 2
+    }
+   },
+   "trends": {
+    "step_min": 5,
+    "axis": [
+     1792112400000,
+     1792112700000
+    ],
+    "values": {
+     "hr": {
+      "1792112400000": 80,
+      "1792112700000": 82
+     }
+    },
+    "events": [
+     {
+      "ts": 1792112400000,
+      "title": "Start"
+     }
+    ],
+    "source": "manual"
+   },
+   "contact_name": "Kin",
+   "contact_phone": "0812345678",
+   "lines": [
+    {
+     "site": "L hand",
+     "gauge": "20",
+     "inserted_at": "09:00"
+    },
+    {
+     "site": "R arm",
+     "gauge": "18",
+     "inserted_at": "09:10"
+    }
+   ]
+  },
+  "issues": []
+ },
+ {
+  "name": "phone pattern",
+  "status": "submitted",
+  "data": {
+   "hn": "E2E0001",
+   "full_name": "E2E Patient",
+   "dob": "1970-01-02",
+   "age": 56,
+   "sex": "female",
+   "visit_time": "09:30",
+   "assessed_at": "2026-10-16T09:30:00+07:00",
+   "weight_kg": 61.5,
+   "height_cm": 160,
+   "smoker": "other",
+   "symptoms": [
+    "dizzy",
+    "other"
+   ],
+   "_other": {
+    "smoker": "pipe",
+    "symptoms": "nausea"
+   },
+   "has_fever": true,
+   "temperature_c": 38.2,
+   "consent": true,
+   "notes": "every field type",
+   "photo": {
+    "name": "pixel.png",
+    "mime": "image/png",
+    "size": 70,
+    "ref": "att:c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77"
+   },
+   "nurse_signature": {
+    "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "signed_at": "2026-10-16T09:31:00+07:00"
+   },
+   "aldrete": {
+    "activity": {
+     "admit": 2,
+     "dc": 2
+    },
+    "spo2": {
+     "admit": 1,
+     "dc": 2
+    }
+   },
+   "trends": {
+    "step_min": 5,
+    "axis": [
+     1792112400000,
+     1792112700000
+    ],
+    "values": {
+     "hr": {
+      "1792112400000": 80,
+      "1792112700000": 82
+     }
+    },
+    "events": [
+     {
+      "ts": 1792112400000,
+      "title": "Start"
+     }
+    ],
+    "source": "manual"
+   },
+   "contact_name": "Kin",
+   "contact_phone": "12ab",
+   "lines": [
+    {
+     "site": "L hand",
+     "gauge": "20",
+     "inserted_at": "09:00"
+    },
+    {
+     "site": "R arm",
+     "gauge": "18",
+     "inserted_at": "09:10"
+    }
+   ]
+  },
+  "issues": [
+   {
+    "path": "$.data.contact_phone",
+    "code": "pattern_mismatch"
+   }
+  ]
+ },
+ {
+  "name": "repeat: a required child missing",
+  "status": "submitted",
+  "data": {
+   "hn": "E2E0001",
+   "full_name": "E2E Patient",
+   "dob": "1970-01-02",
+   "age": 56,
+   "sex": "female",
+   "visit_time": "09:30",
+   "assessed_at": "2026-10-16T09:30:00+07:00",
+   "weight_kg": 61.5,
+   "height_cm": 160,
+   "smoker": "other",
+   "symptoms": [
+    "dizzy",
+    "other"
+   ],
+   "_other": {
+    "smoker": "pipe",
+    "symptoms": "nausea"
+   },
+   "has_fever": true,
+   "temperature_c": 38.2,
+   "consent": true,
+   "notes": "every field type",
+   "photo": {
+    "name": "pixel.png",
+    "mime": "image/png",
+    "size": 70,
+    "ref": "att:c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77"
+   },
+   "nurse_signature": {
+    "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "signed_at": "2026-10-16T09:31:00+07:00"
+   },
+   "aldrete": {
+    "activity": {
+     "admit": 2,
+     "dc": 2
+    },
+    "spo2": {
+     "admit": 1,
+     "dc": 2
+    }
+   },
+   "trends": {
+    "step_min": 5,
+    "axis": [
+     1792112400000,
+     1792112700000
+    ],
+    "values": {
+     "hr": {
+      "1792112400000": 80,
+      "1792112700000": 82
+     }
+    },
+    "events": [
+     {
+      "ts": 1792112400000,
+      "title": "Start"
+     }
+    ],
+    "source": "manual"
+   },
+   "contact_name": "Kin",
+   "contact_phone": "0812345678",
+   "lines": [
+    {
+     "gauge": "20"
+    }
+   ]
+  },
+  "issues": [
+   {
+    "path": "$.data.lines[0].site",
+    "code": "required"
+   }
+  ]
+ },
+ {
+  "name": "repeat: too many items",
+  "status": "submitted",
+  "data": {
+   "hn": "E2E0001",
+   "full_name": "E2E Patient",
+   "dob": "1970-01-02",
+   "age": 56,
+   "sex": "female",
+   "visit_time": "09:30",
+   "assessed_at": "2026-10-16T09:30:00+07:00",
+   "weight_kg": 61.5,
+   "height_cm": 160,
+   "smoker": "other",
+   "symptoms": [
+    "dizzy",
+    "other"
+   ],
+   "_other": {
+    "smoker": "pipe",
+    "symptoms": "nausea"
+   },
+   "has_fever": true,
+   "temperature_c": 38.2,
+   "consent": true,
+   "notes": "every field type",
+   "photo": {
+    "name": "pixel.png",
+    "mime": "image/png",
+    "size": 70,
+    "ref": "att:c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77"
+   },
+   "nurse_signature": {
+    "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "signed_at": "2026-10-16T09:31:00+07:00"
+   },
+   "aldrete": {
+    "activity": {
+     "admit": 2,
+     "dc": 2
+    },
+    "spo2": {
+     "admit": 1,
+     "dc": 2
+    }
+   },
+   "trends": {
+    "step_min": 5,
+    "axis": [
+     1792112400000,
+     1792112700000
+    ],
+    "values": {
+     "hr": {
+      "1792112400000": 80,
+      "1792112700000": 82
+     }
+    },
+    "events": [
+     {
+      "ts": 1792112400000,
+      "title": "Start"
+     }
+    ],
+    "source": "manual"
+   },
+   "contact_name": "Kin",
+   "contact_phone": "0812345678",
+   "lines": [
+    {
+     "site": "0"
+    },
+    {
+     "site": "1"
+    },
+    {
+     "site": "2"
+    },
+    {
+     "site": "3"
+    },
+    {
+     "site": "4"
+    }
+   ]
+  },
+  "issues": [
+   {
+    "path": "$.data.lines",
+    "code": "too_many_items"
+   }
+  ]
+ },
+ {
+  "name": "matrix cell out of range",
+  "status": "submitted",
+  "data": {
+   "hn": "E2E0001",
+   "full_name": "E2E Patient",
+   "dob": "1970-01-02",
+   "age": 56,
+   "sex": "female",
+   "visit_time": "09:30",
+   "assessed_at": "2026-10-16T09:30:00+07:00",
+   "weight_kg": 61.5,
+   "height_cm": 160,
+   "smoker": "other",
+   "symptoms": [
+    "dizzy",
+    "other"
+   ],
+   "_other": {
+    "smoker": "pipe",
+    "symptoms": "nausea"
+   },
+   "has_fever": true,
+   "temperature_c": 38.2,
+   "consent": true,
+   "notes": "every field type",
+   "photo": {
+    "name": "pixel.png",
+    "mime": "image/png",
+    "size": 70,
+    "ref": "att:c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77"
+   },
+   "nurse_signature": {
+    "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "signed_at": "2026-10-16T09:31:00+07:00"
+   },
+   "aldrete": {
+    "activity": {
+     "admit": 5
+    }
+   },
+   "trends": {
+    "step_min": 5,
+    "axis": [
+     1792112400000,
+     1792112700000
+    ],
+    "values": {
+     "hr": {
+      "1792112400000": 80,
+      "1792112700000": 82
+     }
+    },
+    "events": [
+     {
+      "ts": 1792112400000,
+      "title": "Start"
+     }
+    ],
+    "source": "manual"
+   },
+   "contact_name": "Kin",
+   "contact_phone": "0812345678",
+   "lines": [
+    {
+     "site": "L hand",
+     "gauge": "20",
+     "inserted_at": "09:00"
+    },
+    {
+     "site": "R arm",
+     "gauge": "18",
+     "inserted_at": "09:10"
+    }
+   ]
+  },
+  "issues": [
+   {
+    "path": "$.data.aldrete.activity.admit",
+    "code": "out_of_range"
+   }
+  ]
+ },
+ {
+  "name": "Other chosen without its text",
+  "status": "submitted",
+  "data": {
+   "hn": "E2E0001",
+   "full_name": "E2E Patient",
+   "dob": "1970-01-02",
+   "age": 56,
+   "sex": "female",
+   "visit_time": "09:30",
+   "assessed_at": "2026-10-16T09:30:00+07:00",
+   "weight_kg": 61.5,
+   "height_cm": 160,
+   "smoker": "other",
+   "symptoms": [
+    "dizzy",
+    "other"
+   ],
+   "_other": {
+    "smoker": "pipe"
+   },
+   "has_fever": true,
+   "temperature_c": 38.2,
+   "consent": true,
+   "notes": "every field type",
+   "photo": {
+    "name": "pixel.png",
+    "mime": "image/png",
+    "size": 70,
+    "ref": "att:c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77"
+   },
+   "nurse_signature": {
+    "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "signed_at": "2026-10-16T09:31:00+07:00"
+   },
+   "aldrete": {
+    "activity": {
+     "admit": 2,
+     "dc": 2
+    },
+    "spo2": {
+     "admit": 1,
+     "dc": 2
+    }
+   },
+   "trends": {
+    "step_min": 5,
+    "axis": [
+     1792112400000,
+     1792112700000
+    ],
+    "values": {
+     "hr": {
+      "1792112400000": 80,
+      "1792112700000": 82
+     }
+    },
+    "events": [
+     {
+      "ts": 1792112400000,
+      "title": "Start"
+     }
+    ],
+    "source": "manual"
+   },
+   "contact_name": "Kin",
+   "contact_phone": "0812345678",
+   "lines": [
+    {
+     "site": "L hand",
+     "gauge": "20",
+     "inserted_at": "09:00"
+    },
+    {
+     "site": "R arm",
+     "gauge": "18",
+     "inserted_at": "09:10"
+    }
+   ]
+  },
+  "issues": [
+   {
+    "path": "$.data.symptoms",
+    "code": "other_text_required"
+   }
+  ]
+ },
+ {
+  "name": "wrong value types",
+  "status": "submitted",
+  "data": {
+   "hn": "E2E0001",
+   "full_name": "E2E Patient",
+   "dob": "1970-01-02",
+   "age": "abc",
+   "sex": "female",
+   "visit_time": "09:30",
+   "assessed_at": "2026-10-16T09:30:00+07:00",
+   "weight_kg": -1,
+   "height_cm": 160,
+   "smoker": "other",
+   "symptoms": [
+    "dizzy",
+    "other"
+   ],
+   "_other": {
+    "smoker": "pipe",
+    "symptoms": "nausea"
+   },
+   "has_fever": "yes",
+   "temperature_c": 38.2,
+   "consent": true,
+   "notes": "every field type",
+   "photo": {
+    "name": "pixel.png",
+    "mime": "image/png",
+    "size": 70,
+    "ref": "att:c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77"
+   },
+   "nurse_signature": {
+    "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "signed_at": "2026-10-16T09:31:00+07:00"
+   },
+   "aldrete": {
+    "activity": {
+     "admit": 2,
+     "dc": 2
+    },
+    "spo2": {
+     "admit": 1,
+     "dc": 2
+    }
+   },
+   "trends": {
+    "step_min": 5,
+    "axis": [
+     1792112400000,
+     1792112700000
+    ],
+    "values": {
+     "hr": {
+      "1792112400000": 80,
+      "1792112700000": 82
+     }
+    },
+    "events": [
+     {
+      "ts": 1792112400000,
+      "title": "Start"
+     }
+    ],
+    "source": "manual"
+   },
+   "contact_name": "Kin",
+   "contact_phone": "0812345678",
+   "lines": [
+    {
+     "site": "L hand",
+     "gauge": "20",
+     "inserted_at": "09:00"
+    },
+    {
+     "site": "R arm",
+     "gauge": "18",
+     "inserted_at": "09:10"
+    }
+   ]
+  },
+  "issues": [
+   {
+    "path": "$.data.age",
+    "code": "invalid_type"
+   },
+   {
+    "path": "$.data.has_fever",
+    "code": "invalid_type"
+   },
+   {
+    "path": "$.data.weight_kg",
+    "code": "out_of_range"
+   }
+  ]
+ },
+ {
+  "name": "an option that is not offered",
+  "status": "submitted",
+  "data": {
+   "hn": "E2E0001",
+   "full_name": "E2E Patient",
+   "dob": "1970-01-02",
+   "age": 56,
+   "sex": "unknown",
+   "visit_time": "09:30",
+   "assessed_at": "2026-10-16T09:30:00+07:00",
+   "weight_kg": 61.5,
+   "height_cm": 160,
+   "smoker": "other",
+   "symptoms": [
+    "dizzy",
+    "flying"
+   ],
+   "_other": {
+    "smoker": "pipe",
+    "symptoms": "nausea"
+   },
+   "has_fever": true,
+   "temperature_c": 38.2,
+   "consent": true,
+   "notes": "every field type",
+   "photo": {
+    "name": "pixel.png",
+    "mime": "image/png",
+    "size": 70,
+    "ref": "att:c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77"
+   },
+   "nurse_signature": {
+    "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "signed_at": "2026-10-16T09:31:00+07:00"
+   },
+   "aldrete": {
+    "activity": {
+     "admit": 2,
+     "dc": 2
+    },
+    "spo2": {
+     "admit": 1,
+     "dc": 2
+    }
+   },
+   "trends": {
+    "step_min": 5,
+    "axis": [
+     1792112400000,
+     1792112700000
+    ],
+    "values": {
+     "hr": {
+      "1792112400000": 80,
+      "1792112700000": 82
+     }
+    },
+    "events": [
+     {
+      "ts": 1792112400000,
+      "title": "Start"
+     }
+    ],
+    "source": "manual"
+   },
+   "contact_name": "Kin",
+   "contact_phone": "0812345678",
+   "lines": [
+    {
+     "site": "L hand",
+     "gauge": "20",
+     "inserted_at": "09:00"
+    },
+    {
+     "site": "R arm",
+     "gauge": "18",
+     "inserted_at": "09:10"
+    }
+   ]
+  },
+  "issues": [
+   {
+    "path": "$.data.sex",
+    "code": "invalid_option"
+   },
+   {
+    "path": "$.data.symptoms",
+    "code": "invalid_option"
+   }
+  ]
+ },
+ {
+  "name": "unknown field",
+  "status": "submitted",
+  "data": {
+   "hn": "E2E0001",
+   "full_name": "E2E Patient",
+   "dob": "1970-01-02",
+   "age": 56,
+   "sex": "female",
+   "visit_time": "09:30",
+   "assessed_at": "2026-10-16T09:30:00+07:00",
+   "weight_kg": 61.5,
+   "height_cm": 160,
+   "smoker": "other",
+   "symptoms": [
+    "dizzy",
+    "other"
+   ],
+   "_other": {
+    "smoker": "pipe",
+    "symptoms": "nausea"
+   },
+   "has_fever": true,
+   "temperature_c": 38.2,
+   "consent": true,
+   "notes": "every field type",
+   "photo": {
+    "name": "pixel.png",
+    "mime": "image/png",
+    "size": 70,
+    "ref": "att:c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77"
+   },
+   "nurse_signature": {
+    "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "signed_at": "2026-10-16T09:31:00+07:00"
+   },
+   "aldrete": {
+    "activity": {
+     "admit": 2,
+     "dc": 2
+    },
+    "spo2": {
+     "admit": 1,
+     "dc": 2
+    }
+   },
+   "trends": {
+    "step_min": 5,
+    "axis": [
+     1792112400000,
+     1792112700000
+    ],
+    "values": {
+     "hr": {
+      "1792112400000": 80,
+      "1792112700000": 82
+     }
+    },
+    "events": [
+     {
+      "ts": 1792112400000,
+      "title": "Start"
+     }
+    ],
+    "source": "manual"
+   },
+   "contact_name": "Kin",
+   "contact_phone": "0812345678",
+   "lines": [
+    {
+     "site": "L hand",
+     "gauge": "20",
+     "inserted_at": "09:00"
+    },
+    {
+     "site": "R arm",
+     "gauge": "18",
+     "inserted_at": "09:10"
+    }
+   ],
+   "not_in_form": 1
+  },
+  "issues": [
+   {
+    "path": "$.data.not_in_form",
+    "code": "unknown_field"
+   }
+  ]
+ },
+ {
+  "name": "timeline value off its axis",
+  "status": "submitted",
+  "data": {
+   "hn": "E2E0001",
+   "full_name": "E2E Patient",
+   "dob": "1970-01-02",
+   "age": 56,
+   "sex": "female",
+   "visit_time": "09:30",
+   "assessed_at": "2026-10-16T09:30:00+07:00",
+   "weight_kg": 61.5,
+   "height_cm": 160,
+   "smoker": "other",
+   "symptoms": [
+    "dizzy",
+    "other"
+   ],
+   "_other": {
+    "smoker": "pipe",
+    "symptoms": "nausea"
+   },
+   "has_fever": true,
+   "temperature_c": 38.2,
+   "consent": true,
+   "notes": "every field type",
+   "photo": {
+    "name": "pixel.png",
+    "mime": "image/png",
+    "size": 70,
+    "ref": "att:c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77"
+   },
+   "nurse_signature": {
+    "data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "signed_at": "2026-10-16T09:31:00+07:00"
+   },
+   "aldrete": {
+    "activity": {
+     "admit": 2,
+     "dc": 2
+    },
+    "spo2": {
+     "admit": 1,
+     "dc": 2
+    }
+   },
+   "trends": {
+    "step_min": 5,
+    "axis": [
+     1792112400000,
+     1792112700000
+    ],
+    "values": {
+     "hr": {
+      "1": 80
+     }
+    },
+    "events": [
+     {
+      "ts": 1792112400000,
+      "title": "Start"
+     }
+    ],
+    "source": "manual"
+   },
+   "contact_name": "Kin",
+   "contact_phone": "0812345678",
+   "lines": [
+    {
+     "site": "L hand",
+     "gauge": "20",
+     "inserted_at": "09:00"
+    },
+    {
+     "site": "R arm",
+     "gauge": "18",
+     "inserted_at": "09:10"
+    }
+   ]
+  },
+  "issues": [
+   {
+    "path": "$.data.trends.values.hr.1",
+    "code": "unknown_field"
+   }
+  ]
+ }
+]

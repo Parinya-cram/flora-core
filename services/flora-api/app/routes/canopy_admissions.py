@@ -12,7 +12,7 @@ from psycopg import Connection
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
-from .. import directory, form_sync, hl7_interface
+from .. import case_forms, directory, form_sync, hl7_interface, workflows
 from ..database import connection
 from .canopy_preferences import require_canopy_permission
 from .canopy_users import ward_scope
@@ -242,3 +242,61 @@ def patch_form(admission_id: str, payload: FormPatch, user: dict = Depends(requi
             (Jsonb(merged), Jsonb(versions), current, current, admission_id),
         )
     return {"ok": True, "draft": merged, "updated_at": current, "updated_by": user["username"]}
+
+
+# ---------------------------------------------------------------- workflow (Form Studio) forms of the admission
+
+class WorkflowFormPatch(BaseModel):
+    patch: dict[str, Any]
+    # Required when a changed field was last filled on the Leaf (an amendment).
+    reason: str | None = Field(default=None, max_length=500)
+
+
+def _admission_workflow(database: Connection, row: dict[str, Any]) -> dict[str, Any] | None:
+    workflow_id = (row["admission"] or {}).get("workflow_id")
+    if not workflow_id or database.execute("SELECT to_regclass('canopy_workflow') AS t").fetchone()["t"] is None:
+        return None
+    found = database.execute(
+        "SELECT published_definition FROM canopy_workflow WHERE id=%s AND status<>'archived' AND published_definition IS NOT NULL",
+        (workflow_id,)).fetchone()
+    return found["published_definition"] if found else None
+
+
+@router.get("/{admission_id}/workflow-forms")
+def admission_workflow_forms(admission_id: str, _: dict = Depends(require_canopy_permission("case.read")),
+                             scope: list[str] | None = Depends(ward_scope), database: Connection = Depends(connection)) -> dict[str, Any]:
+    """The forms of the admission's workflow (Workflow Studio preset) with what was filled so far, here or at the bedside."""
+    row = _load(database, admission_id, scope)
+    workflow = _admission_workflow(database, row)
+    filled = case_forms.admission_forms(database, admission_id) if case_forms.available(database) else {}
+    forms = []
+    for entry in (workflow or {}).get("forms") or []:
+        if not isinstance(entry, dict) or not entry.get("form_id"):
+            continue
+        definition = workflows.form_definition(database, entry["form_id"], int(entry.get("version") or 0))
+        if definition is not None:
+            forms.append({"ref": entry, "definition": definition, "record": filled.get(entry["form_id"])})
+    return {"workflowId": (workflow or {}).get("id"), "workflowName": (workflow or {}).get("name"),
+            "editable": _public(row)["formEditable"], "forms": forms}
+
+
+@router.patch("/{admission_id}/workflow-forms/{form_id}")
+def patch_admission_workflow_form(admission_id: str, form_id: str, payload: WorkflowFormPatch,
+                                  user: dict = Depends(require_canopy_permission("case.chart")),
+                                  scope: list[str] | None = Depends(ward_scope), database: Connection = Depends(connection)) -> dict[str, Any]:
+    from ..formdev.errors import FormDevError
+
+    with database.transaction():
+        row = _load(database, admission_id, scope, lock=True)
+        if not _public(row)["formEditable"]:
+            raise HTTPException(status_code=409, detail="this case is archived or cancelled; the form is read-only")
+        entry = next((item for item in (_admission_workflow(database, row) or {}).get("forms") or []
+                      if isinstance(item, dict) and item.get("form_id") == form_id), None)
+        if entry is None:
+            raise HTTPException(status_code=404, detail="this form is not part of the admission's workflow")
+        try:
+            record = case_forms.patch_admission_form(database, row, form_id, int(entry.get("version") or 0), payload.patch,
+                                                     user["username"], directory.now_ms(), payload.reason)
+        except FormDevError as error:
+            raise HTTPException(status_code=error.status, detail=error.message) from None
+    return {"ok": True, "record": record}

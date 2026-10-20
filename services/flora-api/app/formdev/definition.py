@@ -16,6 +16,7 @@ from datetime import date
 from typing import Any, Callable, Iterable
 
 from .blocks import section_field_lists
+from .case_blocks import CASE_BLOCKS, LIMITS as CASE_BLOCK_LIMITS, MAX_COLUMNS as CASE_BLOCK_MAX_COLUMNS
 from .logic import model as logic_model
 from .logic.formula import check as check_formula
 from .messages import MESSAGES
@@ -47,7 +48,8 @@ LIST_OPERATORS = ("in", "not_in")
 FORM_ACTIONS = ("view", "create", "edit", "delete", "export")
 SECTION_ACTIONS = ("view", "edit")
 FIELD_ACTIONS = ("view", "edit", "export")
-TEMPLATE_TOKENS = ("title", "form_id", "version", "page", "pages", "date", "record_id")
+# Header / footer tokens: the form and page, and the patient and print (hn, an, patient, dob from the record's fields).
+TEMPLATE_TOKENS = ("title", "form_id", "version", "page", "pages", "date", "record_id", "hn", "an", "patient", "dob", "printed_at", "printed_by", "hospital")
 CALCULATOR_OUTPUTS = ("number", "integer", "decimal", "text", "boolean")
 RECORD_STATUSES = ("draft", "submitted", "deleted")
 MAX_INDEXED_FIELDS = 16
@@ -79,9 +81,9 @@ SIGNATURE_DATA = re.compile(r"^data:image/(png|svg\+xml);base64,[A-Za-z0-9+/=]+\
 
 DEFINITION_KEYS = {"format", "form_id", "schema_version", "title", "description", "paper", "style_id", "style", "font_id", "offline", "metadata",
                    "layout", "calculators", "rules", "permission", "sections", "migration", "extensions"}
-SECTION_KEYS = {"id", "title", "description", "fields", "categories", "sections", "layout", "style", "visibility", "permission", "page_break", "repeat",
+SECTION_KEYS = {"id", "title", "title_en", "description", "fields", "categories", "sections", "layout", "style", "visibility", "permission", "page_break", "repeat",
                 "print_style", "hide_title", "repeat_on_pages"}
-CATEGORY_KEYS = {"id", "title", "description", "fields", "layout", "style", "visibility", "permission", "page_break", "repeat", "print_style", "hide_title"}
+CATEGORY_KEYS = {"id", "title", "title_en", "description", "fields", "layout", "style", "visibility", "permission", "page_break", "repeat", "print_style", "hide_title"}
 # Paper layout (Template phase): bordered cells with "Label: value", and top-level sections drawn on every page.
 PRINT_STYLES = ("plain", "boxed")
 PAGE_BANDS = ("header", "footer")
@@ -96,6 +98,8 @@ MAX_TIMELINE_COLUMNS = 1500
 # 2 of 5 is Flora Leaf's HN barcode (digits only), Code 128 / Code 39 take letters too (e.g. AN "67-00123").
 # bind: the case datum (Flora Leaf) a field shows, as domain.name (patient.hn, case.asa, anesthesia.start).
 BIND = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+\Z")
+# A logo field whose src is "hospital" prints the hospital's logo set in Canopy and kept on every Leaf.
+HOSPITAL_LOGO = "hospital"
 LOGO_SRC = re.compile(r"^data:image/(png|jpeg);base64,[A-Za-z0-9+/=]+\Z")
 MAX_LOGO_CHARS = 400_000
 LOGO_HEIGHT_MM = (4, 60)
@@ -109,13 +113,18 @@ MAX_TIMELINE_EVENTS = 300
 MATRIX_NUMERIC = ("integer", "number")
 MAX_MATRIX_ITEMS = 60
 PAPER_KEYS = {"size", "orientation", "margin_mm", "header", "footer", "density"}
-# Print density: compact = denser type and rows; fit_page = the largest size that fits one page (never below the
-# compact minimum; content that still does not fit continues on the next pages).
+# Print density: compact = denser type and rows; fit_page = the largest size that fits one page (down to 0.74 of normal,
+# type never below 5.5 pt; content that still does not fit continues on the next pages).
 DENSITIES = ("normal", "compact", "fit_page")
 BAND_KEYS = {"left", "center", "right", "height_mm", "first_page"}
 MARGIN_KEYS = ("top", "right", "bottom", "left")
 CALCULATOR_KEYS = {"id", "name", "description", "formula", "output"}
-FIELD_LAYOUT_KEYS = {"col", "row", "span", "responsive", "page_break"}
+FIELD_LAYOUT_KEYS = {"col", "row", "span", "row_span", "responsive", "page_break"}
+# A field may cover several grid rows (row_span), up to this many.
+MAX_ROW_SPAN = 50
+MAX_PARAGRAPH = 4000
+# Static elements: no value, shown on screen and on paper.
+STATIC_TYPES = ("heading", "paragraph", "divider")
 RESPONSIVE_KEYS = {"col", "span", "hidden"}
 RULE_KEYS = {"required", "min", "max", "min_length", "max_length", "pattern", "email", "numeric", "min_date", "max_date", "message", "rules"}
 # Which validation rules apply to which stored value kind (field_types "value").
@@ -691,8 +700,8 @@ def _validate_display(ctx: _Ctx, field: dict[str, Any], path: str) -> None:
         ctx.add(f"{path}.display.form", "conflicting_visibility", "display.form disagrees with visible/hidden")
 
 
-def _validate_field_layout(ctx: _Ctx, layout: Any, path: str, columns: int) -> tuple[int, int, int] | None:
-    """Validate a field placement; returns the explicit (row, col, span) cell when all three are given."""
+def _validate_field_layout(ctx: _Ctx, layout: Any, path: str, columns: int) -> tuple[int, int, int, int] | None:
+    """Validate a field placement; returns the explicit (row, col, span, row_span) cell when row, col and span are given."""
     if not isinstance(layout, dict):
         ctx.add(path, "invalid_layout", "layout must be an object")
         return None
@@ -700,6 +709,8 @@ def _validate_field_layout(ctx: _Ctx, layout: Any, path: str, columns: int) -> t
     _check_placement(ctx, layout, path, columns)
     if "row" in layout and not (is_int(layout["row"]) and 1 <= layout["row"] <= 500):
         ctx.add(f"{path}.row", "invalid_layout", "row must be an integer 1-500")
+    if "row_span" in layout and not (is_int(layout["row_span"]) and 1 <= layout["row_span"] <= MAX_ROW_SPAN):
+        ctx.add(f"{path}.row_span", "invalid_layout", f"row_span must be an integer 1-{MAX_ROW_SPAN}")
     if "page_break" in layout and layout["page_break"] not in PAGE_BREAKS:
         ctx.add(f"{path}.page_break", "invalid_page_break", f"page_break must be one of {', '.join(PAGE_BREAKS)}")
     if "responsive" in layout:
@@ -719,7 +730,9 @@ def _validate_field_layout(ctx: _Ctx, layout: Any, path: str, columns: int) -> t
                 if "hidden" in rule and not isinstance(rule["hidden"], bool):
                     ctx.add(f"{path}.responsive.{mode}.hidden", "invalid_type", "hidden must be a boolean")
     cell = (layout.get("row"), layout.get("col"), layout.get("span"))
-    return cell if all(is_int(part) for part in cell) else None  # type: ignore[return-value]
+    if not all(is_int(part) for part in cell):
+        return None
+    return (*cell, layout["row_span"] if is_int(layout.get("row_span")) else 1)  # type: ignore[return-value]
 
 
 def _check_placement(ctx: _Ctx, rule: dict[str, Any], path: str, columns: int) -> None:
@@ -734,13 +747,13 @@ def _check_placement(ctx: _Ctx, rule: dict[str, Any], path: str, columns: int) -
         ctx.add(path, "layout_out_of_bounds", f"col {col} + span {span} goes past column {columns}")
 
 
-def _check_overlaps(ctx: _Ctx, cells: list[tuple[str, tuple[int, int, int]]]) -> None:
+def _check_overlaps(ctx: _Ctx, cells: list[tuple[str, tuple[int, int, int, int]]]) -> None:
     taken: set[tuple[int, int]] = set()
-    for path, (row, col, span) in cells:
-        wanted = {(row, column) for column in range(col, col + span)}
+    for path, (row, col, span, rows) in cells:
+        wanted = {(line, column) for line in range(row, row + rows) for column in range(col, col + span)}
         clash = sorted(wanted & taken)
         if clash:
-            ctx.add(f"{path}.layout", "layout_overlap", f"Overlaps another field at row {row}, column {clash[0][1]}")
+            ctx.add(f"{path}.layout", "layout_overlap", f"Overlaps another field at row {clash[0][0]}, column {clash[0][1]}")
         taken |= wanted
 
 
@@ -833,6 +846,7 @@ def _validate_section(ctx: _Ctx, section: Any, path: str, scope: _Scope, columns
     if not isinstance(section.get("title"), str) or not section["title"].strip():
         ctx.add(f"{path}.title", "invalid_title", "Section title is required")
     _check_text(ctx, section, "description", path, 2000)
+    _check_text(ctx, section, "title_en", path, 200)
     if "layout" in section:
         columns = _validate_container_layout(ctx, section["layout"], f"{path}.layout", columns, SECTION_LAYOUTS)
     if "style" in section:
@@ -896,6 +910,7 @@ def _validate_category(ctx: _Ctx, category: Any, path: str, scope: _Scope, colum
     if not isinstance(category.get("title"), str) or not category["title"].strip():
         ctx.add(f"{path}.title", "invalid_title", "Category title is required")
     _check_text(ctx, category, "description", path, 2000)
+    _check_text(ctx, category, "title_en", path, 200)
     if "layout" in category:
         columns = _validate_container_layout(ctx, category["layout"], f"{path}.layout", columns, SECTION_LAYOUTS)
     if "style" in category:
@@ -946,7 +961,7 @@ def _validate_repeat_block(ctx: _Ctx, block: dict[str, Any], path: str, block_fi
 
 
 def _validate_field_list(ctx: _Ctx, field_list: list[Any], path: str, scope: _Scope, columns: int, in_repeat: bool, depth: int) -> None:
-    cells: list[tuple[str, tuple[int, int, int]]] = []
+    cells: list[tuple[str, tuple[int, int, int, int]]] = []
     for index, field in enumerate(field_list):
         f_path = f"{path}[{index}]"
         cell = _validate_field(ctx, field, f_path, scope, columns, in_repeat, depth)
@@ -955,7 +970,7 @@ def _validate_field_list(ctx: _Ctx, field_list: list[Any], path: str, scope: _Sc
     _check_overlaps(ctx, cells)
 
 
-def _validate_field(ctx: _Ctx, field: Any, path: str, scope: _Scope, columns: int, in_repeat: bool, depth: int) -> tuple[int, int, int] | None:
+def _validate_field(ctx: _Ctx, field: Any, path: str, scope: _Scope, columns: int, in_repeat: bool, depth: int) -> tuple[int, int, int, int] | None:
     if not isinstance(field, dict):
         ctx.add(path, "not_object", "Field must be an object")
         return None
@@ -997,7 +1012,7 @@ def _validate_field(ctx: _Ctx, field: Any, path: str, scope: _Scope, columns: in
             ctx.add(f"{path}.{flag}", "invalid_type", f"{flag} must be a boolean")
     if isinstance(field.get("visible"), bool) and isinstance(field.get("hidden"), bool) and field["visible"] == field["hidden"]:
         ctx.add(f"{path}.visible", "conflicting_visibility", "visible and hidden disagree")
-    for name, limit in (("description", 2000), ("placeholder", 200), ("unit", 40)):
+    for name, limit in (("description", 2000), ("placeholder", 200), ("unit", 40), ("label_en", 200)):
         _check_text(ctx, field, name, path, limit)
     for bound in ("min", "max"):
         if bound in field and not is_number(field[bound]):
@@ -1016,14 +1031,20 @@ def _validate_field(ctx: _Ctx, field: Any, path: str, scope: _Scope, columns: in
             ctx.formulas.append((f"{path}.formula", field["formula"], scope))
     if value_kind in ("file", "signature"):
         _validate_file_props(ctx, field, path)
+    if "label_width" in field and "label_width" in allowed and not (is_int(field["label_width"]) and 10 <= field["label_width"] <= 90):
+        ctx.add(f"{path}.label_width", "invalid_layout", "label_width must be an integer 10-90 (percent of the table)")
     if "option_columns" in field and "option_columns" in allowed and not (is_int(field["option_columns"]) and 1 <= field["option_columns"] <= 6):
         ctx.add(f"{path}.option_columns", "invalid_columns", "option_columns must be an integer 1-6")
     if field_type == "matrix":
         _validate_matrix(ctx, field, path)
     if field_type == "timeline" and "timeline" in field:
         _validate_timeline_config(ctx, field["timeline"], f"{path}.timeline")
+    if field_type in STATIC_TYPES:
+        _validate_static_element(ctx, field, path)
     if field_type in ("logo", "barcode"):
         _validate_printed_element(ctx, field, path, scope)
+    if field_type == "case_block":
+        _validate_case_block(ctx, field, path)
     if "bind" in field and not (isinstance(field["bind"], str) and BIND.match(field["bind"])):
         ctx.add(f"{path}.bind", "invalid_type", "bind names a case datum such as patient.hn or case.asa")
     if "derive" in field and "derive" in allowed:
@@ -1153,6 +1174,18 @@ def matrix_totals(field: dict[str, Any], value: Any) -> dict[str, dict[str, floa
     return out
 
 
+def _validate_static_element(ctx: _Ctx, field: dict[str, Any], path: str) -> None:
+    """heading: level 1-3; paragraph: its text (required); all: alignment."""
+    if "level" in field and not (is_int(field["level"]) and 1 <= field["level"] <= 3):
+        ctx.add(f"{path}.level", "invalid_layout", "level must be 1, 2 or 3")
+    if "align" in field and field["align"] not in ALIGNS:
+        ctx.add(f"{path}.align", "invalid_layout", "align is left, center or right")
+    if field["type"] == "paragraph":
+        content = field.get("content")
+        if not isinstance(content, str) or not content.strip() or len(content) > MAX_PARAGRAPH:
+            ctx.add(f"{path}.content", "invalid_type", f"content is the paragraph's text (1-{MAX_PARAGRAPH} characters)")
+
+
 def _validate_printed_element(ctx: _Ctx, field: dict[str, Any], path: str, scope: _Scope) -> None:
     """logo: a PNG / JPEG picture kept in the definition; barcode: the value of another field of the form."""
     low, high = LOGO_HEIGHT_MM if field["type"] == "logo" else BARCODE_HEIGHT_MM
@@ -1162,8 +1195,10 @@ def _validate_printed_element(ctx: _Ctx, field: dict[str, Any], path: str, scope
         ctx.add(f"{path}.align", "invalid_layout", "align is left, center or right")
     if field["type"] == "logo":
         src = field.get("src")
+        if src == HOSPITAL_LOGO:  # the hospital's logo, set in Canopy (app/hospital_profile.py)
+            return
         if not isinstance(src, str) or not LOGO_SRC.match(src):
-            ctx.add(f"{path}.src", "invalid_file", "src is a PNG or JPEG picture (data:image/png;base64,...)")
+            ctx.add(f"{path}.src", "invalid_file", 'src is a PNG or JPEG picture (data:image/png;base64,...) or "hospital"')
         elif len(src) > MAX_LOGO_CHARS:
             ctx.add(f"{path}.src", "invalid_max_size", f"The picture is limited to {MAX_LOGO_CHARS // 1000} KB (base64); use a smaller image")
         return
@@ -1176,6 +1211,58 @@ def _validate_printed_element(ctx: _Ctx, field: dict[str, Any], path: str, scope
         ctx.add(f"{path}.symbology", "invalid_layout", f"symbology is one of {', '.join(SYMBOLOGIES)}")
     if "show_text" in field and not isinstance(field["show_text"], bool):
         ctx.add(f"{path}.show_text", "invalid_type", "show_text must be a boolean")
+
+
+
+def _validate_case_block(ctx: _Ctx, field: dict[str, Any], path: str) -> None:
+    """case_block: a known block, some of its columns (each once) with widths in percent that together fit the
+    block, and row limits (twin of validate.ts validateCaseBlock)."""
+    spec = CASE_BLOCKS.get(field.get("block")) if isinstance(field.get("block"), str) else None
+    if spec is None:
+        ctx.add(f"{path}.block", "invalid_type", f"block is one of {', '.join(CASE_BLOCKS)}")
+        return
+    keys = [column["key"] for column in spec["columns"]]
+    if "block_columns" in field:
+        columns = field["block_columns"]
+        low, high = CASE_BLOCK_LIMITS["column_width"]
+        if not isinstance(columns, list) or not columns or len(columns) > CASE_BLOCK_MAX_COLUMNS:
+            ctx.add(f"{path}.block_columns", "invalid_type", f"block_columns lists 1-{CASE_BLOCK_MAX_COLUMNS} of the block's columns")
+        else:
+            seen: set[str] = set()
+            total = 0.0
+            for index, column in enumerate(columns):
+                at = f"{path}.block_columns[{index}]"
+                if not isinstance(column, dict):
+                    ctx.add(at, "invalid_type", "a column is {key, width?, label?}")
+                    continue
+                ctx.unknown(column, {"key", "width", "label"}, at)
+                key = column.get("key")
+                if not isinstance(key, str) or key not in keys:
+                    ctx.add(f"{at}.key", "invalid_type", f"key is one of {', '.join(keys)}")
+                elif key in seen:
+                    ctx.add(f"{at}.key", "duplicate_option", f"column '{key}' is listed twice")
+                else:
+                    seen.add(key)
+                if "width" in column:
+                    width = column["width"]
+                    if not (is_number(width) and low <= width <= high):
+                        ctx.add(f"{at}.width", "invalid_layout", f"width is {low}-{high} (percent of the block)")
+                    else:
+                        total += width
+                if "label" in column:
+                    label = column["label"]
+                    if not (isinstance(label, str) and label.strip() and len(label) <= 80):
+                        ctx.add(f"{at}.label", "invalid_label", "label is 1-80 characters")
+            if total > 100.5:
+                ctx.add(f"{path}.block_columns", "invalid_layout", f"the column widths add to {round(total)}%; together they must fit the block (100%)")
+    for name in ("max_rows", "min_rows"):
+        low, high = CASE_BLOCK_LIMITS[name]
+        if name in field and not (is_int(field[name]) and low <= field[name] <= high):
+            ctx.add(f"{path}.{name}", "invalid_type", f"{name} must be an integer {low}-{high}")
+    if is_int(field.get("max_rows")) and is_int(field.get("min_rows")) and field["min_rows"] > field["max_rows"]:
+        ctx.add(f"{path}.min_rows", "invalid_range", "min_rows must not be more than max_rows")
+    if "show_header" in field and not isinstance(field["show_header"], bool):
+        ctx.add(f"{path}.show_header", "invalid_type", "show_header must be a boolean")
 
 
 HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}\Z")
@@ -1352,7 +1439,8 @@ def _validate_options(ctx: _Ctx, field: dict[str, Any], path: str, scope: _Scope
         else:
             values.add(value)
             o_path = f"{path}.options[{o_index}]"
-            ctx.unknown(option, {"value", "label", "has_input", "input_required", "when"}, o_path)
+            ctx.unknown(option, {"value", "label", "label_en", "has_input", "input_required", "when"}, o_path)
+            _check_text(ctx, option, "label_en", o_path, 200)
             for flag in ("has_input", "input_required"):
                 if flag in option and not isinstance(option[flag], bool):
                     ctx.add(f"{o_path}.{flag}", "invalid_option", f"{flag} must be a boolean")
@@ -1661,12 +1749,14 @@ def _value_file(field: dict[str, Any], value: Any, path: str) -> list[Issue]:
 
 
 def _value_signature(field: dict[str, Any], value: Any, path: str) -> list[Issue]:
-    ok = isinstance(value, dict) and not set(value) - {"data", "signed_at", "signer"} and isinstance(value.get("data"), str) \
-        and bool(SIGNATURE_DATA.match(value["data"])) \
+    # signer / signer_name: who signed; verified "pin": confirmed with the signer's signing PIN on Flora Leaf.
+    ok = isinstance(value, dict) and not set(value) - {"data", "signed_at", "signer", "signer_name", "verified"} \
+        and isinstance(value.get("data"), str) and bool(SIGNATURE_DATA.match(value["data"])) \
         and ("signed_at" not in value or (isinstance(value["signed_at"], str) and _valid_datetime(value["signed_at"]))) \
-        and ("signer" not in value or (isinstance(value["signer"], str) and len(value["signer"]) <= 200))
+        and all(key not in value or (isinstance(value[key], str) and len(value[key]) <= 200) for key in ("signer", "signer_name")) \
+        and ("verified" not in value or value["verified"] == "pin")
     if not ok:
-        return [Issue(path, "invalid_signature", "Expected {data: PNG or SVG data URL, signed_at?, signer?}")]
+        return [Issue(path, "invalid_signature", "Expected {data: PNG or SVG data URL, signed_at?, signer?, signer_name?, verified?: pin}")]
     limit = field["max_size_kb"] if is_int(field.get("max_size_kb")) else DEFAULT_SIGNATURE_KB
     return [Issue(path, "file_too_large", f"Larger than {limit} KB")] if len(value["data"]) > limit * 1024 else []
 

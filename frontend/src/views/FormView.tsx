@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLanguage } from "../context/LanguageContext";
 import type { CaseStatus } from "../api/caseApi";
 import ConfirmDialog from "../components/common/ConfirmDialog";
 import { MicIcon } from "../components/common/DictationButton";
@@ -192,6 +193,7 @@ interface FormViewProps {
 const IDLE_CASE: CaseStatus = { status: "IDLE" };
 /** Workflow Studio forms load Form Studio's renderer only when a case has them. */
 const WorkflowFormPanel = lazy(() => import("../components/workflow/WorkflowFormPanel"));
+const CaseWorkflowControl = lazy(() => import("../components/workflow/CaseWorkflowControl"));
 const FORM_REMOTE_REFRESH_MS = 10_000;
 
 const card =
@@ -1772,13 +1774,31 @@ export default function FormView({
   const [activeTab, setActiveTab] = useState<FormTabId>(FORM_REQUIRED_TAB);
   // Workflow Studio: the case's Form Studio forms are extra tabs after the built-in ones.
   const caseWorkflow = useCaseWorkflow(source ? null : leafCaseId);
-  const workflowTabs = useMemo(() => workflowFormTabs(caseWorkflow), [caseWorkflow]);
+  // The open case, for workflow forms to fill their bound fields from (caseData.ts).
+  const caseHead = useMemo(() => (caseStatus.status === "IDLE" || leafCaseId == null ? undefined : {
+    caseId: leafCaseId, hn: caseStatus.hn, admissionNumber: caseStatus.admission_number ?? null,
+    startTime: caseStatus.start_time, dischargeTime: caseStatus.discharge_time ?? null,
+  }), [caseStatus, leafCaseId]);
+  // Copies of a repeatable form opened here and not saved yet ("Add another"); a saved copy comes back from the Leaf API.
+  const [addedCopies, setAddedCopies] = useState<{ caseId: number | null; keys: string[] }>({ caseId: null, keys: [] });
+  const workflowTabs = useMemo(
+    () => workflowFormTabs(caseWorkflow, addedCopies.caseId === leafCaseId ? addedCopies.keys : []),
+    [caseWorkflow, addedCopies, leafCaseId],
+  );
   const builtInRecord = caseWorkflow.workflow?.anesthesia_record?.enabled !== false || !workflowTabs.length;
   const workflowOptionalSections = caseWorkflow.workflow?.anesthesia_record?.optional_sections;
   const [workflowTabPick, setWorkflowTab] = useState<string | null>(null);
   const workflowTab = workflowTabs.some(tab => tab.formId === workflowTabPick)
     ? workflowTabPick
     : builtInRecord ? null : workflowTabs[0]?.formId ?? null;
+  // A copy opened with "Add another" has no record yet: the form's definition and an empty record, kept stable.
+  const blankCopies = useMemo(() => Object.fromEntries(workflowTabs
+    .filter(tab => !caseWorkflow.forms[tab.formId] && caseWorkflow.forms[tab.of])
+    .map(tab => [tab.formId, { definition: caseWorkflow.forms[tab.of].definition, record: null }])), [workflowTabs, caseWorkflow.forms]);
+  const addCopy = (key: string) => {
+    setAddedCopies(current => ({ caseId: leafCaseId, keys: [...(current.caseId === leafCaseId ? current.keys : []), key] }));
+    setWorkflowTab(key);
+  };
 
   useEffect(() => {
     formRef.current = form;
@@ -1960,6 +1980,12 @@ export default function FormView({
       for (const key of Object.keys(remote)) {
         if (!sameFormValue(prev[key], previousBaseline[key])) continue;
         if (sameFormValue(prev[key], remote[key])) continue;
+        // AN, DOB, age, weight, height and blood group come from the patient record (loadSharedPatientRecord); a draft
+        // that does not hold them does not clear them, whichever of the two loads finishes first.
+        if (SHARED_PATIENT_FORM_FIELD_KEYS.has(key) && isBlankFormValue(remote[key]) && !isBlankFormValue(prev[key])) {
+          if (baselineRef.current) baselineRef.current = { ...baselineRef.current, [key]: prev[key] };
+          continue;
+        }
         next[key] = remote[key];
         changed = true;
       }
@@ -2706,15 +2732,20 @@ export default function FormView({
             {orderCaseTabs(builtInRecord ? visibleTabs : [], workflowTabs).map(entry => {
               if (entry.kind === "form") {
                 const tab = entry.tab;
-                return (
+                return [
                   <button key={`wf-${tab.formId}`} type="button" role="tab" aria-selected={workflowTab === tab.formId} title={[tab.phase !== "any" ? tab.phase : "", tab.hint].filter(Boolean).join(" · ") || undefined}
                     className={`${tabButtonBase} min-h-11 whitespace-nowrap rounded-xl px-3 ${workflowTab === tab.formId
                       ? "border-[var(--app-accent)] bg-[var(--app-accent)] text-[var(--app-accent-contrast)] shadow-sm"
                       : "border-dashed border-[var(--app-border)] bg-[var(--app-control-bg)] text-[var(--app-muted)] hover:bg-[var(--app-control-bg-hover)] hover:text-[var(--app-text)]"}`}
                     onClick={() => setWorkflowTab(tab.formId)}>
                     <span className="font-bold">{tab.title}</span>{tab.required ? <span className="ml-1 text-rose-500">*</span> : null}
-                  </button>
-                );
+                    <FormTabStatus status={tab.status} sync={tab.sync} synced={tab.synced} />
+                  </button>,
+                  // A repeatable form: "Add another" after its last copy, once that copy has been started.
+                  ...(tab.nextCopy && !readOnly && caseStatus.status !== "ARCHIVED" && tab.status !== "empty"
+                    ? [<AddFormCopyTab key={`wf-add-${tab.of}`} title={tab.title} className={tabButtonBase} onAdd={() => addCopy(tab.nextCopy as string)} />]
+                    : []),
+                ];
               }
               const tab = FORM_TAB_DEFS.find(item => item.id === entry.id);
               const progress = completionByTab[entry.id as FormTabId];
@@ -2727,6 +2758,10 @@ export default function FormView({
               );
             })}
           </div>
+
+          {leafCaseId != null && !source && !readOnly && caseStatus.status !== "ARCHIVED" ? <Suspense fallback={null}>
+            <CaseWorkflowControl caseId={leafCaseId} workflow={caseWorkflow.workflow} onAttached={caseWorkflow.replace} />
+          </Suspense> : null}
 
           {!allowedTabs && !readOnly && builtInRecord ? <details className="mt-2 rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] px-3 py-2">
             <summary className="cursor-pointer text-xs font-bold text-[var(--app-muted)]">Configure procedure-specific sections</summary>
@@ -3490,7 +3525,8 @@ export default function FormView({
 
       {leafCaseId != null && workflowTabs.length ? <Suspense fallback={workflowTab ? <div className="p-4 text-sm text-[var(--app-muted)]">Loading form…</div> : null}>
         {workflowTabs.map(tab => <WorkflowFormPanel key={`${leafCaseId}-${tab.formId}`} caseId={leafCaseId} formId={tab.formId}
-          form={caseWorkflow.forms[tab.formId]} hint={tab.hint} readOnly={readOnly || caseStatus.status === "ARCHIVED"} hidden={workflowTab !== tab.formId} />)}
+          form={caseWorkflow.forms[tab.formId] ?? blankCopies[tab.formId]} hint={tab.hint} readOnly={readOnly || caseStatus.status === "ARCHIVED"} hidden={workflowTab !== tab.formId}
+          head={caseHead} />)}
       </Suspense> : null}
 
       {showSavedPreview ? (
@@ -3575,4 +3611,27 @@ export default function FormView({
       />
     </div>
   );
+}
+
+/** "+ Add another" after the last tab of a repeatable form: opens the next copy (saved on its first change). */
+function AddFormCopyTab({ title, className, onAdd }: { title: string; className: string; onAdd: () => void }) {
+  const { t } = useLanguage();
+  return <button type="button" title={`${t("caseForm.addCopy")}: ${title}`} onClick={onAdd}
+    className={`${className} min-h-11 whitespace-nowrap rounded-xl border-dashed border-[var(--app-border)] bg-[var(--app-control-bg)] px-3 text-[var(--app-muted)] hover:bg-[var(--app-control-bg-hover)] hover:text-[var(--app-text)]`}>
+    + {t("caseForm.addCopy")}
+  </button>;
+}
+
+/** A workflow form tab's state: completed, started, and whether Canopy has it (or reported a problem). */
+function FormTabStatus({ status, sync, synced }: { status: "empty" | "draft" | "completed"; sync: string | null; synced: boolean }) {
+  if (status === "empty") return null;
+  const problem = synced && (sync === "not_stored" || sync === "kept_as_draft");
+  const title = `${status === "completed" ? "Completed" : "Started"} · ${problem ? "Canopy reported a problem" : synced ? "in Canopy" : "not yet in Canopy"}`;
+  return <span title={title} className={`ml-1.5 inline-block text-[10px] ${problem ? "text-amber-500" : status === "completed" ? "text-emerald-500" : "text-[var(--app-muted)]"}`}>
+    {problem ? "⚠" : status === "completed" ? "✓" : "●"}{!synced && !problem ? <span className="ml-0.5 opacity-70">↑</span> : null}
+  </span>;
+}
+
+function isBlankFormValue(value: unknown): boolean {
+  return value === undefined || value === null || (typeof value === "string" && !value.trim());
 }

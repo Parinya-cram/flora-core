@@ -21,10 +21,6 @@ PDF = b"%PDF-1.7\n1 0 obj<</Type /Catalog>>endobj\n2 0 obj<</Type /Page /Resourc
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
 
 
-def upload(*files):
-    return {"files": [{"name": name, "data": base64.b64encode(content).decode("ascii")} for name, content in files]}
-
-
 def docx(paragraphs, table):
     ns = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
     body = "".join(f"<w:p><w:r><w:t>{text}</w:t></w:r></w:p>" for text in paragraphs)
@@ -37,7 +33,7 @@ def docx(paragraphs, table):
 
 
 def inspect(*files):
-    return documents.inspect(documents.read_upload(upload(*files)))
+    return documents.inspect([documents.SourceFile(name=name, content=content) for name, content in files])
 
 
 class Inspection(unittest.TestCase):
@@ -135,11 +131,12 @@ class Inspection(unittest.TestCase):
 
     def test_limits(self):
         with self.assertRaises(documents.DocumentError):
-            documents.read_upload({"files": []})
+            documents.check_request([])
         with self.assertRaises(documents.DocumentError):
-            documents.read_upload({"files": [{"name": "x", "data": "not base64!"}]})
+            documents.check_request([documents.SourceFile(name=f"f{n}", content=b"x") for n in range(documents.MAX_FILES + 1)])
+        half = documents.MAX_TOTAL_BYTES // 2 + 1
         with self.assertRaises(documents.DocumentError):
-            documents.read_upload(upload(*[(f"f{n}", b"x") for n in range(documents.MAX_FILES + 1)]))
+            documents.check_request([documents.SourceFile(name="a", content=b"a" * half), documents.SourceFile(name="b", content=b"b" * half)])
         (empty,) = inspect(("empty.txt", b""))
         self.assertEqual(empty.status, "error")
 
@@ -247,6 +244,14 @@ class Build(unittest.TestCase):
 
         for name in FIELD_TYPES:
             self.assertIn(f"- {name}:", ai_builder.SYSTEM_PROMPT)
+
+    def test_the_prompt_teaches_report_components_and_their_blocks(self):
+        from app.formdev.case_blocks import CASE_BLOCKS
+
+        self.assertIn("case_block (REPORT COMPONENT)", ai_builder.SYSTEM_PROMPT)
+        self.assertIn("ONE PAGE.", ai_builder.SYSTEM_PROMPT)
+        for name, spec in CASE_BLOCKS.items():
+            self.assertIn(f"- {name}: {spec['en']}", ai_builder.SYSTEM_PROMPT)
 
 
 class ImageScaling(unittest.TestCase):

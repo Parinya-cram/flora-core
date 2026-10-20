@@ -4,13 +4,16 @@ import os
 import urllib.request
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi.responses import Response
+from pydantic import BaseModel, Field
 from psycopg import Connection
 
 from ..database import connection
 from .auth_canopy import read_token
+from .canopy_preferences import current_canopy_user
 from .canopy_users import ward_scope
 
 
@@ -405,6 +408,143 @@ def case_snapshot(
     if not row:
         raise HTTPException(status_code=404, detail="synchronized case not found")
     return row
+
+
+@router.get("/cases/{global_case_id}/forms")
+def case_forms_review(
+    global_case_id: uuid.UUID,
+    scope: list[str] | None = Depends(fleet_scope),
+    database: Connection = Depends(connection),
+) -> dict:
+    """The Workflow Studio (Form Studio) forms of one case, for review in Canopy: each form's definition and values,
+    status on the Leaf, Form Studio receipt, who changed each field (on the Leaf or here, with reasons) and every
+    amendment made in Canopy. Includes forms carried over by a handover (kept under the case's first global id)."""
+    case = database.execute(
+        """SELECT c.global_case_id, c.leaf_id, c.source_case_id FROM sync_case_index c
+           LEFT JOIN canopy_leaf_unit scope_unit ON scope_unit.leaf_id = c.leaf_id
+           WHERE c.global_case_id = %s AND {IN_SCOPE}""".replace("{IN_SCOPE}", IN_SCOPE),
+        (global_case_id, scope, scope)).fetchone()
+    if not case:
+        raise HTTPException(status_code=404, detail="synchronized case not found")
+    if database.execute("SELECT to_regclass('canopy_case_form') AS t").fetchone()["t"] is None:
+        return {"forms": []}
+    from .. import case_forms, workflows
+
+    rows = database.execute(
+        """SELECT * FROM canopy_case_form WHERE case_key = %s OR (leaf_id = %s AND source_case_id = %s)
+           ORDER BY created_at, form_id""",
+        (str(case["global_case_id"]), case["leaf_id"], case["source_case_id"])).fetchall()
+    forms = []
+    for row in rows:
+        item = case_forms.public(row)
+        item["definition"] = workflows.form_definition(database, case_forms.form_of(row["form_id"]), int(row["form_version"]))
+        item["amendments"] = case_forms.amendments(database, row)
+        forms.append(item)
+    return {"forms": forms}
+
+
+def _case_form_row(database: Connection, global_case_id: uuid.UUID, form_id: str, scope: list[str] | None) -> dict[str, Any]:
+    case = database.execute(
+        """SELECT c.global_case_id, c.leaf_id, c.source_case_id FROM sync_case_index c
+           LEFT JOIN canopy_leaf_unit scope_unit ON scope_unit.leaf_id = c.leaf_id
+           WHERE c.global_case_id = %s AND {IN_SCOPE}""".replace("{IN_SCOPE}", IN_SCOPE),
+        (global_case_id, scope, scope)).fetchone()
+    row = database.execute(
+        """SELECT * FROM canopy_case_form WHERE form_id = %s AND (case_key = %s OR (leaf_id = %s AND source_case_id = %s))
+           ORDER BY updated_at DESC LIMIT 1""",
+        (form_id, str(case["global_case_id"]), case["leaf_id"], case["source_case_id"])).fetchone() if case else None
+    if row is None:
+        raise HTTPException(status_code=404, detail="case form not found")
+    return row
+
+
+class ReviewAction(BaseModel):
+    action: Literal["reviewed", "approved"]
+    note: str | None = Field(default=None, max_length=500)
+
+
+@router.post("/cases/{global_case_id}/forms/{form_id}/review")
+def review_case_form(
+    global_case_id: uuid.UUID, form_id: str, payload: ReviewAction,
+    user: dict = Depends(current_canopy_user),
+    scope: list[str] | None = Depends(fleet_scope),
+    database: Connection = Depends(connection),
+) -> dict:
+    """Reviewed (permission form.review) or Approved (form.approve) for a case form; see case_forms.review."""
+    from .. import case_forms
+    from ..formdev.errors import FormDevError
+
+    needed = "form.review" if payload.action == "reviewed" else "form.approve"
+    if needed not in user.get("_permissions", []):
+        raise HTTPException(status_code=403, detail=f"{needed} permission required")
+    with database.transaction():
+        row = _case_form_row(database, global_case_id, form_id, scope)
+        try:
+            row = case_forms.review(database, row["case_key"], form_id, payload.action, user["username"], payload.note,
+                                    int(datetime.now(timezone.utc).timestamp() * 1000))
+        except FormDevError as error:
+            raise HTTPException(status_code=error.status, detail=error.message) from None
+    return {"review": case_forms.review_status(row)}
+
+
+@router.get("/cases/{global_case_id}/forms/{form_id}/history")
+def case_form_history(
+    global_case_id: uuid.UUID, form_id: str,
+    scope: list[str] | None = Depends(fleet_scope),
+    database: Connection = Depends(connection),
+) -> dict:
+    """Every version of a case form's record with the fields changed, the amendments and the review actions."""
+    from .. import case_forms
+
+    return {"history": case_forms.history(database, _case_form_row(database, global_case_id, form_id, scope))}
+
+
+@router.get("/cases/{global_case_id}/documents")
+def case_documents(global_case_id: uuid.UUID, scope: list[str] | None = Depends(fleet_scope), database: Connection = Depends(connection)) -> dict:
+    """Documents attached to the case on its Leaf (scans put together there), newest last."""
+    case = database.execute(
+        """SELECT c.global_case_id, c.leaf_id, c.source_case_id FROM sync_case_index c
+           LEFT JOIN canopy_leaf_unit scope_unit ON scope_unit.leaf_id = c.leaf_id
+           WHERE c.global_case_id = %s AND {IN_SCOPE}""".replace("{IN_SCOPE}", IN_SCOPE),
+        (global_case_id, scope, scope)).fetchone()
+    if not case or database.execute("SELECT to_regclass('canopy_case_document') AS t").fetchone()["t"] is None:
+        return {"documents": []}
+    rows = database.execute(
+        """SELECT leaf_id, document_id, title, pages, bytes, created_at, created_by, removed_at, removed_by, removed_reason, received_at,
+             content IS NOT NULL AS received
+           FROM canopy_case_document WHERE global_case_id = %s OR (leaf_id = %s AND source_case_id = %s) ORDER BY created_at""",
+        (str(case["global_case_id"]), case["leaf_id"], str(case["source_case_id"]))).fetchall()
+    return {"documents": rows}
+
+
+@router.get("/cases/{global_case_id}/documents/{leaf_id}/{document_id}/file")
+def case_document_file(global_case_id: uuid.UUID, leaf_id: str, document_id: int, scope: list[str] | None = Depends(fleet_scope),
+                       database: Connection = Depends(connection)) -> Response:
+    listed = case_documents(global_case_id, scope, database)["documents"]
+    if not any(row["leaf_id"] == leaf_id and row["document_id"] == document_id for row in listed):
+        raise HTTPException(status_code=404, detail="document not found")
+    row = database.execute("SELECT content FROM canopy_case_document WHERE leaf_id=%s AND document_id=%s", (leaf_id, document_id)).fetchone()
+    if row["content"] is None:
+        raise HTTPException(status_code=404, detail="the file has not arrived from the Leaf yet")
+    return Response(bytes(row["content"]), media_type="application/pdf", headers={"Cache-Control": "private, no-store"})
+
+
+@router.get("/hospital-profile")
+def get_hospital_profile(_: dict = Depends(current_canopy_user), database: Connection = Depends(connection)) -> dict:
+    """The hospital's name and logo printed on reports and forms (sent to every Leaf)."""
+    from .. import hospital_profile
+
+    return {"profile": hospital_profile.canopy_get(database)}
+
+
+@router.put("/hospital-profile")
+def put_hospital_profile(payload: dict = Body(...), user: dict = Depends(current_canopy_user),
+                         database: Connection = Depends(connection)) -> dict:
+    from .. import hospital_profile
+
+    if "config.manage" not in user.get("_permissions", []):
+        raise HTTPException(status_code=403, detail="config.manage permission required")
+    return {"profile": hospital_profile.canopy_put(database, payload, user["username"])}
 
 
 HABER_URL = os.getenv("FLORA_HABER_URL", "http://haber:8000").rstrip("/")

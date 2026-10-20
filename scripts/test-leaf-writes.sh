@@ -1,8 +1,9 @@
 #!/bin/sh
-# Run services/flora-api/tests/test_leaf_writes.py against a disposable database.
+# Run services/flora-api/tests/test_leaf_writes.py and test_case_forms.py against a disposable database.
 #
 #   scripts/test-leaf-writes.sh            # build, test, drop
 #   KEEP=1 scripts/test-leaf-writes.sh     # keep the database afterwards (for debugging)
+#   TESTS=tests/test_case_forms.py scripts/test-leaf-writes.sh   # some of the tests
 #
 # The database is built as a new install builds it: every script of Dockerfile.postgres.dev in init order, then the
 # public terminology baseline (ICD-10 WHO, ICD-9-CM, UCUM releases) copied from databases/seed/flora_leaf.sql, so no
@@ -40,17 +41,20 @@ for table in terminology_release terminology_entry terminology_synonym; do
   echo "SELECT setval(pg_get_serial_sequence('$table','id'), greatest(1, (SELECT coalesce(max(id), 0) FROM $table)))" | psql_db "$DB" > /dev/null
 done
 
-ADMIN="$(grep -E '^FLORA_POSTGRES_ADMIN_USER=' "$REPO/.env" | cut -d= -f2-)"
-PASSWORD="$(grep -E '^FLORA_POSTGRES_ADMIN_PASSWORD=' "$REPO/.env" | cut -d= -f2- || true)"
+# PG_ADMIN_USER / PG_ADMIN_PASSWORD: the server's admin (scripts/ci-test-db.sh); else the dev stack's .env.
+ADMIN="${PG_ADMIN_USER:-$(grep -E '^FLORA_POSTGRES_ADMIN_USER=' "$REPO/.env" 2>/dev/null | cut -d= -f2-)}"
+PASSWORD="${PG_ADMIN_PASSWORD:-$(grep -E '^FLORA_POSTGRES_ADMIN_PASSWORD=' "$REPO/.env" 2>/dev/null | cut -d= -f2- || true)}"
 [ -n "$PASSWORD" ] || PASSWORD="$(docker exec "$CONTAINER" printenv POSTGRES_PASSWORD)"
 URL="postgresql://$ADMIN:$PASSWORD@postgres:5432/$DB"
-api() { docker run --rm --network "$NETWORK" -v "$REPO:/repo" -w /repo/services/flora-api -e FLORA_DATABASE_URL="$URL" -e PYTHONPATH=/repo/services/flora-api "$IMAGE" "$@"; }
+# API_DOCKER_ARGS: extra docker run arguments (scripts/test-form-flow.sh adds the worker's httpx and a report folder).
+api() { docker run --rm --network "$NETWORK" -v "$REPO:/repo" -w /repo/services/flora-api -e FLORA_DATABASE_URL="$URL" -e PYTHONPATH=/repo/services/flora-api ${API_DOCKER_ARGS:-} "$IMAGE" "$@"; }
 
 api python /repo/scripts/import-terminology.py materialize-icd-masters
 
-echo "== running tests/test_leaf_writes.py"
+TESTS="${TESTS:-tests/test_leaf_writes.py tests/test_case_forms.py tests/test_leaf_sync.py tests/test_hospital_profile.py tests/test_case_documents.py tests/test_retention.py}"
+echo "== running $TESTS"
 status=0
-output="$(api python -m unittest tests/test_leaf_writes.py 2>&1)" || status=$?
+output="$(api python -m unittest $TESTS 2>&1)" || status=$?
 printf '%s\n' "$output" | grep -vE '^INFO:' | sed "s|$PASSWORD|***|g"
 
 [ "${KEEP:-0}" = "1" ] && echo "kept $DB" || drop

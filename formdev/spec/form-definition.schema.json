@@ -154,7 +154,7 @@
     "band": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Header or footer. Text may use {title} {form_id} {version} {page} {pages} {date} {record_id}.",
+      "description": "Header or footer. Text may use {title} {form_id} {version} {page} {pages} {date} {record_id} and the patient / print tokens {hn} {an} {patient} {dob} {printed_at} {printed_by}, and {hospital} (the hospital's name set in Canopy). A form without a footer prints a default one with the patient, when and by whom printed, and the page number.",
       "properties": {
         "left": {
           "type": "string",
@@ -340,6 +340,12 @@
               "$ref": "#/$defs/placement"
             }
           }
+        },
+        "row_span": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "Grid rows the field covers (default 1); with row and col it places the field anywhere on the grid"
         }
       }
     },
@@ -701,6 +707,11 @@
             "footer"
           ],
           "description": "Top-level sections only: drawn at the top or bottom of every printed page"
+        },
+        "title_en": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "The title in English when `title` is Thai"
         }
       }
     },
@@ -731,6 +742,11 @@
         },
         "when": {
           "$ref": "#/$defs/condition"
+        },
+        "label_en": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "The label in English when `label` is Thai (shown when the form is used in English)"
         }
       }
     },
@@ -775,7 +791,11 @@
             "matrix",
             "timeline",
             "logo",
-            "barcode"
+            "barcode",
+            "case_block",
+            "heading",
+            "paragraph",
+            "divider"
           ]
         },
         "label": {
@@ -959,6 +979,12 @@
               "$ref": "#/$defs/lookupPairs"
             }
           }
+        },
+        "label_width": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 90,
+          "description": "matrix: the width of the row names' column, in percent of the table (as on the paper)"
         },
         "option_columns": {
           "type": "integer",
@@ -1193,9 +1219,9 @@
         },
         "src": {
           "type": "string",
-          "pattern": "^data:image/(png|jpeg);base64,[A-Za-z0-9+/=]+$",
+          "pattern": "^(data:image/(png|jpeg);base64,[A-Za-z0-9+/=]+|hospital)$",
           "maxLength": 400000,
-          "description": "logo: the picture (PNG or JPEG data URL, kept in the definition)"
+          "description": "logo: the picture (PNG or JPEG data URL, kept in the definition), or \"hospital\" for the hospital's logo set in Canopy"
         },
         "height_mm": {
           "type": "number",
@@ -1225,10 +1251,63 @@
         "show_text": {
           "type": "boolean"
         },
+        "block": {
+          "enum": ["diagnoses", "procedures", "allergies", "labs", "events", "staff", "medications", "fluids", "outputs", "billing", "scores"],
+          "description": "case_block: the Flora Leaf case data this report component prints as a table (formdev/spec/case-blocks.json)"
+        },
+        "block_columns": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key"],
+            "properties": {
+              "key": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$" },
+              "width": { "type": "number", "minimum": 3, "maximum": 100, "description": "percent of the block" },
+              "label": { "type": "string", "minLength": 1, "maxLength": 80 }
+            }
+          },
+          "description": "case_block: the block's columns in print order with their widths (percent of the block; together at most 100)"
+        },
+        "max_rows": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "description": "case_block: rows printed at most (default 20)"
+        },
+        "min_rows": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 60,
+          "description": "case_block: ruled rows printed at least (empty ones to write on)"
+        },
+        "show_header": {
+          "type": "boolean",
+          "description": "case_block: print the column headings (default true)"
+        },
         "bind": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)+$",
           "description": "The case datum this field shows when the form is filled or printed on Flora Leaf (e.g. patient.hn, patient.weight_kg)"
+        },
+        "label_en": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "The label in English when `label` is Thai (shown when the form is used in English)"
+        },
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3,
+          "description": "heading: 1 (largest) to 3"
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000,
+          "description": "paragraph: the text shown and printed"
         }
       },
       "allOf": [
@@ -1496,6 +1575,11 @@
         "hide_title": {
           "type": "boolean",
           "description": "Do not print the title"
+        },
+        "title_en": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "The title in English when `title` is Thai"
         }
       }
     },

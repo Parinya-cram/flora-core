@@ -23,12 +23,14 @@ type Props = {
   onFormCreated: (formId: string) => void;
   /** Opens this template's review when it changes (e.g. after saving it from the designer). */
   focus?: { templateId: string; key: number } | null;
+  /** Reading documents into a form happens in the Documents tab (OCR first, AI only where unsure). */
+  onDocuments?: () => void;
 };
 type Screen = { kind: "list" } | { kind: "build" } | { kind: "review"; templateId: string; isNew: boolean };
 
 const ORIGIN: Record<TemplateRow["origin"], [string, string]> = { ai: ["✨ AI", "✨ AI"], import: ["นำเข้า", "Imported"], manual: ["สร้างเอง", "Hand-made"] };
 
-export default function TemplateLibrary({ remote, online, language = "th", onEdit, onFormCreated, focus }: Props) {
+export default function TemplateLibrary({ remote, online, language = "th", onEdit, onFormCreated, focus, onDocuments }: Props) {
   const lang = langOf(language);
   const t = (th: string, en: string) => tr(lang, th, en);
   const [screen, setScreen] = useState<Screen>({ kind: "list" });
@@ -74,12 +76,14 @@ export default function TemplateLibrary({ remote, online, language = "th", onEdi
     <section className={`${panel} flex flex-wrap items-center gap-3 p-4`}>
       <div className="min-w-0 flex-1">
         <h2 className="text-lg font-semibold text-[var(--app-text)]">{t("คลังแม่แบบ", "Template library")}</h2>
-        <p className="text-xs text-[var(--app-muted)]">{t("เอกสาร → AI สร้างแม่แบบ → ตรวจกับต้นฉบับ → สร้างแบบฟอร์มและเผยแพร่ → เลือกใช้ใน Workflow Studio เพื่อกรอกบน Flora Leaf",
-          "Documents → AI builds a template → check it against the originals → create and publish a form → pick it in Workflow Studio for Flora Leaf")}</p>
+        <p className="text-xs text-[var(--app-muted)]">{t("เอกสาร → อ่านด้วย OCR ภาษาไทย (AI เฉพาะจุดไม่แน่ใจ) → ตรวจกับต้นฉบับ → สร้างแบบฟอร์มและเผยแพร่ → เลือกใช้ใน Workflow Studio เพื่อกรอกบน Flora Leaf",
+          "Documents → read with Thai OCR (AI only where unsure) → check against the originals → create and publish a form → pick it in Workflow Studio for Flora Leaf")}</p>
       </div>
       <input className="w-48 rounded-lg border border-[var(--app-border)] bg-[var(--app-control-bg)] px-2 py-1.5 text-sm text-[var(--app-text)]" placeholder={t("ค้นหา", "Search")}
         value={filter} onChange={event => setFilter(event.target.value)} aria-label={t("ค้นหาแม่แบบ", "Search templates")} />
-      <button type="button" className={primary} onClick={() => setScreen({ kind: "build" })}>✨ {t("สร้างจากเอกสารด้วย AI", "Build from documents with AI")}</button>
+      <button type="button" className={primary} onClick={() => (onDocuments ? onDocuments() : setScreen({ kind: "build" }))}>📄 {t("สร้างจากเอกสาร / สแกน", "Build from documents / scans")}</button>
+      <button type="button" className={small} onClick={() => setScreen({ kind: "build" })} title={t("นำเข้าไฟล์ .form.json หรือให้ AI อ่านทั้งเอกสาร", "Import a .form.json, or have the AI read whole documents")}>
+        {t("นำเข้าไฟล์ / AI ทั้งเอกสาร", "Import a file / AI on whole documents")}</button>
     </section>
 
     {error ? <div role="alert" className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-600 dark:text-rose-300">{error}</div> : null}
