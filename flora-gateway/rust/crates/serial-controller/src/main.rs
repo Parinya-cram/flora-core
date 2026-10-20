@@ -12,7 +12,7 @@ use gateway_core::config::{FlowControlMode, GatewayConfig, SerialPod};
 use gateway_core::envelope::{pod_key, raw_topic, Command, RawFrame};
 use gateway_core::{commands, kafka, telemetry};
 use rdkafka::producer::FutureProducer;
-use serde_json::{json, Map};
+use serde_json::{json, Map, Value};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tokio_serial::{DataBits, FlowControl, Parity, SerialPort, SerialPortBuilderExt, SerialStream, StopBits};
@@ -54,6 +54,7 @@ async fn run_pod(pod: SerialPod, key: String, gateway_id: String, producer: Futu
                 }
                 seq += 1;
                 let error = session(&pod, &key, &gateway_id, &producer, &status, stream, &mut commands, &mut seq).await;
+                admin::set_detail(&status, &key, "lines", Value::Null);
                 if let Err(error) = error {
                     tracing::warn!(pod = key, %error, "serial session ended");
                     admin::set_connected(&status, &key, false, Some(error.to_string()));
@@ -109,6 +110,9 @@ async fn session(
     let topic = raw_topic(key);
     let mut buffer = Vec::with_capacity(4096);
     let mut chunk = [0u8; 4096];
+    // A frame ends `idle_ms` after its last byte; the deadline is not moved by line sampling or commands.
+    let mut frame_end = tokio::time::Instant::now();
+    let mut line_check = tokio::time::interval(Duration::from_secs(1));
     loop {
         tokio::select! {
             read = stream.read(&mut chunk) => {
@@ -117,12 +121,16 @@ async fn session(
                     bail!("serial port closed");
                 }
                 buffer.extend_from_slice(&chunk[..count]);
+                frame_end = tokio::time::Instant::now() + Duration::from_millis(pod.idle_ms);
                 if buffer.len() >= pod.max_frame_bytes {
                     flush(key, gateway_id, &topic, producer, status, &mut buffer, seq)?;
                 }
             }
-            _ = tokio::time::sleep(Duration::from_millis(pod.idle_ms)), if !buffer.is_empty() => {
+            _ = tokio::time::sleep_until(frame_end), if !buffer.is_empty() => {
                 flush(key, gateway_id, &topic, producer, status, &mut buffer, seq)?;
+            }
+            _ = line_check.tick() => {
+                admin::set_detail(status, key, "lines", modem_lines(&mut stream));
             }
             command = commands.recv() => {
                 let Some(command) = command else { bail!("command channel closed") };
@@ -131,6 +139,18 @@ async fn session(
             }
         }
     }
+}
+
+/// Modem status lines the device drives: a powered device on a full RS-232 cable usually raises DSR and/or CTS
+/// (DCD on some), so they tell "plugged in and on" apart from "nothing there" even before it sends data.
+/// A 3-wire cable (TX/RX/GND only) leaves them all off.
+fn modem_lines(stream: &mut SerialStream) -> Value {
+    json!({
+        "dsr": stream.read_data_set_ready().ok(),
+        "cts": stream.read_clear_to_send().ok(),
+        "dcd": stream.read_carrier_detect().ok(),
+        "ri": stream.read_ring_indicator().ok(),
+    })
 }
 
 fn flush(key: &str, gateway_id: &str, topic: &str, producer: &FutureProducer, status: &StatusMap, buffer: &mut Vec<u8>, seq: &mut u64) -> Result<()> {

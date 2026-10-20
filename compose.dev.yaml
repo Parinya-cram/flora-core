@@ -8,3 +8,4 @@ include:
   - path: ./compose/flora-canopy.yaml
   - path: ./compose/flora-sync.yaml
   - path: ./compose/flora-multi-leaf.yaml
+  - path: ./flora-gateway/compose.yaml

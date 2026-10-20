@@ -87,6 +87,14 @@ class MedibusParser(Parser):
     def feed(self, frame):
         if frame.pod != self.pod:
             return []
+        if frame.meta.get("event") in ("connected", "disconnected"):
+            # MEDIBUS.X over LAN (socket pod): a new TCP session starts a fresh handshake.
+            self.ready = False
+            self.pending = None
+            self.last_receive = 0
+            self.buffer.clear()
+            self.next_page = 0
+            return []
         rows = []
         # Serial controller chunks may split or combine protocol messages.
         # Realtime bytes (high bit set) are independent of the ASCII channel.

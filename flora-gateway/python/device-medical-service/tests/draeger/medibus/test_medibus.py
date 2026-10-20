@@ -145,3 +145,20 @@ def test_invalid_packet_does_not_record_partial_measurements():
     good = packet(0x24, b'D6  14', response=True)
     parser.feed(raw(good[:-3] + b'00\r'))
     assert parser.drain_measurements() == []
+
+
+def test_lan_reconnect_restarts_handshake_and_drops_partial_frame():
+    # draeger-p2500-lan: same parser behind a raw TCP socket pod.
+    parser = load_parser("medibus", "p2500-01", "socket.p2500", {})
+    assert command_bytes(parser.poll()[0]) == packet(0x51)
+    parser.feed(raw(packet(0x51, response=True), pod="socket.p2500", connection=1))
+    parser.feed(raw(packet(0x52, b"P2500", response=True), pod="socket.p2500", connection=1))
+    assert command_bytes(parser.drain_commands()[0]) == packet(0x52)
+    assert command_bytes(parser.poll()[0]) == packet(0x24)
+    half = packet(0x24, b'D6  14', response=True)
+    parser.feed(raw(half[:5], pod="socket.p2500", connection=1))
+    assert parser.feed(raw(b"", pod="socket.p2500", connection=1, event="disconnected")) == []
+    parser.feed(raw(b"", pod="socket.p2500", connection=2, event="connected"))
+    # The rest of the old frame must not complete a measurement on the new session.
+    assert parser.feed(raw(half[5:], pod="socket.p2500", connection=2)) == []
+    assert command_bytes(parser.poll()[0]) == packet(0x51)

@@ -5,6 +5,7 @@ KAFKA_BROKERS = os.getenv("FLORA_KAFKA_BROKERS", "kafka:9092")
 GATEWAY_ID = os.getenv("FLORA_GATEWAY_ID", "gateway-dev")
 CONFIG_PATH = os.getenv("FLORA_GATEWAY_CONFIG", "/config/gateway.toml")
 SEED_PATH = os.getenv("FLORA_GATEWAY_SEED", "/config/instances.json")
+KONG_CONFIG_PATH = os.getenv("FLORA_GATEWAY_KONG_CONFIG", "/kong/kong.yaml")
 ADMIN_KEY = os.getenv("GATEWAY_ADMIN_KEY", "").strip()
 # First admin account, created only when gateway_user is empty. Change it on the Account tab.
 ADMIN_USERNAME = os.getenv("GATEWAY_ADMIN_USERNAME", "admin")
