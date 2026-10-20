@@ -149,7 +149,8 @@ const $ = (id) => document.getElementById(id);
 $("logo").src = document.querySelector('link[rel="icon"]').href;
 const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
 const when = (ms) => ms ? new Date(ms).toLocaleString() : "—";
-const ago = (ms) => { if (!ms) return "never"; const s = Math.round((Date.now() - ms) / 1000); return s < 90 ? `${s}s ago` : `${Math.round(s / 60)} min ago`; };
+const ago = (ms) => { if (!ms) return "never"; const s = Math.round((Date.now() - ms) / 1000);
+  return s < 90 ? `${s}s ago` : s < 5400 ? `${Math.round(s / 60)} min ago` : s < 172800 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} days ago`; };
 let editing = null, detailing = null, me = null, auditRows = [];
 // Every API call: a lost session sends the operator back to the sign-in page.
 const rawFetch = window.fetch.bind(window);
