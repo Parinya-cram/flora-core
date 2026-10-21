@@ -156,7 +156,9 @@
     <div class="muted" style="margin-top:8px">Root CI builds every image and pushes it to <code id="registry"></code>, then publishes a release
     (<code>flora-root/scripts/publish_release.py</code>). Each hospital's Haber mirrors the digests and the hospital approves the rollout.</div></section>
   <section data-tab="library"><h2 style="display:flex;justify-content:space-between;align-items:center">Device library
-      <button class="primary admin-only" onclick="editProfile('')">+ Add device profile</button></h2>
+      <span style="display:flex;gap:6px"><a href="api/v1/device-library.csv"><button type="button">Download CSV</button></a>
+      <label class="admin-only" style="display:inline-block"><input type="file" accept=".csv,text/csv,application/json" hidden onchange="importLibrary(this)"><span class="btnlike" style="display:inline-block;padding:5px 10px;border-radius:6px;border:1px solid var(--line);cursor:pointer;font-size:14px">Import CSV</span></label>
+      <button class="primary admin-only" onclick="editProfile('')">+ Add device profile</button></span></h2>
     <div class="muted" style="margin:-4px 0 10px">Settings for each device type (parser, controller, default options, connection defaults).
       Every hospital's appliance gets them on its next Root sync and hands them to its gateways on check-in — no new gateway release needed.
       A hospital still only runs the device types its license allows.</div>
@@ -685,6 +687,22 @@ async function saveProfile(event) {
   if (!r.ok) { $("libErr").textContent = (await r.json().catch(() => ({}))).detail || `HTTP ${r.status}`; return false; }
   profileEdit = null; $("libForm").innerHTML = ""; await loadLibrary();
   return false;
+}
+async function importLibrary(input) {
+  const file = input.files[0]; input.value = ""; if (!file) return;
+  const text = await file.text();
+  const type = file.name.endsWith(".json") ? "application/json" : "text/csv";
+  const send = (dry) => fetch(`api/v1/device-library/import${dry ? "?dry_run=true" : ""}`, { method: "POST", headers: { "content-type": type }, body: text });
+  let r = await send(true), d = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const errs = d.detail?.errors;
+    alert(errs ? `Nothing imported — fix these rows:\n` + errs.map((e) => `row ${e.row} (${e.code || "?"}): ${e.error}`).join("\n") : (d.detail || `HTTP ${r.status}`));
+    return;
+  }
+  if (!confirm(`${file.name}: ${d.rows} rows — ${d.created.length} new, ${d.updated.length} updated (revision + 1).\nImport and publish to every hospital?`)) return;
+  r = await send(false); d = await r.json().catch(() => ({}));
+  if (!r.ok) { alert(d.detail?.errors ? "Import failed" : (d.detail || `HTTP ${r.status}`)); return; }
+  await loadLibrary();
 }
 async function profileStatus(code, action) {
   if (action === "withdraw" && !confirm(`Withdraw ${code}? Gateways stop offering it on their next check-in.`)) return;

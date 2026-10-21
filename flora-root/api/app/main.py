@@ -16,6 +16,8 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import csv
+import io
 import json
 import re
 import logging
@@ -31,7 +33,7 @@ from typing import Any
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
@@ -552,13 +554,16 @@ def list_device_library():
     return {"rows": device_profiles()}
 
 
-@app.put("/api/v1/device-library/{code}", dependencies=[Depends(require_admin)])
-def save_device_profile(code: str, body: DeviceProfileIn, request: Request):
-    if not re.fullmatch(r"[a-z0-9][a-z0-9_.-]{1,63}", code):
-        raise HTTPException(400, "code: lowercase letters, digits, - _ . (2-64)")
-    user = (getattr(request.state, "user", None) or {}).get("username") or "root-ci"
-    with pool.connection() as connection:
-        row = connection.execute(
+PROFILE_CODE = re.compile(r"[a-z0-9][a-z0-9_.-]{1,63}")
+CONTROLLERS = ("socket", "serial", "webhook", "feeder")
+
+
+def upsert_profile(connection, code: str, body: DeviceProfileIn, user: str) -> dict[str, Any]:
+    if not PROFILE_CODE.fullmatch(code):
+        raise ValueError("code: lowercase letters, digits, - _ . (2-64)")
+    if body.controller not in CONTROLLERS:
+        raise ValueError(f"controller must be one of {', '.join(CONTROLLERS)}")
+    return connection.execute(
             """INSERT INTO root_device_profile (code, label, category, protocol, controller, parser, image, default_options,
                    connection_defaults, models, notes, updated_at, updated_by) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                ON CONFLICT (code) DO UPDATE SET label=excluded.label, category=excluded.category, protocol=excluded.protocol,
@@ -569,8 +574,77 @@ def save_device_profile(code: str, body: DeviceProfileIn, request: Request):
                RETURNING *""",
             (code, body.label, body.category, body.protocol, body.controller, body.parser, body.image,
              Jsonb(body.default_options), Jsonb(body.connection_defaults), body.models, body.notes, now_ms(), user)).fetchone()
-    auth.audit(user, "device_profile.save", code, auth.client_ip(request), {"code": code, "revision": row["revision"]})
+
+
+@app.put("/api/v1/device-library/{code}", dependencies=[Depends(require_admin)])
+def save_device_profile(code: str, body: DeviceProfileIn, request: Request):
+    user = (getattr(request.state, "user", None) or {}).get("username") or "root-ci"
+    try:
+        with pool.connection() as connection:
+            row = upsert_profile(connection, code, body, user)
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
+    auth.audit(user, "device_profile.save", code, auth.client_ip(request), {"revision": row["revision"]})
     return {key: row[key] for key in PROFILE_FIELDS}
+
+
+CSV_COLUMNS = ("code", "label", "category", "protocol", "controller", "parser", "image", "default_options",
+               "connection_defaults", "models", "notes")
+
+
+@app.get("/api/v1/device-library.csv")
+def export_device_library():
+    """The library as CSV — also the template for an import (JSON columns as JSON text, models separated by ;)."""
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(CSV_COLUMNS)
+    for p in device_profiles(active_only=True):
+        writer.writerow([json.dumps(p[c], ensure_ascii=False) if c in ("default_options", "connection_defaults")
+                         else ";".join(p[c]) if c == "models" else p[c] or "" for c in CSV_COLUMNS])
+    return Response(out.getvalue(), media_type="text/csv; charset=utf-8",
+                    headers={"content-disposition": 'attachment; filename="device-library.csv"'})
+
+
+@app.post("/api/v1/device-library/import", dependencies=[Depends(require_admin)])
+async def import_device_library(request: Request, dry_run: bool = False):
+    """CSV (header row = CSV_COLUMNS; code, label, controller, parser required) or a JSON list of profiles.
+    All rows are checked first; nothing is saved when any row is wrong. Existing codes are updated (revision + 1)."""
+    raw = (await request.body()).decode("utf-8-sig")
+    if request.headers.get("content-type", "").startswith("application/json"):
+        items = json.loads(raw)
+    else:
+        items = []
+        for row in csv.DictReader(io.StringIO(raw)):
+            row = {k.strip().lower(): (v or "").strip() for k, v in row.items() if k}
+            items.append({**row, "models": [m.strip() for m in row.get("models", "").replace(",", ";").split(";") if m.strip()],
+                          **{c: json.loads(row[c]) if row.get(c) else {} for c in ("default_options", "connection_defaults")}})
+    parsed, errors = [], []
+    for number, item in enumerate(items, start=1):
+        try:
+            code = str(item.get("code") or "").strip()
+            body = DeviceProfileIn(**{k: v for k, v in item.items() if k in DeviceProfileIn.model_fields and v not in ("", None)})
+            if not PROFILE_CODE.fullmatch(code):
+                raise ValueError(f"code {code!r}: lowercase letters, digits, - _ . (2-64)")
+            if body.controller not in CONTROLLERS:
+                raise ValueError(f"controller must be one of {', '.join(CONTROLLERS)}")
+            parsed.append((code, body))
+        except Exception as error:   # noqa: BLE001 — report every bad row, by number
+            errors.append({"row": number, "code": item.get("code"), "error": str(error).splitlines()[0][:300]})
+    if errors:
+        raise HTTPException(400, {"errors": errors, "rows": len(items)})
+    with pool.connection() as connection:
+        existing = {r["code"] for r in connection.execute("SELECT code FROM root_device_profile").fetchall()}
+        result = {"rows": len(parsed), "created": [c for c, _ in parsed if c not in existing],
+                  "updated": [c for c, _ in parsed if c in existing], "dry_run": dry_run}
+        if dry_run:
+            return result
+        user = (getattr(request.state, "user", None) or {}).get("username") or "root-ci"
+        with connection.transaction():
+            for code, body in parsed:
+                upsert_profile(connection, code, body, user)
+    auth.audit(user, "device_profile.import", None, auth.client_ip(request),
+               {"created": len(result["created"]), "updated": len(result["updated"])})
+    return result
 
 
 @app.post("/api/v1/device-library/{code}/{action}", dependencies=[Depends(require_admin)])
