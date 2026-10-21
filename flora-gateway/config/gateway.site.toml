@@ -15,9 +15,6 @@ path = "/dev/ttyS0"
 baud = 19200
 data_bits = 8
 parity = "even"
-stop_bits = 1
-flow_control = "none"
-idle_ms = 20
 
 [[serial.pods]]
 id = "COM2"
@@ -26,13 +23,7 @@ id = "COM2"
 path = "/dev/ttyS1"
 baud = 19200
 parity = "even"
-idle_ms = 20
 data_bits = 8
-stop_bits = 1
-flow_control = "none"
-rts = true
-dtr = true
-max_frame_bytes = 16384
 
 [feeder]
 admin_port = 5002
