@@ -165,6 +165,34 @@ async function report(appliance, code, status, error) {
   await request(`${appliance}/api/haber/v1/install/report`, { method: "POST", body: { code, status, error: error || null } }).catch(() => {});
 }
 
+// ------------------------------------------------------------------ native (Windows, bundled runtime — no Docker)
+const native = require("../native/runtime.cjs");
+const nativeAvailable = () => fs.existsSync(path.join(native.RUNTIME(), "python")) && fs.existsSync(path.join(native.RUNTIME(), "pgsql"));
+
+async function installLeafNative({ appliance, code, baseDir }, log, supervisor) {
+  log("Claiming this machine with the appliance");
+  const node = await request(`${appliance}/api/haber/v1/install/claim`, { method: "POST", body: { code, kind: "leaf", hostname: os.hostname() } });
+  if (!node.canopy_sync_url) throw new Error("the appliance has no Canopy address for Leafs (set it in Device Distribution settings)");
+  log(`Leaf ${node.node_id} (${node.label || node.node_id}) · ${[node.ward, node.room, node.bed].filter(Boolean).join(" · ")}`);
+  try {
+    const settings = await native.prepareLeaf(node, appliance, path.join(baseDir, "native"));
+    if (node.canopy_sync_url.startsWith("https:")) {
+      log("Trusting the hospital's Canopy certificate");
+      settings.trustFile = path.join(settings.dir, "flora-trust.pem");
+      fs.writeFileSync(settings.trustFile, tls.rootCertificates.join("\n") + "\n" + await peerCertificatePem(node.canopy_sync_url));
+      fs.writeFileSync(path.join(settings.dir, "leaf.json"), JSON.stringify(settings, null, 2));
+    }
+    log("Starting the Leaf (database, API, sync)");
+    await native.startLeaf(settings, supervisor, log);
+    await report(appliance, code, "installed");
+    log(`Leaf ${node.node_id} is running`);
+    return { native: true, nodeId: node.node_id, label: node.label, dir: settings.dir, apiPort: settings.apiPort, adminPassword: settings.adminPassword };
+  } catch (error) {
+    await report(appliance, code, "failed", error.message);
+    throw error;
+  }
+}
+
 // ------------------------------------------------------------------ Leaf
 async function installLeaf({ appliance, code, baseDir, registry: registryOverride }, log) {
   log("Claiming this machine with the appliance");
@@ -427,12 +455,16 @@ async function exposeOnLan(ports, log) {
 }
 
 // Bring installed nodes up again after a reboot (containers restart with Docker; this covers a stopped engine).
-async function startInstalled(state, log) {
-  for (const node of [state?.leaf, state?.gateway].filter(Boolean)) {
+async function startInstalled(state, log, supervisor) {
+  if (state?.leaf?.native) {
+    const settings = JSON.parse(fs.readFileSync(path.join(state.leaf.dir, "leaf.json"), "utf8"));
+    await native.startLeaf(settings, supervisor, log);
+  }
+  for (const node of [state?.leaf, state?.gateway].filter((n) => n && !n.native)) {
     const files = ["compose.yaml"];
     await compose(node.dir, node.project, ["up", "-d"], files).catch((e) => log(`could not start ${node.project}: ${e.message}`));
   }
 }
 
-module.exports = { readState, writeState, checkDocker, checkKubernetes, installSite, approveFirstReleases, exposeOnLan, localIp,
+module.exports = { readState, writeState, checkDocker, checkKubernetes, nativeAvailable, installLeafNative, native, installSite, approveFirstReleases, exposeOnLan, localIp,
   installLeaf, installGateway, startInstalled, normaliseAppliance };

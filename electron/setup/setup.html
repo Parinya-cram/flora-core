@@ -33,7 +33,7 @@
     <p>ติดตั้งจาก Appliance ของโรงพยาบาลในเครือข่าย (ไม่ต้องใช้อินเทอร์เน็ต) · Set up this machine</p></div></header>
 
   <section>
-    <h2>1 · Rancher Desktop</h2>
+    <h2>1 · ส่วนประกอบของเครื่อง</h2>
     <div class="status"><span class="dot" id="dockerDot"></span><span id="dockerText">กำลังตรวจ…</span></div>
     <p class="hint" id="dockerHelp" hidden>ติดตั้ง <b>Rancher Desktop</b> แล้วเลือก Container engine = <b>dockerd (moby)</b>, ปิด Kubernetes ได้, เปิดโปรแกรมทิ้งไว้ แล้วกด "ตรวจอีกครั้ง"
       <br><a href="#" id="rdLink" style="color:var(--accent)">ดาวน์โหลด Rancher Desktop</a> · <a href="#" id="recheck" style="color:var(--accent)">ตรวจอีกครั้ง</a></p>
@@ -105,7 +105,7 @@
     $("dockerDot").className = "dot"; $("dockerText").textContent = "กำลังตรวจ…";
     const r = await window.floraSetup.checkDocker();
     $("dockerDot").className = "dot " + (r.ok ? "ok" : "bad");
-    $("dockerText").textContent = r.ok ? `พร้อมใช้งาน (Docker ${r.server})` : "ยังไม่พบ Rancher Desktop / Docker ที่ทำงานอยู่";
+    $("dockerText").textContent = r.native ? "ไม่ต้องติดตั้งเพิ่ม — ระบบอยู่ในโปรแกรมแล้ว" : r.ok ? `พร้อมใช้งาน (Docker ${r.server})` : "ยังไม่พบ Rancher Desktop / Docker ที่ทำงานอยู่";
     $("dockerHelp").hidden = r.ok; $("go").disabled = !r.ok;
     return r.ok;
   }

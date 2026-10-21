@@ -22,6 +22,7 @@ let mainWindow = null;
 let tray = null;
 let quitting = false;
 let serialController = null;
+const nativeSupervisor = new installer.native.Supervisor((line) => console.log(line));
 const dataDir = () => app.getPath("userData");
 const nodeState = () => installer.readState(dataDir());
 
@@ -112,7 +113,9 @@ function ensureTray(state) {
   ]));
 }
 
-ipcMain.handle("flora:setup:check-docker", () => installer.checkDocker());
+// With the bundled Windows runtime the Leaf needs no Docker: the setup page skips that check.
+ipcMain.handle("flora:setup:check-docker", async () => installer.nativeAvailable()
+  ? { ok: true, native: true, server: "built-in" } : installer.checkDocker());
 ipcMain.handle("flora:setup:open-external", (_event, url) => shell.openExternal(String(url)));
 ipcMain.handle("flora:setup:check-kubernetes", () => installer.checkKubernetes());
 ipcMain.handle("flora:setup:install", async (_event, form) => {
@@ -132,7 +135,9 @@ ipcMain.handle("flora:setup:install", async (_event, form) => {
       appliance = installer.normaliseAppliance(form.appliance);
     }
     state.appliance = appliance;
-    if (roles.has("leaf")) state.leaf = await installer.installLeaf({ appliance, code: form.leafCode, baseDir }, setupLog);
+    if (roles.has("leaf")) state.leaf = installer.nativeAvailable()
+      ? await installer.installLeafNative({ appliance, code: form.leafCode, baseDir }, setupLog, nativeSupervisor)
+      : await installer.installLeaf({ appliance, code: form.leafCode, baseDir }, setupLog);
     if (roles.has("gateway")) state.gateway = await installer.installGateway({ appliance, code: form.gatewayCode, baseDir }, setupLog);
     installer.writeState(dataDir(), state);
     if (process.platform === "win32") app.setLoginItemSettings({ openAtLogin: true });
@@ -214,7 +219,7 @@ app.whenReady().then(async () => {
   } else {
     applyState(state);
     if (state) {
-      installer.startInstalled(state, (line) => console.log(line)).catch(() => {});
+      await installer.startInstalled(state, (line) => console.log(line), nativeSupervisor).catch((e) => console.error(e));
       superviseSerialController(state); ensureTray(state);
       if (state.leaf) await waitForApi(180);
     }
@@ -224,6 +229,15 @@ app.whenReady().then(async () => {
 });
 
 app.on("second-instance", () => { if (mainWindow) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.show(); mainWindow.focus(); } });
-app.on("before-quit", () => { quitting = true; if (serialController) serialController.kill(); });
+app.on("before-quit", async (event) => {
+  quitting = true; if (serialController) serialController.kill();
+  const state = nodeState();
+  if (state?.leaf?.native && !nativeSupervisor.stopping) {          // stop the Leaf cleanly (database last)
+    event.preventDefault();
+    await nativeSupervisor.stopAll();
+    await installer.native.stopLeaf({ dir: state.leaf.dir });
+    app.quit();
+  }
+});
 app.on("window-all-closed", () => { if (process.platform !== "darwin" && !tray) app.quit(); });
 app.on("will-quit", () => { for (const file of generatedPreviewFiles) { try { fs.unlinkSync(file); } catch {} } });

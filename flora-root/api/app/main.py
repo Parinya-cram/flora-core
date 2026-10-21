@@ -29,8 +29,8 @@ from typing import Any
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from fastapi import Body, Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
@@ -161,7 +161,7 @@ auth.install(app, pool, [
     r"/health", r"/api/v1/keys", r"/api/v1/tenants/[^/]+/(bundle|heartbeat|releases)",  # Canopy, tenant key auth
     r"/api/auth/status",                                                                # login page status panel
     r"/api/v1/tenants/[^/]+/installs/(pending|[^/]+/report)",                           # appliance, tenant key auth
-    r"/api/v1/install/redeem", r"/install/site\.sh", r"/install/files/site/site\.yaml",  # new site server, one-time code
+    r"/api/v1/install/redeem", r"/install", r"/install/site\.sh", r"/install/files/site/site\.yaml", r"/install/windows/[A-Za-z0-9._-]+",  # new site server, one-time code
 ])
 app.include_router(auth.router)
 require_admin = auth.require_admin  # signed-in admin operator, or Root CI with x-root-key / Basic
@@ -446,7 +446,8 @@ def install_commands(kind: str, code: str, root_url: str, tenant_id: str) -> dic
         insecure = ROOT_TLS_SELF_SIGNED and root_url.startswith("https:")
         return {"run_on": "the hospital's main server, Linux (it needs internet to reach Root)",
                 "command": f"curl -fsSL{'k' if insecure else ''} {root_url}/install/site.sh | sudo sh -s -- --root {root_url}"
-                           f"{' --root-insecure' if insecure else ''} --code {code}"}
+                           f"{' --root-insecure' if insecure else ''} --code {code}",
+                "windows": f"{root_url}/install?os=windows"}
     appliance = appliance_url(tenant_id)
     return {"run_on": f"the new {kind} machine on the hospital LAN (no internet needed; it installs from the appliance)",
             "command": f"curl -fsSL {appliance}/install/{kind}.sh | sudo sh -s -- --code {code}",
@@ -547,6 +548,91 @@ def site_installer(request: Request):
 @app.get("/install/files/site/site.yaml")
 def site_manifest():
     return PlainTextResponse((Path(__file__).parent / "static" / "install" / "site.yaml").read_text())
+
+
+
+# ------------------------------------------------------------------ install page (pick the operating system)
+# A new hospital has no appliance yet, so its main server takes the installer from Root: Windows gets the same
+# Flora iCIS Setup the appliances serve (the "windows" image of the newest Leaf release), Linux gets site.sh.
+
+WINDOWS_FILE = "Flora-iCIS-Setup.exe"
+MANIFEST_ACCEPT = ", ".join(["application/vnd.oci.image.index.v1+json", "application/vnd.docker.distribution.manifest.list.v2+json",
+                             "application/vnd.oci.image.manifest.v1+json", "application/vnd.docker.distribution.manifest.v2+json"])
+INSTALLER_CACHE = Path(os.getenv("ROOT_INSTALLER_CACHE", "/tmp/flora-installers"))
+
+
+def latest_windows_release() -> dict[str, Any] | None:
+    with pool.connection() as connection:
+        rows = connection.execute(
+            "SELECT * FROM root_release WHERE component='leaf' AND withdrawn_at IS NULL AND services ? 'windows' ORDER BY created_at DESC LIMIT 1").fetchall()
+    return release_doc(rows[0]) if rows else None
+
+
+def windows_installer_file(release: dict[str, Any]) -> Path:
+    import io
+    import tarfile
+    image = release["services"]["windows"]
+    INSTALLER_CACHE.mkdir(parents=True, exist_ok=True)
+    target = INSTALLER_CACHE / f"{image['digest'].split(':')[-1]}.exe"
+    if target.exists():
+        return target
+    base = f"{REGISTRY_INTERNAL}/v2/{image['repository']}"
+    def get(url: str, accept: str | None = None) -> bytes:
+        request = urllib.request.Request(url, headers={"Accept": accept} if accept else {})
+        with urllib.request.urlopen(request, timeout=300) as response:  # noqa: S310 (our registry)
+            return response.read()
+    manifest = json.loads(get(f"{base}/manifests/{image['digest']}", MANIFEST_ACCEPT))
+    if "manifests" in manifest:
+        manifest = json.loads(get(f"{base}/manifests/{manifest['manifests'][0]['digest']}", MANIFEST_ACCEPT))
+    for layer in reversed(manifest["layers"]):
+        with tarfile.open(fileobj=io.BytesIO(get(f"{base}/blobs/{layer['digest']}")), mode="r:*") as archive:
+            member = next((m for m in archive.getmembers() if m.name.lstrip("./") == WINDOWS_FILE), None)
+            if member:
+                tmp = target.with_suffix(".tmp"); tmp.write_bytes(archive.extractfile(member).read()); tmp.replace(target)
+                return target
+    raise HTTPException(500, "the installer image holds no installer")
+
+
+@app.get("/install")
+def install_page(request: Request, os_name: str | None = Query(None, alias="os")):
+    from html import escape as esc
+    root_url = ROOT_PUBLIC_URL or str(request.base_url).rstrip("/")
+    chosen = os_name or ("windows" if "windows" in request.headers.get("user-agent", "").lower() else "linux")
+    release = latest_windows_release()
+    tabs = "".join(f'<a href="/install?os={key}" class="{"on" if key == chosen else ""}">{label}</a>' for key, label in (("windows", "Windows"), ("linux", "Linux")))
+    insecure = ROOT_TLS_SELF_SIGNED and root_url.startswith("https:")
+    if chosen == "windows":
+        body = (f'<div class="card"><h2>1 · ดาวน์โหลด</h2><p><a class="btn" href="/install/windows/{WINDOWS_FILE}">Download Flora iCIS Setup ({esc(release["version"])})</a></p></div>'
+                if release else '<div class="card"><p class="warn">ยังไม่มีไฟล์ติดตั้ง Windows ใน release ล่าสุด</p></div>')
+        body += f"""<div class="card"><h2>2 · ติดตั้ง</h2><ol>
+<li>ดับเบิลคลิก <b>Flora iCIS Setup</b> ติดตั้งให้เสร็จ</li>
+<li>เปิดโปรแกรม เลือก <b>Canopy + Appliance</b> (และ Leaf / Gateway ถ้าจะลงในเครื่องเดียวกัน)</li>
+<li>ใส่ที่อยู่ Root <code>{esc(root_url)}</code> และรหัสจาก Root › Topology › โรงพยาบาล › <b>Install site server</b></li></ol></div>"""
+    else:
+        body = f"""<div class="card"><h2>เครื่อง server หลักของโรงพยาบาล (Canopy + Appliance)</h2>
+<p>Ubuntu ที่ออกอินเทอร์เน็ตไป Root ได้ · แทน XXXX ด้วยรหัสจาก Root › Topology › โรงพยาบาล › Install site server</p>
+<pre>curl -fsSL{'k' if insecure else ''} {esc(root_url)}/install/site.sh | sudo sh -s -- --root {esc(root_url)}{' --root-insecure' if insecure else ''} --code XXXX-XXXX-XXXX-XXXX</pre>
+<p>เครื่อง Leaf / Gateway ติดตั้งจาก Appliance ของโรงพยาบาลหลังจากนั้น: <code>http://&lt;appliance&gt;:7204/install</code></p></div>"""
+    css = """body{font:15px/1.6 'Segoe UI',system-ui,sans-serif;max-width:780px;margin:36px auto;padding:0 20px;color:#1d2621;background:#f6f7f4}
+h1{font-size:24px;margin:0 0 4px} .sub{color:#65706a;margin:0 0 20px} .tabs{display:flex;gap:8px;margin:0 0 16px}
+.tabs a{padding:9px 18px;border-radius:10px;border:1px solid #d8ddd8;text-decoration:none;color:#1d2621;font-weight:600;background:#fff}
+.tabs a.on{background:#2f6f4f;color:#fff;border-color:#2f6f4f} .card{background:#fff;border:1px solid #e2e6e1;border-radius:14px;padding:18px 22px;margin-bottom:14px}
+.btn{display:inline-block;background:#2f6f4f;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:600}
+.warn{color:#a46a12} code,pre{background:#eef2ee;border-radius:6px} code{padding:2px 6px} pre{padding:10px 12px;white-space:pre-wrap;word-break:break-all;user-select:all}
+li{margin:6px 0} h2{font-size:16px;margin:0 0 8px}"""
+    return HTMLResponse(f"""<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Flora iCIS · ติดตั้งโรงพยาบาลใหม่</title><style>{css}</style></head><body>
+<h1>ติดตั้งโรงพยาบาลใหม่</h1><p class="sub">Flora iCIS Root · เลือกระบบปฏิบัติการของเครื่อง server หลัก</p>
+<div class="tabs">{tabs}</div>{body}</body></html>""")
+
+
+@app.get(f"/install/windows/{WINDOWS_FILE}")
+def install_windows_file():
+    release = latest_windows_release()
+    if release is None:
+        raise HTTPException(404, "no Leaf release carries the Windows installer yet")
+    return FileResponse(windows_installer_file(release), filename=f"Flora-iCIS-Setup-{release['version']}.exe",
+                        media_type="application/vnd.microsoft.portable-executable")
 
 
 class RedeemIn(BaseModel):

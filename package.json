@@ -48,6 +48,10 @@
       {
         "from": "build-win/serial-controller.exe",
         "to": "serial-controller.exe"
+      },
+      {
+        "from": "build-win/runtime",
+        "to": "runtime"
       }
     ],
     "directories": {

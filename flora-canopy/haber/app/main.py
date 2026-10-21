@@ -33,7 +33,7 @@ from typing import Any
 import httpx
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
@@ -403,7 +403,7 @@ basic_auth.install(app, "Canopy Haber", "HABER", [
     r"/health", r"/api/haber/v1/gateways/[^/]+/(checkin|alerts|activity)",  # gateways, token auth
     r"/api/haber/v1/root-keys", r"/api/haber/v1/nodes/[^/]+/(desired|report)",  # flora-updater, token auth
     r"/api/haber/v1/ai-relay/.+",   # Canopy / Leaf AI calls, relay token in the path
-    r"/install/(leaf|gateway)\.sh", r"/install/windows(/[A-Za-z0-9._-]+)?", r"/install/files/[a-z]+/[A-Za-z0-9._-]+", r"/api/haber/v1/install/(claim|report)",   # new LAN machines, one-time code
+    r"/install", r"/install/(leaf|gateway)\.sh", r"/install/windows(/[A-Za-z0-9._-]+)?", r"/install/files/[a-z]+/[A-Za-z0-9._-]+", r"/api/haber/v1/install/(claim|report)",   # new LAN machines, one-time code
 ])
 
 
@@ -1009,24 +1009,39 @@ def windows_installer_path(release: dict[str, Any]) -> Path:
     raise HTTPException(500, "the installer image holds no installer")
 
 
+INSTALL_PAGE_CSS = """body{font:15px/1.6 'Segoe UI',system-ui,sans-serif;max-width:780px;margin:36px auto;padding:0 20px;color:#1d2621;background:#f6f7f4}
+h1{font-size:24px;margin:0 0 4px} .sub{color:#65706a;margin:0 0 20px}
+.tabs{display:flex;gap:8px;margin:0 0 16px} .tabs a{padding:9px 18px;border-radius:10px;border:1px solid #d8ddd8;text-decoration:none;color:#1d2621;font-weight:600;background:#fff}
+.tabs a.on{background:#2f6f4f;color:#fff;border-color:#2f6f4f} .card{background:#fff;border:1px solid #e2e6e1;border-radius:14px;padding:18px 22px;margin-bottom:14px}
+.btn{display:inline-block;background:#2f6f4f;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:600}
+.warn{color:#a46a12} code,pre{background:#eef2ee;border-radius:6px} code{padding:2px 6px} pre{padding:10px 12px;white-space:pre-wrap;word-break:break-all;user-select:all}
+li{margin:6px 0} h2{font-size:16px;margin:0 0 8px}"""
+
+
+@app.get("/install")
 @app.get("/install/windows")
-def windows_installer_page(request: Request):
-    """A plain page for the hospital PC: download the installer, then the steps."""
-    release = windows_release()
+def install_page(request: Request, os_name: str | None = Query(None, alias="os")):
+    """Leaf / gateway machines of this hospital: pick the operating system, then download or copy."""
     here = str(request.base_url).rstrip("/")
-    body = (f'<p><a class="btn" href="/install/windows/{WINDOWS_FILE}">Download Flora iCIS Setup ({esc(release["version"])})</a></p>'
-            if release else '<p class="warn">No Leaf release with the Windows installer is mirrored on this appliance yet.</p>')
-    return HTMLResponse(f"""<!doctype html><html lang="th"><head><meta charset="utf-8"><title>Flora iCIS · Windows</title>
-<style>body{{font:15px/1.6 'Segoe UI',system-ui,sans-serif;max-width:720px;margin:40px auto;padding:0 20px;color:#1d2621}}
-.btn{{display:inline-block;background:#2f6f4f;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:600}}
-.warn{{color:#a46a12}} code{{background:#eef2ee;padding:2px 6px;border-radius:5px}} li{{margin:6px 0}}</style></head><body>
-<h1>Flora iCIS สำหรับ Windows</h1>{body}
-<ol><li>ติดตั้ง <b>Rancher Desktop</b> (Container engine: <b>dockerd (moby)</b>) แล้วเปิดค้างไว้ —
-ถ้าจะลง <b>Canopy</b> บนเครื่องนี้ ให้เปิด <b>Kubernetes</b> ใน Rancher Desktop ด้วย</li>
-<li>ดับเบิลคลิก <b>Flora iCIS Setup</b> ติดตั้งให้เสร็จ</li>
+    chosen = os_name or ("windows" if request.url.path.endswith("/windows") else "windows" if "windows" in request.headers.get("user-agent", "").lower() else "linux")
+    release = windows_release()
+    tabs = "".join(f'<a href="/install?os={key}" class="{"on" if key == chosen else ""}">{label}</a>' for key, label in (("windows", "Windows"), ("linux", "Linux")))
+    if chosen == "windows":
+        body = (f'<div class="card"><h2>1 · ดาวน์โหลด</h2><p><a class="btn" href="/install/windows/{WINDOWS_FILE}">Download Flora iCIS Setup ({esc(release["version"])})</a></p></div>'
+                if release else '<div class="card"><p class="warn">ยังไม่มีไฟล์ติดตั้ง Windows บน Appliance นี้ (รอ release ของ Leaf ที่มีไฟล์ Windows mirror มาก่อน)</p></div>')
+        body += f"""<div class="card"><h2>2 · ติดตั้ง</h2><ol>
+<li>ดับเบิลคลิก <b>Flora iCIS Setup</b> ติดตั้งให้เสร็จ (ถ้า Windows เตือน ให้กด More info → Run anyway)</li>
 <li>เปิดโปรแกรม เลือกสิ่งที่จะลงบนเครื่องนี้ (Canopy + Appliance / Leaf / Gateway — เลือกได้หลายอย่าง)</li>
-<li>ใส่ที่อยู่ Appliance <code>{esc(here.split('//')[-1])}</code> และรหัสติดตั้งจาก Root แล้วกด <b>ติดตั้ง</b></li></ol>
-</body></html>""")
+<li>ใส่ที่อยู่ Appliance <code>{esc(here.split('//')[-1])}</code> และรหัสติดตั้งจาก Root แล้วกด <b>ติดตั้ง</b></li></ol></div>"""
+    else:
+        body = f"""<div class="card"><h2>Leaf</h2><p>รันบนเครื่อง Leaf (ต้องมี Docker + docker compose) แทน XXXX ด้วยรหัสจาก Root › + Add Leaf</p>
+<pre>curl -fsSL {esc(here)}/install/leaf.sh | sudo sh -s -- --code XXXX-XXXX-XXXX-XXXX</pre></div>
+<div class="card"><h2>Gateway</h2><p>รันบนเครื่อง gateway แทน XXXX ด้วยรหัสจาก Root › + Add gateway</p>
+<pre>curl -fsSL {esc(here)}/install/gateway.sh | sudo sh -s -- --code XXXX-XXXX-XXXX-XXXX</pre></div>"""
+    return HTMLResponse(f"""<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Flora iCIS · ติดตั้ง</title><style>{INSTALL_PAGE_CSS}</style></head><body>
+<h1>ติดตั้ง Flora iCIS</h1><p class="sub">Appliance ของโรงพยาบาล {esc(TENANT_ID)} · เลือกระบบปฏิบัติการของเครื่องที่จะติดตั้ง</p>
+<div class="tabs">{tabs}</div>{body}</body></html>""")
 
 
 @app.get(f"/install/windows/{WINDOWS_FILE}")

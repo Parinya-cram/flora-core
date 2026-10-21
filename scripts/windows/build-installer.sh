@@ -16,6 +16,10 @@ sudo -n nerdctl run --rm -v "$ROOT_DIR/flora-gateway/rust:/src:ro" -v "$ROOT_DIR
     cd /src && CARGO_TARGET_DIR=/target cargo build --release --locked -p serial-controller --target x86_64-pc-windows-gnu
     cp /target/x86_64-pc-windows-gnu/release/serial-controller.exe /out/ && chown $UID_GID /out/serial-controller.exe"
 
+echo "== Windows runtime (Python + Flora bytecode, PostgreSQL, Java + Kafka) — no Docker needed on the PC"
+sudo -n nerdctl run --rm -v "$ROOT_DIR:/repo:ro" -v "$ROOT_DIR/build-win:/out" -v flora-win-runtime-cache:/cache \
+  docker.io/library/python:3.13-slim sh -c "python3 /repo/scripts/windows/build_runtime.py /repo /out/runtime && chown -R $UID_GID /out/runtime"
+
 echo "== Leaf screens + Electron installer (wine)"
 sudo -n nerdctl run --rm -v "$ROOT_DIR:/project" -w /project \
   -v flora-electron-cache:/root/.cache docker.io/electronuserland/builder:wine sh -c "
