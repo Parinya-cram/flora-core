@@ -114,16 +114,29 @@ function ensureTray(state) {
 
 ipcMain.handle("flora:setup:check-docker", () => installer.checkDocker());
 ipcMain.handle("flora:setup:open-external", (_event, url) => shell.openExternal(String(url)));
+ipcMain.handle("flora:setup:check-kubernetes", () => installer.checkKubernetes());
 ipcMain.handle("flora:setup:install", async (_event, form) => {
   try {
-    const appliance = installer.normaliseAppliance(form.appliance);
+    const roles = new Set(form.roles || []);
     const baseDir = path.join(dataDir(), "nodes");
-    const state = { ...(nodeState() || {}), appliance, role: form.role, installedAt: Date.now() };
-    if (form.role !== "gateway") state.leaf = await installer.installLeaf({ appliance, code: form.leafCode, baseDir }, setupLog);
-    if (form.role !== "leaf") state.gateway = await installer.installGateway({ appliance, code: form.gatewayCode, baseDir }, setupLog);
+    const state = { ...(nodeState() || {}), roles: [...roles], installedAt: Date.now() };
+    let appliance = null;
+    if (roles.has("canopy")) {
+      // Canopy + appliance first; Leaf / gateway on this PC then install from that new appliance.
+      state.site = await installer.installSite({ root: form.root, code: form.siteCode }, setupLog);
+      await installer.exposeOnLan(Object.values(state.site.ports), setupLog);
+      appliance = state.site.applianceUrl;
+      const first = [roles.has("leaf") && "leaf", roles.has("gateway") && "gateway"].filter(Boolean);
+      if (first.length) await installer.approveFirstReleases(state.site, first, setupLog);
+    } else if (roles.has("leaf") || roles.has("gateway")) {
+      appliance = installer.normaliseAppliance(form.appliance);
+    }
+    state.appliance = appliance;
+    if (roles.has("leaf")) state.leaf = await installer.installLeaf({ appliance, code: form.leafCode, baseDir }, setupLog);
+    if (roles.has("gateway")) state.gateway = await installer.installGateway({ appliance, code: form.gatewayCode, baseDir }, setupLog);
     installer.writeState(dataDir(), state);
     if (process.platform === "win32") app.setLoginItemSettings({ openAtLogin: true });
-    return { ok: true, leaf: state.leaf, gateway: state.gateway };
+    return { ok: true, site: state.site, leaf: state.leaf, gateway: state.gateway };
   } catch (error) {
     setupLog(`ERROR: ${error.message}`);
     return { ok: false, error: error.message };
@@ -153,7 +166,8 @@ async function createWindow() {
   // Keep a gateway running in the tray when the window closes.
   win.on("close", (event) => { if (state && state.gateway && !quitting) { event.preventDefault(); win.hide(); } });
   const devUrl = process.env.FLORA_FRONTEND_URL || process.env.VITE_DEV_SERVER_URL;
-  if (state && state.gateway && !state.leaf) await win.loadURL("http://127.0.0.1:7400");   // gateway-only machine
+  if (state && state.site && !state.leaf) await win.loadURL(`https://127.0.0.1:${state.site.ports.canopy}`);   // Canopy machine
+  else if (state && state.gateway && !state.leaf) await win.loadURL("http://127.0.0.1:7400");   // gateway-only machine
   else if (devUrl) await win.loadURL(devUrl);
   else {
     const indexFile = path.join(__dirname, "..", "frontend", "dist", "index.html");
@@ -167,6 +181,10 @@ ipcMain.on("flora:app:get-edition-code", event => { event.returnValue = EDITION_
 ipcMain.on("flora:app:get-product-name", event => { event.returnValue = PRODUCT_NAME; });
 ipcMain.on("flora:app:get-version", event => { event.returnValue = app.getVersion(); });
 ipcMain.on("flora:app:get-backend-base-url", event => { event.returnValue = API_BASE_URL; });
+
+app.on("certificate-error", (event, _contents, url, _error, _cert, callback) => {
+  if (/^https:\/\/(127\.0\.0\.1|localhost)(:\d+)?\//.test(url)) { event.preventDefault(); callback(true); } else callback(false);
+});
 
 app.whenReady().then(async () => {
   ipcMain.handle("flora:bootstrap:get-status", systemStatus);

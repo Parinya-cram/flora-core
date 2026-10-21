@@ -40,21 +40,31 @@
   </section>
 
   <section>
-    <h2>2 · เครื่องนี้ทำหน้าที่อะไร</h2>
+    <h2>2 · ติดตั้งอะไรบนเครื่องนี้ (เลือกได้หลายอย่าง)</h2>
     <div class="roles">
+      <div class="role" data-role="canopy"><b>Canopy + Appliance</b><span>ศูนย์กลางของโรงพยาบาล (ต้องเปิด Kubernetes ใน Rancher Desktop และออกเน็ตไป Root ได้)</span></div>
       <div class="role on" data-role="leaf"><b>Leaf</b><span>เครื่องข้างเตียง / ห้องผ่าตัด</span></div>
-      <div class="role" data-role="both"><b>Leaf + Gateway</b><span>ข้างเตียง และต่อเครื่องมือแพทย์ในเครื่องเดียว</span></div>
-      <div class="role" data-role="gateway"><b>Gateway</b><span>ต่อเครื่องมือแพทย์อย่างเดียว</span></div>
+      <div class="role" data-role="gateway"><b>Gateway</b><span>ต่อเครื่องมือแพทย์ (พอร์ต COM / เครือข่าย)</span></div>
     </div>
+    <div class="status" id="k8sRow" hidden style="margin-top:12px"><span class="dot" id="k8sDot"></span><span id="k8sText"></span></div>
   </section>
 
   <section>
-    <h2>3 · Appliance และรหัสติดตั้ง</h2>
-    <label>ที่อยู่ Appliance ของโรงพยาบาล <span class="hint">เช่น 172.22.19.81 หรือ 172.22.19.81:7204</span></label>
-    <input type="text" id="appliance" placeholder="172.22.19.81" autocomplete="off">
-    <div id="leafBox"><label>รหัสติดตั้ง Leaf <span class="hint">จาก Root › Topology › โรงพยาบาล › + Add Leaf</span></label>
+    <h2>3 · ที่อยู่ และรหัสติดตั้งจาก Root</h2>
+    <div id="siteBox" hidden>
+      <label>ที่อยู่ Root <span class="hint">เช่น https://172.22.19.81:8443</span></label>
+      <input type="text" id="root" placeholder="https://172.22.19.81:8443" autocomplete="off">
+      <label>รหัสติดตั้ง Canopy (site) <span class="hint">Root › Topology › โรงพยาบาล › Install site server</span></label>
+      <input type="text" id="siteCode" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off">
+    </div>
+    <div id="applianceBox">
+      <label>ที่อยู่ Appliance ของโรงพยาบาล <span class="hint">เช่น 172.22.19.81 หรือ 172.22.19.81:7204</span></label>
+      <input type="text" id="appliance" placeholder="172.22.19.81" autocomplete="off">
+    </div>
+    <p class="hint" id="sameMachine" hidden>Leaf / Gateway จะติดตั้งจาก Appliance ที่เพิ่งลงบนเครื่องนี้</p>
+    <div id="leafBox"><label>รหัสติดตั้ง Leaf <span class="hint">Root › + Add Leaf</span></label>
       <input type="text" id="leafCode" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off"></div>
-    <div id="gwBox" hidden><label>รหัสติดตั้ง Gateway <span class="hint">จาก Root › + Add gateway</span></label>
+    <div id="gwBox" hidden><label>รหัสติดตั้ง Gateway <span class="hint">Root › + Add gateway</span></label>
       <input type="text" id="gwCode" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off"></div>
     <div class="row" style="margin-top:16px"><button id="go">ติดตั้ง</button><span class="err" id="formErr"></span></div>
   </section>
@@ -73,11 +83,23 @@
 </main>
 <script>
   const $ = (id) => document.getElementById(id);
-  let role = "leaf";
+  const picked = new Set(["leaf"]);
+  function refresh() {
+    document.querySelectorAll(".role").forEach((x) => x.classList.toggle("on", picked.has(x.dataset.role)));
+    $("siteBox").hidden = !picked.has("canopy");
+    $("applianceBox").hidden = picked.has("canopy") || (!picked.has("leaf") && !picked.has("gateway"));
+    $("sameMachine").hidden = !(picked.has("canopy") && (picked.has("leaf") || picked.has("gateway")));
+    $("leafBox").hidden = !picked.has("leaf"); $("gwBox").hidden = !picked.has("gateway");
+    $("k8sRow").hidden = !picked.has("canopy"); if (picked.has("canopy")) checkKubernetes();
+  }
+  async function checkKubernetes() {
+    $("k8sDot").className = "dot"; $("k8sText").textContent = "ตรวจ Kubernetes…";
+    const r = await window.floraSetup.checkKubernetes();
+    $("k8sDot").className = "dot " + (r.ok ? "ok" : "bad");
+    $("k8sText").textContent = r.ok ? "Kubernetes ใน Rancher Desktop พร้อม" : "เปิด Kubernetes ใน Rancher Desktop (Preferences › Kubernetes) แล้วเลือกใหม่";
+  }
   document.querySelectorAll(".role").forEach((el) => el.addEventListener("click", () => {
-    role = el.dataset.role;
-    document.querySelectorAll(".role").forEach((x) => x.classList.toggle("on", x === el));
-    $("leafBox").hidden = role === "gateway"; $("gwBox").hidden = role === "leaf";
+    const r = el.dataset.role; if (picked.has(r)) picked.delete(r); else picked.add(r); refresh();
   }));
   async function checkDocker() {
     $("dockerDot").className = "dot"; $("dockerText").textContent = "กำลังตรวจ…";
@@ -92,21 +114,25 @@
   window.floraSetup.onLog((line) => { const log = $("log"); log.textContent += line + "\n"; log.scrollTop = log.scrollHeight; });
   $("go").addEventListener("click", async () => {
     $("formErr").textContent = "";
-    const form = { role, appliance: $("appliance").value.trim(), leafCode: $("leafCode").value.trim(), gatewayCode: $("gwCode").value.trim() };
-    if (!form.appliance) return ($("formErr").textContent = "ใส่ที่อยู่ Appliance");
-    if (role !== "gateway" && !form.leafCode) return ($("formErr").textContent = "ใส่รหัสติดตั้ง Leaf");
-    if (role !== "leaf" && !form.gatewayCode) return ($("formErr").textContent = "ใส่รหัสติดตั้ง Gateway");
+    const form = { roles: [...picked], root: $("root").value.trim(), siteCode: $("siteCode").value.trim(), appliance: $("appliance").value.trim(),
+                   leafCode: $("leafCode").value.trim(), gatewayCode: $("gwCode").value.trim() };
+    if (!picked.size) return ($("formErr").textContent = "เลือกอย่างน้อยหนึ่งอย่าง");
+    if (picked.has("canopy") && (!form.root || !form.siteCode)) return ($("formErr").textContent = "ใส่ที่อยู่ Root และรหัสติดตั้ง Canopy");
+    if (!picked.has("canopy") && !form.appliance) return ($("formErr").textContent = "ใส่ที่อยู่ Appliance");
+    if (picked.has("leaf") && !form.leafCode) return ($("formErr").textContent = "ใส่รหัสติดตั้ง Leaf");
+    if (picked.has("gateway") && !form.gatewayCode) return ($("formErr").textContent = "ใส่รหัสติดตั้ง Gateway");
     $("go").disabled = true; $("progress").hidden = false; $("log").textContent = "";
     const r = await window.floraSetup.install(form);
     if (!r.ok) { $("formErr").textContent = "ติดตั้งไม่สำเร็จ: " + r.error + " — แก้แล้วกดติดตั้งอีกครั้งได้ (รหัสเดิมใช้ซ้ำได้บนเครื่องนี้)"; $("go").disabled = false; return; }
     const rows = [];
+    if (r.site) rows.push(["Canopy", r.site.canopyUrl], ["ผู้ใช้ Canopy ครั้งแรก", `admin / ${r.site.adminPassword}`], ["Appliance", `${r.site.applianceUrl}  (admin / ${r.site.haberAdminPassword})`]);
     if (r.leaf) rows.push(["Leaf", `${r.leaf.label || r.leaf.nodeId} (${r.leaf.nodeId})`], ["ผู้ใช้ครั้งแรก", `admin / ${r.leaf.adminPassword}`]);
     if (r.gateway) rows.push(["Gateway", r.gateway.nodeId], ["หน้า Gateway", `${r.gateway.adminUrl}  (admin / ${r.gateway.adminPassword})`]);
     $("resultKv").innerHTML = rows.map(([k, v]) => `<b>${k}</b><span>${String(v).replace(/[<>&]/g, "")}</span>`).join("");
     $("result").hidden = false; $("result").scrollIntoView({ behavior: "smooth" });
   });
   $("open").addEventListener("click", () => window.floraSetup.openApp());
-  checkDocker();
+  refresh(); checkDocker();
 </script>
 </body>
 </html>

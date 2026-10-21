@@ -1017,9 +1017,10 @@ def windows_installer_page(request: Request):
 .btn{{display:inline-block;background:#2f6f4f;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:600}}
 .warn{{color:#a46a12}} code{{background:#eef2ee;padding:2px 6px;border-radius:5px}} li{{margin:6px 0}}</style></head><body>
 <h1>Flora iCIS สำหรับ Windows</h1>{body}
-<ol><li>ติดตั้ง <b>Rancher Desktop</b> (Container engine: <b>dockerd (moby)</b>) แล้วเปิดค้างไว้</li>
+<ol><li>ติดตั้ง <b>Rancher Desktop</b> (Container engine: <b>dockerd (moby)</b>) แล้วเปิดค้างไว้ —
+ถ้าจะลง <b>Canopy</b> บนเครื่องนี้ ให้เปิด <b>Kubernetes</b> ใน Rancher Desktop ด้วย</li>
 <li>ดับเบิลคลิก <b>Flora iCIS Setup</b> ติดตั้งให้เสร็จ</li>
-<li>เปิดโปรแกรม เลือกหน้าที่ของเครื่อง (Leaf / Leaf + Gateway / Gateway)</li>
+<li>เปิดโปรแกรม เลือกสิ่งที่จะลงบนเครื่องนี้ (Canopy + Appliance / Leaf / Gateway — เลือกได้หลายอย่าง)</li>
 <li>ใส่ที่อยู่ Appliance <code>{esc(here.split('//')[-1])}</code> และรหัสติดตั้งจาก Root แล้วกด <b>ติดตั้ง</b></li></ol>
 </body></html>""")
 

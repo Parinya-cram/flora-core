@@ -255,6 +255,177 @@ async function installGateway({ appliance, code, baseDir, registry: registryOver
   }
 }
 
+// ------------------------------------------------------------------ hospital site (Canopy + appliance) on Rancher Desktop's Kubernetes
+// The same site.yaml as site.sh on Linux. Rancher Desktop runs k3s on its dockerd (moby), so images pulled and tagged
+// with docker are what the cluster runs (pull policy Never) — no registry access from the cluster.
+async function kubectl(args, { input } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = require("child_process").execFile("kubectl", ["--context", "rancher-desktop", ...args],
+      { windowsHide: true, maxBuffer: 64 * 1024 * 1024, timeout: 15 * 60 * 1000 }, (error, stdout, stderr) =>
+        error ? reject(new Error(`kubectl ${args.slice(0, 3).join(" ")}: ${(stderr || stdout || error.message).toString().trim().slice(-600)}`)) : resolve(String(stdout)));
+    if (input !== undefined) { child.stdin.write(input); child.stdin.end(); }
+  });
+}
+
+async function checkKubernetes() {
+  try { await kubectl(["get", "nodes"]); return { ok: true }; }
+  catch { return { ok: false, error: "Turn on Kubernetes in Rancher Desktop (Preferences > Kubernetes), wait until it is running, then try again." }; }
+}
+
+function localIp() {
+  return Object.values(os.networkInterfaces()).flat().find((i) => i && i.family === "IPv4" && !i.internal)?.address || "127.0.0.1";
+}
+
+// A self-signed TLS certificate for this hospital's Canopy, made by the appliance image (python cryptography).
+async function selfSignedCert(image, cn, ip) {
+  const py = `
+import datetime, ipaddress
+from cryptography import x509
+from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, ${JSON.stringify(cn)})])
+now = datetime.datetime.now(datetime.timezone.utc)
+cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
+  .serial_number(x509.random_serial_number()).not_valid_before(now).not_valid_after(now + datetime.timedelta(days=1825))
+  .add_extension(x509.SubjectAlternativeName([x509.IPAddress(ipaddress.ip_address(${JSON.stringify(ip)})), x509.DNSName("localhost")]), False)
+  .sign(key, hashes.SHA256()))
+print(cert.public_bytes(serialization.Encoding.PEM).decode() + key.private_bytes(serialization.Encoding.PEM,
+  serialization.PrivateFormat.TraditionalOpenSSL, serialization.NoEncryption()).decode())`;
+  const out = await run("docker", ["run", "--rm", "--entrypoint", "python", image, "-c", py]);
+  return { cert: out.slice(0, out.indexOf("-----END CERTIFICATE-----") + 25) + "\n", key: out.slice(out.indexOf("-----BEGIN RSA PRIVATE KEY-----")) };
+}
+
+async function installSite({ root, code, ports = { canopy: 9443, haber: 7204, registry: 7205 }, prefix = "flora" }, log) {
+  root = String(root || "").trim().replace(/\/+$/, "");
+  if (!/^https?:\/\//.test(root)) root = `https://${root}`;
+  const ip = localIp();
+  log(`Redeeming the site code at Root (${root})`);
+  const site = await request(`${root}/api/v1/install/redeem`, { method: "POST", body: { code } });
+  const rootReport = (status, error) => request(`${root}/api/v1/tenants/${site.tenant_id}/installs/${site.install_id}/report`, {
+    method: "POST", headers: { authorization: `Bearer ${site.tenant_key}` },
+    body: { status, detail: { hostname: os.hostname(), ip, ...(error ? { error } : {}) } } }).catch(() => {});
+  try {
+    log(`Hospital ${site.tenant_id} — ${site.name}`);
+    if (!(await checkKubernetes()).ok) throw new Error("Kubernetes is not running in Rancher Desktop");
+    const releases = await request(`${root}/api/v1/tenants/${site.tenant_id}/releases`, { headers: { authorization: `Bearer ${site.tenant_key}` } });
+    const rid = releases.bundle.latest.canopy;
+    const rel = releases.bundle.releases.find((r) => r.release_id === rid);
+    const registry = site.registry.replace(/^https?:\/\//, "");
+    await trustRegistry(registry, log);
+    const local = {};
+    for (const key of ["api", "web", "db", "haber", "registry"]) {
+      const image = rel.services[key]; if (!image) throw new Error(`the Canopy release has no ${key} image`);
+      const ref = `${registry}/${image.repository}@${image.digest}`; local[key] = `flora-site/${key}:${rid}`;
+      log(`Pulling ${key}`); await run("docker", ["pull", "-q", ref]); await run("docker", ["tag", ref, local[key]]);
+    }
+    log("Secrets and certificate (kept in this cluster)");
+    for (const ns of [`${prefix}-canopy`, `${prefix}-appliance`]) {
+      await kubectl(["create", "namespace", ns]).catch(() => {});
+      await kubectl(["label", "namespace", ns, `flora/site=${site.tenant_id}`, "--overwrite"]);
+    }
+    const haveSecret = await kubectl(["-n", `${prefix}-canopy`, "get", "secret", "site"]).then(() => true, () => false);
+    if (!haveSecret) {
+      const values = { "db-admin": secret(), "db-app": secret(), "db-view": secret(), "db-sync": secret(), session: secret(),
+        admin: secret(8), "haber-admin": secret(8), sync: secret(), "gateway-token": secret(), "node-token": secret(), "tenant-key": site.tenant_key };
+      const args = Object.entries(values).map(([k, v]) => `--from-literal=${k}=${v}`);
+      for (const ns of [`${prefix}-canopy`, `${prefix}-appliance`]) await kubectl(["-n", ns, "create", "secret", "generic", "site", ...args]);
+    } else for (const ns of [`${prefix}-canopy`, `${prefix}-appliance`])
+      await kubectl(["-n", ns, "patch", "secret", "site", "-p", JSON.stringify({ stringData: { "tenant-key": site.tenant_key } })]);
+    const sec = async (key) => Buffer.from((await kubectl(["-n", `${prefix}-canopy`, "get", "secret", "site", "-o", `jsonpath={.data.${key}}`])).trim(), "base64").toString();
+    if (!(await kubectl(["-n", `${prefix}-canopy`, "get", "secret", "edge-tls"]).then(() => true, () => false))) {
+      const tlsPair = await selfSignedCert(local.haber, site.tenant_id, ip);
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "flora-tls-"));
+      fs.writeFileSync(path.join(tmp, "tls.crt"), tlsPair.cert); fs.writeFileSync(path.join(tmp, "tls.key"), tlsPair.key);
+      await kubectl(["-n", `${prefix}-canopy`, "create", "secret", "tls", "edge-tls", `--cert=${path.join(tmp, "tls.crt")}`, `--key=${path.join(tmp, "tls.key")}`]);
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+    const trust = tls.rootCertificates.join("\n") + "\n" + (site.root_url.startsWith("https:") ? await peerCertificatePem(site.root_url) : "");
+    const trustYaml = await kubectl(["-n", `${prefix}-appliance`, "create", "configmap", "root-trust", "--from-literal=trust.pem=" + trust, "--dry-run=client", "-o", "yaml"]);
+    await kubectl(["apply", "-f", "-"], { input: trustYaml });
+    log("Installing Canopy and the appliance");
+    let yaml = String(await request(`${root}/install/files/site/site.yaml`));
+    const fill = { __P__: prefix, __TENANT__: site.tenant_id, __IP__: ip, __CANOPY_PORT__: ports.canopy, __HABER_PORT__: ports.haber,
+      __REGISTRY_PORT__: ports.registry, __ROOT_API__: site.root_url, __ROOT_PUBLIC_KEY__: site.signing_key.public_raw,
+      __ROOT_REGISTRY__: site.registry, __IMG_API__: local.api, __IMG_WEB__: local.web, __IMG_DB__: local.db,
+      __IMG_HABER__: local.haber, __IMG_REGISTRY__: local.registry };
+    for (const [k, v] of Object.entries(fill)) yaml = yaml.split(k).join(String(v));
+    await kubectl(["apply", "-f", "-"], { input: yaml });
+    for (const d of ["canopy-db", "canopy-api", "sync-api", "canopy-web", "edge"]) {
+      log(`waiting for ${d}…`); await kubectl(["-n", `${prefix}-canopy`, "rollout", "status", `deploy/${d}`, "--timeout=600s"]);
+    }
+    log("Hospital account in Canopy");
+    const account = site.tenant_id.toLowerCase().replace(/-/g, "_").replace(/^([^a-z])/, "h_$1");
+    const owner = `postgresql://flora_admin:${await sec("db-admin")}@canopy-db:5432/flora`;
+    const cli = (cmd) => kubectl(["-n", `${prefix}-canopy`, "exec", "deploy/canopy-api", "-c", "canopy-api", "--", "env",
+      `FLORA_PLATFORM_DATABASE_URL=${owner}`, `FLORA_SYNC_SHARED_SECRET=${secretCache.sync}`, `TENANT=${account}`, `NAME=${site.name}`, "sh", "-c",
+      `export FLORA_DATABASE_URL=postgresql://flora_view:$DB_VIEW@canopy-db:5432/flora; python -m app.cli_accounts ${cmd}`]);
+    const secretCache = { sync: await sec("sync") };
+    if (!(await cli("list").catch(() => "")).split("\n").some((l) => l.startsWith(account + " "))) {
+      await cli('adopt-public "$TENANT" "$NAME"');
+      await kubectl(["-n", `${prefix}-canopy`, "rollout", "restart", "deploy/canopy-api"]);
+      await kubectl(["-n", `${prefix}-canopy`, "rollout", "status", "deploy/canopy-api", "--timeout=300s"]);
+    }
+    log("Appliance: connecting to Root");
+    for (const d of ["haber-registry", "haber"]) await kubectl(["-n", `${prefix}-appliance`, "rollout", "status", `deploy/${d}`, "--timeout=600s"]);
+    const habAuth = { authorization: "Basic " + Buffer.from(`admin:${await sec("haber-admin")}`).toString("base64") };
+    const habUrl = `http://127.0.0.1:${ports.haber}`;
+    let ok = false;
+    for (let i = 0; i < 40 && !ok; i++) {
+      await request(`${habUrl}/api/haber/v1/root/sync`, { method: "POST", headers: habAuth }).catch(() => {});
+      ok = (await request(`${habUrl}/api/haber/v1/overview`, { headers: habAuth }).catch(() => ({})))?.root?.status === "ok";
+      if (!ok) await new Promise((r) => setTimeout(r, 5000));
+    }
+    if (!ok) throw new Error("the appliance cannot reach Root yet");
+    await rootReport("installed");
+    log(`Site ${site.tenant_id} is running`);
+    return { tenantId: site.tenant_id, name: site.name, ip, ports, prefix, canopyUrl: `https://${ip}:${ports.canopy}`,
+      applianceUrl: `http://${ip}:${ports.haber}`, adminPassword: await sec("admin"), haberAdminPassword: await sec("haber-admin") };
+  } catch (error) {
+    await rootReport("failed", error.message);
+    throw error;
+  }
+}
+
+// After a fresh site, approve the newest mirrored Leaf / gateway releases once so machines of this hospital can
+// install right away (only when nothing is approved yet; later rollouts stay a decision in Device Distribution).
+async function approveFirstReleases(siteInfo, components, log) {
+  const habUrl = `http://127.0.0.1:${siteInfo.ports.haber}`;
+  const habAuth = { authorization: "Basic " + Buffer.from(`admin:${siteInfo.haberAdminPassword}`).toString("base64") };
+  for (const component of components) {
+    for (let i = 0; i < 120; i++) {
+      const overview = await request(`${habUrl}/api/haber/v1/overview`, { headers: habAuth }).catch(() => null);
+      const rel = overview && overview.releases;
+      if (rel && rel.approvals && rel.approvals[component]) break;
+      const latest = rel && rel.latest && rel.latest[component];
+      const row = latest && (rel.rows || []).find((r) => r.release_id === latest);
+      const mirror = row && (row.mirror || {}).status;
+      if (latest && mirror === "ready") {
+        await request(`${habUrl}/api/haber/v1/releases/${latest}/approve`, { method: "POST", headers: habAuth });
+        log(`Approved ${latest} for this hospital`); break;
+      }
+      if (latest && mirror !== "mirroring" && i % 6 === 0) await request(`${habUrl}/api/haber/v1/releases/${latest}/mirror`, { method: "POST", headers: habAuth }).catch(() => {});
+      if (i % 6 === 0) log(`waiting for the ${component} release to reach this appliance…`);
+      await new Promise((r) => setTimeout(r, 5000));
+    }
+  }
+}
+
+// Make the site reachable from the LAN: Rancher Desktop publishes ports on this PC's loopback only.
+async function exposeOnLan(ports, log) {
+  if (process.platform !== "win32") return;
+  const lines = [];
+  for (const port of ports) {
+    lines.push(`netsh interface portproxy delete v4tov4 listenport=${port} listenaddress=0.0.0.0 2>$null`);
+    lines.push(`netsh interface portproxy add v4tov4 listenport=${port} listenaddress=0.0.0.0 connectport=${port} connectaddress=127.0.0.1`);
+    lines.push(`New-NetFirewallRule -DisplayName 'Flora iCIS ${port}' -Direction Inbound -Protocol TCP -LocalPort ${port} -Action Allow -ErrorAction SilentlyContinue | Out-Null`);
+  }
+  const script = path.join(os.tmpdir(), "flora-expose.ps1"); fs.writeFileSync(script, lines.join("\r\n"));
+  log("Opening the hospital ports on this PC (Windows asks for administrator permission)");
+  await run("powershell", ["-NoProfile", "-Command", `Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','${script}'`]);
+}
+
 // Bring installed nodes up again after a reboot (containers restart with Docker; this covers a stopped engine).
 async function startInstalled(state, log) {
   for (const node of [state?.leaf, state?.gateway].filter(Boolean)) {
@@ -263,4 +434,5 @@ async function startInstalled(state, log) {
   }
 }
 
-module.exports = { readState, writeState, checkDocker, installLeaf, installGateway, startInstalled, normaliseAppliance };
+module.exports = { readState, writeState, checkDocker, checkKubernetes, installSite, approveFirstReleases, exposeOnLan, localIp,
+  installLeaf, installGateway, startInstalled, normaliseAppliance };
