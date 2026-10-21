@@ -116,6 +116,12 @@ def apps(repo: Path, out: Path) -> None:
              apps / "device_medical" / "device_medical_service")
 
 
+def gateway_files(repo: Path, out: Path) -> None:
+    (out / "gateway" / "db").mkdir(parents=True)
+    for sql in sorted((repo / "flora-gateway/db").glob("*.sql")):
+        shutil.copy(sql, out / "gateway" / "db" / sql.name)
+
+
 def postgres(out: Path) -> None:
     keep = ("pgsql/bin/", "pgsql/lib/", "pgsql/share/")
     skip = ("pgAdmin", "/doc/", "/include/", "/symbols/", "/StackBuilder")
@@ -160,7 +166,7 @@ def main() -> None:
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
-    for step in (python_runtime, apps, db_scripts, ocr):
+    for step in (python_runtime, apps, db_scripts, gateway_files, ocr):
         print(f"== {step.__name__}", flush=True)
         step(repo, out)
     print("== postgres", flush=True); postgres(out)

@@ -61,6 +61,13 @@ class Supervisor {
     };
     launch();
   }
+  stop(name) {                                   // stop one process for good (until started again)
+    const child = this.children.get(name);
+    if (!child) return;
+    this.children.delete(name);
+    child.removeAllListeners("exit");
+    try { child.kill(); } catch {}
+  }
   async stopAll() {
     this.stopping = true;
     for (const child of this.children.values()) { try { child.kill(); } catch {} }
@@ -74,7 +81,7 @@ class Supervisor {
 async function initDatabase(dir, port, passwords, log) {
   const data = path.join(dir, "pgdata");
   if (fs.existsSync(path.join(data, "PG_VERSION"))) return false;
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(path.join(dir, "logs"), { recursive: true });
   const pwfile = path.join(dir, ".pw"); fs.writeFileSync(pwfile, passwords.FLORA_DB_ADMIN_PASSWORD);
   log("Creating the database (first start)");
   await runTool(PG_BIN("initdb"), ["-D", data, "-U", "flora_admin", `--pwfile=${pwfile}`, "-E", "UTF8", "--locale=C", "-A", "scram-sha-256"]);

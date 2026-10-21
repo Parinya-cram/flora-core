@@ -193,6 +193,70 @@ async function installLeafNative({ appliance, code, baseDir }, log, supervisor) 
   }
 }
 
+const canopyNative = require("../native/canopy.cjs");
+const gatewayNative = require("../native/gateway.cjs");
+
+// Canopy + appliance as Windows processes (canopy.cjs): redeem the Root site code, generate every secret here.
+async function installSiteNative({ root, code, baseDir }, log, supervisor) {
+  root = String(root || "").trim().replace(/\/+$/, "");
+  if (!/^https?:\/\//.test(root)) root = `https://${root}`;
+  const ip = localIp();
+  log(`Redeeming the site code at Root (${root})`);
+  const site = await request(`${root}/api/v1/install/redeem`, { method: "POST", body: { code } });
+  const rootReport = (status, error) => request(`${root}/api/v1/tenants/${site.tenant_id}/installs/${site.install_id}/report`, {
+    method: "POST", headers: { authorization: `Bearer ${site.tenant_key}` },
+    body: { status, detail: { hostname: os.hostname(), ip, runtime: "windows", ...(error ? { error } : {}) } } }).catch(() => {});
+  try {
+    log(`Hospital ${site.tenant_id} — ${site.name}`);
+    const s = canopyNative.prepareCanopy(site, path.join(baseDir, "native"), ip);
+    log("Trusting Root's certificate");
+    fs.writeFileSync(path.join(s.dir, "root-trust.pem"), tls.rootCertificates.join("\n") + "\n"
+      + (site.root_url.startsWith("https:") ? await peerCertificatePem(site.root_url) : ""));
+    log("Starting Canopy and the appliance (database, API, sync, appliance, HTTPS)");
+    const urls = await canopyNative.startCanopy(s, supervisor, log);
+    log("Appliance: connecting to Root");
+    const ports = canopyNative.PORTS;
+    const habUrl = `http://127.0.0.1:${ports.haber}`;
+    const habAuth = { authorization: "Basic " + Buffer.from(`admin:${s.haberAdmin}`).toString("base64") };
+    let ok = false;
+    for (let i = 0; i < 40 && !ok; i++) {
+      await request(`${habUrl}/api/haber/v1/root/sync`, { method: "POST", headers: habAuth }).catch(() => {});
+      ok = (await request(`${habUrl}/api/haber/v1/overview`, { headers: habAuth }).catch(() => ({})))?.root?.status === "ok";
+      if (!ok) await new Promise((r) => setTimeout(r, 5000));
+    }
+    if (!ok) throw new Error("the appliance cannot reach Root yet");
+    await rootReport("installed");
+    log(`Site ${site.tenant_id} is running`);
+    return { native: true, dir: s.dir, tenantId: site.tenant_id, name: site.name, ip,
+      ports: { canopy: ports.canopy, haber: ports.haber }, ...urls, adminPassword: s.admin, haberAdminPassword: s.haberAdmin };
+  } catch (error) {
+    await rootReport("failed", error.message);
+    throw error;
+  }
+}
+
+// The gateway as Windows processes (gateway.cjs); COM ports work directly, no Docker.
+async function installGatewayNative({ appliance, code, baseDir }, log, supervisor) {
+  log("Claiming this machine as a gateway");
+  const node = await request(`${appliance}/api/haber/v1/install/claim`, { method: "POST", body: { code, kind: "gateway", hostname: os.hostname() } });
+  try {
+    const get = (name) => request(`${appliance}/install/files/gateway/${name}`);
+    const toml = String(await get("gateway.toml")).replace("__GATEWAY_ID__", node.node_id).replace(/brokers = "[^"]*"/, 'brokers = "127.0.0.1:7414"');
+    const files = { "config/gateway.toml": toml, "config/instances.json": await get("instances.json"), "kong/kong.yaml": await get("kong.yaml") };
+    for (const [name, content] of Object.entries(files)) files[name] = typeof content === "string" ? content : JSON.stringify(content, null, 2);
+    const s = await gatewayNative.prepareGateway(node, appliance, path.join(baseDir, "native"), files);
+    s.ip = localIp();
+    log("Starting the gateway (database, broker, controllers, service)");
+    await gatewayNative.startGateway(s, supervisor, log);
+    await report(appliance, code, "installed");
+    log(`Gateway ${node.node_id} is running`);
+    return { native: true, nodeId: node.node_id, dir: s.dir, adminPassword: s.adminPassword, adminUrl: "http://127.0.0.1:7400" };
+  } catch (error) {
+    await report(appliance, code, "failed", error.message);
+    throw error;
+  }
+}
+
 // ------------------------------------------------------------------ Leaf
 async function installLeaf({ appliance, code, baseDir, registry: registryOverride }, log) {
   log("Claiming this machine with the appliance");
@@ -441,12 +505,12 @@ async function approveFirstReleases(siteInfo, components, log) {
 }
 
 // Make the site reachable from the LAN: Rancher Desktop publishes ports on this PC's loopback only.
-async function exposeOnLan(ports, log) {
+async function exposeOnLan(ports, log, { proxy = true } = {}) {
   if (process.platform !== "win32") return;
   const lines = [];
   for (const port of ports) {
-    lines.push(`netsh interface portproxy delete v4tov4 listenport=${port} listenaddress=0.0.0.0 2>$null`);
-    lines.push(`netsh interface portproxy add v4tov4 listenport=${port} listenaddress=0.0.0.0 connectport=${port} connectaddress=127.0.0.1`);
+    if (proxy) lines.push(`netsh interface portproxy delete v4tov4 listenport=${port} listenaddress=0.0.0.0 2>$null`);
+    if (proxy) lines.push(`netsh interface portproxy add v4tov4 listenport=${port} listenaddress=0.0.0.0 connectport=${port} connectaddress=127.0.0.1`);
     lines.push(`New-NetFirewallRule -DisplayName 'Flora iCIS ${port}' -Direction Inbound -Protocol TCP -LocalPort ${port} -Action Allow -ErrorAction SilentlyContinue | Out-Null`);
   }
   const script = path.join(os.tmpdir(), "flora-expose.ps1"); fs.writeFileSync(script, lines.join("\r\n"));
@@ -456,6 +520,11 @@ async function exposeOnLan(ports, log) {
 
 // Bring installed nodes up again after a reboot (containers restart with Docker; this covers a stopped engine).
 async function startInstalled(state, log, supervisor) {
+  if (state?.site?.native) await canopyNative.startCanopy(JSON.parse(fs.readFileSync(path.join(state.site.dir, "site.json"), "utf8")), supervisor, log);
+  if (state?.gateway?.native) {
+    const settings = JSON.parse(fs.readFileSync(path.join(state.gateway.dir, "gateway.json"), "utf8"));
+    await gatewayNative.startGateway({ ...settings, ip: localIp() }, supervisor, log);
+  }
   if (state?.leaf?.native) {
     const settings = JSON.parse(fs.readFileSync(path.join(state.leaf.dir, "leaf.json"), "utf8"));
     await native.startLeaf(settings, supervisor, log);
@@ -466,5 +535,11 @@ async function startInstalled(state, log, supervisor) {
   }
 }
 
-module.exports = { readState, writeState, checkDocker, checkKubernetes, nativeAvailable, installLeafNative, native, installSite, approveFirstReleases, exposeOnLan, localIp,
+async function stopNative(state) {
+  if (state?.leaf?.native) await native.stopLeaf({ dir: state.leaf.dir });
+  if (state?.gateway?.native) await gatewayNative.stopGateway({ dir: state.gateway.dir });
+  if (state?.site?.native) await canopyNative.stopCanopy({ dir: state.site.dir });
+}
+
+module.exports = { readState, installSiteNative, installGatewayNative, stopNative, writeState, checkDocker, checkKubernetes, nativeAvailable, installLeafNative, native, installSite, approveFirstReleases, exposeOnLan, localIp,
   installLeaf, installGateway, startInstalled, normaliseAppliance };

@@ -85,7 +85,7 @@ function applyState(state) {
 function superviseSerialController(state) {
   const gw = state && state.gateway;
   const exe = path.join(process.resourcesPath || "", "serial-controller.exe");
-  if (!gw || process.platform !== "win32" || !fs.existsSync(exe) || serialController) return;
+  if (!gw || gw.native || process.platform !== "win32" || !fs.existsSync(exe) || serialController) return;
   const env = fs.readFileSync(path.join(gw.dir, ".env"), "utf8");
   const dbPassword = (env.match(/^FLORA_GATEWAY_DB_PASSWORD=(.*)$/m) || [])[1] || "";
   const logs = path.join(gw.dir, "logs"); fs.mkdirSync(logs, { recursive: true });
@@ -126,11 +126,17 @@ ipcMain.handle("flora:setup:install", async (_event, form) => {
     let appliance = null;
     if (roles.has("canopy")) {
       // Canopy + appliance first; Leaf / gateway on this PC then install from that new appliance.
-      state.site = await installer.installSite({ root: form.root, code: form.siteCode }, setupLog);
-      await installer.exposeOnLan(Object.values(state.site.ports), setupLog);
-      appliance = state.site.applianceUrl;
-      const first = [roles.has("leaf") && "leaf", roles.has("gateway") && "gateway"].filter(Boolean);
-      if (first.length) await installer.approveFirstReleases(state.site, first, setupLog);
+      if (installer.nativeAvailable()) {
+        state.site = await installer.installSiteNative({ root: form.root, code: form.siteCode, baseDir }, setupLog, nativeSupervisor);
+        await installer.exposeOnLan([...Object.values(state.site.ports), ...(roles.has("gateway") ? [7410] : [])], setupLog, { proxy: false });
+        appliance = `http://127.0.0.1:${state.site.ports.haber}`;
+      } else {
+        state.site = await installer.installSite({ root: form.root, code: form.siteCode }, setupLog);
+        await installer.exposeOnLan(Object.values(state.site.ports), setupLog);
+        appliance = state.site.applianceUrl;
+        const first = [roles.has("leaf") && "leaf", roles.has("gateway") && "gateway"].filter(Boolean);
+        if (first.length) await installer.approveFirstReleases(state.site, first, setupLog);
+      }
     } else if (roles.has("leaf") || roles.has("gateway")) {
       appliance = installer.normaliseAppliance(form.appliance);
     }
@@ -138,7 +144,11 @@ ipcMain.handle("flora:setup:install", async (_event, form) => {
     if (roles.has("leaf")) state.leaf = installer.nativeAvailable()
       ? await installer.installLeafNative({ appliance, code: form.leafCode, baseDir }, setupLog, nativeSupervisor)
       : await installer.installLeaf({ appliance, code: form.leafCode, baseDir }, setupLog);
-    if (roles.has("gateway")) state.gateway = await installer.installGateway({ appliance, code: form.gatewayCode, baseDir }, setupLog);
+    if (roles.has("gateway")) state.gateway = installer.nativeAvailable()
+      ? await installer.installGatewayNative({ appliance, code: form.gatewayCode, baseDir }, setupLog, nativeSupervisor)
+      : await installer.installGateway({ appliance, code: form.gatewayCode, baseDir }, setupLog);
+    if (!roles.has("canopy") && roles.has("gateway") && state.gateway.native)
+      await installer.exposeOnLan([7410], setupLog, { proxy: false });
     installer.writeState(dataDir(), state);
     if (process.platform === "win32") app.setLoginItemSettings({ openAtLogin: true });
     return { ok: true, site: state.site, leaf: state.leaf, gateway: state.gateway };
@@ -232,10 +242,10 @@ app.on("second-instance", () => { if (mainWindow) { if (mainWindow.isMinimized()
 app.on("before-quit", async (event) => {
   quitting = true; if (serialController) serialController.kill();
   const state = nodeState();
-  if (state?.leaf?.native && !nativeSupervisor.stopping) {          // stop the Leaf cleanly (database last)
+  if ((state?.leaf?.native || state?.gateway?.native || state?.site?.native) && !nativeSupervisor.stopping) {   // databases last
     event.preventDefault();
     await nativeSupervisor.stopAll();
-    await installer.native.stopLeaf({ dir: state.leaf.dir });
+    await installer.stopNative(state);
     app.quit();
   }
 });

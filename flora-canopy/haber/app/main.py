@@ -286,6 +286,10 @@ async def mirror_releases() -> None:
     if not pending:
         STATE["mirror"].update(error=None)   # everything mirrored; clear any stale error from a withdrawn release
         return
+    if not REGISTRY_URL:   # no registry here (Windows site): machines take images straight from Root's registry
+        for release in pending:
+            set_mirror(release, "ready")
+        return
     mirror = Mirror(ROOT_REGISTRY_URL or manifest["registry"], REGISTRY_URL)
     STATE["mirror"].update(status="running", error=None)
     try:
@@ -991,7 +995,10 @@ def windows_installer_path(release: dict[str, Any]) -> Path:
     target = cache / f"{image['digest'].split(':')[-1]}.exe"
     if target.exists():
         return target
-    base = f"{REGISTRY_URL.rstrip('/')}/v2/{image['repository']}"
+    registry = REGISTRY_URL or ROOT_REGISTRY_URL or (releases_manifest() or {}).get("registry", "")
+    if "://" not in registry:
+        registry = f"http://{registry}"
+    base = f"{registry.rstrip('/')}/v2/{image['repository']}"
     with httpx.Client(timeout=120) as client:
         manifest = client.get(f"{base}/manifests/{image['digest']}", headers={"accept": MANIFEST_TYPES}).raise_for_status().json()
         if "manifests" in manifest:   # an index: take the one platform image

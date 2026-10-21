@@ -8,23 +8,30 @@ TAG="$1"; VERSION="1.0.${CI_PIPELINE_IID:-0}"
 ROOT_DIR=$(pwd); UID_GID="$(id -u):$(id -g)"
 mkdir -p build-win
 
-echo "== serial-controller.exe (COM ports on Windows)"
+echo "== gateway programs for Windows (serial-controller.exe also serves COM ports for a Docker gateway)"
 sudo -n nerdctl run --rm -v "$ROOT_DIR/flora-gateway/rust:/src:ro" -v "$ROOT_DIR/build-win:/out" \
   -v flora-cargo-registry:/usr/local/cargo/registry -v flora-cargo-target-win:/target docker.io/library/rust:1-bookworm sh -c "
     set -e; apt-get update -qq >/dev/null; apt-get install -y -qq gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 cmake >/dev/null
     rustup target add x86_64-pc-windows-gnu >/dev/null
-    cd /src && CARGO_TARGET_DIR=/target cargo build --release --locked -p serial-controller --target x86_64-pc-windows-gnu
-    cp /target/x86_64-pc-windows-gnu/release/serial-controller.exe /out/ && chown $UID_GID /out/serial-controller.exe"
+    cd /src && CARGO_TARGET_DIR=/target cargo build --release --locked --target x86_64-pc-windows-gnu \
+      -p serial-controller -p feeder-controller -p webhook-controller -p socket-controller -p collector -p server -p publisher
+    mkdir -p /out/gateway-bin
+    for b in serial-controller feeder-controller webhook-controller socket-controller collector server publisher; do
+      cp /target/x86_64-pc-windows-gnu/release/\$b.exe /out/gateway-bin/; done
+    cp /out/gateway-bin/serial-controller.exe /out/ && chown -R $UID_GID /out/serial-controller.exe /out/gateway-bin"
 
 echo "== Windows runtime (Python + Flora bytecode, PostgreSQL, Java + Kafka) — no Docker needed on the PC"
 sudo -n nerdctl run --rm -v "$ROOT_DIR:/repo:ro" -v "$ROOT_DIR/build-win:/out" -v flora-win-runtime-cache:/cache \
   docker.io/library/python:3.13-slim sh -c "python3 /repo/scripts/windows/build_runtime.py /repo /out/runtime && chown -R $UID_GID /out/runtime"
+mkdir -p build-win/runtime/gateway && mv build-win/gateway-bin build-win/runtime/gateway/bin
 
 echo "== Leaf screens + Electron installer (wine)"
 sudo -n nerdctl run --rm -v "$ROOT_DIR:/project" -w /project \
   -v flora-electron-cache:/root/.cache docker.io/electronuserland/builder:wine sh -c "
     set -e; npm ci --no-audit --no-fund >/dev/null
-    cd frontend && npm ci --no-audit --no-fund >/dev/null && VITE_FLORA_SURFACE=leaf npm run build >/dev/null && cd ..
+    cd frontend && npm ci --no-audit --no-fund >/dev/null
+    VITE_FLORA_SURFACE=canopy npx vite build --outDir ../build-win/runtime/web/canopy --emptyOutDir >/dev/null
+    VITE_FLORA_SURFACE=leaf npm run build >/dev/null && cd ..
     npx electron-builder --win --x64 --publish never -c.extraMetadata.version=$VERSION
     chown -R $UID_GID dist-electron node_modules frontend/node_modules frontend/dist build-win"
 
