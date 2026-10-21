@@ -13,7 +13,8 @@ sudo -n nerdctl run --rm -v "$ROOT_DIR/flora-gateway/rust:/src:ro" -v "$ROOT_DIR
   -v flora-cargo-registry:/usr/local/cargo/registry -v flora-cargo-target-win:/target docker.io/library/rust:1-bookworm sh -c "
     set -e; apt-get update -qq >/dev/null; apt-get install -y -qq gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 cmake >/dev/null
     rustup target add x86_64-pc-windows-gnu >/dev/null
-    cd /src && CARGO_TARGET_DIR=/target cargo build --release --locked --target x86_64-pc-windows-gnu \
+    # librdkafka's Windows SASL code needs the SSPI library (secur32) at link time.
+    cd /src && RUSTFLAGS='-C link-arg=-lsecur32 -C link-arg=-lcrypt32' CARGO_TARGET_DIR=/target cargo build --release --locked --target x86_64-pc-windows-gnu \
       -p serial-controller -p feeder-controller -p webhook-controller -p socket-controller -p collector -p server -p publisher
     mkdir -p /out/gateway-bin
     for b in serial-controller feeder-controller webhook-controller socket-controller collector server publisher; do
