@@ -220,8 +220,10 @@ windows-installer:
     TAG: $CI_COMMIT_SHORT_SHA
   script:
     - sh scripts/windows/build-installer.sh "$TAG"
-    - python3 flora-root/scripts/publish_k8s_releases.py "$TAG" leaf
+    # The deploy job already published leaf 1.0.N without the installer; releases are immutable, so this is 1.0.N.1.
+    - RELEASE_VERSION="1.0.${CI_PIPELINE_IID}.1" python3 flora-root/scripts/publish_k8s_releases.py "$TAG" leaf
   artifacts:
+    when: always
     paths: [dist-electron/Flora-iCIS-Setup-*.exe]
     expire_in: 30 days
   rules:
