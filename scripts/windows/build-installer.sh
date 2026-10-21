@@ -11,7 +11,7 @@ mkdir -p build-win
 echo "== serial-controller.exe (COM ports on Windows)"
 sudo -n nerdctl run --rm -v "$ROOT_DIR/flora-gateway/rust:/src:ro" -v "$ROOT_DIR/build-win:/out" \
   -v flora-cargo-registry:/usr/local/cargo/registry -v flora-cargo-target-win:/target docker.io/library/rust:1-bookworm sh -c "
-    set -e; apt-get update -qq >/dev/null; apt-get install -y -qq gcc-mingw-w64-x86-64 >/dev/null
+    set -e; apt-get update -qq >/dev/null; apt-get install -y -qq gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 cmake >/dev/null
     rustup target add x86_64-pc-windows-gnu >/dev/null
     cd /src && CARGO_TARGET_DIR=/target cargo build --release --locked -p serial-controller --target x86_64-pc-windows-gnu
     cp /target/x86_64-pc-windows-gnu/release/serial-controller.exe /out/ && chown $UID_GID /out/serial-controller.exe"
