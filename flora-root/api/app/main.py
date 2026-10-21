@@ -431,12 +431,26 @@ def install_doc(row: dict[str, Any]) -> dict[str, Any]:
                                       "created_at", "created_by", "expires_at", "updated_at", "detail")} | {"status": status}
 
 
-def install_commands(kind: str, code: str, root_url: str) -> dict[str, str]:
+ROOT_TLS_SELF_SIGNED = os.getenv("ROOT_TLS_SELF_SIGNED", "true").lower() == "true"
+
+
+def appliance_url(tenant_id: str) -> str:
+    """The hospital appliance as its LAN machines reach it (reported in its heartbeat)."""
+    with pool.connection() as connection:
+        row = connection.execute("SELECT usage FROM root_checkin WHERE tenant_id=%s", (tenant_id,)).fetchone()
+    return ((row or {}).get("usage") or {}).get("appliance_url") or "http://<appliance>:7204"
+
+
+def install_commands(kind: str, code: str, root_url: str, tenant_id: str) -> dict[str, str]:
     if kind == "site":
-        return {"run_on": "the hospital's site server (it needs internet to reach Root)",
-                "command": f"curl -fsSL {root_url}/install/site.sh | sudo sh -s -- --root {root_url} --code {code}"}
+        insecure = ROOT_TLS_SELF_SIGNED and root_url.startswith("https:")
+        return {"run_on": "the hospital's main server, Linux (it needs internet to reach Root)",
+                "command": f"curl -fsSL{'k' if insecure else ''} {root_url}/install/site.sh | sudo sh -s -- --root {root_url}"
+                           f"{' --root-insecure' if insecure else ''} --code {code}"}
+    appliance = appliance_url(tenant_id)
     return {"run_on": f"the new {kind} machine on the hospital LAN (no internet needed; it installs from the appliance)",
-            "command": f"curl -fsSL http://<appliance>:7204/install/{kind}.sh | sudo sh -s -- --code {code}"}
+            "command": f"curl -fsSL {appliance}/install/{kind}.sh | sudo sh -s -- --code {code}",
+            "windows": f"{appliance}/install/windows"}
 
 
 @app.post("/api/v1/tenants/{tenant_id}/installs", dependencies=[Depends(require_admin)], status_code=201)
@@ -462,7 +476,7 @@ def create_install(tenant_id: str, body: InstallIn, request: Request):
                {"install_id": install_id, "kind": body.kind, "node_id": body.node_id})
     root_url = ROOT_PUBLIC_URL or str(request.base_url).rstrip("/")
     # The code is shown once; Root keeps only its hash.
-    return {"install_id": install_id, "code": code, **install_commands(body.kind, code, root_url)}
+    return {"install_id": install_id, "code": code, **install_commands(body.kind, code, root_url, tenant_id)}
 
 
 @app.get("/api/v1/tenants/{tenant_id}/installs")

@@ -63,3 +63,4 @@ backup/
 /*.pptx
 # Step report of scripts/test-form-flow.sh
 e2e-form-flow.json
+build-win/

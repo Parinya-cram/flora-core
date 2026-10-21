@@ -248,6 +248,7 @@ spec:
             - { name: HABER_ADMIN_PASSWORD, valueFrom: { secretKeyRef: { name: site, key: haber-admin } } }
             - { name: FLORA_CANOPY_SYNC_URL, value: "http://sync-api.__P__-canopy.svc.cluster.local:8000" }
             - { name: FLORA_CANOPY_SYNC_PUBLIC_URL, value: "https://__IP__:__CANOPY_PORT__" }
+            - { name: FLORA_APPLIANCE_PUBLIC_URL, value: "http://__IP__:__HABER_PORT__" }
             - { name: FLORA_SYNC_SHARED_SECRET, valueFrom: { secretKeyRef: { name: site, key: sync } } }
             - { name: HABER_REGISTRY_URL, value: "http://haber-registry:5000" }
             - { name: HABER_REGISTRY_PUBLIC, value: "__IP__:__REGISTRY_PORT__" }

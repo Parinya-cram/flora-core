@@ -93,6 +93,7 @@ spec:
             - { name: FLORA_SYNC_SHARED_SECRET, value: "admin" }
             - { name: HABER_REGISTRY_URL, value: "http://haber-registry:5000" }
             - { name: HABER_REGISTRY_PUBLIC, value: "172.22.19.81:7205" }
+            - { name: FLORA_APPLIANCE_PUBLIC_URL, value: "http://172.22.19.81:7204" }   # as LAN machines reach this appliance
             - { name: HABER_ROOT_SYNC_SEC, value: "15" }
             - { name: HABER_DB_PATH, value: "/data/haber.db" }
           ports:

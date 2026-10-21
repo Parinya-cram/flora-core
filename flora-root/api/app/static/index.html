@@ -527,8 +527,8 @@ function renderInstalls() {
       <div class="note" style="flex:1 0 100%">${esc(INSTALL_TEXT[installForm].note)}</div></form>` : "";
   const result = installResult ? `<div class="once"><b>Install code for ${esc(installResult.node_id || "the site server")}</b> — shown once, copy it now.
       <div style="margin:8px 0"><code class="cmd">${esc(installResult.code)}</code></div>
-      <div class="note">Run on ${esc(installResult.run_on)}:</div><code class="cmd">${esc(installResult.command)}</code>
-      <div class="note" style="margin-top:6px">The installer behind this command is the next build step; the code is already valid and tracked here.</div>
+      <div class="note">Linux — run on ${esc(installResult.run_on)}:</div><code class="cmd">${esc(installResult.command)}</code>
+      ${installResult.windows ? `<div class="note" style="margin-top:10px">Windows — open <a href="${esc(installResult.windows)}" target="_blank" style="color:var(--accent)">${esc(installResult.windows)}</a> on that PC, download <b>Flora iCIS Setup</b>, install, then enter the appliance address and this code.</div>` : ""}
       <p style="margin:8px 0 0"><button type="button" onclick="navigator.clipboard.writeText(installResult.command)">Copy command</button>
       <button type="button" onclick="installResult=null;renderInstalls()">Done</button></p></div>` : "";
   box.innerHTML = `<div class="inst"><h3>Machines & installs</h3>

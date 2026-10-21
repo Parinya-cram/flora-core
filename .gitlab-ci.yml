@@ -208,3 +208,25 @@ site-install-test:
     - sh scripts/install-test/site.sh
   rules:
     - if: $SITE_TEST
+
+# Windows installer "Flora iCIS Setup" (Leaf / Leaf + gateway, Electron): built on this runner without Windows
+# (cross-compiled serial-controller.exe + electron-builder under wine), then the Leaf release is republished
+# with it so hospital PCs download it from their appliance. Only when the desktop app or its parts change.
+windows-installer:
+  stage: deploy
+  tags: [flora-k8s]
+  needs: [deploy-k8s]
+  variables:
+    TAG: $CI_COMMIT_SHORT_SHA
+  script:
+    - sh scripts/windows/build-installer.sh "$TAG"
+    - python3 flora-root/scripts/publish_k8s_releases.py "$TAG" leaf
+  artifacts:
+    paths: [dist-electron/Flora-iCIS-Setup-*.exe]
+    expire_in: 30 days
+  rules:
+    - if: $SITE_TEST
+      when: never
+    - if: $CI_COMMIT_BRANCH == "device-distribution" && $BUILD_WINDOWS
+    - if: $CI_COMMIT_BRANCH == "device-distribution"
+      changes: [electron/**/*, frontend/**/*, package.json, flora-gateway/rust/**/*, scripts/windows/**/*]

@@ -17,6 +17,9 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import html as _html
+import io
+import tarfile
 import hmac
 import json
 import logging
@@ -31,7 +34,7 @@ import httpx
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from . import basic_auth
@@ -55,6 +58,8 @@ CANOPY_SYNC_URL = os.getenv("FLORA_CANOPY_SYNC_URL", "").rstrip("/")
 SYNC_SECRET = os.getenv("FLORA_SYNC_SHARED_SECRET", "")
 # Canopy sync URL as a Leaf on the hospital LAN reaches it (handed to new Leafs at install).
 CANOPY_SYNC_PUBLIC = os.getenv("FLORA_CANOPY_SYNC_PUBLIC_URL", "").rstrip("/")
+# This appliance as Leafs / gateways on the LAN reach it (shown in Root's install commands).
+APPLIANCE_PUBLIC = os.getenv("FLORA_APPLIANCE_PUBLIC_URL", "").rstrip("/")
 SYNC_INTERVAL = int(os.getenv("HABER_ROOT_SYNC_SEC", "20"))
 DB_PATH = os.getenv("HABER_DB_PATH", "/data/haber.db")
 # Config that an admin can change at runtime from the Settings UI. The env value above is the
@@ -369,6 +374,7 @@ def usage() -> dict[str, Any]:
                     for d in (gateway.get("devices") or [])],
     } for gateway in known]
     return {"leaves": len(leaves), "gateways": len(known), "gateway_devices": devices,
+            "appliance_url": APPLIANCE_PUBLIC or f"http://{REGISTRY_PUBLIC.split(':')[0]}:7204",
             "leaf_ids": [leaf["leaf_id"] for leaf in leaves],
             "leaf_detail": [{key: leaf.get(key) for key in ("leaf_id", "name", "ward_key", "ward", "room", "bed", "last_seen")}
                             for leaf in leaves],
@@ -394,7 +400,7 @@ app = FastAPI(title="Flora Canopy Haber", lifespan=lifespan)
 basic_auth.install(app, "Canopy Haber", "HABER", [
     r"/health", r"/api/haber/v1/gateways/[^/]+/(checkin|alerts|activity)",  # gateways, token auth
     r"/api/haber/v1/root-keys", r"/api/haber/v1/nodes/[^/]+/(desired|report)",  # flora-updater, token auth
-    r"/install/(leaf|gateway)\.sh", r"/install/files/[a-z]+/[A-Za-z0-9._-]+", r"/api/haber/v1/install/(claim|report)",   # new LAN machines, one-time code
+    r"/install/(leaf|gateway)\.sh", r"/install/windows(/[A-Za-z0-9._-]+)?", r"/install/files/[a-z]+/[A-Za-z0-9._-]+", r"/api/haber/v1/install/(claim|report)",   # new LAN machines, one-time code
 ])
 
 
@@ -938,8 +944,8 @@ def install_script(kind: str, request: Request):
                              media_type="text/x-shellscript")
 
 
-INSTALL_FILES = {"leaf": {"compose.yaml", "https.conf.template"},
-                 "gateway": {"compose.yaml", "gateway.toml", "instances.json", "kong.yaml", "nginx.conf",
+INSTALL_FILES = {"leaf": {"compose.yaml", "compose.desktop.yaml", "https.conf.template"},
+                 "gateway": {"compose.yaml", "compose.desktop.yaml", "gateway.toml", "instances.json", "kong.yaml", "nginx.conf",
                              "0001-gateway.sql", "0002-device-measurements.sql"}}
 
 
@@ -949,6 +955,82 @@ def install_file(kind: str, name: str):
     if name not in INSTALL_FILES.get(kind, set()):
         raise HTTPException(404, "no such file")
     return PlainTextResponse((Path(__file__).parent / "install" / kind / name).read_text())
+
+
+esc = lambda value: _html.escape(str(value))
+
+# ------------------------------------------------------------------ Windows installer (Flora iCIS Setup.exe)
+# CI wraps the installer in a one-file image that rides along with the Leaf release (service "windows"), so it
+# is mirrored here with everything else and hospital PCs download it from this appliance, without internet.
+
+WINDOWS_FILE = "Flora-iCIS-Setup.exe"
+MANIFEST_TYPES = ", ".join(["application/vnd.oci.image.index.v1+json", "application/vnd.docker.distribution.manifest.list.v2+json",
+                            "application/vnd.oci.image.manifest.v1+json", "application/vnd.docker.distribution.manifest.v2+json"])
+
+
+def windows_release() -> dict[str, Any] | None:
+    """The approved Leaf release when it carries the installer, else the newest mirrored one that does."""
+    manifest = releases_manifest() or {}
+    ready = {rid for rid, row in mirror_rows().items() if row.get("status") == "ready"}
+    with_windows = [r for r in manifest.get("releases") or [] if r.get("component") == "leaf"
+                    and "windows" in (r.get("services") or {}) and r["release_id"] in ready]
+    approved = approved_release("leaf")
+    for release in with_windows:
+        if approved and release["release_id"] == approved.get("release_id"):
+            return release
+    return with_windows[0] if with_windows else None
+
+
+def windows_installer_path(release: dict[str, Any]) -> Path:
+    image = release["services"]["windows"]
+    cache = Path(DB_PATH).parent / "cache"; cache.mkdir(parents=True, exist_ok=True)
+    target = cache / f"{image['digest'].split(':')[-1]}.exe"
+    if target.exists():
+        return target
+    base = f"{REGISTRY_URL.rstrip('/')}/v2/{image['repository']}"
+    with httpx.Client(timeout=120) as client:
+        manifest = client.get(f"{base}/manifests/{image['digest']}", headers={"accept": MANIFEST_TYPES}).raise_for_status().json()
+        if "manifests" in manifest:   # an index: take the one platform image
+            entry = next((m for m in manifest["manifests"] if (m.get("platform") or {}).get("os") != "unknown"), manifest["manifests"][0])
+            manifest = client.get(f"{base}/manifests/{entry['digest']}", headers={"accept": MANIFEST_TYPES}).raise_for_status().json()
+        for layer in reversed(manifest["layers"]):
+            blob = client.get(f"{base}/blobs/{layer['digest']}", follow_redirects=True).raise_for_status().content
+            with tarfile.open(fileobj=io.BytesIO(blob), mode="r:*") as archive:
+                member = next((m for m in archive.getmembers() if m.name.lstrip("./") == WINDOWS_FILE), None)
+                if member:
+                    tmp = target.with_suffix(".tmp")
+                    tmp.write_bytes(archive.extractfile(member).read())
+                    tmp.replace(target)
+                    return target
+    raise HTTPException(500, "the installer image holds no installer")
+
+
+@app.get("/install/windows")
+def windows_installer_page(request: Request):
+    """A plain page for the hospital PC: download the installer, then the steps."""
+    release = windows_release()
+    here = str(request.base_url).rstrip("/")
+    body = (f'<p><a class="btn" href="/install/windows/{WINDOWS_FILE}">Download Flora iCIS Setup ({esc(release["version"])})</a></p>'
+            if release else '<p class="warn">No Leaf release with the Windows installer is mirrored on this appliance yet.</p>')
+    return HTMLResponse(f"""<!doctype html><html lang="th"><head><meta charset="utf-8"><title>Flora iCIS · Windows</title>
+<style>body{{font:15px/1.6 'Segoe UI',system-ui,sans-serif;max-width:720px;margin:40px auto;padding:0 20px;color:#1d2621}}
+.btn{{display:inline-block;background:#2f6f4f;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:600}}
+.warn{{color:#a46a12}} code{{background:#eef2ee;padding:2px 6px;border-radius:5px}} li{{margin:6px 0}}</style></head><body>
+<h1>Flora iCIS สำหรับ Windows</h1>{body}
+<ol><li>ติดตั้ง <b>Rancher Desktop</b> (Container engine: <b>dockerd (moby)</b>) แล้วเปิดค้างไว้</li>
+<li>ดับเบิลคลิก <b>Flora iCIS Setup</b> ติดตั้งให้เสร็จ</li>
+<li>เปิดโปรแกรม เลือกหน้าที่ของเครื่อง (Leaf / Leaf + Gateway / Gateway)</li>
+<li>ใส่ที่อยู่ Appliance <code>{esc(here.split('//')[-1])}</code> และรหัสติดตั้งจาก Root แล้วกด <b>ติดตั้ง</b></li></ol>
+</body></html>""")
+
+
+@app.get(f"/install/windows/{WINDOWS_FILE}")
+def windows_installer_file():
+    release = windows_release()
+    if release is None:
+        raise HTTPException(404, "no Leaf release with the Windows installer is mirrored here yet")
+    return FileResponse(windows_installer_path(release), filename=f"Flora-iCIS-Setup-{release['version']}.exe",
+                        media_type="application/vnd.microsoft.portable-executable")
 
 
 @app.get("/health")

@@ -88,13 +88,24 @@ def post_release(release: dict) -> None:
         raise SystemExit(f"Root rejected {release['component']} {release['version']}: {error.code} {error.read().decode()}")
 
 
+def has_image(image: str) -> bool:
+    return subprocess.run(["sudo", "nerdctl", "-n", "k8s.io", "image", "inspect", image],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+
+
 def main() -> None:
     device_types = []
     try:
         device_types = json.loads(open(DEVICE_TYPES_FILE).read())
     except OSError:
         pass
+    only = set(sys.argv[2:])          # e.g. "leaf": republish just that component (windows-installer job)
+    # The Windows installer travels with the Leaf release when this pipeline built it.
+    if has_image(f"flora-windows-setup:{TAG}"):
+        PUBLISH["leaf"]["windows"] = f"flora-windows-setup:{TAG}"
     for component, services in PUBLISH.items():
+        if only and component not in only:
+            continue
         pinned = {}
         for key, image in services.items():
             repo = f"flora/{component}/{key}"

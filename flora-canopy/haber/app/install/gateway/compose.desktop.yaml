@@ -1,0 +1,202 @@
+# Flora iCIS gateway DESKTOP (Windows, Rancher Desktop): installed by the Flora iCIS Setup app. Serial
+# (COM) devices are read by the native serial-controller.exe on Windows, so it is not a container here;
+# Leafs read the data-api over HTTP on the LAN (port 7410), the admin page is on this machine (7400).
+# Flora iCIS gateway on a hospital machine, installed from the appliance (gateway.sh). Images only:
+# every FLORA_IMAGE_* comes from .release/flora-gateway.env (the release the hospital approved; the
+# updater rewrites it on later approvals). Settings and secrets are in .env, generated on this machine.
+# Serial ports found on the machine are mapped in compose.devices.yaml. One gateway per machine.
+x-rust: &rust
+  image: ${FLORA_IMAGE_RUST}
+  environment: &rust-env
+    FLORA_GATEWAY_CONFIG: /config/gateway.toml
+    FLORA_GATEWAY_ID: ${FLORA_GATEWAY_ID}
+    FLORA_KAFKA_BROKERS: kafka:9092
+    FLORA_GATEWAY_DATABASE_URL: postgresql://flora_gateway:${FLORA_GATEWAY_DB_PASSWORD}@gateway-db:5432/flora_gateway
+    RUST_LOG: info
+  volumes:
+    - ./config:/config:ro
+  depends_on:
+    kafka: {condition: service_healthy}
+  restart: unless-stopped
+
+services:
+  kafka:
+    image: ${FLORA_IMAGE_KAFKA}
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:9092,EXTERNAL://:9094,CONTROLLER://:9093
+      # EXTERNAL = the native serial-controller.exe on this Windows machine (127.0.0.1:7414)
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:7414
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_NUM_PARTITIONS: 1
+      KAFKA_LOG_RETENTION_HOURS: 72
+      KAFKA_HEAP_OPTS: -Xmx512m -Xms256m
+    ports:
+      - "127.0.0.1:7414:9094"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+
+  gateway-db:
+    image: ${FLORA_IMAGE_DB}
+    environment:
+      POSTGRES_DB: flora_gateway
+      POSTGRES_USER: flora_gateway
+      POSTGRES_PASSWORD: ${FLORA_GATEWAY_DB_PASSWORD}
+    ports:
+      - "127.0.0.1:7412:5432"     # the native serial-controller.exe stores here
+    volumes:
+      - gateway_db_data:/var/lib/postgresql/data
+      - ./db/0001-gateway.sql:/docker-entrypoint-initdb.d/0001-gateway.sql:ro
+      - ./db/0002-device-measurements.sql:/docker-entrypoint-initdb.d/0002-device-measurements.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flora_gateway -d flora_gateway"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  feeder-controller:
+    <<: *rust
+    command: ["feeder-controller"]
+
+  webhook-controller:
+    <<: *rust
+    command: ["webhook-controller"]
+    ports:
+      - "9003:9003"
+
+  socket-controller:
+    <<: *rust
+    command: ["socket-controller"]
+    ports:
+      - "9001:9001"     # HL7 (OR)
+      - "9002:9002"     # HL7 (ICU)
+      - "9500:9500"     # Dräger Vista 120 S (as its central station)
+      - "2051:2051"     # Dräger IACS relay
+
+  # Not a service: pulled so gateway-service can start one parser container per device.
+  parser-image:
+    image: ${FLORA_IMAGE_PARSER}
+    command: ["true"]
+    restart: "no"
+
+  collector:
+    <<: *rust
+    command: ["collector"]
+    depends_on:
+      kafka: {condition: service_healthy}
+      gateway-db: {condition: service_healthy}
+
+  server:
+    <<: *rust
+    command: ["server"]
+    depends_on:
+      gateway-db: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 15
+
+  publisher:
+    <<: *rust
+    command: ["publisher"]
+
+  kong:
+    image: ${FLORA_IMAGE_KONG}
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yaml
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_ADMIN_LISTEN: 127.0.0.1:8001
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_DNS_VALID_TTL: "5"
+    volumes:
+      - ./kong:/kong:ro
+    ports:
+      - "7410:8000"     # Leafs on the LAN read /data-api here
+    depends_on:
+      server: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  gateway-service:
+    image: ${FLORA_IMAGE_SERVICE}
+    env_file:
+      - path: ./certs/trust.env
+        required: false
+    environment:
+      FLORA_GATEWAY_ID: ${FLORA_GATEWAY_ID}
+      FLORA_GATEWAY_DATABASE_URL: postgresql://flora_gateway:${FLORA_GATEWAY_DB_PASSWORD}@gateway-db:5432/flora_gateway
+      FLORA_KAFKA_BROKERS: kafka:9092
+      FLORA_GATEWAY_CONFIG: /config/gateway.toml
+      FLORA_GATEWAY_SEED: /config/instances.json
+      SERIAL_ADMIN_URL: http://host.docker.internal:5001     # native serial-controller.exe on Windows
+      SOCKET_ADMIN_URL: http://socket-controller:5004
+      HABER_URL: ${HABER_URL}
+      GATEWAY_DATA_API_URL: ${GATEWAY_DATA_API_URL}
+      HABER_GATEWAY_TOKEN: ${HABER_GATEWAY_TOKEN}
+      GATEWAY_LICENSE_REQUIRED: "true"
+      GATEWAY_SYNC_INTERVAL_SEC: "20"
+      GATEWAY_ADMIN_USERNAME: admin
+      GATEWAY_ADMIN_PASSWORD: ${GATEWAY_ADMIN_PASSWORD}
+      GATEWAY_DOCKER_NETWORK: flora-gateway_default
+      GATEWAY_COMPOSE_PROJECT: flora-gateway
+      GATEWAY_PARSER_IMAGE: ${FLORA_IMAGE_PARSER}
+    volumes:
+      - ./certs:/etc/flora/certs:ro
+      - ./config:/config
+      - ./kong:/kong:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:7400:8000"
+    depends_on:
+      gateway-db: {condition: service_healthy}
+      kafka: {condition: service_healthy}
+      parser-image: {condition: service_completed_successfully}
+    restart: unless-stopped
+
+  updater:
+    image: ${FLORA_IMAGE_UPDATER}
+    env_file:
+      - path: ./certs/trust.env
+        required: false
+    environment:
+      FLORA_COMPONENT: gateway
+      FLORA_NODE_ID: ${FLORA_GATEWAY_ID}
+      HABER_URL: ${HABER_URL}
+      HABER_NODE_TOKEN: ${HABER_NODE_TOKEN}
+    volumes:
+      - ./certs:/etc/flora/certs:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ..:/host
+      - updater_state:/state
+    restart: unless-stopped
+
+volumes:
+  updater_state:
+  kafka_data:
+  gateway_db_data:
