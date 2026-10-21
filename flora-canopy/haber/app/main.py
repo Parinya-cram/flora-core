@@ -118,7 +118,8 @@ def kv_set(key: str, value: Any) -> None:
 # ------------------------------------------------------------------ Root sync
 
 def verify(envelope: dict[str, Any], keys: dict[str, str]) -> dict[str, Any]:
-    public = keys.get(envelope.get("key_id", ""))
+    # A pinned key (FLORA_ROOT_PUBLIC_KEY) is stored as "pinned", not under Root's key id.
+    public = keys.get(envelope.get("key_id", "")) or keys.get("pinned")
     if not public:
         raise ValueError(f"unknown signing key {envelope.get('key_id')}")
     try:
