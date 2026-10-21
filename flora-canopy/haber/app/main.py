@@ -33,7 +33,7 @@ from typing import Any
 import httpx
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
@@ -60,6 +60,8 @@ SYNC_SECRET = os.getenv("FLORA_SYNC_SHARED_SECRET", "")
 CANOPY_SYNC_PUBLIC = os.getenv("FLORA_CANOPY_SYNC_PUBLIC_URL", "").rstrip("/")
 # This appliance as Leafs / gateways on the LAN reach it (shown in Root's install commands).
 APPLIANCE_PUBLIC = os.getenv("FLORA_APPLIANCE_PUBLIC_URL", "").rstrip("/")
+# AI hosts Canopy / Leaf may reach through this appliance (they have no internet of their own).
+AI_HOSTS = os.getenv("HABER_AI_HOSTS", "ai.esm-solution.com,api.anthropic.com,api.openai.com,openrouter.ai")
 SYNC_INTERVAL = int(os.getenv("HABER_ROOT_SYNC_SEC", "20"))
 DB_PATH = os.getenv("HABER_DB_PATH", "/data/haber.db")
 # Config that an admin can change at runtime from the Settings UI. The env value above is the
@@ -68,7 +70,7 @@ DB_PATH = os.getenv("HABER_DB_PATH", "/data/haber.db")
 SETTINGS_KEYS = {
     "root_url": ("ROOT_URL", str), "root_registry_url": ("ROOT_REGISTRY_URL", str),
     "registry_public": ("REGISTRY_PUBLIC", str), "canopy_sync_url": ("CANOPY_SYNC_URL", str),
-    "canopy_sync_public": ("CANOPY_SYNC_PUBLIC", str),
+    "canopy_sync_public": ("CANOPY_SYNC_PUBLIC", str), "ai_hosts": ("AI_HOSTS", str),
     "tenant_id": ("TENANT_ID", str), "tenant_key": ("TENANT_KEY", str),
     "sync_interval": ("SYNC_INTERVAL", int),
 }
@@ -400,6 +402,7 @@ app = FastAPI(title="Flora Canopy Haber", lifespan=lifespan)
 basic_auth.install(app, "Canopy Haber", "HABER", [
     r"/health", r"/api/haber/v1/gateways/[^/]+/(checkin|alerts|activity)",  # gateways, token auth
     r"/api/haber/v1/root-keys", r"/api/haber/v1/nodes/[^/]+/(desired|report)",  # flora-updater, token auth
+    r"/api/haber/v1/ai-relay/.+",   # Canopy / Leaf AI calls, relay token in the path
     r"/install/(leaf|gateway)\.sh", r"/install/windows(/[A-Za-z0-9._-]+)?", r"/install/files/[a-z]+/[A-Za-z0-9._-]+", r"/api/haber/v1/install/(claim|report)",   # new LAN machines, one-time code
 ])
 
@@ -655,6 +658,7 @@ class SettingsIn(BaseModel):
     registry_public: str | None = None
     canopy_sync_url: str | None = None
     canopy_sync_public: str | None = None   # Canopy sync URL handed to new Leafs on the LAN
+    ai_hosts: str | None = None             # comma-separated AI hosts the relay may reach
     tenant_id: str | None = None
     tenant_key: str | None = None   # write-only; blank keeps the current value
     sync_interval: int | str | None = None   # blank string resets to the env default (like the URL fields)
@@ -1032,6 +1036,34 @@ def windows_installer_file():
         raise HTTPException(404, "no Leaf release with the Windows installer is mirrored here yet")
     return FileResponse(windows_installer_path(release), filename=f"Flora-iCIS-Setup-{release['version']}.exe",
                         media_type="application/vnd.microsoft.portable-executable")
+
+
+# ------------------------------------------------------------------ AI relay
+# Canopy and Leaf have no internet of their own; their AI calls come here and are forwarded to an
+# allow-listed AI host only (AI_HOSTS setting). The caller proves itself with a token the appliance gave it
+# (node token for Leafs, the admin secret canopy-api holds); the AI key travels in the request, as before.
+
+RELAY_HEADERS = {"content-type", "accept", "authorization", "x-api-key", "anthropic-version", "anthropic-beta", "user-agent"}
+
+
+@app.api_route("/api/haber/v1/ai-relay/{token}/{scheme}/{target:path}", methods=["GET", "POST"])
+async def ai_relay(token: str, scheme: str, target: str, request: Request):
+    allowed = [t for t in (NODE_TOKEN, os.getenv("HABER_ADMIN_PASSWORD", "")) if t]
+    if not any(hmac.compare_digest(token, t) for t in allowed):
+        raise HTTPException(401, "invalid relay token")
+    host = target.split("/", 1)[0].split(":", 1)[0].lower()
+    hosts = {h.strip().lower() for h in AI_HOSTS.split(",") if h.strip()}
+    if scheme not in {"https", "http"} or host not in hosts:
+        raise HTTPException(403, f"AI host {host} is not allowed by this appliance (Device Distribution > settings > AI hosts)")
+    url = f"{scheme}://{target}" + (f"?{request.url.query}" if request.url.query else "")
+    headers = {k: v for k, v in request.headers.items() if k.lower() in RELAY_HEADERS}
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(240.0, connect=15.0)) as client:
+            upstream = await client.request(request.method, url, content=await request.body(), headers=headers)
+    except httpx.HTTPError as error:
+        raise HTTPException(502, f"the appliance cannot reach {host} ({type(error).__name__})") from None
+    keep = {k: v for k, v in upstream.headers.items() if k.lower() in {"content-type", "server"}}
+    return Response(content=upstream.content, status_code=upstream.status_code, headers=keep)
 
 
 @app.get("/health")

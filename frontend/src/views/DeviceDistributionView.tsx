@@ -12,6 +12,7 @@ const SETTING_FIELDS: { key: string; label: string; placeholder: string }[] = [
   { key: "registry_public", label: "Hospital registry (nodes pull)", placeholder: "172.22.19.81:7205" },
   { key: "canopy_sync_url", label: "Canopy sync URL", placeholder: "http://sync-api.flora-canopy.svc.cluster.local:8000" },
   { key: "canopy_sync_public", label: "Canopy URL for new Leafs (LAN)", placeholder: "https://172.22.19.81:9443" },
+  { key: "ai_hosts", label: "AI hosts Canopy/Leaf may reach (via this appliance)", placeholder: "ai.esm-solution.com,api.anthropic.com" },
   { key: "tenant_id", label: "Tenant ID", placeholder: "hospital-01" },
   { key: "sync_interval", label: "Root sync interval (s)", placeholder: "15" },
 ];
