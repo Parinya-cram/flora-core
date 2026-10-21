@@ -220,3 +220,24 @@ CREATE TABLE IF NOT EXISTS root_install (
   updated_at    bigint NOT NULL
 );
 CREATE INDEX IF NOT EXISTS root_install_tenant_idx ON root_install (tenant_id, created_at DESC);
+
+-- Device library: the vendor-maintained settings for each device type (parser, controller, default options,
+-- connection defaults). Signed per hospital; the appliance hands it to gateways on check-in, so a settings
+-- change reaches gateways without a new gateway release. Each edit bumps the profile's revision.
+CREATE TABLE IF NOT EXISTS root_device_profile (
+  code                 text PRIMARY KEY,
+  label                text NOT NULL,
+  category             text,
+  protocol             text,
+  controller           text NOT NULL,
+  parser               text NOT NULL,
+  image                text NOT NULL DEFAULT 'parser',     -- service key of the gateway release that runs it
+  default_options      jsonb NOT NULL DEFAULT '{}'::jsonb,
+  connection_defaults  jsonb NOT NULL DEFAULT '{}'::jsonb,
+  models               text[] NOT NULL DEFAULT '{}',        -- device_type ids (catalog models) this profile serves
+  notes                text,
+  revision             integer NOT NULL DEFAULT 1,
+  status               text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'withdrawn')),
+  updated_at           bigint NOT NULL,
+  updated_by           text
+);

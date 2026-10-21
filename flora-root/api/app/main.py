@@ -17,6 +17,7 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 import logging
 import os
 import secrets
@@ -158,7 +159,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Flora Root", lifespan=lifespan)
 auth.install(app, pool, [
-    r"/health", r"/api/v1/keys", r"/api/v1/tenants/[^/]+/(bundle|heartbeat|releases)",  # Canopy, tenant key auth
+    r"/health", r"/api/v1/keys", r"/api/v1/tenants/[^/]+/(bundle|heartbeat|releases|device-library)",  # Canopy, tenant key auth
     r"/api/auth/status",                                                                # login page status panel
     r"/api/v1/tenants/[^/]+/installs/(pending|[^/]+/report)",                           # appliance, tenant key auth
     r"/api/v1/install/redeem", r"/install", r"/install/site\.sh", r"/install/files/site/site\.yaml", r"/install/windows/[A-Za-z0-9._-]+",  # new site server, one-time code
@@ -498,6 +499,105 @@ def revoke_install(install_id: str, request: Request):
     auth.audit(auth.current_user(request).get("username"), "install.revoke", row["tenant_id"], auth.client_ip(request),
                {"install_id": install_id})
     return {"ok": True}
+
+
+# ------------------------------------------------------------------ device library (device settings for gateways)
+
+PROFILE_FIELDS = ("code", "label", "category", "protocol", "controller", "parser", "image", "default_options",
+                  "connection_defaults", "models", "notes", "revision", "status", "updated_at", "updated_by")
+
+
+class DeviceProfileIn(BaseModel):
+    label: str
+    category: str | None = None
+    protocol: str | None = None
+    controller: str
+    parser: str
+    image: str = "parser"
+    default_options: dict[str, Any] = {}
+    connection_defaults: dict[str, Any] = {}
+    models: list[str] = []
+    notes: str | None = None
+
+
+def seed_device_library(connection) -> None:
+    """First use: the library starts as the newest gateway release's catalog (device-types.json at build time)."""
+    if connection.execute("SELECT 1 FROM root_device_profile LIMIT 1").fetchone():
+        return
+    release = connection.execute(
+        "SELECT device_types FROM root_release WHERE component='gateway' AND withdrawn_at IS NULL "
+        "AND jsonb_array_length(device_types) > 0 ORDER BY created_at DESC LIMIT 1").fetchone()
+    for item in (release["device_types"] if release else []):
+        if not item.get("code") or not item.get("parser"):
+            continue
+        connection.execute(
+            """INSERT INTO root_device_profile (code, label, category, protocol, controller, parser, image, default_options,
+                   connection_defaults, updated_at, updated_by) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'release')
+               ON CONFLICT (code) DO NOTHING""",
+            (item["code"], item.get("label") or item["code"], item.get("category"), item.get("protocol"),
+             item.get("controller") or "socket", item["parser"], item.get("image") or "parser",
+             Jsonb(item.get("default_options") or {}), Jsonb(item.get("connection_defaults") or {}), now_ms()))
+
+
+def device_profiles(active_only: bool = False) -> list[dict[str, Any]]:
+    with pool.connection() as connection:
+        seed_device_library(connection)
+        rows = connection.execute("SELECT * FROM root_device_profile" + (" WHERE status='active'" if active_only else "")
+                                  + " ORDER BY category NULLS LAST, label").fetchall()
+    return [{key: row[key] for key in PROFILE_FIELDS} for row in rows]
+
+
+@app.get("/api/v1/device-library")
+def list_device_library():
+    return {"rows": device_profiles()}
+
+
+@app.put("/api/v1/device-library/{code}", dependencies=[Depends(require_admin)])
+def save_device_profile(code: str, body: DeviceProfileIn, request: Request):
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_.-]{1,63}", code):
+        raise HTTPException(400, "code: lowercase letters, digits, - _ . (2-64)")
+    user = (getattr(request.state, "user", None) or {}).get("username") or "root-ci"
+    with pool.connection() as connection:
+        row = connection.execute(
+            """INSERT INTO root_device_profile (code, label, category, protocol, controller, parser, image, default_options,
+                   connection_defaults, models, notes, updated_at, updated_by) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+               ON CONFLICT (code) DO UPDATE SET label=excluded.label, category=excluded.category, protocol=excluded.protocol,
+                 controller=excluded.controller, parser=excluded.parser, image=excluded.image,
+                 default_options=excluded.default_options, connection_defaults=excluded.connection_defaults,
+                 models=excluded.models, notes=excluded.notes, revision=root_device_profile.revision + 1,
+                 status='active', updated_at=excluded.updated_at, updated_by=excluded.updated_by
+               RETURNING *""",
+            (code, body.label, body.category, body.protocol, body.controller, body.parser, body.image,
+             Jsonb(body.default_options), Jsonb(body.connection_defaults), body.models, body.notes, now_ms(), user)).fetchone()
+    auth.audit(user, "device_profile.save", code, auth.client_ip(request), {"code": code, "revision": row["revision"]})
+    return {key: row[key] for key in PROFILE_FIELDS}
+
+
+@app.post("/api/v1/device-library/{code}/{action}", dependencies=[Depends(require_admin)])
+def set_device_profile_status(code: str, action: str, request: Request):
+    if action not in ("withdraw", "restore"):
+        raise HTTPException(404, "unknown action")
+    status = "withdrawn" if action == "withdraw" else "active"
+    user = (getattr(request.state, "user", None) or {}).get("username") or "root-ci"
+    with pool.connection() as connection:
+        row = connection.execute(
+            "UPDATE root_device_profile SET status=%s, revision=revision+1, updated_at=%s, updated_by=%s WHERE code=%s RETURNING code",
+            (status, now_ms(), user, code)).fetchone()
+    if not row:
+        raise HTTPException(404, "unknown device profile")
+    auth.audit(user, f"device_profile.{action}", code, auth.client_ip(request), {})
+    return {"code": code, "status": status}
+
+
+@app.get("/api/v1/tenants/{tenant_id}/device-library")
+def tenant_device_library(tenant_id: str, request: Request):
+    """The library for one hospital, signed: its appliance gives these settings to gateways on check-in.
+    Withdrawn profiles are listed so gateways drop them."""
+    require_tenant(tenant_id, request)
+    rows = device_profiles()
+    return sign({"tenant_id": tenant_id, "signed_at": now_ms(),
+                 "revision": sum(r["revision"] for r in rows),
+                 "profiles": [{key: r[key] for key in PROFILE_FIELDS if key not in ("updated_by",)} for r in rows]})
 
 
 @app.get("/api/v1/tenants/{tenant_id}/installs/pending")

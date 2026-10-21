@@ -211,6 +211,12 @@ async def sync_root() -> None:
             releases = response.json()
             verify(releases, keys)
             kv_set("releases", releases)
+        response = await client.get(f"{ROOT_URL}/api/v1/tenants/{TENANT_ID}/device-library", headers=headers)
+        if response.status_code != 404:  # older Root without the device library
+            response.raise_for_status()
+            library = response.json()
+            verify(library, keys)
+            kv_set("device_library", library)
         response = await client.get(f"{ROOT_URL}/api/v1/tenants/{TENANT_ID}/installs/pending", headers=headers)
         if response.status_code != 404:  # older Root without installs
             response.raise_for_status()
@@ -481,13 +487,35 @@ def gateway_checkin(gateway_id: str, body: Checkin, request: Request):
 
 
 def gateway_catalog() -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
-    """Device types gateways receive from Root: the approved gateway release's, else the built-in catalog."""
+    """Device types gateways receive: the approved gateway release's catalog (else the built-in one), with
+    Root's device library on top — its settings win, new profiles are added and withdrawn ones are dropped."""
     release = approved_release("gateway")
     if release and release["device_types"]:
         # Parser images come from the approved gateway release, pinned by digest in haber-registry.
-        return [{**item, "image": image_ref(release["services"][item["image"]]), "version": release["version"]}
-                for item in release["device_types"]], release
-    return CATALOG["device_types"], None
+        catalog = [{**item, "image": image_ref(release["services"][item["image"]]), "version": release["version"]}
+                   for item in release["device_types"]]
+    else:
+        release, catalog = None, list(CATALOG["device_types"])
+    library = verified("device_library")
+    if not library:
+        return catalog, release
+    images = {item["code"]: item["image"] for item in catalog}
+    default_image = (image_ref(release["services"]["parser"]) if release and "parser" in release["services"]
+                     else CATALOG["images"][0]["image"])
+    by_code = {item["code"]: item for item in catalog}
+    for profile in library["profiles"]:
+        if profile["status"] != "active":
+            by_code.pop(profile["code"], None)
+            continue
+        service = profile.get("image") or "parser"
+        image = (image_ref(release["services"][service]) if release and service in release["services"]
+                 else images.get(profile["code"], default_image))
+        by_code[profile["code"]] = {key: profile.get(key) for key in (
+            "code", "label", "category", "protocol", "controller", "parser", "default_options", "connection_defaults")} | {
+            "protocol": profile.get("protocol") or "custom", "category": profile.get("category") or "device",
+            "default_options": profile.get("default_options") or {}, "connection_defaults": profile.get("connection_defaults") or {},
+            "image": image, "version": f"lib-{profile['revision']}", "origin": "library"}
+    return list(by_code.values()), release
 
 
 def forward_to_canopy(gateway_id: str, body: Checkin, license_grant: dict[str, Any]) -> dict[str, Any]:
@@ -729,7 +757,7 @@ def unadopt_type(code: str, request: Request):
 
 @app.get("/api/haber/v1/device-types")
 def device_types():
-    return {"rows": CATALOG["device_types"]}
+    return {"rows": gateway_catalog()[0]}
 
 
 @app.get("/api/haber/v1/images")

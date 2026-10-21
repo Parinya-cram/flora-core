@@ -126,6 +126,7 @@
   <button role="tab" data-go="tenants">Tenants<span class="badge" hidden></span></button>
   <button role="tab" data-go="topology">Topology<span class="badge" hidden></span></button>
   <button role="tab" data-go="releases">Releases<span class="badge" hidden></span></button>
+  <button role="tab" data-go="library">Device library<span class="badge" hidden></span></button>
   <div class="sysmenu">
     <div class="syspop" id="syspop" role="menu" hidden>
       <div class="who"><b>Signed in</b><span id="whoName">…</span></div>
@@ -154,6 +155,13 @@
   <section data-tab="releases"><h2>Releases</h2><div id="releases"></div>
     <div class="muted" style="margin-top:8px">Root CI builds every image and pushes it to <code id="registry"></code>, then publishes a release
     (<code>flora-root/scripts/publish_release.py</code>). Each hospital's Haber mirrors the digests and the hospital approves the rollout.</div></section>
+  <section data-tab="library"><h2 style="display:flex;justify-content:space-between;align-items:center">Device library
+      <button class="primary admin-only" onclick="editProfile('')">+ Add device profile</button></h2>
+    <div class="muted" style="margin:-4px 0 10px">Settings for each device type (parser, controller, default options, connection defaults).
+      Every hospital's appliance gets them on its next Root sync and hands them to its gateways on check-in — no new gateway release needed.
+      A hospital still only runs the device types its license allows.</div>
+    <p><input id="libFilter" placeholder="Filter by name, code, parser or category" oninput="renderLibrary()" style="width:min(420px,100%);padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)"></p>
+    <div id="libForm"></div><div id="library">Loading…</div></section>
   <section data-tab="config"><h2>Global configuration</h2><div id="config"></div></section>
   <section data-tab="keys"><h2>Signing key</h2><div id="keys"></div></section>
   <section data-tab="operators"><h2>Operators</h2>
@@ -193,6 +201,7 @@ function showTab(name) {
   if (!tabButtons.some((b) => b.dataset.go === name)) name = "tenants";
   if (name === "operators") loadOperators();
   if (name === "audit") loadAudit();
+  if (name === "library") loadLibrary();
   tabButtons.forEach((b) => b.setAttribute("aria-selected", String(b.dataset.go === name)));
   document.querySelectorAll("main [data-tab]").forEach((s) => { s.hidden = s.dataset.tab !== name; });
   document.getElementById("sysbtn").classList.toggle("active", !!document.querySelector(`#syspop [data-go="${name}"]`));
@@ -615,6 +624,74 @@ function renderAudit() {
   $("me").innerHTML = `<b>${esc(me.display_name || me.username)}</b><span class="role ${esc(me.role)}">${esc(me.role)}</span>`;
   showTab(location.hash.slice(1));
 })();
+// ---------------------------------------------------------------- device library
+let library = [], profileEdit = null;
+const CONTROLLERS = ["socket", "serial", "webhook", "feeder"];
+async function loadLibrary() {
+  const r = await fetch("api/v1/device-library"); if (!r.ok) return;
+  library = (await r.json()).rows; renderLibrary();
+}
+function renderLibrary() {
+  const q = ($("libFilter").value || "").toLowerCase();
+  const rows = library.filter((p) => !q || [p.code, p.label, p.parser, p.category, p.protocol].join(" ").toLowerCase().includes(q));
+  badge("library", String(library.filter((p) => p.status === "active").length));
+  $("library").innerHTML = rows.length ? `<table><tr><th>Device profile</th><th>Category</th><th>Connection</th><th>Parser</th><th>Revision</th><th>Updated</th><th></th></tr>${
+    rows.map((p) => `<tr${p.status === "withdrawn" ? ' style="opacity:.55"' : ""}><td><b>${esc(p.label)}</b><div class="muted"><code>${esc(p.code)}</code></div>
+      ${p.notes ? `<div class="muted">${esc(p.notes)}</div>` : ""}</td>
+      <td>${esc(p.category || "—")}</td><td><span class="chip">${esc(p.controller)}</span> ${esc(p.protocol || "")}</td>
+      <td><code>${esc(p.parser)}</code></td><td class="num">r${p.revision}${p.status === "withdrawn" ? ' <span class="bad">withdrawn</span>' : ""}</td>
+      <td>${ago(p.updated_at)}<div class="muted">${esc(p.updated_by || "")}</div></td>
+      <td class="admin-only" style="white-space:nowrap"><button onclick="editProfile('${esc(p.code)}')">Edit</button>
+        ${p.status === "active" ? `<button class="danger" onclick="profileStatus('${esc(p.code)}','withdraw')">Withdraw</button>`
+          : `<button onclick="profileStatus('${esc(p.code)}','restore')">Restore</button>`}</td></tr>`).join("")}</table>`
+    : `<p class="muted">No device profiles yet. The library starts from the newest gateway release once one is published, or add one.</p>`;
+}
+function editProfile(code) {
+  const p = library.find((x) => x.code === code) || { code: "", label: "", category: "", protocol: "", controller: "socket", parser: "",
+    image: "parser", default_options: {}, connection_defaults: {}, models: [], notes: "" };
+  profileEdit = code || "__new__";
+  const field = (name, label, value, extra = "") => `<label style="display:grid;font-size:12px;color:var(--muted);gap:3px">${label}
+    <input name="${name}" value="${esc(value)}" ${extra} style="padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)"></label>`;
+  const area = (name, label, value) => `<label style="display:grid;font-size:12px;color:var(--muted);gap:3px;grid-column:1/-1">${label}
+    <textarea name="${name}" rows="6" spellcheck="false" style="font:12px ui-monospace,Menlo,monospace;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)">${esc(JSON.stringify(value || {}, null, 2))}</textarea></label>`;
+  $("libForm").innerHTML = `<form onsubmit="return saveProfile(event)" style="border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
+    <b style="grid-column:1/-1">${code ? `Edit ${esc(p.label)} <span class="muted">(r${p.revision} → r${p.revision + 1})</span>` : "New device profile"}</b>
+    ${field("code", "Code", p.code, code ? "readonly" : 'required pattern="[a-z0-9][a-z0-9_.\-]{1,63}" placeholder="e.g. mindray-benevision-hl7"')}
+    ${field("label", "Name", p.label, "required")}
+    ${field("category", "Category", p.category, 'placeholder="patient_monitor, ventilator…"')}
+    ${field("protocol", "Protocol", p.protocol, 'placeholder="hl7v2, json, medibus…"')}
+    <label style="display:grid;font-size:12px;color:var(--muted);gap:3px">Controller
+      <select name="controller" style="padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)">
+        ${CONTROLLERS.map((c) => `<option ${c === p.controller ? "selected" : ""}>${c}</option>`).join("")}</select></label>
+    ${field("parser", "Parser", p.parser, 'required placeholder="hl7v2, json_fields…"')}
+    ${area("default_options", "Default options (JSON) — parser settings", p.default_options)}
+    ${area("connection_defaults", "Connection defaults (JSON) — port, framing, baud rate, poll interval…", p.connection_defaults)}
+    ${field("models", "Catalog models (device_type ids, comma separated)", (p.models || []).join(", "))}
+    ${field("notes", "Notes", p.notes || "")}
+    <div style="grid-column:1/-1;display:flex;gap:8px;align-items:center"><button class="primary">Save and publish</button>
+      <button type="button" onclick="profileEdit=null;$('libForm').innerHTML=''">Cancel</button><span id="libErr" class="bad"></span></div></form>`;
+  $("libForm").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+async function saveProfile(event) {
+  event.preventDefault();
+  const f = Object.fromEntries(new FormData(event.target));
+  let body;
+  try {
+    body = { label: f.label, category: f.category || null, protocol: f.protocol || null, controller: f.controller, parser: f.parser,
+      default_options: JSON.parse(f.default_options || "{}"), connection_defaults: JSON.parse(f.connection_defaults || "{}"),
+      models: f.models.split(",").map((m) => m.trim()).filter(Boolean), notes: f.notes || null };
+  } catch (e) { $("libErr").textContent = "JSON is not valid: " + e.message; return false; }
+  const r = await fetch(`api/v1/device-library/${encodeURIComponent(f.code)}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (!r.ok) { $("libErr").textContent = (await r.json().catch(() => ({}))).detail || `HTTP ${r.status}`; return false; }
+  profileEdit = null; $("libForm").innerHTML = ""; await loadLibrary();
+  return false;
+}
+async function profileStatus(code, action) {
+  if (action === "withdraw" && !confirm(`Withdraw ${code}? Gateways stop offering it on their next check-in.`)) return;
+  await fetch(`api/v1/device-library/${encodeURIComponent(code)}/${action}`, { method: "POST" });
+  await loadLibrary();
+}
+
 load(); setInterval(() => { if (!editing) load(); }, 5000);
 // ---------------------------------------------------------------- system menu
 (() => {
