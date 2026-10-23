@@ -330,7 +330,7 @@ function RecoveryPanel({ rooms, sessions, onOpen }: { rooms: OrRoom[]; sessions:
     <div className="space-y-3">
       <div className={`${card} space-y-2 p-3`}>
         <h3 className="text-sm font-bold">Waiting for recovery <span className="text-[var(--app-muted)]">{waiting.length}</span></h3>
-        {waiting.length ? waiting.map(row => card2(row, row.journeyState === "assigned_recovery" ? `Bed ${row.bedName || "assigned"} · waiting to move in` : `Out of OR ${clock(row.movedOutAt)} · assign a bed`))
+        {waiting.length ? waiting.map(row => card2(row, row.journeyState === "assigned_recovery" ? `Bed ${row.bedName || "assigned"} · waiting to receive transfer` : `Transferred ${clock(row.movedOutAt)} · assign a bed`))
           : <p className="text-xs text-[var(--app-muted)]">Nobody waiting.</p>}
       </div>
       <div className={`${card} space-y-2 p-3`}>

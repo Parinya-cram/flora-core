@@ -42,6 +42,8 @@ pods = [
     { id = "or-monitor", port = 9001, framing = "mllp", auto_ack = true },
     { id = "icu-monitor", port = 9002, framing = "mllp", auto_ack = true },
     { id = "vista", port = 9500, framing = "raw", auto_ack = false },
+    # Simulated Dräger M540s (m540-sim-N), relayed like tools/iacs-relay; one pod parser splits them by source_ip.
+    { id = "m540-relay", port = 9510, framing = "udp_relay", auto_ack = false, max_frame_bytes = 6096 },
 ]
 
 [collector]
@@ -51,6 +53,12 @@ flush_ms = 500
 
 [server]
 listen = "0.0.0.0:8080"
+
+[stream_hub]
+listen = "0.0.0.0:7407"
+admin_port = 5007
+settle_ms = 300
+max_unacked = 300
 
 [publisher]
 admin_port = 5006

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { listCanopyStaff, type CanopyStaff } from "../../api/staffDirectoryApi";
 import {
-  assignOrBed, assignOrRecovery, closeOrSession, createOrSession, getOrSession, requestOrDischarge, requestOrMoveIn, requestOrMoveOut,
+  assignOrBed, assignOrRecovery, closeOrSession, createOrSession, getOrSession, requestOrDischarge, requestOrMoveIn, requestOrMoveOut, setOrBillingMode,
   restoreOrSession, unassignOrBed, updateOrSession, CLOSED_STATES, DESTINATIONS,
   type OrOptions, type OrRoom, type OrSession, type SessionEvent, type SessionInput, type TeamMember,
 } from "../../api/orScheduleApi";
@@ -142,6 +142,8 @@ export default function SessionDrawer({ options, rooms, session, start, onClose,
 
   const conflicts = current?.conflicts || [];
   const preArrival = current && (current.journeyState === "booked" || current.journeyState === "assigned") && current.status === "pending";
+  // Close (cancel, postpone, …) while the board still shows the booking before arrival, even if a Leaf opened a case for it.
+  const canCloseBooking = Boolean(current && (current.journeyState === "booked" || current.journeyState === "assigned"));
   const defaultBed = orBeds.find(bed => bed.roomId === current?.roomId && !bed.active_case) || orBeds.find(bed => bed.roomId === current?.roomId);
   return (
     <div className="app-theme-scope fixed inset-0 z-[1200] flex justify-end bg-black/40" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
@@ -253,13 +255,23 @@ export default function SessionDrawer({ options, rooms, session, start, onClose,
             <div className={label}>{current.journeyState === "in_or" ? "In the OR room" : "Recovery"}</div>
             {current.journeyState === "in_or" ? <div className="flex flex-wrap items-center gap-2 text-sm">
               <span>In <b>{current.bedName || current.roomName}</b>{current.movedInAt ? ` since ${new Date(current.movedInAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}.</span>
-              <button type="button" className={primary} disabled={busy || Boolean(current.moveOutRequestedAt)} onClick={() => void act(() => requestOrMoveOut(current.id))}>Patient move out</button>
-              {current.moveOutRequestedAt ? <span className="text-xs text-[var(--app-muted)]">Sent; the room's Leaf closes the case at its next sync.</span> : null}
+              <button type="button" className={primary} disabled={busy || Boolean(current.moveOutRequestedAt)} onClick={() => void act(() => requestOrMoveOut(current.id, current.billingMode || "combined"))}>Transfer to Recovery</button>
+              {current.moveOutRequestedAt ? <span className="text-xs text-[var(--app-muted)]">Sent; the room's Leaf closes the Anesthesia case at its next sync.</span> : null}
             </div> : null}
+            {current.journeyState !== "in_recovery" ? <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className={label}>Billing</span>
+              {(["combined", "separate"] as const).map(mode => (
+                <label key={mode} className="inline-flex items-center gap-1">
+                  <input type="radio" name="or-billing-mode" checked={(current.billingMode || "combined") === mode} disabled={busy}
+                    onChange={() => void act(() => setOrBillingMode(current.id, mode))} />
+                  {mode === "combined" ? "Combined (OR + Recovery one bill)" : "Separate bills"}
+                </label>
+              ))}
+            </div> : <div className="text-xs text-[var(--app-muted)]">Billing: {(current.billingMode || "combined") === "combined" ? "combined OR + Recovery bill" : "separate bills"}.</div>}
             {current.journeyState === "awaiting_recovery" || current.journeyState === "assigned_recovery" ? <>
               <div className="text-sm">{current.journeyState === "awaiting_recovery"
                 ? <>Out of the OR room{current.movedOutAt ? ` at ${new Date(current.movedOutAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""} — waiting for a recovery bed.</>
-                : <>Recovery bed <b>{current.bedName}</b> assigned — waiting to move in.</>}</div>
+                : <>Recovery bed <b>{current.bedName}</b> assigned — waiting for the recovery Leaf to receive the transfer (new Post-Anesthesia case).</>}</div>
               <div className="flex flex-wrap gap-2">
                 <select className={`${field} !w-auto`} value={recoveryBedId === "" ? recoveryBeds.find(bed => !bed.active_case && bed.leaf_id)?.id ?? "" : recoveryBedId}
                   onChange={e => setRecoveryBedId(e.target.value ? Number(e.target.value) : "")} aria-label="Recovery bed">
@@ -274,7 +286,7 @@ export default function SessionDrawer({ options, rooms, session, start, onClose,
                     return result;
                   })}>{current.journeyState === "assigned_recovery" ? "Change bed" : "Assign recovery bed"}</button>
                 {current.journeyState === "assigned_recovery" ? <button type="button" className={primary} disabled={busy || Boolean(current.moveInRequestedAt)}
-                  onClick={() => void act(() => requestOrMoveIn(current.id))}>Patient move in</button> : null}
+                  onClick={() => void act(() => requestOrMoveIn(current.id))}>Receive transfer</button> : null}
               </div>
               {warning ? <p className="text-xs text-amber-600 dark:text-amber-300">{warning}</p> : null}
             </> : null}
@@ -306,11 +318,12 @@ export default function SessionDrawer({ options, rooms, session, start, onClose,
         <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--app-border)] px-4 py-3">
           <div className="flex gap-2">
             {current ? <button type="button" className={button} onClick={() => onOpenPreop(current.id)}>Pre-op form{current.preopFilled ? " ✓" : ""}</button> : null}
-            {current && preArrival ? <select className={`${field} !w-auto text-rose-500`} disabled={busy} value="" aria-label="Close the booking"
+            {current && canCloseBooking ? <select className={`${field} !w-auto text-rose-500`} disabled={busy} value="" aria-label="Close the booking"
               onChange={e => {
                 const state = e.target.value as (typeof CLOSED_STATES)[number];
                 if (!state) return;
-                const reason = window.prompt(`Reason (${state.replace("_", "-")})`) ?? null;
+                const openOnLeaf = current.status === "started" ? `\n\nA case for this patient is open on ${current.leafName || "the Leaf"}; it stays there until it is discharged on that Leaf.` : "";
+                const reason = window.prompt(`Reason (${state.replace("_", "-")})${openOnLeaf}`) ?? null;
                 if (reason !== null) void act(() => closeOrSession(current.id, state, reason));
               }}>
               <option value="">Close booking…</option><option value="cancelled">Cancelled</option><option value="postponed">Postponed</option>

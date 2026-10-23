@@ -33,6 +33,7 @@ CONTROLLERS = {
     "socket-controller": os.getenv("SOCKET_ADMIN_URL", "http://socket-controller:5004"),
     "collector": os.getenv("COLLECTOR_ADMIN_URL", "http://collector:5005"),
     "publisher": os.getenv("PUBLISHER_ADMIN_URL", "http://publisher:5006"),
+    "stream-hub": os.getenv("STREAM_HUB_ADMIN_URL", "http://stream-hub:5007"),
 }
 # Ingress controllers that can be stopped when a station does not use them, keyed to their pod prefix.
 INGRESS = {"serial-controller": "serial", "feeder-controller": "feeder", "webhook-controller": "webhook",

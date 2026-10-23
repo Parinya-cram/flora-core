@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getEffectiveTimelineWithMasks, type TimelineMask, type TimelineProvenance, type VitalMinuteRow } from "../api/vitalMinutesApi";
 import type { ClinicalTimelineValues } from "../components/clinical-timeline/types";
+import { LIVE_MINUTE_CLOSED_EVENT, type LiveMinute } from "./useLiveCase";
+
+/** leaf-live rolls a closed minute into vital_minutes shortly after it closes; refetch after this delay. */
+const LIVE_ROLLUP_DELAY_MS = 2_500;
 
 type CaseStatus = "IDLE" | "ACTIVE" | "DISCHARGED" | "ARCHIVED";
 
@@ -97,6 +101,8 @@ export function useVitalMinutes(
   caseId: number | null,
   status: CaseStatus,
   axis: number[],
+  /** Values of the minute still streaming in (useLiveCase); shown until the stored minute arrives. */
+  liveMinute?: LiveMinute | null,
 ) {
   const [values, setValues] = useState<ClinicalTimelineValues>({});
   const [provenance, setProvenance] = useState<TimelineProvenance>({});
@@ -157,12 +163,25 @@ export function useVitalMinutes(
         if (!Number.isFinite(changedCaseId) || changedCaseId !== activeCaseId) return;
         void fetchVitals(true);
       };
+      // A minute closed in the live stream: fetch it now instead of waiting for the 15 s poll.
+      let liveTimer: ReturnType<typeof setTimeout> | null = null;
+      const onLiveMinuteClosed = (event: Event) => {
+        const custom = event as CustomEvent<{ caseId?: number; minute?: number }>;
+        if (Number(custom.detail?.caseId) !== activeCaseId) return;
+        const minute = Number(custom.detail?.minute);
+        if (Number.isFinite(minute) && (minute < fromTs || minute > toTs)) return;
+        if (liveTimer) clearTimeout(liveTimer);
+        liveTimer = setTimeout(() => void fetchVitals(false), LIVE_ROLLUP_DELAY_MS);
+      };
       const timer = setInterval(() => fetchVitals(false), 15_000);
       window.addEventListener("flora:case-start-time-updated", onStartTimeUpdated);
+      window.addEventListener(LIVE_MINUTE_CLOSED_EVENT, onLiveMinuteClosed);
       return () => {
         alive = false;
         clearInterval(timer);
+        if (liveTimer) clearTimeout(liveTimer);
         window.removeEventListener("flora:case-start-time-updated", onStartTimeUpdated);
+        window.removeEventListener(LIVE_MINUTE_CLOSED_EVENT, onLiveMinuteClosed);
       };
     }
 
@@ -174,5 +193,22 @@ export function useVitalMinutes(
   /** Refetch now (after a mask change), resolving when the new data is in. */
   const reload = useCallback(() => reloadRef.current(), []);
 
-  return { values, provenance, loading, fetchedAxis, masked, masks, reload };
+  // Merge the streaming minute into the grid. Stored values always win; the live value
+  // only fills a cell the server has not rolled up yet, and only on an axis column.
+  const mergedValues = useMemo(() => {
+    if (!liveMinute || status !== "ACTIVE" || !axis.length) return values;
+    const ts = liveMinute.ts_minute;
+    if (!axis.includes(ts)) return values;
+    let next: ClinicalTimelineValues | null = null;
+    for (const [rawKey, value] of Object.entries(liveMinute.values)) {
+      if (value == null || value === "") continue;
+      const rowId = toRowId(rawKey);
+      if (values[rowId]?.[ts] != null) continue;
+      next = next ?? { ...values };
+      next[rowId] = { ...(next[rowId] || {}), [ts]: value };
+    }
+    return next ?? values;
+  }, [axis, liveMinute, status, values]);
+
+  return { values: mergedValues, provenance, loading, fetchedAxis, masked, masks, reload };
 }

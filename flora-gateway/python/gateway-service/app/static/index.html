@@ -39,6 +39,8 @@
   th { font-weight:600; color:var(--muted); font-size:12px } td.actions { white-space:nowrap; text-align:right }
   .chip { display:inline-block; padding:1px 8px; border-radius:999px; background:var(--chip); font-size:12px; margin:1px 3px 1px 0; font-variant-numeric:tabular-nums }
   .ok { color:var(--ok) } .warn { color:var(--warn) } .bad { color:var(--bad) } .muted { color:var(--muted) }
+  tr.pod-row td { background:var(--chip); border-bottom:none } tr.sub td:first-child { padding-left:28px; position:relative }
+  tr.sub td:first-child::before { content:""; position:absolute; left:12px; top:0; bottom:50%; width:10px; border-left:1px solid var(--muted); border-bottom:1px solid var(--muted) }
   .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; background:var(--bad) } .dot.on { background:var(--ok) }
   button { font:inherit; font-size:12px; padding:3px 9px; border-radius:6px; border:1px solid var(--line); background:var(--panel); color:var(--ink); cursor:pointer }
   button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600 }
@@ -141,6 +143,8 @@
     <button data-tab="devices"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Devices</button>
     <button data-tab="streams"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7c3 0 3 3 6 3s3-3 6-3 3 3 6 3M3 14c3 0 3 3 6 3s3-3 6-3 3 3 6 3"/></svg>Streams</button>
     <button data-tab="alerts"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2zM10 20a2 2 0 0 0 4 0"/></svg>Alerts<span class="badge" id="alert-badge" hidden></span></button>
+    <button data-tab="sessions"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 12h3l2-3 2 6 2-3h1"/></svg>Case sessions</button>
+    <button data-tab="leaves"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3M21 12v2"/></svg>Leaves</button>
   </nav>
   <div class="sysmenu">
     <div class="syspop" id="syspop" role="menu" hidden>
@@ -236,6 +240,22 @@
     <p class="muted">For a device Canopy does not list yet (gateway admin only). A template must use a parser image Canopy delivered and a parser inside it,
       and its type must be in the Root license. If Canopy later sends a type with the same code, the Canopy version replaces it.</p>
     <div id="types-local"></div></section>
+</main>
+<main data-panel="sessions" hidden>
+  <section><div class="head"><h2>Case sessions</h2><span id="bindings-count" class="muted"></span>
+    <label class="muted" style="margin-left:auto; font-size:12px"><input type="checkbox" id="bindings-open"> Open only</label></div>
+    <p class="muted">Each row is one bind from a Leaf's live stream: which case (Canopy case UUID) receives which device.
+      A binding closes when the Leaf unbinds it (discharged, archived, edited, case_inactive), its connection drops (disconnect)
+      or its token is revoked. Last acked = the newest second the Leaf has stored.</p>
+    <div id="case-bindings"></div></section>
+</main>
+<main data-panel="leaves" hidden>
+  <section><div class="head"><h2>Leaf tokens</h2><button class="primary admin-only" onclick="issueLeafToken()">Issue token</button></div>
+    <p class="muted">A Leaf opens the live stream at <code>wss://&lt;this gateway&gt;/stream/v1</code> with its Leaf ID and a token from here
+      (paste it in the Leaf's gateway settings). The token is shown once; the gateway keeps only its hash. Revoking a token
+      closes that Leaf's stream and its open case bindings within seconds.</p>
+    <div id="leaf-token-new" hidden></div>
+    <div id="leaf-tokens"></div></section>
 </main>
 <main data-panel="manufacturers" hidden>
   <section><div class="head"><h2>Manufacturers</h2><button class="primary admin-only" onclick="editManufacturer()">Add manufacturer</button></div><div id="manufacturers"></div></section>
@@ -427,11 +447,11 @@ function connectionSummary(t) {
 }
 
 // ---------------------------------------------------------------- data caches
-let cache = { types: [], manufacturers: [], devices: [], images: [], haber: {} };
+let cache = { types: [], manufacturers: [], devices: [], images: [], haber: {}, demux: [] };
 let me = { role: "operator" };
 async function loadRegistry() {
-  const [types, manufacturers, devices, images] = await Promise.all([get("api/device-types"), get("api/manufacturers"), get("api/instances"), get("api/parser-images")]);
-  cache = { types: types.rows, manufacturers: manufacturers.rows, devices: devices.rows, images: images.rows, haber: images.haber };
+  const [types, manufacturers, devices, images, demux] = await Promise.all([get("api/device-types"), get("api/manufacturers"), get("api/instances"), get("api/parser-images"), get("api/pods/demux").catch(() => ({ rows: [] }))]);
+  cache = { types: types.rows, manufacturers: manufacturers.rows, devices: devices.rows, images: images.rows, haber: images.haber, demux: demux.rows };
 }
 async function loadPods() {
   try {
@@ -441,7 +461,7 @@ async function loadPods() {
 }
 
 // ---------------------------------------------------------------- devices
-function editDevice(device) {
+function editDevice(device, defaults) {
   const isNew = !device;
   const typeOptions = cache.types.map((t) => [t.code, `${t.manufacturer_name ? t.manufacturer_name + " · " : ""}${t.label} (${t.code})`]);
   openForm(isNew ? "Add device" : `Edit ${device.device_id}`, [
@@ -458,16 +478,50 @@ function editDevice(device) {
     { name: "options", label: "Parser options (JSON, overrides type defaults)", type: "json", wide: true },
     { name: "notes", label: "Notes", type: "textarea", wide: true },
     { name: "enabled", label: "Enabled (runs a parser container)", type: "check" },
-  ], device || { enabled: true, options: {}, installed_at: Date.now() }, async (values) => {
+  ], device || defaults || { enabled: true, options: {}, installed_at: Date.now() }, async (values) => {
     if (isNew) await api("api/instances", "POST", values);
     else { delete values.device_id; await api(`api/instances/${enc(device.device_id)}`, "PUT", values); }
   });
 }
+// A demux pod (one listener, one parser) is shown as a parent row with its devices beneath it,
+// each tagged by the source IP that selects it. Other devices keep their own rows.
+function groupByPod(rows, pods) {
+  const byPod = Object.fromEntries(pods.map((p) => [p.pod, p]));
+  const out = [], seen = new Set();
+  for (const row of rows) {
+    const pod = byPod[row.pod];
+    if (!pod) { out.push({ row }); continue; }
+    if (seen.has(pod.pod)) continue;
+    seen.add(pod.pod);
+    out.push({ pod });
+    for (const sub of rows.filter((r) => r.pod === pod.pod)) out.push({ row: sub, sub: true, ip: pod.devices.find((d) => d.device_id === sub.device_id)?.source_ip });
+  }
+  return out;
+}
+function podRow(p, columns) {
+  const c = p.container;
+  const unregistered = p.unregistered.map((u) => `<span class="chip warn" title="heard ${ago(u.last_seen)}">${esc(u.source_ip)}
+    <button class="admin-only" style="padding:0 6px" onclick='addSubDevice(${JSON.stringify(p.pod)}, ${JSON.stringify(u.source_ip)})'>Register</button></span>`).join("");
+  return `<tr class="pod-row"><td colspan="${columns - 1}"><b>Listener <code>${esc(p.pod)}</code></b>
+      <span class="muted"> · ${esc(p.device_types.join(", "))} · ${p.devices.length} sub device(s) by source IP · parser </span>${c ? `<span class="${c.status === "running" ? "ok" : "warn"}">${esc(c.status)}</span>` : `<span class="muted">not started</span>`}
+      ${unregistered ? `<div class="muted" style="margin-top:4px">Not registered: ${unregistered}</div>` : ""}</td>
+    <td class="actions"><button class="admin-only" onclick='addSubDevice(${JSON.stringify(p.pod)})'>Add sub device</button>
+      <button onclick="show('streams'); setTimeout(() => selectStream(${esc(JSON.stringify(p.pod))}), 300)">Stream</button></td></tr>`;
+}
+async function addSubDevice(pod, sourceIp) {
+  if (!cache.types.length) await loadRegistry();
+  const p = cache.demux.find((x) => x.pod === pod);
+  const sibling = cache.devices.find((d) => d.pod === pod);
+  editDevice(undefined, { enabled: true, installed_at: Date.now(), pod, device_type: p?.device_types[0],
+    leaf_id: sibling?.leaf_id, options: sourceIp ? { source_ip: sourceIp } : { source_ip: "" } });
+}
+const subIp = (g) => g.sub ? `<span class="chip">${esc(g.ip || "no source_ip")}</span>` : "";
 function renderDevices() {
   const typeBy = Object.fromEntries(cache.types.map((t) => [t.code, t]));
-  $("devices").innerHTML = cache.devices.length ? `<table><tr><th>Device</th><th>Type / manufacturer</th><th>Serial · asset</th><th>Station · location</th><th>Pod → Leaf</th><th>Installed</th><th>Parser</th><th></th></tr>${cache.devices.map((d) => {
-    const t = typeBy[d.device_type] || {};
-    return `<tr><td><b>${esc(d.label || d.device_id)}</b><div class="muted"><code>${esc(d.device_id)}</code></div></td>
+  $("devices").innerHTML = cache.devices.length ? `<table><tr><th>Device</th><th>Type / manufacturer</th><th>Serial · asset</th><th>Station · location</th><th>Pod → Leaf</th><th>Installed</th><th>Parser</th><th></th></tr>${groupByPod(cache.devices, cache.demux).map((g) => {
+    if (g.pod) return podRow(g.pod, 8);
+    const d = g.row, t = typeBy[d.device_type] || {};
+    return `<tr class="${g.sub ? "sub" : ""}"><td><b>${esc(d.label || d.device_id)}</b> ${subIp(g)}<div class="muted"><code>${esc(d.device_id)}</code></div></td>
       <td>${esc(t.label || d.device_type)}<div class="muted">${esc(t.manufacturer_name || "—")}${t.model ? " · " + esc(t.model) : ""}</div></td>
       <td>${esc(d.serial_number || "—")}<div class="muted">${esc(d.asset_tag || "")}</div></td>
       <td>${esc(d.station || "—")}<div class="muted">${esc(d.location || "")}</div></td>
@@ -599,6 +653,7 @@ $("password").addEventListener("submit", async (event) => {
 async function renderOverview() {
   const [lic, controllers, instances, status, logs] = await Promise.all([
     get("api/license"), get("api/controllers"), get("api/instances"), get("api/devices/status").catch(() => ({ devices: [] })), get("api/logs?limit=40")]);
+  const demux = (await get("api/pods/demux").catch(() => ({ rows: [] }))).rows;
   $("ts").textContent = "updated " + new Date().toLocaleTimeString();
   $("gw").textContent = lic.gateway_id ? `${lic.gateway_id} · tenant ${lic.tenant_id || "—"}` : "Station admin";
   $("license").innerHTML = `<span class="${lic.valid ? "ok" : "bad"}"><b>${lic.valid ? "Valid" : "Not valid"}</b></span>
@@ -623,11 +678,12 @@ async function renderOverview() {
   }).join("");
   const byDevice = Object.fromEntries((status.devices || []).map((d) => [d.device_id, d]));
   const latest = Object.fromEntries(await Promise.all(instances.rows.map(async (i) => [i.device_id, await get(`api/devices/${enc(i.device_id)}/latest?seconds=30`).catch(() => [])])));
-  $("instances").innerHTML = `<table><tr><th>Device</th><th>Pod → Leaf</th><th>Parser container</th><th>Data</th><th>Latest values</th><th></th></tr>${instances.rows.map((i) => {
-    const d = byDevice[i.device_id] || {};
+  $("instances").innerHTML = `<table><tr><th>Device</th><th>Pod → Leaf</th><th>Parser container</th><th>Data</th><th>Latest values</th><th></th></tr>${groupByPod(instances.rows, demux).map((g) => {
+    if (g.pod) return podRow(g.pod, 6);
+    const i = g.row, d = byDevice[i.device_id] || {};
     const values = {};
     for (const row of (Array.isArray(latest[i.device_id]) ? latest[i.device_id] : [])) values[row.ivy_param] = row;
-    return `<tr><td><b>${esc(i.label || i.device_id)}</b><div class="muted"><code>${esc(i.device_id)}</code> · ${esc(i.device_type)}${i.station ? " · " + esc(i.station) : ""}</div></td>
+    return `<tr class="${g.sub ? "sub" : ""}"><td><b>${esc(i.label || i.device_id)}</b> ${subIp(g)}<div class="muted"><code>${esc(i.device_id)}</code> · ${esc(i.device_type)}${i.station ? " · " + esc(i.station) : ""}</div></td>
       <td><code>${esc(i.pod)}</code><div>→ ${esc(i.leaf_id || "unassigned")}</div></td>
       <td>${i.enabled ? "" : `<span class="warn">disabled</span> `}${i.container ? `<span class="${i.container.status === "running" ? "ok" : "warn"}">${esc(i.container.status)}</span>` : `<span class="muted">not started</span>`}</td>
       <td><span class="dot ${d.is_online ? "on" : ""}"></span>${esc(d.status || "waiting")}<div class="muted">${d.total_samples ?? 0} samples · ${ago(d.last_seen_ts)}</div></td>
@@ -1024,11 +1080,56 @@ async function pushAlerts() {
   render();
 }
 
+// ---------------------------------------------------------------- Leaf live stream
+let newLeafToken = null;
+const when = (iso) => iso ? new Date(iso).toLocaleString() : "—";
+function issueLeafToken() {
+  openForm("Issue Leaf token", [
+    { name: "leaf_id", label: "Leaf ID (as the Leaf reports it)", required: true, placeholder: "leaf-or-01" },
+    { name: "label", label: "Label", placeholder: "e.g. OR-1 bedside PC" },
+  ], {}, async (values) => { newLeafToken = await api("api/leaf-tokens", "POST", values); });
+}
+async function copyLeafToken() {
+  try { await navigator.clipboard.writeText(newLeafToken.token); $("leaf-token-copy").textContent = "Copied"; }
+  catch { getSelection().selectAllChildren($("leaf-token-value")); }
+}
+function forgetLeafToken() { newLeafToken = null; renderLeaves(); }
+async function renderLeaves() {
+  const box = $("leaf-token-new");
+  box.hidden = !newLeafToken;
+  if (newLeafToken) box.innerHTML = `<div class="alert-card" style="display:block; margin-bottom:12px; border-left-color:var(--accent)">
+    <b>Token for ${esc(newLeafToken.leaf_id)}</b> — copy it now; it is not shown again.
+    <div style="display:flex; gap:8px; align-items:center; margin-top:8px"><code id="leaf-token-value" style="word-break:break-all">${esc(newLeafToken.token)}</code>
+    <button id="leaf-token-copy" onclick="copyLeafToken()">Copy</button><button onclick="forgetLeafToken()">Done</button></div></div>`;
+  const rows = (await get("api/leaf-tokens")).rows;
+  $("leaf-tokens").innerHTML = rows.length ? `<table><tr><th>Leaf</th><th>Label</th><th>Issued</th><th>Status</th><th>Open bindings</th><th></th></tr>${rows.map((t) => `<tr>
+    <td><code>${esc(t.leaf_id)}</code></td><td>${esc(t.label || "—")}</td>
+    <td>${when(t.created_at)}<div class="muted" style="font-size:12px">${esc(t.created_by || "")}</div></td>
+    <td>${t.revoked_at ? `<span class="warn">revoked ${when(t.revoked_at)}</span>` : `<span class="ok">active</span>`}</td>
+    <td>${t.open_bindings}</td>
+    <td class="actions">${t.revoked_at ? "" : `<button class="danger admin-only" onclick="act('api/leaf-tokens/${t.id}/revoke', 'POST', 'Revoke this token for ${esc(t.leaf_id)}? Its live stream stops.')">Revoke</button>`}</td></tr>`).join("")}</table>`
+    : `<span class="muted">No Leaf tokens yet.</span>`;
+}
+async function renderSessions() {
+  const d = await get(`api/case-bindings?limit=300${$("bindings-open").checked ? "&open=1" : ""}`);
+  $("bindings-count").textContent = `${d.counts.open} open · ${d.counts.total} recorded`;
+  $("case-bindings").innerHTML = d.rows.length ? `<table><tr><th>Case UUID</th><th>Leaf</th><th>Device</th><th>Mode</th><th>Bound</th><th>Unbound</th><th>Reason</th><th>Last acked</th></tr>${d.rows.map((b) => `<tr>
+    <td><code>${esc(b.case_uuid)}</code></td><td><code>${esc(b.leaf_id)}</code></td>
+    <td>${esc(b.device_label || b.device_id)}<div class="muted" style="font-size:12px"><code>${esc(b.device_id)}</code></div></td>
+    <td><span class="chip">${esc(b.mode)}</span></td><td>${when(b.bound_at)}</td>
+    <td>${b.unbound_at ? when(b.unbound_at) : `<span class="ok">open</span>`}</td><td>${esc(b.unbind_reason || "")}</td>
+    <td>${b.last_acked_seq ? `${new Date(b.last_acked_seq * 1000).toLocaleTimeString()}<div class="muted" style="font-size:12px">${b.last_acked_seq}</div>` : "—"}</td></tr>`).join("")}</table>`
+    : `<span class="muted">No case bindings${$("bindings-open").checked ? " open" : ""} yet.</span>`;
+}
+$("bindings-open").addEventListener("change", () => renderSessions().catch((e) => console.error(e)));
+
 async function render() {
   try {
     if (tab === "overview") { loadSite().catch(() => {}); renderTimeline().catch((e) => console.error(e)); return await renderOverview(); }
     if (tab === "streams") return await renderStreams();
     if (tab === "alerts") return await renderAlerts();
+    if (tab === "sessions") return await renderSessions();
+    if (tab === "leaves") return await renderLeaves();
     if (tab === "users") return me.role === "admin" ? await renderUsers() : undefined;
     await loadRegistry();
     ({ devices: renderDevices, types: renderTypes, manufacturers: renderManufacturers })[tab]();
@@ -1046,6 +1147,7 @@ loadRegistry().catch(() => {});
 show(tab);
 setInterval(() => tab === "overview" && !dialog.open && render(), 5000);
 setInterval(() => tab === "streams" && !dialog.open && render(), 2000);
+setInterval(() => tab === "sessions" && !dialog.open && render(), 5000);
 setInterval(() => tab === "alerts" ? !dialog.open && render() : loadAlertBadge().catch(() => {}), 10000);
 loadAlertBadge().catch(() => {});
 setInterval(() => tab === "devices" && dmon.selected && !dialog.open && renderDeviceMonitor().catch(() => {}), 4000);

@@ -10,7 +10,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
     cargo build --release --locked \
     && mkdir -p /out \
-    && for bin in serial-controller feeder-controller webhook-controller socket-controller collector server publisher; do \
+    && for bin in serial-controller feeder-controller webhook-controller socket-controller collector server publisher stream-hub; do \
          cp target/release/$bin /out/; \
        done
 

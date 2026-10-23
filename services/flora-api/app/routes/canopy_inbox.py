@@ -49,12 +49,22 @@ def canopy_admissions(_: dict = Depends(require_permission("case.read")), databa
     return {"rows": [inbox_public(row) for row in rows]}
 
 
+def _metadata(raw: Any) -> dict[str, Any]:
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except ValueError:
+            return {}
+    return raw if isinstance(raw, dict) else {}
+
+
 @router.get("/canopy-sync/outbox")
 def outbox(_: dict = Depends(service_only), database: Connection = Depends(connection)) -> dict:
     cases = database.execute(
         """SELECT c.id, c.canopy_admission_id, c.status, c.case_code, c.start_time, c.discharge_time,
                   to_jsonb(c) ->> 'discharge_reason' AS discharge_reason, to_jsonb(c) ->> 'discharge_destination' AS discharge_destination,
                   to_jsonb(c) ->> 'discharge_note' AS discharge_note, to_jsonb(c) ->> 'or_stage' AS or_stage,
+                  (to_jsonb(c) -> 'admission_metadata') AS admission_metadata,
                   d.form_draft_json, d.field_versions
            FROM cases c LEFT JOIN case_detail d ON d.case_id=c.id
            WHERE c.canopy_admission_id IS NOT NULL
@@ -70,6 +80,7 @@ def outbox(_: dict = Depends(service_only), database: Connection = Depends(conne
             "case_code": row["case_code"], "start_time": row["start_time"], "discharge_time": row["discharge_time"],
             "discharge_reason": row["discharge_reason"], "discharge_destination": row["discharge_destination"],
             "discharge_note": row["discharge_note"], "or_stage": row["or_stage"],
+            "billing_mode": _metadata(row["admission_metadata"]).get("transfer_billing_mode"),
             "values": form_sync.parse(row["form_draft_json"]), "versions": row["field_versions"] or {},
         } for row in cases],
         "claims": [{"admission_id": str(row["id"]), "case_id": row["case_id"]} for row in claims],
@@ -167,7 +178,7 @@ def run_requests(database: Connection, linked: list[dict[str, Any]]) -> list[dic
 
 def auto_move_in(database: Connection, pending: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """The ward desk pressed Move in for a patient assigned to this bed: start the case now (at the requested
-    time). Skipped while another case is active here; the desk sees the patient still waiting."""
+    time). Other active cases on this Leaf (other beds) do not hold it back."""
     from .cases_lifecycle import StartCase, start_case
     results = []
     for item in pending:
@@ -177,9 +188,6 @@ def auto_move_in(database: Connection, pending: list[dict[str, Any]]) -> list[di
             continue
         row = database.execute("SELECT status FROM canopy_admission_inbox WHERE id=%s", (item["id"],)).fetchone()
         if not row or row["status"] != "pending":
-            continue
-        if database.execute("SELECT 1 FROM cases WHERE status='active' LIMIT 1").fetchone():
-            results.append({"admission_id": str(item["id"]), "started": False, "reason": "another case is active"})
             continue
         actor = {"username": str(session.get("move_in_requested_by") or "canopy"), "role": "integration", "id": None}
         if session.get("stage") == "recovery":

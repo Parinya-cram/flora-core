@@ -1,5 +1,6 @@
-"""Starts one device-medical-service container per device instance and restarts
-gateway controllers. Needs the Docker socket mounted into the container."""
+"""Starts one device-medical-service container per device instance (or one per pod for
+device types flagged `demux`) and restarts gateway controllers. Needs the Docker socket
+mounted into the container."""
 import json
 import re
 from typing import Any
@@ -23,13 +24,21 @@ def parser_name(device_id: str) -> str:
     return "flora-gw-parser-" + re.sub(r"[^a-zA-Z0-9_.-]", "-", device_id)
 
 
+def pod_parser_name(pod: str) -> str:
+    return "flora-gw-parser-pod-" + re.sub(r"[^a-zA-Z0-9_.-]", "-", pod)
+
+
+def ensure_image(image: str) -> None:
+    try:
+        client().images.get(image)
+    except ImageNotFound:  # pull (from Haber) before the running parser is stopped
+        client().images.pull(image)
+
+
 def start_parser(instance: dict[str, Any], device_type: dict[str, Any]) -> str:
     options = {**(device_type.get("default_options") or {}), **(instance.get("options") or {})}
     name = parser_name(instance["device_id"])
-    try:
-        client().images.get(device_type["image"])
-    except ImageNotFound:  # pull (from Haber) before the running parser is stopped
-        client().images.pull(device_type["image"])
+    ensure_image(device_type["image"])
     stop_parser(instance["device_id"])
     container = client().containers.run(
         device_type["image"],
@@ -54,6 +63,43 @@ def start_parser(instance: dict[str, Any], device_type: dict[str, Any]) -> str:
     return container.id
 
 
+def start_pod_parser(pod: str, image: str, device_map: list[dict[str, Any]], config_hash: str) -> str:
+    """One container parses every instance on `pod` (POD_DEMUX mode), routing frames by source_ip.
+    `config_hash` (label) tells reconcile when the pod's instances or options changed."""
+    ensure_image(image)
+    stop_pod_parser(pod)
+    container = client().containers.run(
+        image,
+        name=pod_parser_name(pod),
+        detach=True,
+        network=settings.DOCKER_NETWORK,
+        restart_policy={"Name": "unless-stopped"},
+        environment={
+            "FLORA_KAFKA_BROKERS": settings.KAFKA_BROKERS,
+            "POD_DEMUX": "1",
+            "POD": pod,
+            "DEVICE_MAP": json.dumps(device_map),
+        },
+        labels={
+            "flora.gateway.role": "parser-pod",
+            "flora.gateway.id": settings.GATEWAY_ID,
+            "flora.gateway.pod": pod,
+            "flora.gateway.device_ids": ",".join(item["device_id"] for item in device_map),
+            "flora.gateway.config_hash": config_hash,
+            "com.docker.compose.project": settings.COMPOSE_PROJECT,
+        },
+    )
+    return container.id
+
+
+def stop_pod_parser(pod: str) -> None:
+    try:
+        container = client().containers.get(pod_parser_name(pod))
+    except NotFound:
+        return
+    container.remove(force=True)
+
+
 def stop_parser(device_id: str) -> None:
     try:
         container = client().containers.get(parser_name(device_id))
@@ -62,18 +108,43 @@ def stop_parser(device_id: str) -> None:
     container.remove(force=True)
 
 
+def _parser_containers() -> list:
+    return client().containers.list(all=True, filters={"label": f"flora.gateway.id={settings.GATEWAY_ID}"})
+
+
+def _state(container) -> dict[str, Any]:
+    return {"container": container.name, "status": container.status, "image": container.image.tags[:1],
+            "image_ref": container.attrs["Config"]["Image"]}
+
+
 def parser_states() -> dict[str, dict[str, Any]]:
+    """By device_id. A device parsed by a pod container reports that container, with `pod` set."""
     try:
-        containers = client().containers.list(all=True, filters={"label": f"flora.gateway.id={settings.GATEWAY_ID}"})
+        containers = _parser_containers()
     except DockerException as error:
         return {"_error": {"status": str(error)}}
-    return {
-        container.labels.get("flora.gateway.device_id", container.name): {
-            "container": container.name, "status": container.status, "image": container.image.tags[:1],
-            "image_ref": container.attrs["Config"]["Image"],
-        }
-        for container in containers
-    }
+    states: dict[str, dict[str, Any]] = {}
+    for container in containers:
+        if container.labels.get("flora.gateway.role") == "parser-pod":
+            pod = container.labels.get("flora.gateway.pod")
+            for device_id in filter(None, container.labels.get("flora.gateway.device_ids", "").split(",")):
+                states.setdefault(device_id, {**_state(container), "pod": pod})
+        else:
+            # A per-device container wins, so reconcile can see (and stop) one left from before demux.
+            states[container.labels.get("flora.gateway.device_id", container.name)] = _state(container)
+    return states
+
+
+def pod_parser_states() -> dict[str, dict[str, Any]]:
+    try:
+        containers = client().containers.list(all=True, filters={"label": [
+            f"flora.gateway.id={settings.GATEWAY_ID}", "flora.gateway.role=parser-pod"]})
+    except DockerException:
+        return {}
+    return {container.labels.get("flora.gateway.pod"): {
+                **_state(container), "config_hash": container.labels.get("flora.gateway.config_hash"),
+                "device_ids": [d for d in container.labels.get("flora.gateway.device_ids", "").split(",") if d]}
+            for container in containers}
 
 
 def service_containers(service: str) -> list:
@@ -114,5 +185,6 @@ def service_states() -> dict[str, str]:
     return {c.labels.get("com.docker.compose.service", c.name): c.status for c in containers}
 
 
-__all__ = ["start_parser", "stop_parser", "parser_states", "restart_service", "stop_service", "start_service",
+__all__ = ["start_parser", "stop_parser", "parser_states", "start_pod_parser", "stop_pod_parser", "pod_parser_states",
+           "pod_parser_name", "restart_service", "stop_service", "start_service",
            "service_states", "ImageNotFound", "DockerException"]

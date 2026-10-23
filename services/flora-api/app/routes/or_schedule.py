@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from psycopg import Connection
@@ -100,6 +100,9 @@ def public(row: dict[str, Any], staff_names: dict[str, str] | None = None) -> di
         "moveInRequestedAt": row.get("move_in_requested_at"), "moveInRequestedBy": row.get("move_in_requested_by"),
         "moveOutRequestedAt": row.get("move_out_requested_at"), "dischargeRequestedAt": row.get("discharge_requested_at"),
         "recoveryInAt": row.get("recovery_in_at"), "dischargeNote": row.get("discharge_note"),
+        "billingMode": row.get("billing_mode") or "combined",
+        "orGlobalCaseId": str(row["or_global_case_id"]) if row.get("or_global_case_id") else None,
+        "globalCaseId": str(row["global_case_id"]) if row.get("global_case_id") else None,
         "preopFilled": any(value not in (None, "", [], {}) for value in values.values()),
         "updatedAt": row.get("updated_at"), "updatedBy": row.get("updated_by") or row.get("created_by"),
     }
@@ -144,6 +147,43 @@ def check_codes(database: Connection, or_type: str | None, equipment: list[str])
     return clean
 
 
+# A bed's Leaf: the Leaf assigned to it, or the Leaf that serves it as a further bed (canopy_leaf_bed).
+BED_LEAF_JOIN = """LEFT JOIN canopy_leaf_assignment assignment ON assignment.bed_location_id = bed.id
+           LEFT JOIN canopy_leaf_bed leaf_bed ON leaf_bed.bed_location_id = bed.id"""
+
+
+def bed_cases(database: Connection, beds: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
+    """Newest active case per bed id. A Leaf serving one bed: any active case. A Leaf serving several beds:
+    the case goes to the bed whose name or code matches its bed_label, else to the Leaf's primary bed."""
+    leaf_ids = list({bed["leaf_id"] for bed in beds if bed.get("leaf_id")})
+    if not leaf_ids:
+        return {}
+    served: dict[str, list[dict[str, Any]]] = {}
+    for row in database.execute(
+            """SELECT a.leaf_id, a.bed_location_id AS bed_id, true AS is_primary, b.name, b.code
+               FROM canopy_leaf_assignment a JOIN canopy_location b ON b.id = a.bed_location_id WHERE a.leaf_id = ANY(%s)
+               UNION ALL
+               SELECT lb.leaf_id, lb.bed_location_id, false, b.name, b.code
+               FROM canopy_leaf_bed lb JOIN canopy_location b ON b.id = lb.bed_location_id WHERE lb.leaf_id = ANY(%s)""",
+            (leaf_ids, leaf_ids)).fetchall():
+        served.setdefault(row["leaf_id"], []).append(row)
+    result: dict[int, dict[str, Any]] = {}
+    for case in database.execute(
+            """SELECT leaf_id, hn, case_code, snapshot->'case'->>'bed_label' AS bed_label FROM sync_case_index
+               WHERE status = 'ACTIVE' AND leaf_id = ANY(%s) ORDER BY start_time DESC NULLS LAST""", (leaf_ids,)).fetchall():
+        own = served.get(case["leaf_id"]) or []
+        if len(own) > 1:
+            label = (case["bed_label"] or "").strip().lower()
+            match = [bed for bed in own if label and label in ((bed["name"] or "").strip().lower(), (bed["code"] or "").strip().lower())]
+            match = match or [bed for bed in own if bed["is_primary"]]
+            bed_ids = [bed["bed_id"] for bed in match[:1]]
+        else:
+            bed_ids = [bed["id"] for bed in beds if bed.get("leaf_id") == case["leaf_id"]]
+        for bed_id in bed_ids:
+            result.setdefault(bed_id, {"leaf_id": case["leaf_id"], "hn": case["hn"], "case_code": case["case_code"]})
+    return result
+
+
 def day_conflicts(database: Connection, session: dict[str, Any]) -> list[dict[str, Any]]:
     window = or_journey.span(session)
     if not window:
@@ -182,11 +222,11 @@ def day(from_ts: int = Query(alias="from", gt=0), to_ts: int = Query(alias="to",
            ORDER BY CASE room.room_type WHEN 'or' THEN 0 WHEN 'recovery' THEN 1 ELSE 2 END, room.sort_order, room.name""",
         (unit_key,)).fetchall()
     beds = database.execute(
-        """SELECT bed.id, bed.name, bed.parent_id, assignment.leaf_id,
+        f"""SELECT bed.id, bed.name, bed.parent_id, coalesce(assignment.leaf_id, leaf_bed.leaf_id) AS leaf_id,
                   coalesce(nullif(leaf.canopy_display_name,''), leaf.display_name) AS leaf_name
            FROM canopy_location bed
-           LEFT JOIN canopy_leaf_assignment assignment ON assignment.bed_location_id = bed.id
-           LEFT JOIN sync_leaf_node leaf ON leaf.leaf_id = assignment.leaf_id
+           {BED_LEAF_JOIN}
+           LEFT JOIN sync_leaf_node leaf ON leaf.leaf_id = coalesce(assignment.leaf_id, leaf_bed.leaf_id)
            WHERE bed.kind = 'bed' AND bed.is_active AND bed.parent_id = ANY(%s) ORDER BY bed.sort_order, bed.name""",
         ([room["id"] for room in rooms],)).fetchall()
     sessions = database.execute(
@@ -202,12 +242,9 @@ def day(from_ts: int = Query(alias="from", gt=0), to_ts: int = Query(alias="to",
         """SELECT id, room_location_id, scheduled_at, duration_min, team, journey_state FROM canopy_admission
            WHERE unit_key <> %s AND scheduled_at >= %s - 86400000 AND scheduled_at < %s""", (unit_key, from_ts, to_ts)).fetchall()
     warn = or_journey.conflicts([*sessions, *others])
-    busy = {row["leaf_id"]: row for row in database.execute(
-        """SELECT DISTINCT ON (leaf_id) leaf_id, hn, case_code FROM sync_case_index
-           WHERE status = 'ACTIVE' AND leaf_id = ANY(%s) ORDER BY leaf_id, start_time DESC""",
-        ([bed["leaf_id"] for bed in beds if bed["leaf_id"]],)).fetchall()}
+    busy = bed_cases(database, beds)
     return {
-        "rooms": [{**dict(room), "beds": [{**dict(bed), "active_case": dict(busy[bed["leaf_id"]]) if bed["leaf_id"] in busy else None}
+        "rooms": [{**dict(room), "beds": [{**dict(bed), "active_case": busy.get(bed["id"])}
                                           for bed in beds if bed["parent_id"] == room["id"]]} for room in rooms],
         "sessions": [{**public(row, names), "conflicts": warn.get(str(row["id"]), [])} for row in sessions],
         "unscheduled": [public(row, names) for row in unscheduled],
@@ -325,8 +362,10 @@ def close_session(session_id: str, payload: dict = Body(default={}), user: dict 
         raise HTTPException(400, f"state is one of {', '.join(or_journey.CLOSED_STATES)}")
     with database.transaction():
         row = load(database, session_id, scope, lock=True)
-        if row["status"] != "pending":
-            raise HTTPException(409, "the case has started on a Leaf; it cannot be closed here")
+        # Still before arrival on the board. A case a Leaf opened without moving in through the schedule
+        # (status 'started', journey still booked/assigned) can be closed too; that case stays on its Leaf.
+        if row["status"] not in ("pending", "started", "cancelled"):
+            raise HTTPException(409, "this session cannot be closed here")
         try:
             or_journey.check_transition(row["journey_state"], state)
         except or_journey.TransitionError as error:
@@ -353,8 +392,10 @@ def restore_session(session_id: str, user: dict = Depends(booker), scope: list[s
         row = load(database, session_id, scope, lock=True)
         if row["journey_state"] not in or_journey.CLOSED_STATES:
             raise HTTPException(409, "only a cancelled, postponed, no-show or miscreated session can be booked again")
-        database.execute("UPDATE canopy_admission SET journey_state='booked', status='pending', updated_by=%s, updated_at=%s WHERE id=%s",
-                         (user["username"], directory.now_ms(), session_id))
+        database.execute(
+            """UPDATE canopy_admission SET journey_state='booked',
+                 status=CASE WHEN claimed_leaf_id IS NULL THEN 'pending' ELSE status END, updated_by=%s, updated_at=%s WHERE id=%s""",
+            (user["username"], directory.now_ms(), session_id))
         record_event(database, session_id, "restored", actor=user["username"])
     return {"row": one(database, session_id, scope)}
 
@@ -374,9 +415,10 @@ def assign_bed(session_id: str, payload: AssignInput, user: dict = Depends(mover
         if row["journey_state"] not in ("booked", "assigned"):
             raise HTTPException(409, f"the session is {or_journey.LABEL[row['journey_state']]}; a bed is assigned before the patient moves in")
         bed = database.execute(
-            """SELECT bed.id, bed.name, room.id AS room_id, room.room_type, room.parent_id::text AS unit_key, assignment.leaf_id
+            f"""SELECT bed.id, bed.name, room.id AS room_id, room.room_type, room.parent_id::text AS unit_key,
+                      coalesce(assignment.leaf_id, leaf_bed.leaf_id) AS leaf_id
                FROM canopy_location bed JOIN canopy_location room ON room.id = bed.parent_id
-               LEFT JOIN canopy_leaf_assignment assignment ON assignment.bed_location_id = bed.id
+               {BED_LEAF_JOIN}
                WHERE bed.id = %s AND bed.kind = 'bed'""", (payload.bed_location_id,)).fetchone()
         if bed is None or bed["unit_key"] != row["unit_key"]:
             raise HTTPException(400, "the bed is not in this ward")
@@ -389,7 +431,7 @@ def assign_bed(session_id: str, payload: AssignInput, user: dict = Depends(mover
                  updated_by=%s, updated_at=%s WHERE id=%s""",
             (bed["leaf_id"], bed["id"], bed["room_id"], user["username"], directory.now_ms(), session_id))
         record_event(database, session_id, "assigned", actor=user["username"], location_id=bed["id"], leaf_id=bed["leaf_id"])
-    busy = database.execute("SELECT hn FROM sync_case_index WHERE leaf_id=%s AND status='ACTIVE' LIMIT 1", (bed["leaf_id"],)).fetchone()
+    busy = bed_cases(database, [bed]).get(bed["id"])
     return {"row": one(database, session_id, scope),
             "warning": f"{bed['name']} still has an active case (HN {busy['hn']}); it must move out first" if busy else None}
 
@@ -424,37 +466,62 @@ def request_move_in(session_id: str, user: dict = Depends(mover), scope: list[st
     return {"row": one(database, session_id, scope)}
 
 
+class TransferInput(BaseModel):
+    # One bill for OR + Recovery in Canopy billing, or two separate bills.
+    billing_mode: Literal["combined", "separate"] | None = None
+
+
 @router.post("/api/fleet/admissions/or/sessions/{session_id}/move-out")
-def request_move_out(session_id: str, user: dict = Depends(mover), scope: list[str] | None = Depends(ward_scope),
-                     database: Connection = Depends(connection)) -> dict[str, Any]:
-    """Patient out of the OR room, pressed at the ward desk: the room's Leaf closes its case (not a discharge)."""
+def request_move_out(session_id: str, payload: TransferInput | None = None, user: dict = Depends(mover),
+                     scope: list[str] | None = Depends(ward_scope), database: Connection = Depends(connection)) -> dict[str, Any]:
+    """Transfer to Recovery, pressed at the ward desk: the room's Leaf closes its case (Anesthesia Report);
+    the recovery bed's Leaf starts a new Post-Anesthesia case later."""
     with database.transaction():
         row = load(database, session_id, scope, lock=True)
         in_or_room = row["journey_state"] == "in_or" or (row["journey_state"] == "in_recovery" and database.execute(
             """SELECT 1 FROM canopy_location bed JOIN canopy_location room ON room.id = bed.parent_id
                WHERE bed.id = %s AND room.room_type = 'or'""", (row["current_bed_location_id"],)).fetchone() is not None)
         if not in_or_room:
-            raise HTTPException(409, "only a patient in the OR room moves out")
+            raise HTTPException(409, "only a patient in the OR room can be transferred to recovery")
         current = directory.now_ms()
-        database.execute("UPDATE canopy_admission SET move_out_requested_at=%s, move_out_requested_by=%s, updated_at=%s WHERE id=%s",
-                         (current, user["username"], current, session_id))
-        record_event(database, session_id, "move_out_requested", actor=user["username"], leaf_id=row["current_leaf_id"],
-                     location_id=row["current_bed_location_id"])
+        billing_mode = payload.billing_mode if payload else None
+        database.execute(
+            """UPDATE canopy_admission SET move_out_requested_at=%s, move_out_requested_by=%s,
+                 billing_mode=coalesce(%s, billing_mode), updated_at=%s WHERE id=%s""",
+            (current, user["username"], billing_mode, current, session_id))
+        record_event(database, session_id, "transfer_requested", actor=user["username"], leaf_id=row["current_leaf_id"],
+                     location_id=row["current_bed_location_id"], detail={"billing_mode": billing_mode} if billing_mode else None)
+    return {"row": one(database, session_id, scope)}
+
+
+@router.post("/api/fleet/admissions/or/sessions/{session_id}/billing-mode")
+def set_billing_mode(session_id: str, payload: TransferInput, user: dict = Depends(mover),
+                     scope: list[str] | None = Depends(ward_scope), database: Connection = Depends(connection)) -> dict[str, Any]:
+    """Combine the OR and Recovery billing orders into one bill, or keep them separate (any time)."""
+    if payload.billing_mode is None:
+        raise HTTPException(400, "billing_mode is combined or separate")
+    with database.transaction():
+        load(database, session_id, scope, lock=True)
+        database.execute("UPDATE canopy_admission SET billing_mode=%s, updated_by=%s, updated_at=%s WHERE id=%s",
+                         (payload.billing_mode, user["username"], directory.now_ms(), session_id))
+        record_event(database, session_id, "billing_mode", actor=user["username"], detail={"billing_mode": payload.billing_mode})
     return {"row": one(database, session_id, scope)}
 
 
 @router.post("/api/fleet/admissions/or/sessions/{session_id}/assign-recovery")
 def assign_recovery(session_id: str, payload: AssignInput, user: dict = Depends(mover), scope: list[str] | None = Depends(ward_scope),
                     database: Connection = Depends(connection)) -> dict[str, Any]:
-    """After the OR: a recovery bed. Its Leaf lists the patient; moving in continues the same case there."""
+    """After the OR: a recovery bed. Its Leaf lists the patient; receiving the transfer starts a new
+    (Post-Anesthesia) case there."""
     with database.transaction():
         row = load(database, session_id, scope, lock=True)
         if row["journey_state"] not in ("awaiting_recovery", "assigned_recovery"):
             raise HTTPException(409, "the patient has not moved out of the OR room yet")
         bed = database.execute(
-            """SELECT bed.id, bed.name, room.room_type, room.parent_id::text AS unit_key, assignment.leaf_id
+            f"""SELECT bed.id, bed.name, room.room_type, room.parent_id::text AS unit_key,
+                      coalesce(assignment.leaf_id, leaf_bed.leaf_id) AS leaf_id
                FROM canopy_location bed JOIN canopy_location room ON room.id = bed.parent_id
-               LEFT JOIN canopy_leaf_assignment assignment ON assignment.bed_location_id = bed.id
+               {BED_LEAF_JOIN}
                WHERE bed.id = %s AND bed.kind = 'bed'""", (payload.bed_location_id,)).fetchone()
         if bed is None or bed["unit_key"] != row["unit_key"]:
             raise HTTPException(400, "the bed is not in this ward")
@@ -466,7 +533,7 @@ def assign_recovery(session_id: str, payload: AssignInput, user: dict = Depends(
             """UPDATE canopy_admission SET journey_state='assigned_recovery', target_leaf_id=%s, current_bed_location_id=%s,
                  updated_by=%s, updated_at=%s WHERE id=%s""", (bed["leaf_id"], bed["id"], user["username"], directory.now_ms(), session_id))
         record_event(database, session_id, "assigned_recovery", actor=user["username"], location_id=bed["id"], leaf_id=bed["leaf_id"])
-    busy = database.execute("SELECT hn FROM sync_case_index WHERE leaf_id=%s AND status='ACTIVE' LIMIT 1", (bed["leaf_id"],)).fetchone()
+    busy = bed_cases(database, [bed]).get(bed["id"])
     return {"row": one(database, session_id, scope),
             "warning": f"{bed['name']} still has an active case (HN {busy['hn']})" if busy else None}
 

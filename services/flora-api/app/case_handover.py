@@ -21,7 +21,8 @@ CASE_TABLES = (
     "case_billing_order", "case_billing_order_item", "case_score_result",
 )
 CASE_COLUMNS_SKIP = {"id", "status", "case_code", "archive_time", "handover_from_leaf_id", "handover_from_case_id",
-                     "handover_global_case_id", "handover_to_leaf_id", "handover_at", "canopy_admission_id"}
+                     "handover_global_case_id", "handover_to_leaf_id", "handover_at", "canopy_admission_id",
+                     "bed_label"}  # the bed is the receiving Leaf's; stream_* and device bindings stay behind
 
 
 def _rows(database: Connection, sql: str, params: tuple) -> list[dict[str, Any]]:

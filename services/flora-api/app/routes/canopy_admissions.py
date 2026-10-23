@@ -214,8 +214,13 @@ def cancel_admission(admission_id: str, _: dict = Depends(require_canopy_permiss
         row = _load(database, admission_id, scope, lock=True)
         if row["status"] != "pending":
             raise HTTPException(status_code=409, detail="only an admission that has not started can be cancelled")
-        database.execute("UPDATE canopy_admission SET status='cancelled',updated_at=%s WHERE id=%s",
-                         (directory.now_ms(), admission_id))
+        # An OR booking closes on the schedule too (it would otherwise stay "Appointed" with no actions).
+        database.execute(
+            """UPDATE canopy_admission SET status='cancelled',updated_at=%s,
+                 journey_state=CASE WHEN journey_state IN ('booked','assigned') THEN 'cancelled' ELSE journey_state END,
+                 target_leaf_id=CASE WHEN journey_state IN ('booked','assigned') THEN NULL ELSE target_leaf_id END
+               WHERE id=%s""",
+            (directory.now_ms(), admission_id))
     return {"row": _public(_load(database, admission_id, scope))}
 
 

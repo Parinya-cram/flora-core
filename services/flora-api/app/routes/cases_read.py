@@ -155,7 +155,8 @@ def case_list(request: Request, database: Connection = Depends(connection)) -> d
     )
     rows = database.execute(
         """
-        SELECT id, case_code, hn, status, start_time, discharge_time, created_at, admission_source, identity_status
+        SELECT id, case_code, hn, status, start_time, discharge_time, created_at, admission_source, identity_status,
+               to_jsonb(cases) ->> 'bed_label' AS bed_label
         FROM cases
         WHERE status = ANY(%s)
         ORDER BY start_time DESC, id DESC
@@ -175,6 +176,7 @@ def case_list(request: Request, database: Connection = Depends(connection)) -> d
                 "created_at": row["created_at"],
                 "admission_source": row["admission_source"],
                 "identity_status": row["identity_status"],
+                "bed_label": row["bed_label"],
             }
             for row in rows
         ]
@@ -601,7 +603,8 @@ def case_staff(case_id_raw: str, database: Connection = Depends(connection)) -> 
         SELECT id, hospital_id, personal_id, email, th_first_name, th_last_name,
                en_first_name, en_last_name, innovian_id,
                staff_role_id AS role_id, staff_name AS name, staff_role AS role,
-               entry_year, profile_data, seq, to_jsonb(cs) ->> 'staff_code' AS staff_code
+               entry_year, profile_data, seq, to_jsonb(cs) ->> 'staff_code' AS staff_code,
+               (to_jsonb(cs) ->> 'time_in')::bigint AS time_in, (to_jsonb(cs) ->> 'time_out')::bigint AS time_out
         FROM case_staff cs
         WHERE case_id = %s
         ORDER BY seq ASC, id ASC

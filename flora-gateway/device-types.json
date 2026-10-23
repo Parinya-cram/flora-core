@@ -95,6 +95,7 @@
     "controller": "socket",
     "parser": "iacs_m540",
     "image": "parser",
+    "demux": true,
     "default_options": {},
     "connection_defaults": {
       "transport": "udp",

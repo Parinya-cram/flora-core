@@ -25,6 +25,8 @@ export type OrSession = {
   dischargeDestination: string | null; preopFilled: boolean; targetLeafId: string | null; bedId: number | null;
   moveInRequestedAt: number | null; moveInRequestedBy: string | null; moveOutRequestedAt: number | null;
   dischargeRequestedAt: number | null; recoveryInAt: number | null; dischargeNote: string | null; updatedAt: number | null; updatedBy: string | null;
+  /** OR → Recovery transfer: one combined bill or separate bills; the closed OR case's global id. */
+  billingMode?: BillingMode; orGlobalCaseId?: string | null; globalCaseId?: string | null;
   conflicts?: OrConflict[];
 };
 export type OrBed = { id: number; name: string; leaf_id: string | null; leaf_name: string | null; active_case: { hn: string; case_code: string } | null };
@@ -75,7 +77,12 @@ export const assignOrBed = (id: string, bedId: number) =>
   request<{ row: OrSession; warning: string | null }>(`${OR}/sessions/${encodeURIComponent(id)}/assign`, { method: "POST", body: JSON.stringify({ bed_location_id: bedId }) });
 export const unassignOrBed = (id: string) => request<{ row: OrSession }>(`${OR}/sessions/${encodeURIComponent(id)}/unassign`, { method: "POST", body: "{}" });
 export const requestOrMoveIn = (id: string) => request<{ row: OrSession }>(`${OR}/sessions/${encodeURIComponent(id)}/move-in`, { method: "POST", body: "{}" });
-export const requestOrMoveOut = (id: string) => request<{ row: OrSession }>(`${OR}/sessions/${encodeURIComponent(id)}/move-out`, { method: "POST", body: "{}" });
+export type BillingMode = "combined" | "separate";
+/** Transfer to Recovery: the room's Leaf closes the OR case; the recovery bed starts a new case. */
+export const requestOrMoveOut = (id: string, billingMode?: BillingMode) =>
+  request<{ row: OrSession }>(`${OR}/sessions/${encodeURIComponent(id)}/move-out`, { method: "POST", body: JSON.stringify(billingMode ? { billing_mode: billingMode } : {}) });
+export const setOrBillingMode = (id: string, billingMode: BillingMode) =>
+  request<{ row: OrSession }>(`${OR}/sessions/${encodeURIComponent(id)}/billing-mode`, { method: "POST", body: JSON.stringify({ billing_mode: billingMode }) });
 export const assignOrRecovery = (id: string, bedId: number) =>
   request<{ row: OrSession; warning: string | null }>(`${OR}/sessions/${encodeURIComponent(id)}/assign-recovery`, { method: "POST", body: JSON.stringify({ bed_location_id: bedId }) });
 export const requestOrDischarge = (id: string, destination: string, note: string) =>

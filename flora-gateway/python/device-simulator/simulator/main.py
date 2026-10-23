@@ -8,6 +8,9 @@ Each device uses a different gateway ingress path:
   or-temp-module    RS-232 KEY=VALUE, answers only when polled ("?\\r\\n")
   or-t200           RS-232 Acme T-200 ($T200,…*CS), answers each "R\\r" poll (virtual COM2)
   or-vista          Dräger Vista 120 S CMS link: binary vitals frames over TCP → socket pod 9500
+  m540-sim-N        Dräger M540 IACS datagrams (numerics + ECG/pleth waves) for SIM_M540_MONITORS
+                    monitors, sent through the udp_relay framing → socket pod m540-relay (9510);
+                    monitor N has source IP 10.20.0.(10+N)
 It also receives the publisher's pushed batches at POST /receiver.
 """
 from __future__ import annotations
@@ -25,6 +28,8 @@ from typing import Any
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
+
+from . import iacs
 
 log = logging.getLogger("simulator")
 SOCKET_HOST = os.getenv("SIM_SOCKET_HOST", "socket-controller")
@@ -231,6 +236,57 @@ async def vista_monitor() -> None:
             await asyncio.sleep(3)
 
 
+# ------------------------------------------------------------------ Dräger M540 (IACS, relayed)
+
+M540_RELAY_PORT = int(os.getenv("SIM_M540_RELAY_PORT", "9510"))
+M540_MONITORS = int(os.getenv("SIM_M540_MONITORS", "3"))
+M540_PERIOD = 0.2          # one datagram per 200 ms: 40 ECG samples (tag 200) + 20 pleth (tag 100)
+
+
+def m540_ip(index: int) -> str:
+    return f"10.20.0.{10 + index}"
+
+
+def m540_vitals(index: int) -> dict[str, float]:
+    phase = index * 1.3
+    hr = 64 + 10 * index + wave(6, 5, phase)
+    minute_slot = int(time.time() // 300)
+    sys_bp, dia_bp = 112 + 6 * index + (minute_slot % 4) * 2, 68 + 3 * index + (minute_slot % 3)
+    return {"hr": round(hr), "pr": round(hr + 1), "spo2": round(min(100, 97 + wave(13, 1.5, phase))),
+            "rr": round(13 + index + wave(9, 2, phase)), "etco2": round(36 + wave(8, 2, phase), 1),
+            "nibp_sys": sys_bp, "nibp_dia": dia_bp, "nibp_map": round((sys_bp + 2 * dia_bp) / 3),
+            "temperature": round(36.6 + wave(40, 0.2, phase), 1)}
+
+
+async def m540_relay() -> None:
+    """One relay connection carries every simulated monitor, like tools/iacs-relay."""
+    samples = [0] * M540_MONITORS
+    while True:
+        try:
+            _, writer = await asyncio.open_connection(SOCKET_HOST, M540_RELAY_PORT)
+            log.info("m540 relay connected to %s:%s (%d monitors)", SOCKET_HOST, M540_RELAY_PORT, M540_MONITORS)
+            tick, next_at = 0, time.monotonic()
+            while True:
+                for index in range(M540_MONITORS):
+                    vitals = m540_vitals(index + 1)
+                    start = samples[index]
+                    ecg = [round(iacs.ecg((start + i) / 200, vitals["hr"])) for i in range(40)]
+                    pleth = [round(iacs.pleth((start + 2 * i) / 200, vitals["hr"])) for i in range(20)]
+                    samples[index] += 40
+                    data = iacs.datagram(vitals if tick % 5 == 0 else None,
+                                         [(200, iacs.ECG_KEY, ecg), (100, iacs.PLETH_KEY, pleth)])
+                    writer.write(iacs.relay_frame(m540_ip(index + 1), data))
+                    bump(f"m540-sim-{index + 1}", True)
+                await writer.drain()
+                tick += 1
+                next_at += M540_PERIOD
+                await asyncio.sleep(max(0.0, next_at - time.monotonic()))
+        except Exception as error:
+            for index in range(M540_MONITORS):
+                bump(f"m540-sim-{index + 1}", False, str(error) or type(error).__name__)
+            await asyncio.sleep(3)
+
+
 # ------------------------------------------------------------------ app
 
 @asynccontextmanager
@@ -244,6 +300,8 @@ async def lifespan(_: FastAPI):
         asyncio.create_task(acme_t200()),
         asyncio.create_task(vista_monitor()),
     ]
+    if M540_MONITORS > 0:
+        tasks.append(asyncio.create_task(m540_relay()))
     yield
     for task in tasks:
         task.cancel()

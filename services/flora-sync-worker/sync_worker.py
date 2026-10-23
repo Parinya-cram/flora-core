@@ -81,6 +81,7 @@ def build_snapshot(client: httpx.Client, case: dict[str, Any]) -> dict[str, Any]
         "workflow_forms": f"/api/case/{case_id}/workflow-forms",
         "billing": f"/api/case/{case_id}/billing",
         "scores": f"/api/case/{case_id}/scores?from={from_ms}&to={end_ms}",
+        "devices": f"/api/case/{case_id}/devices",
     }
     snapshot: dict[str, Any] = {"case": case, "window": {"from": from_ms, "to": end_ms}}
     for key, path in paths.items():
@@ -90,6 +91,9 @@ def build_snapshot(client: httpx.Client, case: dict[str, Any]) -> dict[str, Any]
             if error.response.status_code != 404:
                 raise
             snapshot[key] = None
+    # Gateway bindings without the live stream state, which changes every second.
+    for binding in (snapshot.get("devices") or {}).get("devices") or []:
+        binding.pop("stream", None)
     return snapshot
 
 

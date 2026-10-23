@@ -10,6 +10,8 @@ class IacsParseError(ValueError):
 class ParsedIacsDatagram:
     numeric_values: dict[str, int] = field(default_factory=dict)
     waveforms: dict[str, list[int]] = field(default_factory=dict)
+    # Second byte of each waveform block's tag (200, 100 or 50), by waveform key.
+    waveform_tags: dict[str, int] = field(default_factory=dict)
     bed_label: str | None = None
     message: str | None = None
     trailing_offset: int | None = None
@@ -30,6 +32,7 @@ class IacsDatagramParser:
 
         numeric: dict[str, int] = {}
         waveforms: dict[str, list[int]] = {}
+        waveform_tags: dict[str, int] = {}
         bed_label: str | None = None
         message: str | None = None
         position = self.header_length
@@ -50,6 +53,7 @@ class IacsDatagramParser:
                 self._require(payload, position, block_length)
                 key = self._key(payload[position + 10 : position + 12])
                 waveforms[key] = self._signed_list(payload, position + 14, sample_count)
+                waveform_tags[key] = tag[1]
             elif tag == (0, 14):
                 self._require(payload, position, 6)
                 count = payload[position + 4]
@@ -102,6 +106,7 @@ class IacsDatagramParser:
         return ParsedIacsDatagram(
             numeric_values=numeric,
             waveforms=waveforms,
+            waveform_tags=waveform_tags,
             bed_label=bed_label,
             message=message,
             trailing_offset=trailing_offset,

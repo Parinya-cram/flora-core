@@ -17,6 +17,8 @@ export type BillingLine = {
   line_no?: number; item_code: string | null; group_code: string; name: string; variant: string | null; qty: number;
   unit?: string | null; qty_mode?: BillingQtyMode; unit_price?: number | null; amount?: number | null;
   source?: "manual" | "io_suggestion"; note?: string | null;
+  /** Combined OR + Recovery bill on Canopy: which case the line came from. */
+  part?: "or" | "recovery" | null;
 };
 export type BillingOrder = {
   id: number; order_uuid: string; status: "draft" | "submitted" | "void";
@@ -69,6 +71,12 @@ export type CanopyBillingOrder = {
   anesthesia_start: number | null; anesthesia_end: number | null; surgery_start: number | null; surgery_end: number | null;
   discharge_location: string | null; signers: BillingSigner[]; item_count: number; total_amount: number | null;
   submitted_at: number | null; submitted_by: string | null; order_updated_at: number | null; synced_at: number;
+  /** OR → Recovery transfer billed as one: the two cases' orders, OR first. */
+  combined?: boolean; parts?: CanopyBillingPart[];
+};
+export type CanopyBillingPart = {
+  part: "or" | "recovery" | null; global_case_id: string; leaf_name: string | null; status: string | null;
+  item_count: number | null; total_amount: number | null; case_code: string | null;
 };
 export type CanopyBillingTotal = { item_code: string | null; name: string; group_code: string; unit: string | null; qty: number; cases: number; amount: number | null };
 

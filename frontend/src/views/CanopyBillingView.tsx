@@ -1,10 +1,30 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import type { AuthUser } from "../auth/useAuth";
 import {
   getCanopyBillingCatalog, getCanopyBillingOrder, getCanopyBillingOrders, saveCanopyBillingItem,
   type BillingCatalog, type BillingItem, type BillingLine, type CanopyBillingOrder, type CanopyBillingTotal,
 } from "../api/billingApi";
 import { buildBillingSheetHtml, clock, printHtml, qtyText, span } from "../components/billing/billingSheet";
+
+const PART_LABEL = { or: "OR · Anesthesia", recovery: "Recovery · Post-Anesthesia" } as const;
+
+/** Combined OR + Recovery bill for the printed sheet: one line per item (quantities and amounts summed). */
+function sumByItem(lines: BillingLine[]): BillingLine[] {
+  const out: BillingLine[] = [];
+  const byCode = new Map<string, BillingLine>();
+  for (const line of lines) {
+    const found = line.item_code ? byCode.get(line.item_code) : undefined;
+    if (!found) {
+      const copy = { ...line };
+      if (line.item_code) byCode.set(line.item_code, copy);
+      out.push(copy);
+      continue;
+    }
+    found.qty = Number(found.qty || 0) + Number(line.qty || 0);
+    if (found.amount != null || line.amount != null) found.amount = Number(found.amount || 0) + Number(line.amount || 0);
+  }
+  return out;
+}
 
 /**
  * Canopy billing: orders sent by every Leaf (OR billing checklist) and the item master
@@ -70,7 +90,7 @@ function Orders({ catalog }: { catalog: BillingCatalog | null }) {
     if (!selected || !catalog) return;
     const o = selected.order;
     printHtml(buildBillingSheetHtml({
-      catalog, lines: selected.items, signers: o.signers || [], dischargeLocation: o.discharge_location, status: o.status,
+      catalog, lines: o.combined ? sumByItem(selected.items) : selected.items, signers: o.signers || [], dischargeLocation: o.discharge_location, status: o.status,
       anesthesia: [o.anesthesia_start, o.anesthesia_end], surgery: [o.surgery_start, o.surgery_end],
       header: { patientName: o.patient_name, hn: o.hn, an: o.an, opDate: day(o.anesthesia_start || o.surgery_start), room: o.leaf_name || o.leaf_id },
     }));
@@ -104,7 +124,7 @@ function Orders({ catalog }: { catalog: BillingCatalog | null }) {
                   <td className="p-2">{day(row.anesthesia_start || row.order_updated_at)}</td>
                   <td className="p-2">{row.hn || "—"}<div className="text-xs text-[var(--app-muted)]">{row.an || ""}</div></td>
                   <td className="p-2">{row.patient_name || "—"}</td>
-                  <td className="p-2">{row.leaf_name || row.leaf_id}</td>
+                  <td className="p-2">{row.leaf_name || row.leaf_id}{row.combined ? <div><span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-800">OR + Recovery</span></div> : null}</td>
                   <td className="p-2">{clock(row.anesthesia_start)}–{clock(row.anesthesia_end)} <span className="text-xs text-[var(--app-muted)]">{span(row.anesthesia_start, row.anesthesia_end)}</span></td>
                   <td className="p-2 text-right">{row.item_count}</td>
                   <td className="p-2 text-right">{money(row.total_amount)}</td>
@@ -123,14 +143,16 @@ function Orders({ catalog }: { catalog: BillingCatalog | null }) {
                   <div className="text-xs text-[var(--app-muted)]">HN {selected.order.hn} · AN {selected.order.an || "—"} · {selected.order.signers?.map(s => s.name).join(", ")}</div></div>
                 <button type="button" onClick={print} className="rounded-xl border border-[var(--app-border)] px-3 py-1 text-sm font-semibold">Print</button>
               </div>
+              {selected.order.combined ? <div className="mb-2 text-xs text-[var(--app-muted)]">Combined bill: {selected.order.parts?.map(part => `${PART_LABEL[part.part || "or"]} (${part.leaf_name || part.case_code || "case"}, ${part.status})`).join(" + ")}</div> : null}
               <table className="w-full text-sm">
-                <tbody>{selected.items.map(line => (
-                  <tr key={line.line_no} className="border-t border-[var(--app-border)]">
+                <tbody>{selected.items.map((line, index) => <Fragment key={`${line.part || ""}-${line.line_no ?? index}`}>
+                  {selected.order.combined && line.part !== selected.items[index - 1]?.part ? <tr><td colSpan={3} className="pt-2 text-[11px] font-extrabold uppercase tracking-[0.1em] text-[var(--app-muted)]">{PART_LABEL[line.part || "or"]}</td></tr> : null}
+                  <tr className="border-t border-[var(--app-border)]">
                     <td className="py-1">{line.name}{line.variant ? ` (${line.variant})` : ""}</td>
                     <td className="py-1 text-right">{qtyText(line)} {line.qty_mode === "used" ? "" : line.unit || ""}</td>
                     <td className="py-1 text-right">{money(line.amount)}</td>
                   </tr>
-                ))}</tbody>
+                </Fragment>)}</tbody>
               </table>
             </div>
           ) : null}

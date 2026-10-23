@@ -313,7 +313,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Flora Canopy Haber", lifespan=lifespan)
 basic_auth.install(app, "Canopy Haber", "HABER", [
-    r"/health", r"/api/haber/v1/gateways/[^/]+/(checkin|alerts|activity)",  # gateways, token auth
+    r"/health", r"/api/haber/v1/gateways/[^/]+/(checkin|alerts|activity|case-bindings)",  # gateways, token auth
     r"/api/haber/v1/root-keys", r"/api/haber/v1/nodes/[^/]+/(desired|report)",  # flora-updater, token auth
 ])
 
@@ -463,6 +463,31 @@ def gateway_activity(gateway_id: str, body: GatewayActivity, request: Request):
         response.raise_for_status()
     except Exception as error:
         log.warning("canopy activity relay failed for %s: %s", gateway_id, error)
+        raise HTTPException(502, f"Canopy unreachable: {error}") from None
+    return response.json()
+
+
+class GatewayCaseBindings(BaseModel):
+    gateway_id: str
+    bindings: list[dict[str, Any]] = []
+
+
+@app.post("/api/haber/v1/gateways/{gateway_id}/case-bindings")
+def gateway_case_bindings(gateway_id: str, body: GatewayCaseBindings, request: Request):
+    """Relays the stream-hub's case UUID <-> device bindings to Canopy. Canopy's answer lists the
+    binding ids it stored; the gateway resends anything not listed."""
+    supplied = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    if not GATEWAY_TOKEN or not hmac.compare_digest(supplied, GATEWAY_TOKEN):
+        raise HTTPException(401, "invalid gateway token")
+    if not CANOPY_SYNC_URL or not SYNC_SECRET:
+        raise HTTPException(503, "Canopy sync is not configured; bindings stay queued on the gateway")
+    try:
+        response = httpx.post(f"{CANOPY_SYNC_URL}/api/sync/v1/gateways/{gateway_id}/case-bindings",
+                              headers={"authorization": f"Bearer {SYNC_SECRET}"}, timeout=10,
+                              json={"bindings": body.bindings})
+        response.raise_for_status()
+    except Exception as error:
+        log.warning("canopy case-binding relay failed for %s: %s", gateway_id, error)
         raise HTTPException(502, f"Canopy unreachable: {error}") from None
     return response.json()
 

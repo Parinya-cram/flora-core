@@ -15,6 +15,8 @@ export type WardCase = {
   admission_source?: string;
   handover_from_leaf_id?: string | null;
   handover_to_leaf_id?: string | null;
+  /** Multi-case Leaf: bed within the room. */
+  bed_label?: string | null;
 };
 
 export type WardAdmission = {
@@ -53,6 +55,8 @@ export type WardPeer = {
   last_seen?: number | null;
   online: boolean;
   active_case?: WardPeerCase | null;
+  /** Multi-case peers report every active case; active_case stays the newest one. */
+  active_cases?: (WardPeerCase & { bed_label?: string | null })[] | null;
 };
 
 export type GatewayDevice = {
@@ -90,6 +94,8 @@ export type WardOverview = {
   peers: WardPeer[];
   gateways: RegisteredGateway[];
   device_source?: { gateway_id?: string | null; data_api_url: string; configured_at: number; configured_by?: string } | null;
+  /** Multi-gateway Leaf (migration 0090); absent on older Leaf APIs. */
+  gateway_links?: GatewayLink[] | null;
   sync: { auto_interval_sec: number; requested_at?: number | null; ward_synced_at?: number | null; last_ok_at?: number | null; components: SyncComponent[] };
 };
 
@@ -110,6 +116,28 @@ export type GatewayVerify = {
   devices?: GatewayDevice[];
   latest?: Record<string, { value: unknown; unit?: string | null; device_id: string; system_ts: number }>;
   rows?: number;
+};
+
+/** A gateway this Leaf reads from / streams from (leaf_gateway_link). The token is never returned. */
+export type GatewayLink = {
+  id: number;
+  gateway_id?: string | null;
+  label?: string | null;
+  data_api_url?: string | null;
+  stream_url?: string | null;
+  has_token: boolean;
+  is_default: boolean;
+  created_at?: number | string | null;
+  updated_at?: number | string | null;
+};
+export type GatewayLinkInput = {
+  gateway_id?: string | null;
+  label?: string | null;
+  data_api_url?: string | null;
+  stream_url?: string | null;
+  /** Only sent when changed; empty string clears it. */
+  token?: string;
+  is_default?: boolean;
 };
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -142,6 +170,59 @@ export const verifyGateway = (dataApiUrl: string) => post<GatewayVerify>("/gatew
 export const saveDeviceSource = (gatewayId: string | null, dataApiUrl: string) =>
   request<{ device_source: unknown }>("/gateway/source", { method: "PUT", body: JSON.stringify({ gateway_id: gatewayId, data_api_url: dataApiUrl }) });
 
+export function gatewayLinkLabel(link: GatewayLink | undefined | null): string {
+  if (!link) return "Gateway";
+  return link.label || link.gateway_id || link.data_api_url || `Gateway #${link.id}`;
+}
+
+/** Builds the stream address the edge serves next to the data-api (wss://<gateway>/stream/v1). */
+export function suggestStreamUrl(dataApiUrl: string): string {
+  try {
+    const url = new URL(dataApiUrl);
+    return `${url.protocol === "https:" ? "wss" : "ws"}://${url.host}/stream/v1`;
+  } catch {
+    return "";
+  }
+}
+
+function normalizeLink(raw: unknown): GatewayLink | null {
+  const row = raw as Partial<GatewayLink> | null;
+  const id = Number(row?.id);
+  if (!row || !Number.isFinite(id)) return null;
+  return { ...row, id, has_token: Boolean(row.has_token), is_default: Boolean(row.is_default) };
+}
+
+function pickLink(data: unknown): GatewayLink {
+  const value = data as { link?: unknown } | null;
+  const link = normalizeLink(value?.link ?? value);
+  if (!link) throw new Error("Gateway link response missing id");
+  return link;
+}
+
+export async function getGatewayLinks(): Promise<GatewayLink[]> {
+  const data = await request<unknown>("/gateway/links");
+  const rows = Array.isArray(data) ? data : ((data as { links?: unknown })?.links ?? []);
+  return (Array.isArray(rows) ? rows : []).map(normalizeLink).filter((row): row is GatewayLink => Boolean(row));
+}
+export const createGatewayLink = async (input: GatewayLinkInput) => pickLink(await post<unknown>("/gateway/links", input));
+export const updateGatewayLink = async (id: number, input: GatewayLinkInput) =>
+  pickLink(await request<unknown>(`/gateway/links/${id}`, { method: "PUT", body: JSON.stringify(input) }));
+export const deleteGatewayLink = (id: number) => request<unknown>(`/gateway/links/${id}`, { method: "DELETE" });
+/** Devices the gateway serves (proxied Gateway /api/devices/status). */
+export async function getGatewayLinkDevices(id: number): Promise<GatewayDevice[]> {
+  const data = await request<unknown>(`/gateway/links/${id}/devices`);
+  const status = data as { reachable?: boolean; error?: unknown } | null;
+  if (status && status.reachable === false) throw new Error(typeof status.error === "string" ? status.error : "gateway unreachable");
+  const rows = Array.isArray(data) ? data : ((data as { devices?: unknown })?.devices ?? []);
+  const devices: GatewayDevice[] = [];
+  for (const raw of Array.isArray(rows) ? rows : []) {
+    const row = raw as GatewayDevice & { online?: boolean };
+    if (!row || row.device_id == null) continue;
+    devices.push({ ...row, device_id: String(row.device_id), is_online: row.is_online ?? row.online });
+  }
+  return devices;
+}
+
 /** Settings > Location: Canopy's location tree (fails when Canopy is unreachable). */
 export type CanopyLocation = { id: number; parent_id: number | null; kind: "hospital" | "building" | "care_unit" | "room" | "bed"; code?: string | null; name: string };
 export type CanopyLocations = {
@@ -152,5 +233,7 @@ export type CanopyLocations = {
   current_bed_id: number | null;
 };
 export const getCanopyLocations = () => request<CanopyLocations>("/locations");
+/** Discharge dialog: the same tree, readable with case.discharge (no config.manage needed). */
+export const getCanopyDestinations = () => request<CanopyLocations>("/locations/destinations");
 export const assignCanopyLocation = (bedLocationId: number) =>
   post<{ location: Record<string, string>; version: number }>("/locations/assign", { bed_location_id: bedLocationId });

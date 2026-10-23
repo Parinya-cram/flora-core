@@ -25,7 +25,7 @@ import canopyMonitoringIcon from "../assets/menu/canopy-menu-monitoring.png";
 import canopyFormDevIcon from "../assets/menu/canopy-menu-formdev.png";
 import { canAuthorStudio, canUseAiStudio } from "../auth/studioAccess";
 
-export type AppView = "ward" | "case" | "form" | "diagnosis" | "staff" | "io" | "patient" | "report" | "master" | "account" | "dashboard" | "admissions" | "monitoring" | "fleet" | "infrastructure" | "topology" | "gateway-alerts" | "devices" | "twin" | "formdev" | "workflows" | "report-studio" | "ai-studio" | "history" | "billing" | "staff-directory" | "or-schedule";
+export type AppView = "ward" | "case" | "form" | "diagnosis" | "staff" | "io" | "patient" | "report" | "master" | "account" | "dashboard" | "admissions" | "monitoring" | "fleet" | "infrastructure" | "topology" | "gateway-alerts" | "devices" | "twin" | "formdev" | "workflows" | "report-studio" | "ai-studio" | "history" | "billing" | "staff-directory" | "or-schedule" | "waveform" | "journey";
 
 type Props = {
   activeView: AppView;
@@ -40,7 +40,7 @@ type Props = {
   wardName?: string | null;
 };
 
-type NavIconName = "ward" | "chart" | "io" | "clinical" | "form" | "staff" | "patient" | "report" | "config" | "archive" | "start" | "fleet" | "dashboard" | "canopy-dashboard" | "canopy-monitoring" | "canopy-charts" | "canopy-reports" | "canopy-config" | "canopy-infrastructure" | "canopy-formdev";
+type NavIconName = "journey" | "ward" | "chart" | "io" | "clinical" | "form" | "staff" | "patient" | "report" | "config" | "archive" | "start" | "fleet" | "dashboard" | "canopy-dashboard" | "canopy-monitoring" | "canopy-charts" | "canopy-reports" | "canopy-config" | "canopy-infrastructure" | "canopy-formdev";
 type NavItem = { view: AppView; label: string; icon: NavIconName };
 type CanopyCasePanelId = "chart" | "io" | "diagnosis" | "forms" | "staff" | "patient" | "report";
 
@@ -93,6 +93,7 @@ function NavIcon({ name }: { name: NavIconName }) {
       : name === "clinical" ? <><path d="M9 3h6l1 2h3v16H5V5h3l1-2Z"/><path d="M9 12h6M12 9v6"/></>
       : name === "form" ? <><path d="M6 3h9l3 3v15H6Z"/><path d="M15 3v4h4M9 11h6M9 15h6M9 19h4"/></>
       : name === "staff" ? <><circle cx="9" cy="8" r="3"/><path d="M3.5 20c.4-4 2.2-6 5.5-6s5.1 2 5.5 6"/><circle cx="17" cy="9" r="2.2"/><path d="M15.5 15c3.2-.8 5.1.8 5.5 4"/></>
+      : name === "journey" ? <><circle cx="5" cy="6" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 6h8a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h8"/></>
       : name === "patient" ? <><circle cx="12" cy="8" r="3.2"/><path d="M5 21c.5-5 2.8-7.5 7-7.5s6.5 2.5 7 7.5"/></>
       : name === "report" ? <><path d="M5 3h11l3 3v15H5Z"/><path d="M16 3v4h4M8 17v-3M12 17v-6M16 17V9"/></>
       : name === "config" ? <><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></>
@@ -223,12 +224,14 @@ function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, colla
       : [
           { view: "ward", label: t("system.ward"), icon: "ward" },
           { view: "case", label: "Chart", icon: "chart" },
+          { view: "waveform", label: "Waveform", icon: "chart" },
           { view: "io", label: "I/O", icon: "io" },
           { view: "diagnosis", label: "Diag/Ops", icon: "clinical" },
           { view: "form", label: "Forms", icon: "form" },
           { view: "billing", label: "Billing", icon: "report" },
           { view: "staff", label: "Staff", icon: "staff" },
           { view: "patient", label: "Patient", icon: "patient" },
+          { view: "journey", label: "Journey", icon: "journey" },
           ...(canReport ? [{ view: "report" as AppView, label: "Reports", icon: "report" as NavIconName }] : []),
           { view: "history", label: t("topbar.archive"), icon: "archive" },
         ];

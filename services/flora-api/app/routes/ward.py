@@ -16,7 +16,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 
-from .. import case_handover
+from .. import case_bindings, case_handover
 from ..account_config_sync import CANOPY_SYNC_URL, SYNC_SECRET
 from ..database import connection
 from .auth_leaf import now_ms, require_permission, service_only
@@ -40,7 +40,7 @@ def overview(_: dict = Depends(require_permission("case.read")), database: Conne
     directory = database.execute("SELECT leaf_unit_key, leaf_unit_name FROM auth_directory_state WHERE id=1").fetchone() or {}
     cases = database.execute(
         """SELECT id, case_code, hn, admission_number, patient_display_name, status, start_time, discharge_time,
-                  admission_source, handover_from_leaf_id, handover_to_leaf_id
+                  admission_source, handover_from_leaf_id, handover_to_leaf_id, bed_label
            FROM cases
            WHERE status <> 'archived' OR coalesce(archive_time, discharge_time, start_time) > %s
            ORDER BY (status = 'active') DESC, start_time DESC LIMIT 30""",
@@ -68,6 +68,8 @@ def overview(_: dict = Depends(require_permission("case.read")), database: Conne
         "gateways": payload.get("gateways") or [],
         "handovers": payload.get("handovers") or [],
         "device_source": source,
+        "gateway_links": [case_bindings.link_public(row) for row in
+                          database.execute("SELECT * FROM leaf_gateway_link ORDER BY is_default DESC, id").fetchall()],
         "sync": {
             "auto_interval_sec": AUTO_SYNC_SECONDS,
             "requested_at": control.get("requested_at"),
@@ -136,6 +138,7 @@ def put_state(payload: dict[str, Any], _: dict = Depends(service_only), database
             ).fetchone()
             released.append(int(item["source_case_id"]))
             if row:
+                case_bindings.release(database, row["id"], "archived", current)
                 database.execute(
                     """INSERT INTO case_clinical_audit (case_id, action, before_json, after_json, actor_username, actor_role, created_at)
                        VALUES (%s, 'handover.released', NULL, %s, 'canopy-sync', 'integration', %s)""",
@@ -185,16 +188,12 @@ def take_over(payload: dict[str, Any] = Body(...), actor: dict = Depends(require
     global_case_id = str(payload.get("global_case_id") or "").strip()
     if not global_case_id:
         raise HTTPException(400, "global_case_id required")
-    if database.execute("SELECT 1 FROM cases WHERE status='active' LIMIT 1").fetchone():
-        raise HTTPException(409, "discharge the active case on this Leaf first")
     claim = canopy("POST", "/api/sync/v1/handover/claim", {
         "leaf_id": os.getenv("FLORA_LEAF_ID", ""), "global_case_id": global_case_id,
         "move_devices": bool(payload.get("move_devices")), "actor": actor["username"]})
     try:
         with database.transaction():
             database.execute("SELECT pg_advisory_xact_lock(6893, 1)")
-            if database.execute("SELECT 1 FROM cases WHERE status='active' LIMIT 1").fetchone():
-                raise HTTPException(409, "discharge the active case on this Leaf first")
             result = case_handover.import_case(
                 database, claim["export"], from_leaf_id=claim["from_leaf_id"], global_case_id=global_case_id,
                 actor=actor["username"], now=now_ms())
@@ -277,8 +276,116 @@ def gateway_source(payload: dict[str, Any] = Body(...), actor: dict = Depends(re
              configured_by=excluded.configured_by, configured_at=excluded.configured_at RETURNING *""",
         (payload.get("gateway_id"), url, actor["username"], now_ms()),
     ).fetchone()
+    # The default gateway link follows the wizard (per-case bindings and the live stream use links).
+    updated = database.execute(
+        "UPDATE leaf_gateway_link SET gateway_id=%s, data_api_url=%s, updated_at=%s WHERE is_default RETURNING id",
+        (row["gateway_id"], url, row["configured_at"])).fetchone()
+    if updated is None:
+        database.execute(
+            """INSERT INTO leaf_gateway_link (gateway_id, label, data_api_url, is_default, created_at, updated_at)
+               VALUES (%s, %s, %s, true, %s, %s)""",
+            (row["gateway_id"], row["gateway_id"] or "Gateway", url, row["configured_at"], row["configured_at"]))
     database.commit()
     return {"device_source": row}
+
+
+# ---------------------------------------------------------------- gateway links (several gateways; live stream)
+
+LINK_FIELDS = ("gateway_id", "label", "data_api_url", "stream_url", "token")
+
+
+def link_values(payload: dict[str, Any]) -> dict[str, Any]:
+    values = {}
+    for key in LINK_FIELDS:
+        if key in payload:
+            value = str(payload[key] or "").strip() or None
+            values[key] = value.rstrip("/") if value and key.endswith("_url") else value
+    if values.get("data_api_url") and not values["data_api_url"].startswith(("http://", "https://")):
+        raise HTTPException(400, "data_api_url must start with http:// or https://")
+    if values.get("stream_url") and not values["stream_url"].startswith(("ws://", "wss://")):
+        raise HTTPException(400, "stream_url must start with ws:// or wss://")
+    return values
+
+
+def saved_link(database: Connection, link_id: int, is_default: Any, actor: dict) -> dict:
+    if is_default or not database.execute("SELECT 1 FROM leaf_gateway_link WHERE is_default").fetchone():
+        database.execute("UPDATE leaf_gateway_link SET is_default=false WHERE is_default AND id<>%s", (link_id,))
+        database.execute("UPDATE leaf_gateway_link SET is_default=true WHERE id=%s", (link_id,))
+    case_bindings.mirror_default(database, actor["username"])
+    return case_bindings.link_public(database.execute("SELECT * FROM leaf_gateway_link WHERE id=%s", (link_id,)).fetchone())
+
+
+@router.get("/gateway/links")
+def gateway_links(_: dict = Depends(require_permission("case.read")), database: Connection = Depends(connection)) -> dict:
+    rows = database.execute("SELECT * FROM leaf_gateway_link ORDER BY is_default DESC, id").fetchall()
+    return {"links": [case_bindings.link_public(row) for row in rows]}
+
+
+@router.post("/gateway/links")
+def create_gateway_link(payload: dict[str, Any] = Body(...), actor: dict = Depends(require_permission("config.manage")),
+                        database: Connection = Depends(connection)) -> dict:
+    values = link_values(payload)
+    if not values.get("data_api_url") and not values.get("stream_url"):
+        raise HTTPException(400, "data_api_url or stream_url required")
+    current = now_ms()
+    with database.transaction():
+        link_id = database.execute(
+            f"""INSERT INTO leaf_gateway_link ({", ".join(values)}, created_at, updated_at)
+                VALUES ({", ".join(["%s"] * len(values))}, %s, %s) RETURNING id""",
+            (*values.values(), current, current)).fetchone()["id"]
+        return {"link": saved_link(database, link_id, payload.get("is_default"), actor)}
+
+
+@router.put("/gateway/links/{link_id}")
+def update_gateway_link(link_id: int, payload: dict[str, Any] = Body(...),
+                        actor: dict = Depends(require_permission("config.manage")),
+                        database: Connection = Depends(connection)) -> dict:
+    values = link_values(payload)
+    with database.transaction():
+        row = database.execute(
+            f"""UPDATE leaf_gateway_link SET {"".join(f"{key}=%s, " for key in values)}updated_at=%s
+                WHERE id=%s RETURNING id""", (*values.values(), now_ms(), link_id)).fetchone()
+        if row is None:
+            raise HTTPException(404, "gateway link not found")
+        return {"link": saved_link(database, link_id, payload.get("is_default"), actor)}
+
+
+@router.delete("/gateway/links/{link_id}")
+def delete_gateway_link(link_id: int, actor: dict = Depends(require_permission("config.manage")),
+                        database: Connection = Depends(connection)) -> dict:
+    with database.transaction():
+        database.execute("SELECT pg_advisory_xact_lock(6893, 1)")
+        if database.execute("SELECT 1 FROM case_device_binding WHERE gateway_link_id=%s AND released_at IS NULL",
+                            (link_id,)).fetchone():
+            raise HTTPException(409, "active cases still record from this gateway")
+        row = database.execute("DELETE FROM leaf_gateway_link WHERE id=%s RETURNING is_default", (link_id,)).fetchone()
+        if row is None:
+            raise HTTPException(404, "gateway link not found")
+        if row["is_default"]:
+            database.execute(
+                "UPDATE leaf_gateway_link SET is_default=true WHERE id=(SELECT min(id) FROM leaf_gateway_link)")
+            case_bindings.mirror_default(database, actor["username"])
+    return {"ok": True, "deleted": link_id}
+
+
+@router.get("/gateway/links/{link_id}/devices")
+def gateway_link_devices(link_id: int, online_window_sec: int = 30, _: dict = Depends(require_permission("case.read")),
+                         database: Connection = Depends(connection)) -> dict:
+    """Devices this Leaf may bind on that gateway (its data-api /api/devices/status)."""
+    link = database.execute("SELECT data_api_url FROM leaf_gateway_link WHERE id=%s", (link_id,)).fetchone()
+    if link is None:
+        raise HTTPException(404, "gateway link not found")
+    if not link["data_api_url"]:
+        return {"reachable": False, "error": "this gateway link has no data-api URL", "devices": []}
+    try:
+        status, latency = gateway_get(link["data_api_url"], "/api/devices/status", {"online_window_sec": online_window_sec})
+    except Exception as error:
+        return {"reachable": False, "error": f"{type(error).__name__}: {error}", "devices": []}
+    status = status if isinstance(status, dict) else {"devices": status}
+    # Instances assigned to this Leaf or to no Leaf (the stream-hub's rule).
+    status["devices"] = [device for device in status.get("devices") or []
+                         if not isinstance(device, dict) or device.get("leaf_id") in (None, "", LEAF_ID)]
+    return {"reachable": True, "latency_ms": latency, **status}
 
 
 # ---------------------------------------------------------------- Settings > Location from Canopy
@@ -286,6 +393,13 @@ def gateway_source(payload: dict[str, Any] = Body(...), actor: dict = Depends(re
 @router.get("/locations")
 def canopy_locations(_: dict = Depends(require_permission("config.manage"))) -> dict:
     """Canopy's location tree for the Location settings pickers (503 when Canopy is unreachable)."""
+    result = canopy("POST", "/api/sync/v1/locations", {"leaf_id": os.getenv("FLORA_LEAF_ID", "")}, timeout=5)
+    return {**result, "leaf_id": os.getenv("FLORA_LEAF_ID", "")}
+
+
+@router.get("/locations/destinations")
+def discharge_destinations(_: dict = Depends(require_permission("case.discharge"))) -> dict:
+    """The location tree for the discharge dialog: Leaves of this ward (transfer) and the other wards."""
     result = canopy("POST", "/api/sync/v1/locations", {"leaf_id": os.getenv("FLORA_LEAF_ID", "")}, timeout=5)
     return {**result, "leaf_id": os.getenv("FLORA_LEAF_ID", "")}
 

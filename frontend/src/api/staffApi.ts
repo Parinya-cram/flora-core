@@ -34,6 +34,9 @@ export type StaffMember = {
   directory_pending?: number;
   /** Why Canopy did not take this person. */
   sync_error?: string | null;
+  /** Case staff only: when this person came in / left the case (epoch ms, minute precision). */
+  time_in?: number | null;
+  time_out?: number | null;
 };
 
 export type StaffFieldDefinition = {
@@ -91,6 +94,8 @@ function parseStaffRow(row: Record<string, unknown>): StaffMember {
     directory_managed: numberOrNull(row.directory_managed) ?? undefined,
     directory_pending: numberOrNull(row.directory_pending) ?? undefined,
     sync_error: typeof row.sync_error === "string" ? row.sync_error : null,
+    time_in: row.time_in == null ? null : numberOrNull(row.time_in),
+    time_out: row.time_out == null ? null : numberOrNull(row.time_out),
   };
 }
 

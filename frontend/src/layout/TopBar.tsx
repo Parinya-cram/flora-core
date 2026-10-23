@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { AuthUser } from "../auth/useAuth";
-import type { CaseStatus } from "../api/caseApi";
+import type { ActiveCase, CaseStatus } from "../api/caseApi";
 import type { AppView } from "./AppSidebar";
 import ThemePicker from "../components/ThemePicker";
 import LanguagePicker from "../components/LanguagePicker";
@@ -19,6 +19,10 @@ type Props = {
   setActiveView: (view: AppView) => void;
   sessionUser: AuthUser | null;
   caseStatus: CaseStatus;
+  /** Leaf: every active case (one per bed); a switcher appears when there is a choice. */
+  activeCases?: ActiveCase[];
+  onSelectCase?: (caseId: number) => void;
+  onNewCase?: () => void;
   /** Canopy ward scope; null on Leaf. */
   ward?: CanopyWardState | null;
   onLogout: () => void;
@@ -35,7 +39,67 @@ function Icon({ kind }: { kind: "account" | "logout" | "power" }) {
   return <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true"><path d={paths[kind]} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 }
 
-export default function TopBar({ setActiveView, sessionUser, caseStatus, ward = null, onLogout, onShutdown, onToggleNavigation }: Props) {
+const SWITCH_TEXT = {
+  en: { newCase: "New case", newCaseMode: "Starting a new case", cases: "Active cases", noBed: "—" },
+  th: { newCase: "เคสใหม่", newCaseMode: "กำลังเริ่มเคสใหม่", cases: "เคสที่กำลังทำ", noBed: "—" },
+};
+
+function caseLine(item: { bed_label?: string | null; hn?: string; patient_name?: string | null }) {
+  return [item.hn ? `HN ${item.hn}` : "", item.patient_name || ""].filter(Boolean).join(" · ");
+}
+
+/** Leaf with several beds: which case this screen shows, and "+ new case". */
+function CaseSwitcher({ caseStatus, activeCases, onSelectCase, onNewCase }: { caseStatus: CaseStatus; activeCases: ActiveCase[]; onSelectCase?: (caseId: number) => void; onNewCase?: () => void }) {
+  const { language } = useLanguage();
+  const L = SWITCH_TEXT[language === "th" ? "th" : "en"];
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const outside = (event: PointerEvent) => { if (!ref.current?.contains(event.target as Node)) setOpen(false); };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape);
+    return () => { document.removeEventListener("pointerdown", outside); document.removeEventListener("keydown", escape); };
+  }, [open]);
+
+  const currentId = caseStatus.status !== "IDLE" ? caseStatus.case_id : null;
+  const current = activeCases.find(item => item.case_id === currentId);
+  const sorted = [...activeCases].sort((a, b) => String(a.bed_label || "~").localeCompare(String(b.bed_label || "~"), undefined, { numeric: true }) || a.start_time - b.start_time);
+  const bed = caseStatus.status === "IDLE" ? "+" : (current?.bed_label || caseStatus.bed_label || L.noBed);
+  const label = caseStatus.status === "IDLE" ? L.newCaseMode : caseLine({ hn: caseStatus.hn, patient_name: current?.patient_name || caseStatus.patient_name });
+
+  return <div ref={ref} className="relative min-w-0">
+    <button type="button" onClick={() => setOpen(value => !value)} aria-haspopup="menu" aria-expanded={open} aria-label={L.cases}
+      className="flex h-10 min-w-0 max-w-[340px] items-center gap-2 rounded-lg border border-[var(--app-nav-border)] bg-[var(--app-nav-bg)] px-1.5 pr-2 text-left text-[var(--app-text)]">
+      <span className="inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded-md bg-[var(--app-accent)]/15 px-1.5 text-xs font-extrabold text-[var(--app-accent)]">{bed}</span>
+      <span className="hidden min-w-0 truncate text-xs font-semibold sm:block">{label}</span>
+      <span className="shrink-0 rounded-full bg-[var(--app-control-bg)] px-1.5 text-[10px] font-bold text-[var(--app-muted)]">{activeCases.length}</span>
+      <span aria-hidden="true" className={`text-[10px] text-[var(--app-muted)] transition-transform ${open ? "rotate-180" : ""}`}>⌄</span>
+    </button>
+    {open ? <div role="menu" className="absolute left-0 z-[1200] mt-2 w-[300px] overflow-hidden rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] shadow-2xl">
+      <div className="border-b border-[var(--app-border)] px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--app-muted)]">{L.cases}</div>
+      <div className="max-h-[60vh] overflow-y-auto p-1.5">
+        {sorted.map(item => <button key={item.case_id} role="menuitemradio" aria-checked={item.case_id === currentId} type="button"
+          onClick={() => { setOpen(false); onSelectCase?.(item.case_id); }}
+          className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-xs hover:bg-[var(--app-control-bg)] ${item.case_id === currentId ? "bg-[var(--app-control-bg)]" : ""}`}>
+          <span className="inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded-md bg-[var(--app-accent)]/12 px-1.5 font-extrabold text-[var(--app-accent)]">{item.bed_label || L.noBed}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-semibold text-[var(--app-text)]">{item.patient_name || (item.hn ? `HN ${item.hn}` : `#${item.case_id}`)}</span>
+            <span className="block truncate text-[10px] text-[var(--app-muted)]">{item.hn ? `HN ${item.hn}` : ""}{item.devices.length ? ` · ${item.devices.map(binding => binding.device_id).join(", ")}` : ""}</span>
+          </span>
+          {item.case_id === currentId ? <span className="text-[var(--app-accent)]">✓</span> : null}
+        </button>)}
+      </div>
+      {onNewCase ? <div className="border-t border-[var(--app-border)] p-1.5">
+        <button role="menuitem" type="button" onClick={() => { setOpen(false); onNewCase(); }}
+          className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-bold text-[var(--app-accent)] hover:bg-[var(--app-control-bg)]">+ {L.newCase}</button>
+      </div> : null}
+    </div> : null}
+  </div>;
+}
+
+export default function TopBar({ setActiveView, sessionUser, caseStatus, activeCases = [], onSelectCase, onNewCase, ward = null, onLogout, onShutdown, onToggleNavigation }: Props) {
   const { t } = useLanguage();
   const surface = getSurfaceInfo();
   const surfaceLogo = surface.code === "canopy" ? canopyLogo : floraLogo;
@@ -63,7 +127,8 @@ export default function TopBar({ setActiveView, sessionUser, caseStatus, ward = 
       <div className="truncate text-[15px] font-extrabold text-[var(--app-text)]">{BRAND_NAME}</div>
       <div className="truncate text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--app-muted)]">{surface.code === "canopy" ? "Canopy" : "Leaf"}</div>
     </div>
-    {isIdleLeaf ? <span className="hidden items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold text-emerald-500 sm:inline-flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />{t("topbar.readyNextCase")}</span> : null}
+    {surface.code === "leaf" && activeCases.length ? <CaseSwitcher caseStatus={caseStatus} activeCases={activeCases} onSelectCase={onSelectCase} onNewCase={onNewCase} /> : null}
+    {isIdleLeaf && !activeCases.length ? <span className="hidden items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold text-emerald-500 sm:inline-flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />{t("topbar.readyNextCase")}</span> : null}
     {caseStatus.status !== "IDLE" && caseStatus.identity_status === "pending" ? <span className="hidden items-center gap-1.5 rounded-full border border-rose-400/35 bg-rose-500/10 px-2.5 py-1 text-[10px] font-bold text-rose-400 sm:inline-flex"><span className="h-1.5 w-1.5 rounded-full bg-rose-400" />{t("topbar.identityPending")}</span> : null}
     <div className="ml-auto flex shrink-0 items-center gap-2">
       {account ? <span title={`Account ${account.code}`} className="hidden max-w-[180px] items-center gap-1.5 truncate rounded-full border border-[var(--app-nav-border)] px-2.5 py-1 text-[11px] font-bold text-[var(--app-text)] md:inline-flex"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--app-accent)]" /><span className="truncate">{account.name}</span></span> : null}

@@ -12,10 +12,12 @@ from .database import close_pool, connection, open_pool, pool
 from . import tenancy
 from .account_middleware import AccountMiddleware
 from .device_writer import device_writer
+from .live_schema import ensure_live_schema
 from .routes.cases_read import router as cases_read_router
 from .routes.auth_canopy import router as canopy_auth_router
 from .routes.auth_leaf import router as leaf_auth_router
 from .routes.cases_lifecycle import router as cases_lifecycle_router
+from .routes.case_devices import router as case_devices_router
 from .routes.clinical_write import router as clinical_write_router
 from .routes.catalog_write import router as catalog_write_router
 from .routes.io_write import router as io_write_router
@@ -42,6 +44,7 @@ from .routes.scores_leaf import router as scores_leaf_router
 from .routes.staff_canopy import router as staff_canopy_router
 from .routes.or_schedule import router as or_schedule_router
 from .routes.or_leaf import router as or_leaf_router
+from .routes.case_journey import router as case_journey_router
 from .routes.staff_sync_leaf import router as staff_sync_leaf_router
 from .score_writer import score_writer
 from .routes.canopy_admissions import router as canopy_admissions_router
@@ -74,6 +77,7 @@ async def lifespan(_: FastAPI):
     open_pool()
     api_mode = os.getenv("FLORA_API_MODE", "leaf").strip().lower()
     if api_mode == "leaf":
+        ensure_live_schema()
         with pool.connection() as database:
             ensure_bootstrap_admin(database)
     elif api_mode == "canopy":
@@ -121,7 +125,9 @@ if API_MODE == "leaf" and os.getenv("FLORA_LEAF_WRITE_API", "false").lower() == 
     app.include_router(scores_leaf_router)
     app.include_router(staff_sync_leaf_router)  # before catalog_write's /staff/* routes
     app.include_router(or_leaf_router)
+    app.include_router(case_journey_router)
     app.include_router(case_workflow_router)
+    app.include_router(case_devices_router)
     app.include_router(cases_lifecycle_router)
     app.include_router(clinical_write_router)
     app.include_router(catalog_write_router)

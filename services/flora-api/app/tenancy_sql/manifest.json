@@ -67,5 +67,10 @@
  "0085-staff-sync.sql",
  "0087-formdev-template.sql",
  "0071-io-catalog-sync.sql",
- "0079-ai-studio-dashboard.sql"
+ "0079-ai-studio-dashboard.sql",
+ "0090-leaf-live-stream.sql",
+ "0091-or-transfer.sql",
+ "0092-canopy-case-binding.sql",
+ "0093-case-staff-times.sql",
+ "0094-leaf-transfer.sql"
 ]

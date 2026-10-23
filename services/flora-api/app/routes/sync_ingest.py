@@ -528,6 +528,8 @@ def _claim(database: Connection, admission_id: str, leaf_id: str, case: dict[str
         return "missing"
     if row["claimed_leaf_id"] and row["claimed_leaf_id"] != leaf_id:
         from .. import or_sessions
+        if or_sessions.transfer_claim(database, row, leaf_id, case):
+            return "claimed"  # OR → Recovery transfer: the recovery bed's new case takes the booking
         if or_sessions.is_previous_leaf(database, str(row["id"]), leaf_id):
             return "previous"  # the OR room's Leaf, after the case moved on to recovery
         if case is not None and row["status"] != "conflict":
@@ -554,6 +556,44 @@ def claim_admission(admission_id: str, payload: AdmissionClaim, database: Connec
         result = _claim(database, admission_id, payload.leaf_id)
     if result in {"taken", "missing"}:
         raise HTTPException(status_code=409, detail="admission already started elsewhere or cancelled")
+    return {"ok": True, "result": result}
+
+
+class TransferOut(BaseModel):
+    leaf_id: str
+    to_leaf_id: str
+    case_id: int
+    global_case_id: str | None = None
+    admission_id: str | None = None
+    hn: str | None = None
+    admission_number: str | None = None
+    patient: dict[str, Any] = Field(default_factory=dict)
+    billing_mode: str | None = None
+    at: int | None = None
+    by: str | None = None
+
+
+@router.post("/transfers", dependencies=[Depends(require_sync_secret)])
+def transfer_out(payload: TransferOut, database: Connection = Depends(connection)) -> dict[str, Any]:
+    """A Leaf discharges its case to another Leaf (or_sessions.transfer_out)."""
+    from .. import or_sessions
+    try:
+        with database.transaction():
+            admission_id = or_sessions.transfer_out(database, payload.leaf_id, payload.model_dump())
+    except or_sessions.ReopenRefused as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return {"ok": True, "admission_id": admission_id}
+
+
+@router.post("/admissions/{admission_id}/reopen", dependencies=[Depends(require_sync_secret)])
+def reopen_admission(admission_id: str, payload: AdmissionClaim, database: Connection = Depends(connection)) -> dict[str, Any]:
+    """The Leaf cancels the discharge / transfer of this admission's case (or_sessions.reopen)."""
+    from .. import or_sessions
+    try:
+        with database.transaction():
+            result = or_sessions.reopen(database, admission_id, payload.leaf_id)
+    except or_sessions.ReopenRefused as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     return {"ok": True, "result": result}
 
 

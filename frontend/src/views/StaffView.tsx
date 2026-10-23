@@ -19,6 +19,11 @@ import {
   type StaffRole,
 } from "../api/staffApi";
 import StaffSyncPanel from "../components/staff/StaffSyncPanel";
+import ClinicalDateTimeInput from "../components/ClinicalDateTimeInput";
+import { useWorkstationSettings } from "../hooks/useWorkstationSettings";
+import { timestampToWallClockInput, wallClockInputToTimestamp } from "../utils/dateTime";
+
+const nowMinute = () => Math.floor(Date.now() / 60_000) * 60_000;
 
 /** Where a directory row comes from and whether it reaches Canopy. */
 function syncBadge(item: StaffMember, needsCode: boolean): { label: string; className: string; title: string } {
@@ -191,6 +196,7 @@ export default function StaffView({ caseStatus, sessionUser, defaultTab = "curre
   const [directorySaving, setDirectorySaving] = useState(false);
   const [directoryError, setDirectoryError] = useState("");
 
+  const workstation = useWorkstationSettings();
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [savedStaff, setSavedStaff] = useState<StaffMember[]>([]);
   const [caseLoading, setCaseLoading] = useState(false);
@@ -479,6 +485,8 @@ export default function StaffView({ caseStatus, sessionUser, defaultTab = "curre
         roleNameById.get(String(candidate.role_id || "").trim()) ||
         "",
       hospital_id: String(candidate.hospital_id || "").trim(),
+      time_in: candidate.time_in ?? nowMinute(),
+      time_out: candidate.time_out ?? null,
     };
     if (!row.name || !row.role_id || !row.role) return;
 
@@ -507,6 +515,24 @@ export default function StaffView({ caseStatus, sessionUser, defaultTab = "curre
     setQuickName("");
     setQuickHospitalId("");
   };
+
+  const setStaffTime = (index: number, key: "time_in" | "time_out", value: number | null) => {
+    setStaff(prev => prev.map((item, i) => (i === index ? { ...item, [key]: value } : item)));
+  };
+
+  const staffTimeInput = (index: number, key: "time_in" | "time_out", value: number) => (
+    <ClinicalDateTimeInput
+      value={timestampToWallClockInput(value, workstation.timezone)}
+      onChange={next => {
+        const timestamp = wallClockInputToTimestamp(next, workstation.timezone);
+        if (timestamp !== null) setStaffTime(index, key, timestamp);
+      }}
+      dateFormat={workstation.dateFormat}
+      timeFormat={workstation.timeFormat}
+    />
+  );
+
+  const timesInvalid = staff.some(item => item.time_in != null && item.time_out != null && item.time_out < item.time_in);
 
   const removeCaseStaff = (index: number) => {
     setStaff(prev => prev.filter((_, i) => i !== index));
@@ -706,7 +732,10 @@ export default function StaffView({ caseStatus, sessionUser, defaultTab = "curre
                       {staff.map((row, index) => (
                         <div
                           key={`${fillDisplayName(row)}-${row.role_id || row.role}-${row.hospital_id || "-"}-${index}`}
-                          className="app-tooltip flex items-center justify-between gap-2 rounded border border-gray-200 dark:border-gray-800 px-2 py-1.5"
+                          className="rounded border border-gray-200 dark:border-gray-800 px-2 py-1.5 space-y-1"
+                        >
+                        <div
+                          className="app-tooltip flex items-center justify-between gap-2"
                           data-tooltip={toTooltip(row, fields)}
                         >
                           <div className="min-w-0">
@@ -732,6 +761,37 @@ export default function StaffView({ caseStatus, sessionUser, defaultTab = "curre
                             Remove
                           </button>
                         </div>
+                        <div className="flex flex-wrap items-end gap-x-4 gap-y-1">
+                          <div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Time in</div>
+                            {row.time_in != null ? (
+                              staffTimeInput(index, "time_in", row.time_in)
+                            ) : (
+                              <button type="button" onClick={() => setStaffTime(index, "time_in", nowMinute())} className="mt-2 rounded border border-gray-300 dark:border-gray-700 px-2 py-1 text-xs">
+                                In now
+                              </button>
+                            )}
+                          </div>
+                          <div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Time out</div>
+                            {row.time_out != null ? (
+                              <div className="flex items-end gap-1">
+                                {staffTimeInput(index, "time_out", row.time_out)}
+                                <button type="button" onClick={() => setStaffTime(index, "time_out", null)} className="mb-3 text-xs text-gray-500 hover:text-red-600" title="Clear time out">
+                                  Clear
+                                </button>
+                              </div>
+                            ) : (
+                              <button type="button" onClick={() => setStaffTime(index, "time_out", nowMinute())} className="mt-2 rounded border border-gray-300 dark:border-gray-700 px-2 py-1 text-xs">
+                                Out now
+                              </button>
+                            )}
+                          </div>
+                          {row.time_in != null && row.time_out != null && row.time_out < row.time_in ? (
+                            <div className="mb-3 text-xs text-red-600 dark:text-red-400">Time out is before time in</div>
+                          ) : null}
+                        </div>
+                        </div>
                       ))}
                     </div>
                   )}
@@ -744,9 +804,9 @@ export default function StaffView({ caseStatus, sessionUser, defaultTab = "curre
                     <button
                       type="button"
                       onClick={() => void saveCase()}
-                      disabled={!isCaseDirty || caseSaving}
+                      disabled={!isCaseDirty || caseSaving || timesInvalid}
                       className={`rounded px-3 py-1.5 text-sm text-white ${
-                        !isCaseDirty || caseSaving
+                        !isCaseDirty || caseSaving || timesInvalid
                           ? "bg-gray-400 cursor-not-allowed"
                           : "bg-blue-600 hover:bg-blue-700"
                       }`}

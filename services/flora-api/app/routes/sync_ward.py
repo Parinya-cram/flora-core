@@ -66,8 +66,12 @@ def ward(payload: WardExchange, database: Connection = Depends(connection)) -> d
                       (extract(epoch FROM i.last_synced_at) * 1000)::bigint AS synced_at,
                       e.revision AS export_revision
                FROM sync_case_index i LEFT JOIN canopy_case_export e ON e.global_case_id = i.global_case_id
-               WHERE i.leaf_id = ANY(%s) AND i.status = 'ACTIVE'""", (leaf_ids,)).fetchall()
-        by_leaf = {row["leaf_id"]: row for row in cases}
+               WHERE i.leaf_id = ANY(%s) AND i.status = 'ACTIVE'
+               ORDER BY i.start_time DESC NULLS LAST""", (leaf_ids,)).fetchall()
+        # A Leaf may hold several active cases (beds); active_case stays the newest for older Leaves.
+        by_leaf: dict[str, list] = {}
+        for row in cases:
+            by_leaf.setdefault(row["leaf_id"], []).append(row)
         released = database.execute(
             """SELECT id AS handover_id, from_case_id AS source_case_id, to_leaf_id, global_case_id::text
                FROM canopy_case_handover WHERE from_leaf_id=%s AND status IN ('claimed','imported')""",
@@ -80,7 +84,8 @@ def ward(payload: WardExchange, database: Connection = Depends(connection)) -> d
     return {
         "unit": unit,
         "leaves": [{**leaf, "online": bool(leaf["last_seen"] and current - leaf["last_seen"] < ONLINE_MS),
-                    "active_case": by_leaf.get(leaf["leaf_id"])} for leaf in leaves],
+                    "active_case": (by_leaf.get(leaf["leaf_id"]) or [None])[0],
+                    "active_cases": by_leaf.get(leaf["leaf_id"]) or []} for leaf in leaves],
         "gateways": gateways,
         "released": released,
         "handovers": handovers,
@@ -310,3 +315,16 @@ def assign_location(leaf_id: str, payload: LocationAssign, database: Connection 
             "timezone": payload.timezone, "date_format": payload.date_format, "time_format": payload.time_format})
     return {"leaf_id": leaf_id, "bed_location_id": payload.bed_location_id,
             "location": row["desired_config"]["location"], "version": row["desired_version"]}
+
+
+class JourneyQuery(BaseModel):
+    leaf_id: str = Field(min_length=1, max_length=120)
+    case_id: str = Field(min_length=1, max_length=40)
+    admission_number: str = Field(default="", max_length=80)
+
+
+@router.post("/journey")
+def patient_journey(payload: JourneyQuery, database: Connection = Depends(connection)) -> dict[str, Any]:
+    """The earlier (and other) cases of the same AN, e.g. OR → Recovery → ICU, with their medications."""
+    from .. import patient_journey as journey
+    return {"cases": journey.journey(database, payload.admission_number, payload.leaf_id, payload.case_id)}

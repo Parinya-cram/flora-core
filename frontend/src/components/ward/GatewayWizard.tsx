@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLanguage } from "../../context/LanguageContext";
 import {
-  assignGatewayDevices, saveDeviceSource, testGateway, verifyGateway,
-  type GatewayDevice, type GatewayVerify, type RegisteredGateway, type WardOverview,
+  assignGatewayDevices, createGatewayLink, getGatewayLinks, saveDeviceSource, suggestStreamUrl, testGateway, updateGatewayLink, verifyGateway,
+  type GatewayDevice, type GatewayLink, type GatewayVerify, type RegisteredGateway, type WardOverview,
 } from "../../api/wardApi";
 
 type Props = { overview: WardOverview; onClose: () => void };
@@ -20,6 +20,8 @@ const TEXT = {
     waiting: "Waiting for the gateway to pick it up on its next check-in (about 20 s)…", applied: "The gateway now sends these devices to this workstation",
     live: "Waiting for live readings…", liveOk: "Live readings arriving", saveBody: "This workstation will read bedside data from",
     done: "Gateway set up", back: "Back", next: "Next", assign: "Assign", save: "Save", close: "Close", cancel: "Cancel",
+    stream: "Live stream address (optional)", token: "Leaf token (from the Gateway admin, Leaves tab)", tokenSaved: "A token is saved — leave blank to keep it",
+    linkSaved: "Saved as gateway link", linkFailed: "Saved the data feed, but the gateway link could not be saved",
   },
   th: {
     title: "ตั้งค่า Gateway ข้างเตียง",
@@ -32,6 +34,8 @@ const TEXT = {
     waiting: "รอ Gateway รับการตั้งค่าในการเช็กอินครั้งถัดไป (ประมาณ 20 วินาที)…", applied: "Gateway ส่งข้อมูลอุปกรณ์เหล่านี้มาที่เครื่องนี้แล้ว",
     live: "กำลังรอข้อมูลจริง…", liveOk: "ได้รับข้อมูลจริงแล้ว", saveBody: "เครื่องนี้จะอ่านข้อมูลอุปกรณ์ข้างเตียงจาก",
     done: "ตั้งค่า Gateway เรียบร้อย", back: "ย้อนกลับ", next: "ถัดไป", assign: "กำหนด", save: "บันทึก", close: "ปิด", cancel: "ยกเลิก",
+    stream: "ที่อยู่สตรีมสด (ไม่บังคับ)", token: "Token ของ Leaf (จากหน้า admin ของ Gateway แท็บ Leaves)", tokenSaved: "มี token บันทึกไว้แล้ว — เว้นว่างเพื่อใช้ค่าเดิม",
+    linkSaved: "บันทึกเป็น Gateway ที่เชื่อมต่อแล้ว", linkFailed: "บันทึกแหล่งข้อมูลแล้ว แต่บันทึก Gateway ที่เชื่อมต่อไม่สำเร็จ",
   },
 };
 
@@ -59,6 +63,12 @@ export default function GatewayWizard({ overview, onClose }: Props) {
   const [phase, setPhase] = useState<"" | "sending" | "waiting" | "applied">("");
   const [verify, setVerify] = useState<GatewayVerify | null>(null);
   const [saved, setSaved] = useState(false);
+  /** Multi-gateway Leaf: the link this wizard creates or updates (stream address + token). */
+  const [existingLinks, setExistingLinks] = useState<GatewayLink[] | null>(overview.gateway_links ?? null);
+  const [streamUrl, setStreamUrl] = useState("");
+  const [token, setToken] = useState("");
+  const [linkNote, setLinkNote] = useState("");
+  const [linksUnsupported, setLinksUnsupported] = useState(false);
   const poll = useRef<number | null>(null);
   const url = (useManual ? manualUrl : gateway?.data_api_url || "").trim();
 
@@ -145,10 +155,45 @@ export default function GatewayWizard({ overview, onClose }: Props) {
     return () => { stop = true; window.clearInterval(timer); };
   }, [step, url]);
 
+  useEffect(() => {
+    if (existingLinks || linksUnsupported) return;
+    void getGatewayLinks().then(setExistingLinks).catch(() => setLinksUnsupported(true));
+  }, [existingLinks, linksUnsupported]);
+  const matchingLink = useMemo(() => (existingLinks || []).find(link =>
+    (gateway?.gateway_id && link.gateway_id === gateway.gateway_id) || (url && (link.data_api_url || "").replace(/\/+$/, "") === url.replace(/\/+$/, ""))) || null,
+  [existingLinks, gateway, url]);
+  useEffect(() => {
+    if (step !== 4) return;
+     
+    setStreamUrl(current => current || matchingLink?.stream_url || suggestStreamUrl(url));
+  }, [matchingLink, step, url]);
+
   const save = async () => {
     setBusy(true);
     try {
       await saveDeviceSource(gateway?.gateway_id || null, url);
+      // Also keep it as a gateway link (multi-gateway Leaf). Older Leaf APIs have no links endpoint.
+      if (existingLinks !== null) {
+        // Saving the source already moved the default link; match against the fresh list.
+        const fresh = await getGatewayLinks().catch(() => existingLinks || []);
+        const target = fresh.find(link => (gateway?.gateway_id && link.gateway_id === gateway.gateway_id) ||
+          (link.data_api_url || "").replace(/\/+$/, "") === url.replace(/\/+$/, "")) || null;
+        const body = {
+          gateway_id: gateway?.gateway_id || null,
+          label: target?.label || gateway?.site_name || null,
+          data_api_url: url,
+          stream_url: streamUrl.trim() || null,
+          ...(token.trim() ? { token: token.trim() } : {}),
+          ...(target ? {} : { is_default: !fresh.length }),
+        };
+        try {
+          if (target) await updateGatewayLink(target.id, body);
+          else await createGatewayLink(body);
+          setLinkNote(L.linkSaved);
+        } catch (err) {
+          setLinkNote(`${L.linkFailed}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
       setSaved(true);
       mark(4, "done");
     } catch (err) {
@@ -243,6 +288,18 @@ export default function GatewayWizard({ overview, onClose }: Props) {
         {step === 4 ? <div className="space-y-3">
           {saved ? <div className="text-lg font-bold text-emerald-600">✓ {L.done}</div> : <div>{L.saveBody}</div>}
           <div className="font-mono text-xs">{gateway?.site_name ? `${gateway.site_name} · ` : ""}{url}</div>
+          {existingLinks !== null && !saved ? <div className="grid gap-2">
+            <label className="text-xs font-semibold text-[var(--app-muted)]">{L.stream}
+              <input className="mt-1 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] px-2 py-1.5 font-mono text-xs"
+                placeholder="wss://gateway.local/stream/v1" value={streamUrl} onChange={event => setStreamUrl(event.target.value)} />
+            </label>
+            <label className="text-xs font-semibold text-[var(--app-muted)]">{L.token}
+              <input className="mt-1 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] px-2 py-1.5 font-mono text-xs"
+                type="password" autoComplete="off" spellCheck={false} value={token} placeholder={matchingLink?.has_token ? L.tokenSaved : ""}
+                onChange={event => setToken(event.target.value)} />
+            </label>
+          </div> : null}
+          {linkNote ? <div className="text-xs text-[var(--app-muted)]">{linkNote}</div> : null}
           {message ? <div className="text-rose-500">{message}</div> : null}
         </div> : null}
       </div>

@@ -1,5 +1,5 @@
 import { Component, lazy, Suspense, type ErrorInfo, type ReactNode } from "react";
-import type { CaseStatus } from "../api/caseApi";
+import type { ActiveCase, CaseStatus } from "../api/caseApi";
 import type { AuthUser } from "../auth/useAuth";
 import StaffView from "../views/StaffView";
 import ManageView from "../views/ManageView";
@@ -32,11 +32,18 @@ const WardView = lazy(() => import("../views/WardView"));
 const DiagnosisView = lazy(() => import("../views/DiagnosisView"));
 const ReportView = lazy(() => import("../views/ReportView"));
 const PatientView = lazy(() => import("../views/PatientView"));
+const PatientJourneyView = lazy(() => import("../views/PatientJourneyView"));
 const BillingView = lazy(() => import("../views/BillingView"));
+const WaveformView = lazy(() => import("../views/WaveformView"));
 const CanopyBillingView = lazy(() => import("../views/CanopyBillingView"));
 
 interface Props {
   caseStatus: CaseStatus;
+  /** Leaf: every active case (several beds on one Leaf). */
+  activeCases?: ActiveCase[];
+  onSelectCase?: (caseId: number) => void;
+  /** Opens the start landing while other cases keep running. */
+  onNewCase?: () => void;
   activeView:
     | "ward"
     | "case"
@@ -64,17 +71,21 @@ interface Props {
     | "history"
     | "billing"
     | "staff-directory"
-    | "or-schedule";
+    | "or-schedule"
+    | "waveform"
+    | "journey";
   sessionUser: AuthUser | null;
   onCaseDischargeTimeUpdated?: (caseId: number, dischargeTime: number) => void;
   onCaseArchived?: (caseId: number) => void;
+  /** Discharge / transfer cancelled: the case is active again. */
+  onCaseReopened?: (caseId: number) => void;
   onStartNextCase?: () => void;
   onOpenCase?: (c: Exclude<CaseStatus, { status: "IDLE" }>) => void;
-  onCaseStarted?: () => Promise<void> | void;
-  onNavigate?: (view: "patient" | "diagnosis" | "io" | "case") => void;
+  onCaseStarted?: (caseId?: number) => Promise<void> | void;
+  onNavigate?: (view: "patient" | "diagnosis" | "io" | "case" | "journey") => void;
 }
 
-const CASE_PAGES = new Set<Props["activeView"]>(["form", "diagnosis", "staff", "io", "patient", "report", "billing"]);
+const CASE_PAGES = new Set<Props["activeView"]>(["form", "diagnosis", "staff", "io", "patient", "report", "billing", "waveform", "journey"]);
 
 class ViewErrorBoundary extends Component<
   { resetKey: string; children: ReactNode },
@@ -117,10 +128,14 @@ class ViewErrorBoundary extends Component<
 
 export default function MainArea({
   caseStatus,
+  activeCases = [],
+  onSelectCase,
+  onNewCase,
   activeView,
   sessionUser,
   onCaseDischargeTimeUpdated,
   onCaseArchived,
+  onCaseReopened,
   onStartNextCase,
   onOpenCase,
   onCaseStarted,
@@ -143,9 +158,14 @@ export default function MainArea({
       {activeView === "ward" ? (
         <WardView
           caseStatus={caseStatus}
+          activeCases={activeCases}
           sessionUser={sessionUser}
-          onOpenCase={() => onNavigate?.("case")}
-          onCaseChanged={async () => { await onCaseStarted?.(); }}
+          onOpenCase={caseId => {
+            if (caseId != null) onSelectCase?.(caseId);
+            onNavigate?.("case");
+          }}
+          onNewCase={() => (onNewCase ? onNewCase() : onNavigate?.("case"))}
+          onCaseChanged={async caseId => { await onCaseStarted?.(caseId); }}
         />
       ) : activeView === "case" && caseStatus.status === "IDLE" ? (
         <IdleCaseLanding
@@ -153,6 +173,8 @@ export default function MainArea({
           sessionUser={sessionUser}
           onCaseStarted={onCaseStarted ?? (() => {})}
         />
+      ) : activeView === "waveform" ? (
+        <WaveformView key={caseScopedKey} caseStatus={caseStatus} sessionUser={sessionUser} />
       ) : activeView === "form" ? (
         <FormView key={caseScopedKey} caseStatus={caseStatus} />
       ) : activeView === "diagnosis" ? (
@@ -171,6 +193,8 @@ export default function MainArea({
           : <CanopyBillingView sessionUser={sessionUser} />
       ) : activeView === "patient" ? (
         <PatientView key={caseScopedKey} caseStatus={caseStatus} />
+      ) : activeView === "journey" ? (
+        <PatientJourneyView key={caseScopedKey} caseStatus={caseStatus} />
       ) : activeView === "report" ? (
         surface.code === "canopy" ? <CanopyReportsView /> :
           <ReportView
@@ -218,6 +242,7 @@ export default function MainArea({
           onNavigate={onNavigate}
           onCaseDischargeTimeUpdated={onCaseDischargeTimeUpdated}
           onCaseArchived={onCaseArchived}
+          onCaseReopened={onCaseReopened}
           onStartNextCase={onStartNextCase}
         />
       )}

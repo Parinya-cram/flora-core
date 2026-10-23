@@ -34,6 +34,12 @@ class IacsM540Parser(Parser):
             if rule["ivy_param"] not in FLORA_PARAMS or not rule["source_keys"]:
                 raise ValueError("IACS mappings need a Flora parameter and source_keys")
         self.decoder = IacsDatagramParser()
+        # Waveforms: the sample rate is not documented. The block tag (200/100/50) is assumed to be
+        # the rate in Hz until checked against real M540 captures; `wave_rate_hz` overrides it per
+        # waveform key ("31-1") or per tag ("200"). `wave_channels` names a key ("1-1": "ecg").
+        self.wave_rates = {str(k): float(v) for k, v in (self.options.get("wave_rate_hz") or {}).items()}
+        self.wave_channels = {str(k): str(v) for k, v in (self.options.get("wave_channels") or {}).items()}
+        self.publish_waves = bool(self.options.get("publish_waves", True))
         self.unknown_tags: set[str] = set()
 
     def feed(self, frame):
@@ -50,6 +56,12 @@ class IacsM540Parser(Parser):
             if tag not in self.unknown_tags:
                 self.unknown_tags.add(tag)
                 log.info("%s: unknown IACS block %s at %d; earlier values kept", self.device_id, tag, parsed.trailing_offset)
+        if self.publish_waves:
+            for key, samples in parsed.waveforms.items():
+                tag = parsed.waveform_tags.get(key)
+                rate = self.wave_rates.get(key) or self.wave_rates.get(str(tag)) or float(tag or 0)
+                if rate > 0:
+                    self.record_wave(self.wave_channels.get(key, key), rate, frame.ts, samples)
         rows = []
         for key, value in parsed.numeric_values.items():
             rule = next((item for item in self.rules if key in item["source_keys"]), None)
