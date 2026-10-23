@@ -1,6 +1,6 @@
 # FLORA iCIS marketing
 
-Marketing material for FLORA iCIS (E.S.M. Solution Co., Ltd.), started 2026-10-16. The customer-facing names follow `~/Downloads/FLORA iCIS Catalog.pdf`. The device gateway is **Flora Tendril**, and the catalog's three pillars are Integration as a Service, Customization and The Agent.
+Marketing material for FLORA iCIS (E.S.M. Solution Co., Ltd.), started 2026-10-16. The customer-facing names follow `~/Downloads/FLORA iCIS Catalog.pdf`. The device gateway is **Flora Seed** (Thai: เมล็ดพันธุ์, "seed"; it was called Tendril until 2026-10-23, and the catalog PDF still says Tendril), and the catalog's three pillars are Integration as a Service, Customization and The Agent.
 
 | Item | Path | Notes |
 | --- | --- | --- |

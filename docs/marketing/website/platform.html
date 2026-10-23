@@ -19,13 +19,13 @@
       <p class="lede"><span class="th">ทุกชั้นแยกหน้าที่ชัดเจน ถ้าชั้นใดขัดข้อง ชั้นข้างเตียงยังบันทึกเคสได้ต่อ</span><span class="en">Each tier has one job. If any tier fails, the bedside keeps charting.</span></p>
       <div class="pipe" aria-label="Data flow">
         <div class="node"><b><span class="th">เครื่องมือแพทย์</span><span class="en">Devices</span></b><small>Monitor · Vent · Pump</small></div><span class="arrow">→</span>
-        <div class="node"><b>Tendril</b><small><span class="th">แปลงค่า</span><span class="en">normalise</span></small></div><span class="arrow">→</span>
+        <div class="node"><b>Seed</b><small><span class="th">แปลงค่า</span><span class="en">normalise</span></small></div><span class="arrow">→</span>
         <div class="node"><b>Leaf</b><small><span class="th">บันทึกข้างเตียง</span><span class="en">bedside record</span></small></div><span class="arrow">→</span>
         <div class="node"><b>Canopy</b><small><span class="th">ทั้งโรงพยาบาล + HIS</span><span class="en">hospital + HIS</span></small></div><span class="arrow">⇢</span>
         <div class="node"><b>Root</b><small><span class="th">ไลเซนส์และอัปเดต</span><span class="en">licences, updates</span></small></div>
       </div>
       <nav class="subnav" aria-label="On this page">
-        <a href="#gateway">Tendril</a><a href="#leaf">Leaf</a><a href="#canopy">Canopy</a><a href="#root">Root</a><a href="#studio">Studio</a><a href="#interop"><span class="th">มาตรฐานและ HIS</span><span class="en">Standards &amp; HIS</span></a>
+        <a href="#gateway">Seed</a><a href="#leaf">Leaf</a><a href="#canopy">Canopy</a><a href="#root">Root</a><a href="#studio">Studio</a><a href="#interop"><span class="th">มาตรฐานและ HIS</span><span class="en">Standards &amp; HIS</span></a>
       </nav>
     </div>
   </section>
@@ -33,7 +33,7 @@
   <section class="section" style="padding-top:0">
     <div class="wrap">
       <div class="detail" id="gateway">
-        <div class="label"><span class="where"><span class="th">ข้างเครื่องมือแพทย์</span><span class="en">At the device</span></span><h2>Tendril</h2><span class="note">Medical Device Gateway</span></div>
+        <div class="label"><span class="where"><span class="th">ข้างเครื่องมือแพทย์</span><span class="en">At the device</span></span><h2>Seed</h2><span class="note">Medical Device Gateway · <span class="th">Seed = เมล็ดพันธุ์</span><span class="en">“seed”, where clinical data starts</span></span></div>
         <div class="body">
           <p><span class="th">ตัวรับข้อมูลจากเครื่องมือแพทย์ ติดตั้งในเครือข่ายห้องผ่าตัดหรือ ICU รับข้อมูลผ่านพอร์ต Serial, LAN, HL7/MLLP และ UDP แล้วแปลงเป็นค่ามาตรฐานรายนาทีส่งให้ Leaf</span><span class="en">The device receiver sits on the OR or ICU network. It reads serial, LAN, HL7/MLLP and UDP feeds and turns them into standard per-minute values for Leaf.</span></p>
           <ul class="ticks">
