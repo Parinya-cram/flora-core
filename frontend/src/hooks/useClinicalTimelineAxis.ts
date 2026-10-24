@@ -29,12 +29,27 @@ function reserveFutureColumns(
   return extended;
 }
 
+export type TimelineAxisWindow = {
+  /** Window bounds (ms, inclusive); null = case start / case end. */
+  from?: number | null;
+  to?: number | null;
+  /** Grid anchor (coarse steps align to the clinical day); null = case start. */
+  anchor?: number | null;
+  /** The window contains now: poll and reserve future columns (active case only). */
+  live?: boolean;
+};
+
 export function useClinicalTimelineAxis(
   caseId: number | null,
   status: CaseStatus,
   stepMin = 1,
   futureColumnCount = 2,
+  axisWindow: TimelineAxisWindow = {},
 ) {
+  const windowFrom = axisWindow.from ?? null;
+  const windowTo = axisWindow.to ?? null;
+  const windowAnchor = axisWindow.anchor ?? null;
+  const windowLive = axisWindow.live ?? true;
   const [axis, setAxis] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [serverOffsetMs, setServerOffsetMs] = useState(0);
@@ -54,8 +69,12 @@ export function useClinicalTimelineAxis(
       if (showLoading) setLoading(true);
       try {
         const receivedAt = Date.now();
-        const result = await getClinicalTimelineAxis(activeCaseId, stepMin);
-        const next = status === "ACTIVE"
+        const result = await getClinicalTimelineAxis(activeCaseId, stepMin, {
+          from: windowFrom,
+          to: windowTo,
+          anchor: windowAnchor,
+        });
+        const next = status === "ACTIVE" && windowLive
           ? reserveFutureColumns(result.axis, result.serverTime, stepMin, futureColumnCount)
           : result.axis;
         if (!alive) return;
@@ -82,8 +101,8 @@ export function useClinicalTimelineAxis(
     // always fetch once, show loading only on initial/scale change
     fetchAxis(true);
 
-    // poll only when ACTIVE
-    if (status === "ACTIVE") {
+    // poll only when ACTIVE and the window contains now (a past day of a long stay is static)
+    if (status === "ACTIVE" && windowLive) {
       const onStartTimeUpdated = (event: Event) => {
         const custom = event as CustomEvent<{ caseId?: number }>;
         const changedCaseId = Number(custom.detail?.caseId);
@@ -102,7 +121,7 @@ export function useClinicalTimelineAxis(
     return () => {
       alive = false;
     };
-  }, [caseId, status, stepMin, futureColumnCount]);
+  }, [caseId, status, stepMin, futureColumnCount, windowFrom, windowTo, windowAnchor, windowLive]);
 
   return { axis, loading, serverOffsetMs, lastSyncedAt };
 }

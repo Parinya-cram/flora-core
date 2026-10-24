@@ -65,6 +65,7 @@ function text(value: unknown): string {
 }
 
 function numberOrNull(value: unknown): number | null {
+  if (value == null || value === "") return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }
@@ -94,8 +95,8 @@ function parseStaffRow(row: Record<string, unknown>): StaffMember {
     directory_managed: numberOrNull(row.directory_managed) ?? undefined,
     directory_pending: numberOrNull(row.directory_pending) ?? undefined,
     sync_error: typeof row.sync_error === "string" ? row.sync_error : null,
-    time_in: row.time_in == null ? null : numberOrNull(row.time_in),
-    time_out: row.time_out == null ? null : numberOrNull(row.time_out),
+    time_in: numberOrNull(row.time_in),
+    time_out: numberOrNull(row.time_out),
   };
 }
 

@@ -2,6 +2,8 @@ import logging
 from contextlib import asynccontextmanager
 import os
 
+import anyio
+
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -9,12 +11,13 @@ from psycopg import Connection
 
 from .bootstrap_admin import ensure_bootstrap_admin
 from .database import close_pool, connection, open_pool, pool
-from . import tenancy
+from . import activity_log, tenancy
 from .account_middleware import AccountMiddleware
 from .device_writer import device_writer
 from .live_schema import ensure_live_schema
 from .routes.cases_read import router as cases_read_router
 from .routes.auth_canopy import router as canopy_auth_router
+from .routes.activity_log import router as activity_log_router
 from .routes.auth_leaf import router as leaf_auth_router
 from .routes.cases_lifecycle import router as cases_lifecycle_router
 from .routes.case_devices import router as case_devices_router
@@ -45,6 +48,7 @@ from .routes.staff_canopy import router as staff_canopy_router
 from .routes.or_schedule import router as or_schedule_router
 from .routes.or_leaf import router as or_leaf_router
 from .routes.case_journey import router as case_journey_router
+from .routes.central_leaf import router as central_leaf_router
 from .routes.staff_sync_leaf import router as staff_sync_leaf_router
 from .score_writer import score_writer
 from .routes.canopy_admissions import router as canopy_admissions_router
@@ -126,6 +130,7 @@ if API_MODE == "leaf" and os.getenv("FLORA_LEAF_WRITE_API", "false").lower() == 
     app.include_router(staff_sync_leaf_router)  # before catalog_write's /staff/* routes
     app.include_router(or_leaf_router)
     app.include_router(case_journey_router)
+    app.include_router(central_leaf_router)
     app.include_router(case_workflow_router)
     app.include_router(case_devices_router)
     app.include_router(cases_lifecycle_router)
@@ -139,6 +144,7 @@ if API_MODE == "leaf" and os.getenv("FLORA_LEAF_WRITE_API", "false").lower() == 
     app.include_router(terminology_router)
 if API_MODE == "canopy":
     app.include_router(canopy_auth_router)
+    app.include_router(activity_log_router)
     app.include_router(canopy_preferences_router)
     app.include_router(canopy_users_router)
     app.include_router(build_ai_settings_router())
@@ -200,6 +206,25 @@ async def enforce_canopy_read_only(request: Request, call_next):
                 content={"error": "Flora Canopy is read-only"},
             )
     return await call_next(request)
+
+
+@app.middleware("http")
+async def canopy_activity_log(request: Request, call_next):
+    """Administrator → Logs: every Canopy write, chart opened and report printed (see app/activity_log.py)."""
+    if API_MODE != "canopy" or not activity_log.should_log(request.method, request.url.path):
+        return await call_next(request)
+    started = time.monotonic()
+    status, error = 500, None
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        return response
+    except Exception as exc:
+        error = type(exc).__name__
+        raise
+    finally:
+        await anyio.to_thread.run_sync(activity_log.record_request, request, status, int((time.monotonic() - started) * 1000), error,
+                                       tenancy.current_account())
 
 
 @app.middleware("http")

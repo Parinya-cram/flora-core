@@ -1,5 +1,6 @@
 import { BACKEND_BASE } from "./backendBase";
 import { readStoredAuthToken } from "./authApi";
+import type { DeviceBindingInput } from "./caseApi";
 
 /** Leaf Ward page: local data first, refreshed from Canopy by the sync worker. */
 
@@ -97,6 +98,43 @@ export type WardOverview = {
   /** Multi-gateway Leaf (migration 0090); absent on older Leaf APIs. */
   gateway_links?: GatewayLink[] | null;
   sync: { auto_interval_sec: number; requested_at?: number | null; ward_synced_at?: number | null; last_ok_at?: number | null; components: SyncComponent[] };
+  /** Transfer (no discharge): offered to this Leaf, waiting for Receive. Absent on older Leaf APIs. */
+  transfers_in?: WardTransfer[];
+  /** Cases of this Leaf offered to another bed, waiting there. */
+  transfers_out?: WardTransfer[];
+};
+
+export type WardTransfer = {
+  handover_id: number;
+  kind: "transfer" | "bed_move";
+  global_case_id: string;
+  from_leaf_id: string;
+  from_leaf_name?: string | null;
+  source_case_id: string;
+  to_leaf_id: string;
+  to_leaf_name?: string | null;
+  to_bed_location_id?: number | null;
+  to_bed_label?: string | null;
+  from_bed_label?: string | null;
+  initiated_from?: "leaf" | "canopy" | null;
+  requested_by?: string | null;
+  note?: string | null;
+  created_at: number;
+  hn?: string | null;
+  patient_name?: string | null;
+  admission_number?: string | null;
+};
+
+export type TransferBed = {
+  bed_location_id: number;
+  bed_name: string;
+  bed_code?: string | null;
+  room_name?: string | null;
+  room_type?: string | null;
+  leaf_id: string;
+  leaf_name?: string | null;
+  is_primary: boolean;
+  busy?: { leaf_id: string; hn: string; case_code?: string | null } | null;
 };
 
 export type HandoverResult = {
@@ -163,6 +201,18 @@ export const getWardOverview = () => request<WardOverview>("/overview");
 export const requestWardSync = () => request<{ requested_at: number }>("/sync", { method: "POST" });
 export const takeOverCase = (globalCaseId: string, moveDevices: boolean) =>
   post<HandoverResult>("/handover", { global_case_id: globalCaseId, move_devices: moveDevices });
+/** Receive a transfer offered to this Leaf: the chart continues here, on this bed, with these devices. */
+export const receiveTransfer = (transfer: WardTransfer, bedLabel: string, devices: DeviceBindingInput[]) =>
+  post<HandoverResult>("/handover", { global_case_id: transfer.global_case_id, handover_id: transfer.handover_id, bed_label: bedLabel, devices });
+export const getTransferTargets = () => request<{ beds: TransferBed[]; leaf_id: string }>("/transfer-targets");
+/** Move an active case to a bed without discharging it (this Leaf: at once; another Leaf: offered there). */
+export const transferCase = (caseId: number, bed: TransferBed, note?: string) =>
+  post<{ kind: "transfer" | "bed_move"; handover_id?: number; bed_label?: string }>(`/cases/${caseId}/transfer`, {
+    to_leaf_id: bed.leaf_id, to_bed_location_id: bed.bed_location_id, to_bed_label: bed.bed_name, note });
+export const moveCaseBed = (caseId: number, bedLabel: string) =>
+  post<{ kind: "bed_move"; bed_label: string }>(`/cases/${caseId}/transfer`, { to_bed_label: bedLabel });
+export const withdrawTransfer = (caseId: number, handoverId: number) =>
+  post<{ ok: boolean }>(`/cases/${caseId}/transfer/withdraw`, { handover_id: handoverId });
 export const testGateway = (dataApiUrl: string) => post<GatewayTest>("/gateway/test", { data_api_url: dataApiUrl });
 export const assignGatewayDevices = (gatewayId: string, deviceIds: string[]) =>
   post<{ desired_version: number }>("/gateway/assign", { gateway_id: gatewayId, device_ids: deviceIds, release_others: true });

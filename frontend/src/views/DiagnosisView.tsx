@@ -767,7 +767,7 @@ export default function DiagnosisView({ caseStatus }: Props) {
   }
 
   return (
-    <div className="p-4 pb-24 space-y-6 max-w-6xl mx-auto">
+    <div className="p-4 pb-24 space-y-6 w-full">
       {error && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-2 rounded-md text-sm">
           {error}

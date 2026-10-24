@@ -13,6 +13,7 @@ function formatDuration(startTs: number, endTs?: number) {
   const h = Math.floor(totalMins / 60);
   const m = totalMins % 60;
   if (h === 0) return `${m}m`;
+  if (h >= 24) return `${Math.floor(h / 24)}d ${h % 24}h`;
   return `${h}h ${String(m).padStart(2, "0")}m`;
 }
 
@@ -70,7 +71,7 @@ export default function HistoryView({ onOpenCase }: Props) {
   }
 
   return (
-    <div className="mx-auto max-w-5xl p-4 space-y-4">
+    <div className="w-full p-4 space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-base font-semibold text-[var(--app-text)]">Case records</h1>

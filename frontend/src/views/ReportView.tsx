@@ -37,6 +37,7 @@ import { getCaseStaff, type StaffMember } from "../api/staffApi";
 import HnBarcode from "../components/common/HnBarcode";
 import PdfPreviewCanvas from "../components/report/PdfPreviewCanvas";
 import { useCaseWorkflow } from "../components/workflow/caseWorkflow";
+import { stayDayLabel, stayDayStarts } from "./clinical-chart/dayWindow";
 import { getCaseWorkflow } from "../api/workflowApi";
 import type { ClinicalTimelineRow, ClinicalTimelineValues } from "../components/clinical-timeline/types";
 import { BASE_IVY_ROWS, ROW_META, getRowGroup, makeFallbackLabel } from "./clinical-chart/constants";
@@ -407,6 +408,18 @@ type TimelineLayoutMode = "standard" | "smart_fit" | "detail";
 const REPORT_BUCKET_CHOICES_MIN = [5, 10, 15, 20, 30, 60] as const;
 const REPORT_ACTIVE_IDLE_GRACE_MS = 45 * 60_000;
 const REPORT_ACTIVE_TAIL_PAD_MS = REPORT_BUCKET_MS;
+/** Daily summary (long stays): hourly columns, one stay day per timeline page. */
+const REPORT_DAILY_BUCKET_MIN = 60;
+const REPORT_DAILY_PAGE_MS = 24 * 60 * 60_000;
+const REPORT_DAILY_COL_WIDTH = 32;
+/** Print range: the whole stay, one stay day, or a custom from/to. */
+type ReportRange = { kind: "all" } | { kind: "day"; day: number } | { kind: "custom"; from: number; to: number };
+
+function toLocalInputValue(ts: number): string {
+  const date = new Date(ts);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 
 function getReportPrefStorageKey(kind: "timelineLayout" | "chartSeries" | "timelineParams", username: string) {
   const scope = username.trim().toLowerCase();
@@ -544,6 +557,36 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
   // Workflow Studio: the case packet (hidden when the case has no workflow).
   const caseWorkflow = useCaseWorkflow(caseStatus.status !== "IDLE" ? caseStatus.case_id : null);
   const packetEntries = caseWorkflow.workflow?.packet || [];
+  // Long stays: print the whole stay, one day, or a custom range; "daily summary" = hourly columns.
+  const [reportRange, setReportRange] = useState<ReportRange>({ kind: "all" });
+  const [dailySummary, setDailySummary] = useState(false);
+  const reportCaseId = caseStatus.status !== "IDLE" ? caseStatus.case_id : null;
+  useEffect(() => {
+    setReportRange({ kind: "all" });
+    setDailySummary(false);
+  }, [reportCaseId]);
+  const reportCaseStartTs = caseStatus.status !== "IDLE" ? caseStatus.start_time : null;
+  const reportCaseEndTs = caseStatus.status === "DISCHARGED" || caseStatus.status === "ARCHIVED"
+    ? caseStatus.discharge_time || null
+    : null;
+  const reportDayStart = caseWorkflow.workflow?.day_start ?? null;
+  const reportStayDays = useMemo(
+    () => (reportCaseStartTs != null ? stayDayStarts(reportCaseStartTs, reportCaseEndTs ?? Date.now(), reportDayStart) : []),
+    [reportCaseEndTs, reportCaseStartTs, reportDayStart],
+  );
+  const reportRangeBounds = useMemo((): { from: number; to: number } | null => {
+    if (reportRange.kind === "custom") return { from: reportRange.from, to: reportRange.to };
+    if (reportRange.kind === "day") {
+      const dayFrom = reportStayDays[reportRange.day - 1];
+      if (dayFrom == null) return null;
+      const next = new Date(dayFrom);
+      next.setDate(next.getDate() + 1);
+      return { from: dayFrom, to: next.getTime() - 1 };
+    }
+    return null;
+  }, [reportRange, reportStayDays]);
+  const rangeFromTs = reportRangeBounds?.from ?? null;
+  const rangeToTs = reportRangeBounds?.to ?? null;
   const [warnings, setWarnings] = useState<string[]>([]);
   const [reloadToken, setReloadToken] = useState(0);
   const [data, setData] = useState<ReportData | null>(null);
@@ -588,11 +631,13 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
       }
 
       const caseId = caseStatus.case_id;
-      const fromTs = caseStatus.start_time;
-      const statusEndTs =
+      const caseEndTs =
         caseStatus.status === "DISCHARGED" || caseStatus.status === "ARCHIVED"
           ? caseStatus.discharge_time || Date.now()
           : Date.now();
+      // Print range (Day N / custom) limits every load to that window; whole stay = start..end.
+      const fromTs = rangeFromTs != null ? Math.max(caseStatus.start_time, rangeFromTs) : caseStatus.start_time;
+      const statusEndTs = Math.max(fromTs + 60_000, rangeToTs != null ? Math.min(caseEndTs, rangeToTs) : caseEndTs);
 
       setLoading(true);
       setError("");
@@ -653,7 +698,7 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
         isOpenCase && statusEndTs - lastTimelineActivityTs > REPORT_ACTIVE_IDLE_GRACE_MS
           ? lastTimelineActivityTs + REPORT_ACTIVE_TAIL_PAD_MS
           : statusEndTs;
-      const toTs = Math.max(
+      const unclampedToTs = Math.max(
         fromTs + 60000,
         effectiveStatusEndTs,
         maxVitalTs,
@@ -661,6 +706,8 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
         maxIoEventTs,
         maxIoRunTs,
       );
+      // Runs overlapping a range may start/stop outside it: keep the range end.
+      const toTs = rangeToTs != null ? Math.min(unclampedToTs, Math.max(fromTs + 60000, statusEndTs)) : unclampedToTs;
 
       if (!alive) return;
       setData({
@@ -693,7 +740,7 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
     return () => {
       alive = false;
     };
-  }, [caseStatus, reloadToken]);
+  }, [caseStatus, rangeFromTs, rangeToTs, reloadToken]);
 
   useEffect(() => {
     let alive = true;
@@ -1447,16 +1494,19 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
   }, [currentCase?.start_time, data]);
 
   const reportBucketMin = useMemo(() => {
+    if (dailySummary) return REPORT_DAILY_BUCKET_MIN;
     if (timelineLayoutMode === "standard") return REPORT_BUCKET_MIN;
     if (timelineLayoutMode === "detail") return 5;
     return pickReportBucketMin(reportSpanMs, pickSmartFitTimelinePages(reportSpanMs));
-  }, [reportSpanMs, timelineLayoutMode]);
+  }, [dailySummary, reportSpanMs, timelineLayoutMode]);
 
   const reportBucketMs = reportBucketMin * 60_000;
   const reportTimelinePageMs = useMemo(() => {
+    if (dailySummary) return REPORT_DAILY_PAGE_MS;
     if (timelineLayoutMode === "standard") return REPORT_TIMELINE_PAGE_MS;
     return reportBucketMs * REPORT_DEFAULT_TIMELINE_COLUMNS;
-  }, [reportBucketMs, timelineLayoutMode]);
+  }, [dailySummary, reportBucketMs, timelineLayoutMode]);
+  const reportColWidth = dailySummary ? REPORT_DAILY_COL_WIDTH : 50;
 
   const reportPageHours = reportTimelinePageMs / 60 / 60_000;
 
@@ -1469,8 +1519,13 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
       return [{ startTs, endTs, axis: buildAxis(startTs, endTs, reportBucketMs) }];
     }
     // Standard: anchor pages to case start_time (e.g. 13:15 → pages 13:15–17:15, 17:15–21:15)
-    const firstTs =
-      timelineLayoutMode === "standard" && currentCase?.start_time
+    // Daily summary: pages start on the stay day (day_start) containing the range start.
+    const dailyAnchor = dailySummary
+      ? reportStayDays.filter(dayTs => dayTs <= data.fromTs).pop() ?? data.fromTs
+      : null;
+    const firstTs = dailyAnchor != null
+      ? floorToBucket(dailyAnchor, reportBucketMs)
+      : timelineLayoutMode === "standard" && currentCase?.start_time && rangeFromTs == null
         ? floorToBucket(Number(currentCase.start_time), reportBucketMs)
         : floorToBucket(data.fromTs, reportBucketMs);
     const finalTs = Math.max(data.toTs, data.fromTs + reportBucketMs);
@@ -1478,7 +1533,7 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
     const pages: Array<{ startTs: number; endTs: number; axis: number[] }> = [];
     for (let startTs = firstTs; startTs < endTs; startTs += reportTimelinePageMs) {
       // Standard: always fill the full 4-hour window even when data ends earlier
-      const windowEnd = timelineLayoutMode === "standard"
+      const windowEnd = timelineLayoutMode === "standard" || dailySummary
         ? startTs + reportTimelinePageMs
         : Math.min(startTs + reportTimelinePageMs, endTs);
       const axis = buildAxis(startTs, windowEnd, reportBucketMs);
@@ -1489,7 +1544,7 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
       });
     }
     return pages.length > 0 ? pages : [{ startTs: firstTs, endTs: firstTs + reportTimelinePageMs, axis: buildAxis(firstTs, firstTs + reportTimelinePageMs, reportBucketMs) }];
-  }, [currentCase, data, reportBucketMs, reportTimelinePageMs, timelineLayoutMode]);
+  }, [currentCase, dailySummary, data, rangeFromTs, reportBucketMs, reportStayDays, reportTimelinePageMs, timelineLayoutMode]);
 
   const bucketedTimeline = useMemo(() => {
     const values: ClinicalTimelineValues = {};      // 15-min buckets for grid
@@ -2516,18 +2571,18 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
             <section>
               <div className="mb-1 border-b border-gray-400 text-[9px] font-bold uppercase tracking-widest text-gray-600">
                 Classic Timeline Sheet
-                <span className="ml-2 font-normal normal-case text-gray-500">{REPORT_BUCKET_MIN}-minute columns | 4-hour page | events {eventCount}</span>
+                <span className="ml-2 font-normal normal-case text-gray-500">{reportBucketMin}-minute columns | {formatAmount(reportPageHours)}-hour page | events {eventCount}</span>
               </div>
               <div className="overflow-hidden">
-                <ReportTimelineAxis axis={page.axis} colWidth={50} labelColWidth={120} />
-                <ReportVitalSignsTrendChart axis={page.axis} values={bucketedTimeline.chartValues} colWidth={50} labelColWidth={120} height={118} visible={chartSeriesVisibility} onToggle={handleChartToggle} />
+                <ReportTimelineAxis axis={page.axis} colWidth={reportColWidth} labelColWidth={120} />
+                <ReportVitalSignsTrendChart axis={page.axis} values={bucketedTimeline.chartValues} colWidth={reportColWidth} labelColWidth={120} height={118} visible={chartSeriesVisibility} onToggle={handleChartToggle} />
                 <ReportClinicalTimelineGrid
                   axis={page.axis}
                   rows={pageRows}
                   values={valuesMerged}
                   eventMarkersByTs={timelineEventMarkersByBucket}
                   preparedMarkersByTs={timelineIoPrepared.markers}
-                  colWidth={50}
+                  colWidth={reportColWidth}
                   labelColWidth={120}
                 />
               </div>
@@ -2539,7 +2594,7 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
     </div>
   );
   return (
-    <div className="report-root mx-auto max-w-[1480px] p-4 pb-8 text-gray-900 dark:text-gray-100">
+    <div className="report-root w-full p-4 pb-8 text-gray-900 dark:text-gray-100">
       <div className="report-toolbar mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="text-sm font-semibold">Anesthesia Record Report</div>
@@ -2646,7 +2701,61 @@ export default function ReportView({ caseStatus, onCaseDischargeTimeUpdated }: P
                     </button>
                   ) : null}
                 </div>
-                <div className="mt-2 text-[11px] text-[var(--app-muted)]">{timelineLayoutSummary}</div>
+                <div className="mt-2 text-[11px] text-[var(--app-muted)]">{dailySummary ? "Daily summary: hourly columns, one stay day per timeline page." : timelineLayoutSummary}</div>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                  <label className="inline-flex items-center gap-1">
+                    <span className="uppercase tracking-wide text-[var(--app-muted)]">Range</span>
+                    <select
+                      className="rounded border border-[var(--app-border)] bg-[var(--app-control-bg)] px-1.5 py-1"
+                      value={reportRange.kind === "day" ? String(reportRange.day) : reportRange.kind}
+                      onChange={event => {
+                        const raw = event.target.value;
+                        if (raw === "all") setReportRange({ kind: "all" });
+                        else if (raw === "custom") {
+                          const to = reportCaseEndTs ?? Date.now();
+                          setReportRange({ kind: "custom", from: Math.max(reportCaseStartTs ?? to, to - 24 * 60 * 60_000), to });
+                        } else setReportRange({ kind: "day", day: Number(raw) });
+                      }}
+                    >
+                      <option value="all">Whole stay</option>
+                      {reportStayDays.length > 1
+                        ? reportStayDays.map((dayTs, index) => (
+                          <option key={dayTs} value={index + 1}>{stayDayLabel(index + 1, dayTs)}</option>
+                        ))
+                        : null}
+                      <option value="custom">Custom…</option>
+                    </select>
+                  </label>
+                  {reportRange.kind === "custom" ? (
+                    <>
+                      <input
+                        type="datetime-local"
+                        aria-label="Report range from"
+                        className="rounded border border-[var(--app-border)] bg-[var(--app-control-bg)] px-1.5 py-1"
+                        value={toLocalInputValue(reportRange.from)}
+                        onChange={event => {
+                          const from = new Date(event.target.value).getTime();
+                          if (Number.isFinite(from) && from < reportRange.to) setReportRange({ ...reportRange, from });
+                        }}
+                      />
+                      <span>–</span>
+                      <input
+                        type="datetime-local"
+                        aria-label="Report range to"
+                        className="rounded border border-[var(--app-border)] bg-[var(--app-control-bg)] px-1.5 py-1"
+                        value={toLocalInputValue(reportRange.to)}
+                        onChange={event => {
+                          const to = new Date(event.target.value).getTime();
+                          if (Number.isFinite(to) && to > reportRange.from) setReportRange({ ...reportRange, to });
+                        }}
+                      />
+                    </>
+                  ) : null}
+                  <label className="inline-flex items-center gap-1">
+                    <input type="checkbox" checked={dailySummary} onChange={event => setDailySummary(event.target.checked)} />
+                    Daily summary (hourly)
+                  </label>
+                </div>
                 {reportEndSuggestion ? (
                   <div className="mt-2 flex flex-wrap items-center gap-2 rounded border border-amber-500/60 bg-amber-500/10 px-2 py-1.5 text-[11px]">
                     <div className="font-medium uppercase tracking-wide text-amber-300">Suggested end</div>

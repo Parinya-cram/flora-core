@@ -5,6 +5,8 @@ import { MicIcon } from "../components/common/DictationButton";
 import FormDictationModal from "../components/dictation/FormDictationModal";
 import { getSurfaceInfo } from "../edition/config";
 import { orderCaseTabs, useCaseWorkflow, workflowFormTabs } from "../components/workflow/caseWorkflow";
+import { BADGE_TONE, badgeFor } from "../components/workflow/formSchedule";
+import type { FormScheduleSummary } from "../api/workflowApi";
 import {
   getCaseDetailDraft,
   patchCaseDetailDraft,
@@ -192,6 +194,7 @@ interface FormViewProps {
 const IDLE_CASE: CaseStatus = { status: "IDLE" };
 /** Workflow Studio forms load Form Studio's renderer only when a case has them. */
 const WorkflowFormPanel = lazy(() => import("../components/workflow/WorkflowFormPanel"));
+const ScheduledFormPanel = lazy(() => import("../components/workflow/ScheduledFormPanel"));
 const FORM_REMOTE_REFRESH_MS = 10_000;
 
 const card =
@@ -1776,6 +1779,8 @@ export default function FormView({
   const builtInRecord = caseWorkflow.workflow?.anesthesia_record?.enabled !== false || !workflowTabs.length;
   const workflowOptionalSections = caseWorkflow.workflow?.anesthesia_record?.optional_sections;
   const [workflowTabPick, setWorkflowTab] = useState<string | null>(null);
+  // Scheduled forms: the latest due/overdue counts from their panels (keyed case:form), over the workflow read's.
+  const [formSummaries, setFormSummaries] = useState<Record<string, FormScheduleSummary>>({});
   const workflowTab = workflowTabs.some(tab => tab.formId === workflowTabPick)
     ? workflowTabPick
     : builtInRecord ? null : workflowTabs[0]?.formId ?? null;
@@ -2688,7 +2693,7 @@ export default function FormView({
     }`;
 
   return (
-    <div ref={formRootRef} className="app-theme-scope mx-auto max-w-[1500px] space-y-4 p-4 pb-24 text-[var(--app-text)]">
+    <div ref={formRootRef} className="app-theme-scope w-full space-y-4 p-4 pb-24 text-[var(--app-text)]">
       <div className="sticky top-3 z-20">
         <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-panel-bg)]/95 p-3 shadow-lg backdrop-blur">
           <div className="flex flex-wrap items-center gap-3">
@@ -2713,6 +2718,10 @@ export default function FormView({
                       : "border-dashed border-[var(--app-border)] bg-[var(--app-control-bg)] text-[var(--app-muted)] hover:bg-[var(--app-control-bg-hover)] hover:text-[var(--app-text)]"}`}
                     onClick={() => setWorkflowTab(tab.formId)}>
                     <span className="font-bold">{tab.title}</span>{tab.required ? <span className="ml-1 text-rose-500">*</span> : null}
+                    {(() => {
+                      const badge = tab.schedule ? badgeFor(formSummaries[`${leafCaseId}:${tab.formId}`] ?? tab.summary) : null;
+                      return badge ? <span title={badge.text} className={`ml-2 rounded-full border px-1.5 py-0.5 text-[9px] font-bold ${BADGE_TONE[badge.tone]}`}>{badge.count}</span> : null;
+                    })()}
                   </button>
                 );
               }
@@ -3489,7 +3498,11 @@ export default function FormView({
       </fieldset>
 
       {leafCaseId != null && workflowTabs.length ? <Suspense fallback={workflowTab ? <div className="p-4 text-sm text-[var(--app-muted)]">Loading form…</div> : null}>
-        {workflowTabs.map(tab => <WorkflowFormPanel key={`${leafCaseId}-${tab.formId}`} caseId={leafCaseId} formId={tab.formId}
+        {workflowTabs.map(tab => tab.schedule
+          ? <ScheduledFormPanel key={`${leafCaseId}-${tab.formId}`} caseId={leafCaseId} formId={tab.formId} form={caseWorkflow.forms[tab.formId]} hint={tab.hint}
+            readOnly={readOnly || caseStatus.status === "ARCHIVED"} hidden={workflowTab !== tab.formId}
+            onSummary={summary => setFormSummaries(current => ({ ...current, [`${leafCaseId}:${tab.formId}`]: summary }))} />
+          : <WorkflowFormPanel key={`${leafCaseId}-${tab.formId}`} caseId={leafCaseId} formId={tab.formId}
           form={caseWorkflow.forms[tab.formId]} hint={tab.hint} readOnly={readOnly || caseStatus.status === "ARCHIVED"} hidden={workflowTab !== tab.formId} />)}
       </Suspense> : null}
 

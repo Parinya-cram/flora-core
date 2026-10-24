@@ -14,6 +14,9 @@ import { readSessionAccount } from "../api/accountApi";
 import type { CanopyWardState } from "../hooks/useCanopyWard";
 import WorkstationSwitcher from "../demo/WorkstationSwitcher";
 import { currentDemoWorkstation } from "../demo/workstations";
+import { useCaseWorklist } from "../components/workflow/caseWorklist";
+import WorklistBadge from "../components/workflow/WorklistBadge";
+import { BADGE_TONE } from "../components/workflow/formSchedule";
 
 type Props = {
   setActiveView: (view: AppView) => void;
@@ -54,6 +57,7 @@ function CaseSwitcher({ caseStatus, activeCases, onSelectCase, onNewCase }: { ca
   const L = SWITCH_TEXT[language === "th" ? "th" : "en"];
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const worklist = useCaseWorklist();
   useEffect(() => {
     if (!open) return;
     const outside = (event: PointerEvent) => { if (!ref.current?.contains(event.target as Node)) setOpen(false); };
@@ -65,6 +69,10 @@ function CaseSwitcher({ caseStatus, activeCases, onSelectCase, onNewCase }: { ca
 
   const currentId = caseStatus.status !== "IDLE" ? caseStatus.case_id : null;
   const current = activeCases.find(item => item.case_id === currentId);
+  // The other cases' due/overdue forms: one count on the closed switcher.
+  const others = activeCases.filter(item => item.case_id !== currentId).map(item => worklist.get(item.case_id));
+  const othersPending = others.reduce((sum, item) => sum + (item?.overdue ?? 0) + (item?.due ?? 0), 0);
+  const othersOverdue = others.some(item => (item?.overdue ?? 0) > 0);
   const sorted = [...activeCases].sort((a, b) => String(a.bed_label || "~").localeCompare(String(b.bed_label || "~"), undefined, { numeric: true }) || a.start_time - b.start_time);
   const bed = caseStatus.status === "IDLE" ? "+" : (current?.bed_label || caseStatus.bed_label || L.noBed);
   const label = caseStatus.status === "IDLE" ? L.newCaseMode : caseLine({ hn: caseStatus.hn, patient_name: current?.patient_name || caseStatus.patient_name });
@@ -74,6 +82,8 @@ function CaseSwitcher({ caseStatus, activeCases, onSelectCase, onNewCase }: { ca
       className="flex h-10 min-w-0 max-w-[340px] items-center gap-2 rounded-lg border border-[var(--app-nav-border)] bg-[var(--app-nav-bg)] px-1.5 pr-2 text-left text-[var(--app-text)]">
       <span className="inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded-md bg-[var(--app-accent)]/15 px-1.5 text-xs font-extrabold text-[var(--app-accent)]">{bed}</span>
       <span className="hidden min-w-0 truncate text-xs font-semibold sm:block">{label}</span>
+      {currentId != null ? <WorklistBadge item={worklist.get(currentId)} compact /> : null}
+      {othersPending ? <span title="Forms due in other cases" className={`shrink-0 rounded-full border px-1.5 text-[10px] font-bold ${BADGE_TONE[othersOverdue ? "overdue" : "due"]}`}>+{othersPending}</span> : null}
       <span className="shrink-0 rounded-full bg-[var(--app-control-bg)] px-1.5 text-[10px] font-bold text-[var(--app-muted)]">{activeCases.length}</span>
       <span aria-hidden="true" className={`text-[10px] text-[var(--app-muted)] transition-transform ${open ? "rotate-180" : ""}`}>⌄</span>
     </button>
@@ -88,6 +98,7 @@ function CaseSwitcher({ caseStatus, activeCases, onSelectCase, onNewCase }: { ca
             <span className="block truncate font-semibold text-[var(--app-text)]">{item.patient_name || (item.hn ? `HN ${item.hn}` : `#${item.case_id}`)}</span>
             <span className="block truncate text-[10px] text-[var(--app-muted)]">{item.hn ? `HN ${item.hn}` : ""}{item.devices.length ? ` · ${item.devices.map(binding => binding.device_id).join(", ")}` : ""}</span>
           </span>
+          <WorklistBadge item={worklist.get(item.case_id)} compact />
           {item.case_id === currentId ? <span className="text-[var(--app-accent)]">✓</span> : null}
         </button>)}
       </div>

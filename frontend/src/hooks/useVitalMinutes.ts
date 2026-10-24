@@ -103,7 +103,18 @@ export function useVitalMinutes(
   axis: number[],
   /** Values of the minute still streaming in (useLiveCase); shown until the stored minute arrives. */
   liveMinute?: LiveMinute | null,
+  options: {
+    /** Case start (ms): the first column also shows the minutes before it, down to the case start. */
+    caseStartTs?: number | null;
+    /** Ask the server for one value per key per column (long stays / coarse steps, step ≥ 60). */
+    bucketed?: boolean;
+    /** Poll while active; false when the window (a past day) does not contain now. */
+    poll?: boolean;
+  } = {},
 ) {
+  const caseStartTs = options.caseStartTs ?? null;
+  const bucketed = options.bucketed ?? false;
+  const poll = options.poll ?? true;
   const [values, setValues] = useState<ClinicalTimelineValues>({});
   const [provenance, setProvenance] = useState<TimelineProvenance>({});
   const [loading, setLoading] = useState(false);
@@ -129,15 +140,21 @@ export function useVitalMinutes(
 
     const activeCaseId = caseId;
     const currentAxis = axis;
-    const fromTs = axis[0];
     const stepMs = axis.length > 1 ? Math.max(1, axis[1] - axis[0]) : 60_000;
+    // A column shows (previous column, column]; fetch the first column's minutes too, but never
+    // before the case start (keeps the whole-stay view as it was).
+    const fromTs = caseStartTs != null
+      ? Math.min(axis[0], Math.max(Math.floor(caseStartTs / 60_000) * 60_000, axis[0] - stepMs + 60_000))
+      : axis[0];
     const toTs = axis[axis.length - 1] + stepMs - 1;
+    const stepMin = Math.round(stepMs / 60_000);
+    const bucket = bucketed && stepMin >= 60 ? { stepMin, anchor: axis[0] } : undefined;
     let alive = true;
 
     async function fetchVitals(showLoading = false) {
       if (showLoading) setLoading(true);
       try {
-        const { rows, masks: nextMasks } = await getEffectiveTimelineWithMasks(activeCaseId, fromTs, toTs);
+        const { rows, masks: nextMasks } = await getEffectiveTimelineWithMasks(activeCaseId, fromTs, toTs, bucket);
         if (!alive) return;
         const nextValues = toClinicalTimelineValues(rows);
         const nextMasked = toMaskedValues(rows);
@@ -156,7 +173,7 @@ export function useVitalMinutes(
     fetchVitals(true);
     reloadRef.current = () => fetchVitals(false);
 
-    if (status === "ACTIVE") {
+    if (status === "ACTIVE" && poll) {
       const onStartTimeUpdated = (event: Event) => {
         const custom = event as CustomEvent<{ caseId?: number }>;
         const changedCaseId = Number(custom.detail?.caseId);
@@ -188,7 +205,7 @@ export function useVitalMinutes(
     return () => {
       alive = false;
     };
-  }, [caseId, status, axis]);
+  }, [caseId, status, axis, caseStartTs, bucketed, poll]);
 
   /** Refetch now (after a mask change), resolving when the new data is in. */
   const reload = useCallback(() => reloadRef.current(), []);

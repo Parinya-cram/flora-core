@@ -73,7 +73,8 @@ export default function LabView({ caseStatus, onSummaryChange }: Props) {
   const loadLabs = useCallback(async () => {
     if (!caseId) return;
     const toTs = Date.now();
-    const fromTs = Math.max(caseStartTime - 86_400_000, toTs - 604_800_000);
+    // Whole stay (+ the day before admission), so a 30-day ICU stay keeps its early labs.
+    const fromTs = caseStartTime - 86_400_000;
     setLoading(true); setError("");
     try { const rows = await getCaseLabs(caseId, { fromTs, toTs, limit: 1000 }); setLabs(rows); setNote(rows.length ? `Updated ${fmt(Date.now())}` : "No resulted laboratory data received."); }
     catch (err) { setError(err instanceof Error ? err.message : "Lab results could not be loaded."); }

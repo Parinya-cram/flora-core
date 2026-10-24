@@ -139,7 +139,9 @@ import timeCardIcon from "../assets/cards/card-time.png";
 import diagnosisCardIcon from "../assets/cards/card-diagnosis.png";
 import procedureCardIcon from "../assets/cards/card-procedure.png";
 
-import { clampEditionTimelineScale, getEditionInfo, getSurfaceInfo, isTimelineParamAllowed } from "../edition/config";
+import { clampEditionTimelineScale, editionTimelineScaleOptions, getEditionInfo, getSurfaceInfo, isTimelineParamAllowed } from "../edition/config";
+import { getCaseWorkflow } from "../api/workflowApi";
+import { LONG_STAY_MS, resolveChartWindow, stayDayLabel, stayDayStarts, type ChartWindowChoice } from "./clinical-chart/dayWindow";
 import {
   CHART_PREFERENCES_CHANGED_EVENT,
   chartVisibilityStorageKey,
@@ -941,22 +943,51 @@ export default function ClinicalChartView({
   const [dripSmartContrast, setDripSmartContrast] = useState(
     () => readLocalSmartContrast(scopeUsername) ?? accountSmartContrast ?? true,
   );
-  const [scaleDraft, setScaleDraft] = useState(String(axisStepMin));
-  const minimumScale = Math.min(...availableAxisSteps);
-  const maximumScale = Math.max(...availableAxisSteps);
+  const scaleOptions = useMemo(() => editionTimelineScaleOptions(availableAxisSteps), [availableAxisSteps]);
   const changeScale = (value: number) => {
-    const next = clampEditionTimelineScale(value, availableAxisSteps);
-    setAxisStepMin(next);
-    setScaleDraft(String(next));
+    setAxisStepMin(clampEditionTimelineScale(value, availableAxisSteps));
   };
-  const commitScaleDraft = () => {
-    if (!scaleDraft.trim() || !Number.isFinite(Number(scaleDraft))) {
-      setScaleDraft(String(axisStepMin));
-      return;
-    }
-    changeScale(Number(scaleDraft));
-  };
-  useEffect(() => setScaleDraft(String(axisStepMin)), [axisStepMin]);
+  // Long stays: Day N / last 24 h window so the chart never loads 30 days of minutes at once.
+  const [chartWindowChoice, setChartWindowChoice] = useState<ChartWindowChoice>("auto");
+  const [caseDayStart, setCaseDayStart] = useState<string | null>(null);
+  const [windowClockTs, setWindowClockTs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setWindowClockTs(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    setChartWindowChoice("auto");
+    setCaseDayStart(null);
+    if (caseId == null) return;
+    let alive = true;
+    void getCaseWorkflow(caseId)
+      .then(result => { if (alive) setCaseDayStart(result.workflow?.day_start ?? null); })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, [caseId]);
+  const caseStartTs = caseStatus.status !== "IDLE" ? caseStatus.start_time : null;
+  const stayEndTs = caseStatus.status === "IDLE"
+    ? null
+    : caseStatus.status === "ACTIVE" ? windowClockTs : caseStatus.discharge_time ?? windowClockTs;
+  const stayDays = useMemo(
+    () => (caseStartTs != null && stayEndTs != null ? stayDayStarts(caseStartTs, stayEndTs, caseDayStart) : []),
+    [caseDayStart, stayEndTs, caseStartTs],
+  );
+  const isLongStay = caseStartTs != null && stayEndTs != null && stayEndTs - caseStartTs > LONG_STAY_MS;
+  const chartWindow = useMemo(
+    () => (caseStartTs != null && stayEndTs != null
+      ? resolveChartWindow({
+        choice: chartWindowChoice,
+        caseStartTs,
+        endTs: stayEndTs,
+        nowTs: windowClockTs,
+        active: caseStatus.status === "ACTIVE",
+        stepMin: axisStepMin,
+        dayStart: caseDayStart,
+      })
+      : null),
+    [axisStepMin, caseDayStart, stayEndTs, caseStartTs, caseStatus.status, chartWindowChoice, windowClockTs],
+  );
   const [preferredVisibleRowIds, setPreferredVisibleRowIds] = useState<
     string[] | null
   >(() => readVisibleRowsForUser(scopeUsername));
@@ -1015,7 +1046,15 @@ export default function ClinicalChartView({
       return next;
     });
   };
-  const { axis, loading: axisLoading, serverOffsetMs, lastSyncedAt } = useClinicalTimelineAxis(caseId, caseStatus.status, axisStepMin, futureColumnCount);
+  const ioWindowFrom = chartWindow?.from != null ? chartWindow.from - axisStepMin * 60_000 : null;
+  const ioWindowTo = chartWindow?.to != null ? chartWindow.to + axisStepMin * 60_000 : null;
+  const { axis, loading: axisLoading, serverOffsetMs, lastSyncedAt } = useClinicalTimelineAxis(
+    caseId,
+    caseStatus.status,
+    axisStepMin,
+    futureColumnCount,
+    { from: chartWindow?.from, to: chartWindow?.to, anchor: chartWindow?.anchor, live: chartWindow?.live ?? true },
+  );
   // Live 1-s stream from leaf-live (Leaf, active case only); no ring buffer needed here.
   const liveEnabled = getSurfaceInfo().code === "leaf" && caseStatus.status === "ACTIVE";
   const live = useLiveCase(liveEnabled ? caseId : null, { bufferMs: 0 });
@@ -1029,7 +1068,12 @@ export default function ClinicalChartView({
     masked: serverMaskedValues,
     masks: serverMasks,
     reload: reloadVitals,
-  } = useVitalMinutes(caseId, caseStatus.status, axis, liveEnabled ? live.currentMinute : null);
+  } = useVitalMinutes(caseId, caseStatus.status, axis, liveEnabled ? live.currentMinute : null, {
+    caseStartTs,
+    // one value per column from the server for coarse steps; short cases at 60/120 min keep every minute
+    bucketed: axisStepMin > 120 || (axisStepMin >= 60 && isLongStay),
+    poll: chartWindow?.live ?? true,
+  });
   // Invalid device data. Changes show at once (overlay) and settle when the server answers.
   const [maskOverlay, setMaskOverlay] = useState<{ added: Array<Pick<TimelineMask, "param_key" | "from_ts" | "to_ts"> & { key: string }>; removed: number[] }>({ added: [], removed: [] });
   // Undo covers every chart change (vitals, invalid marks, events, fluids/medications): the server
@@ -1603,7 +1647,6 @@ export default function ClinicalChartView({
         availableAxisSteps,
       );
       setAxisStepMin(next);
-      setScaleDraft(String(next));
       setFutureColumnCount(normalizeFutureColumns(detail?.futureColumns ?? readLocalFutureColumns(scopeUsername) ?? accountFutureColumns));
       setDripGroupColors(normalizeDripGroupColors(detail?.dripGroupColors ?? readLocalDripGroupColors(scopeUsername) ?? accountDripGroupColors));
       setDripSmartContrast(detail?.smartContrast ?? readLocalSmartContrast(scopeUsername) ?? accountSmartContrast ?? true);
@@ -1815,9 +1858,11 @@ export default function ClinicalChartView({
 
     async function loadIoData() {
       try {
-        const fromTs = caseInfo.start_time;
-        const toTs =
-          caseInfo.status === "DISCHARGED" && caseInfo.discharge_time
+        // Long stays: only the visible window (+ one column of margin); running drips overlap it.
+        const fromTs = ioWindowFrom != null ? Math.max(caseInfo.start_time, ioWindowFrom) : caseInfo.start_time;
+        const toTs = ioWindowTo != null
+          ? ioWindowTo
+          : caseInfo.status === "DISCHARGED" && caseInfo.discharge_time
             ? caseInfo.discharge_time
             : Date.now() + 24 * 60 * 60 * 1000;
         const [runs, events] = await Promise.all([
@@ -1850,7 +1895,7 @@ export default function ClinicalChartView({
       clearInterval(timer);
       window.removeEventListener("flora:case-io-changed", onIoChanged);
     };
-  }, [caseId, caseStatus]);
+  }, [caseId, caseStatus, ioWindowFrom, ioWindowTo]);
 
   useEffect(() => {
     if (caseId == null || caseStatus.status === "IDLE") {
@@ -5658,24 +5703,41 @@ export default function ClinicalChartView({
         <div className="case-kronos__toolbar rounded-xl border px-3 py-2">
           <div className="case-kronos__controls">
           <label className="case-kronos__eyebrow" htmlFor="case-timeline-scale">MINUTE SCALE</label>
-          <div className="case-kronos__stepper">
-            <button type="button" aria-label="Decrease minute scale" disabled={axisStepMin <= minimumScale} onClick={() => changeScale(axisStepMin - 1)}>−</button>
-            <input
-              id="case-timeline-scale"
-              type="number"
-              min={minimumScale}
-              max={maximumScale}
-              step="1"
-              value={scaleDraft}
-              onChange={event => setScaleDraft(event.target.value)}
-              onBlur={commitScaleDraft}
-              onKeyDown={event => {
-                if (event.key === "Enter") event.currentTarget.blur();
-                if (event.key === "Escape") { setScaleDraft(String(axisStepMin)); event.currentTarget.blur(); }
-              }}
-            />
-            <button type="button" aria-label="Increase minute scale" disabled={axisStepMin >= maximumScale} onClick={() => changeScale(axisStepMin + 1)}>+</button>
-          </div>
+          <select
+            id="case-timeline-scale"
+            className="case-kronos__scale-select"
+            value={axisStepMin}
+            onChange={event => changeScale(Number(event.target.value))}
+          >
+            {scaleOptions.map(step => (
+              <option key={step} value={step}>
+                {step < 60 ? `${step} min` : step % 1440 === 0 ? `${step / 1440} day` : `${step / 60} h`}
+              </option>
+            ))}
+          </select>
+          {stayDays.length > 1 || isLongStay ? (
+            <>
+              <label className="case-kronos__eyebrow" htmlFor="case-timeline-day">DAY</label>
+              <select
+                id="case-timeline-day"
+                className="case-kronos__scale-select"
+                value={String(chartWindow?.choice ?? "all")}
+                onChange={event => {
+                  const raw = event.target.value;
+                  setChartWindowChoice(raw === "all" || raw === "last24" ? raw : Number(raw));
+                  setFollowLatest(raw === "all" || raw === "last24" || Number(raw) === stayDays.length);
+                }}
+              >
+                <option value="all">All ({stayDays.length} d)</option>
+                <option value="last24">Last 24 h</option>
+                {stayDays.map((dayTs, index) => (
+                  <option key={dayTs} value={index + 1}>
+                    {stayDayLabel(index + 1, dayTs)}{index === stayDays.length - 1 && caseStatus.status === "ACTIVE" ? " (today)" : ""}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : null}
           <span className="case-kronos__sync" role="status" aria-live="polite">
             {rawTimelineLoading ? "Updating…" : lastSyncedAt ? "Synced" : "Connecting…"}
           </span>
@@ -5690,7 +5752,7 @@ export default function ClinicalChartView({
           </button>
           {maskError ? <span className="text-xs text-red-600 dark:text-red-400" role="alert">{maskError}</span> : null}
           {!followLatest && caseStatus.status === "ACTIVE" ? (
-            <button type="button" className="case-kronos__latest" onClick={() => setFollowLatest(true)}>Back to now</button>
+            <button type="button" className="case-kronos__latest" onClick={() => { setFollowLatest(true); if (chartWindow && !chartWindow.live) setChartWindowChoice("auto"); }}>Back to now</button>
           ) : null}
           </div>
 

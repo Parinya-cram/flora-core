@@ -27,6 +27,8 @@ import {
 } from "../api/workflowApi";
 import BillingTemplateStudio from "../components/workflow/BillingTemplateStudio";
 import ScoreStudio from "../components/workflow/ScoreStudio";
+import { FormScheduleControl, WorkflowDaySettings } from "../components/workflow/ScheduleControls";
+import { scheduleErrors, scheduleText } from "../components/workflow/formSchedule";
 
 /** Canopy → Workflow Studio: what a case records and prints (docs/workflow-studio.md). */
 
@@ -179,7 +181,7 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
       ...current,
       // Where Form Studio suggests the form is filled in on Leaf (AI builder), else any time at the end.
       forms: [...current.forms, { form_id: option.form_id, version, title: option.title, phase: option.placement?.phase ?? "any", required: false,
-        after_section: option.placement?.after_section ?? null, hint: "", display: "tab" }],
+        after_section: option.placement?.after_section ?? null, hint: "", display: "tab", schedule: null }],
       packet: [...current.packet, { kind: "form", form_id: option.form_id }],
     }));
     setAddFormId("");
@@ -220,6 +222,7 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
     if (!ID_PATTERN.test(def.id)) out.push("Id must start with a letter and use 2–64 lowercase letters, digits or _.");
     if (!def.name.trim()) out.push("Name is required.");
     if (def.packet.filter(entry => entry.kind === "anesthesia_report").length > 1) out.push("The packet may contain at most one anesthesia report.");
+    out.push(...scheduleErrors(def));
     return out;
   })();
 
@@ -311,7 +314,7 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
     setImportResult(null);
   };
 
-  return <div className="app-theme-scope mx-auto max-w-[1500px] space-y-4 p-4 pb-24 text-[var(--app-text)]">
+  return <div className="app-theme-scope w-full space-y-4 p-3 sm:p-5 pb-24 text-[var(--app-text)]">
     <header className="flex flex-wrap items-end justify-between gap-3">
       <div>
         <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">ESM Flora Canopy · case workflows</div>
@@ -387,6 +390,9 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
           <label className="block text-xs font-bold text-[var(--app-muted)]">Description
             <textarea className={`${inputClass} mt-1 resize-y`} rows={2} value={def.description || ""} disabled={readOnly} onChange={event => patchDef(current => ({ ...current, description: event.target.value }))} />
           </label>
+          {/* Day 1 and shifts for scheduled forms (ICU rounds); shown once a form has a schedule. */}
+          {def.forms.some(form => form.schedule) || def.day_start || def.shifts ? <WorkflowDaySettings dayStart={def.day_start} shifts={def.shifts} readOnly={readOnly}
+            onChange={change => patchDef(current => ({ ...current, ...change }))} /> : null}
         </div>
 
         <div className={`${card} space-y-3`}>
@@ -415,7 +421,7 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
             const option = formOption.get(form.form_id);
             const versions = Array.from(new Set([...(option?.versions || []), form.version])).sort((a, b) => a - b);
             return <div key={form.form_id} className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] p-2">
-              <div className="min-w-48 flex-1"><div className="text-sm font-bold">{form.title || option?.title || form.form_id}</div><div className="font-mono text-[11px] text-[var(--app-muted)]">{form.form_id}{option ? "" : " · not found in Form Studio"}</div></div>
+              <div className="min-w-48 flex-1"><div className="text-sm font-bold">{form.title || option?.title || form.form_id}</div><div className="font-mono text-[11px] text-[var(--app-muted)]">{form.form_id}{option ? "" : " · not found in Form Studio"}{form.schedule ? <span className="ml-1 font-sans font-semibold text-[var(--app-accent)]">· {scheduleText(form.schedule)}</span> : null}</div></div>
               <label className="text-xs text-[var(--app-muted)]">Version <select className={`${inputClass} !w-auto !py-1`} disabled={readOnly} value={form.version} onChange={event => patchForm(index, { version: Number(event.target.value) })}>
                 {versions.map(version => <option key={version} value={version}>v{version}{option?.published_version === version ? " (published)" : ""}</option>)}
               </select></label>
@@ -434,6 +440,7 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
               <label className="flex items-center gap-1 text-xs font-semibold"><input type="checkbox" disabled={readOnly} checked={Boolean(form.required)} onChange={event => patchForm(index, { required: event.target.checked })} className="accent-[var(--app-accent)]" />Required</label>
               <input className={`${inputClass} !py-1 basis-full text-xs`} disabled={readOnly} maxLength={300} value={form.hint ?? ""} placeholder="Note shown on Leaf, e.g. Filled in by the PACU nurse before discharge"
                 aria-label={`Note for ${form.title || form.form_id} on Leaf`} onChange={event => patchForm(index, { hint: event.target.value })} />
+              {(form.display ?? "tab") === "tab" ? <FormScheduleControl value={form.schedule} readOnly={readOnly} onChange={schedule => patchForm(index, { schedule })} /> : null}
               {option?.placement && (option.placement.phase !== (form.phase || "any") || (option.placement.after_section ?? null) !== (form.after_section ?? null))
                 ? <div className="basis-full text-[11px] text-[var(--app-muted)]">Form Studio suggests {option.placement.phase}
                   {option.placement.after_section ? `, after ${options.sections.find(section => section.id === option.placement?.after_section)?.label ?? option.placement.after_section}` : ", at the end"}

@@ -42,9 +42,11 @@ type Props = {
   onOpenDevices?: () => void;
   /** Bumped by the parent after the binding dialog saves. */
   bindingsVersion?: number;
+  /** Replaces the default bar look (border-b, panel background), e.g. when shown inside a card. */
+  className?: string;
 };
 
-export default function LiveStrip({ caseId, connection, health, numerics, deviceStatus, onOpenDevices, bindingsVersion = 0 }: Props) {
+export default function LiveStrip({ caseId, connection, health, numerics, deviceStatus, onOpenDevices, bindingsVersion = 0, className = "border-b border-[var(--app-border)] bg-[var(--app-panel-bg)]" }: Props) {
   const { language } = useLanguage();
   const L = TEXT[language === "th" ? "th" : "en"];
   const [bindings, setBindings] = useState<CaseDeviceBinding[]>([]);
@@ -67,7 +69,7 @@ export default function LiveStrip({ caseId, connection, health, numerics, device
   const deviceIds = Array.from(new Set([...bindings.map(row => row.device_id), ...Object.keys(numerics)]));
   const statusById = new Map(deviceStatus.map(row => [row.device_id, row]));
 
-  return <div className="live-strip flex shrink-0 flex-wrap items-stretch gap-2 border-b border-[var(--app-border)] bg-[var(--app-panel-bg)] px-2 py-1.5 text-[var(--app-text)]">
+  return <div className={`live-strip flex shrink-0 flex-wrap items-stretch gap-2 px-2 py-1.5 text-[var(--app-text)] ${className}`}>
     <div className="flex items-center gap-2 pr-1">
       <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--app-muted)]">{L.live}</span>
       <HealthBadge health={health} connection={connection} />

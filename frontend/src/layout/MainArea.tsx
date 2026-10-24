@@ -5,7 +5,7 @@ import StaffView from "../views/StaffView";
 import ManageView from "../views/ManageView";
 import HistoryView from "../views/HistoryView";
 import InputOutputBalanceView from "../views/InputOutputBalanceView";
-import CanopyFleetView from "../views/CanopyFleetView";
+import CanopyActivityLogView from "../views/CanopyActivityLogView";
 import CanopyDashboardView from "../views/CanopyDashboardView";
 import CanopyHomeView from "../views/CanopyHomeView";
 import CanopyInfrastructureView from "../views/CanopyInfrastructureView";
@@ -16,13 +16,13 @@ import CanopyDigitalTwinView from "../views/CanopyDigitalTwinView";
 import IdleCaseLanding from "../views/IdleCaseLanding";
 import AccountView from "../views/AccountView";
 import CanopyReportsView from "../views/CanopyReportsView";
-import CanopyAdmissionsView from "../views/CanopyAdmissionsView";
+import CanopyAdmissionHubView from "../views/CanopyAdmissionHubView";
+import CanopyFleetView from "../views/CanopyFleetView";
 import CanopyFormDevView from "../views/CanopyFormDevView";
 import CanopyReportStudioView from "../views/CanopyReportStudioView";
 import CanopyAiStudioView from "../views/CanopyAiStudioView";
 import WorkflowStudioView from "../views/WorkflowStudioView";
 import CanopyStaffView from "../views/CanopyStaffView";
-import CanopyOrScheduleView from "../views/CanopyOrScheduleView";
 import { getSurfaceInfo } from "../edition/config";
 import CaseHeaderStrip from "../components/case/CaseHeaderStrip";
 
@@ -62,6 +62,7 @@ interface Props {
     | "infrastructure"
     | "topology"
     | "gateway-alerts"
+    | "activity"
     | "devices"
     | "twin"
     | "formdev"
@@ -204,12 +205,13 @@ export default function MainArea({
           />
       ) : activeView === "dashboard" ? (
         <CanopyHomeView />
-      ) : activeView === "admissions" ? (
-        <CanopyAdmissionsView sessionUser={sessionUser} />
-      ) : activeView === "monitoring" ? (
-        <CanopyDashboardView />
+      ) : activeView === "admissions" || activeView === "or-schedule" ? (
+        // One Admission page (admissions + schedule).
+        <CanopyAdmissionHubView key={activeView} sessionUser={sessionUser} initialView={activeView === "or-schedule" ? "schedule" : "table"} />
       ) : activeView === "fleet" ? (
         <CanopyFleetView />
+      ) : activeView === "monitoring" ? (
+        <CanopyDashboardView wardOnly={surface.code !== "canopy"} />
       ) : activeView === "topology" ? (
         <CanopyTopologyView sessionUser={sessionUser} />
       ) : activeView === "twin" ? (
@@ -218,6 +220,8 @@ export default function MainArea({
         <CanopyDeviceManagementView sessionUser={sessionUser} />
       ) : activeView === "gateway-alerts" ? (
         <CanopyGatewayAlertsView />
+      ) : activeView === "activity" ? (
+        <CanopyActivityLogView />
       ) : activeView === "infrastructure" ? (
         <CanopyInfrastructureView />
       ) : activeView === "formdev" ? (
@@ -226,8 +230,6 @@ export default function MainArea({
         <CanopyReportStudioView sessionUser={sessionUser} />
       ) : activeView === "ai-studio" ? (
         <CanopyAiStudioView sessionUser={sessionUser} />
-      ) : activeView === "or-schedule" ? (
-        <CanopyOrScheduleView sessionUser={sessionUser} />
       ) : activeView === "staff-directory" ? (
         <CanopyStaffView sessionUser={sessionUser} />
       ) : activeView === "workflows" ? (
@@ -252,7 +254,7 @@ export default function MainArea({
   return (
     <ViewErrorBoundary resetKey={resetKey}>
       {caseHeader ? (
-        <div className="case-header-frame flex h-full min-h-0 flex-col bg-gray-50 dark:bg-gray-900">
+        <div className="case-header-frame flex h-full min-h-0 flex-col bg-[var(--app-bg)]">
           <div className="case-header-frame__header shrink-0 px-2 pt-2">
             <CaseHeaderStrip key={caseStatus.case_id} caseStatus={caseStatus} sessionUser={sessionUser} onNavigate={onNavigate} />
           </div>

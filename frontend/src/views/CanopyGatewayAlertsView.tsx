@@ -65,7 +65,7 @@ export default function CanopyGatewayAlertsView() {
 
   return (
     <div className="h-full overflow-y-auto bg-[var(--app-bg)] p-3 sm:p-5">
-      <div className="mx-auto max-w-7xl space-y-4">
+      <div className="w-full space-y-4">
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--app-accent)]">Central log</div>

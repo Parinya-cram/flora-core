@@ -76,3 +76,6 @@ COPY infrastructure/postgres/0091-or-transfer.sql /docker-entrypoint-initdb.d/00
 COPY infrastructure/postgres/0092-canopy-case-binding.sql /docker-entrypoint-initdb.d/0092-canopy-case-binding.sql
 COPY infrastructure/postgres/0093-case-staff-times.sql /docker-entrypoint-initdb.d/0093-case-staff-times.sql
 COPY infrastructure/postgres/0094-leaf-transfer.sql /docker-entrypoint-initdb.d/0094-leaf-transfer.sql
+COPY infrastructure/postgres/0095-case-transfer.sql /docker-entrypoint-initdb.d/0095-case-transfer.sql
+COPY infrastructure/postgres/0096-canopy-activity-log.sql /docker-entrypoint-initdb.d/0096-canopy-activity-log.sql
+COPY infrastructure/postgres/0097-case-form-entry.sql /docker-entrypoint-initdb.d/0097-case-form-entry.sql

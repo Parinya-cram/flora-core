@@ -13,6 +13,11 @@ from .auth_leaf import require_permission
 router = APIRouter(prefix="/api/case", tags=["cases"], dependencies=[Depends(require_permission("case.read"))])
 MINUTE_MS = 60_000
 ADVANCE_MIN = 5
+# Chart column widths (minutes). Long stays use the coarse ones (4 h … 1 day).
+AXIS_STEPS = (1, 5, 15, 30, 60, 120, 240, 360, 720, 1440)
+LEGACY_MAX_STEP = 120
+# /timeline/effective returns one value per key per column at or above this step.
+BUCKET_MIN_STEP = 60
 
 
 def now_ms() -> int:
@@ -68,6 +73,66 @@ def resolve_case_range(row: dict[str, Any], request: Request) -> tuple[int, int]
     if to_ts < from_ts:
         raise HTTPException(status_code=400, detail="invalid range")
     return from_ts, to_ts
+
+
+def normalize_axis_step(raw: float | None) -> int:
+    """Listed steps pass as-is; other values up to 120 keep the old 1..120 clamp (older clients
+    send any integer); larger values snap to the nearest listed step."""
+    step = math.floor((raw or 1) + 0.5)
+    if step in AXIS_STEPS:
+        return step
+    if step <= LEGACY_MAX_STEP:
+        return max(1, step)
+    return min((value for value in AXIS_STEPS if value > LEGACY_MAX_STEP), key=lambda value: (abs(value - step), value))
+
+
+def axis_points(start_ts: int, end_ts: int, step_min: int, anchor: int | None = None,
+                window_from: int | None = None, window_to: int | None = None) -> list[int]:
+    """Column timestamps anchor + k*step covering the case (start..end), limited to [from, to].
+    Without an anchor the grid starts at the case start (the original behaviour). A column
+    shows the minutes in (previous column, column]."""
+    step_ms = step_min * MINUTE_MS
+    base = start_ts if anchor is None else anchor
+    first = base + math.ceil((start_ts - base) / step_ms) * step_ms
+    last_ts = end_ts
+    if anchor is not None and step_min > LEGACY_MAX_STEP and end_ts > first:
+        # coarse grid: one more column so the minutes after the last full column are shown
+        last_ts = first + math.ceil((end_ts - first) / step_ms) * step_ms
+    if window_from is not None and window_from > first:
+        first = first + math.ceil((window_from - first) / step_ms) * step_ms
+    if window_to is not None:
+        last_ts = min(last_ts, window_to)
+    return list(range(first, last_ts + 1, step_ms)) if last_ts >= first else []
+
+
+def bucket_effective_rows(rows: list[dict], step_min: int, anchor: int) -> list[dict]:
+    """Keeps the last value per key in each column (anchor + k*step covers (column-step, column]).
+    Values stay at the minute they were charted, so the grid's in-column fallback and the
+    cell provenance work unchanged; a day at 240 min is about 6 rows instead of 1440."""
+    step_ms = step_min * MINUTE_MS
+    latest: dict[tuple[int, str, str], tuple[int, Any]] = {}
+    for row in rows:
+        timestamp = row["ts_minute"]
+        column = anchor + math.ceil((timestamp - anchor) / step_ms) * step_ms
+        for field in ("payload", "masked"):
+            values = row.get(field)
+            if not isinstance(values, dict):
+                continue
+            for key, value in values.items():
+                if value is None or value == "":
+                    continue
+                previous = latest.get((column, field, key))
+                if previous is None or previous[0] <= timestamp:
+                    latest[(column, field, key)] = (timestamp, value)
+    by_ts: dict[int, dict] = {}
+    source = {row["ts_minute"]: row for row in rows}
+    for (_, field, key), (timestamp, value) in latest.items():
+        out = by_ts.setdefault(timestamp, {"ts_minute": timestamp, "payload": {}, "provenance": {}})
+        out.setdefault(field, {})[key] = value
+        detail = (source[timestamp].get("provenance") or {}).get(key)
+        if field == "payload" and detail is not None:
+            out["provenance"][key] = detail
+    return [by_ts[timestamp] for timestamp in sorted(by_ts)]
 
 
 def parse_payload(raw: str | None) -> Any:
@@ -222,7 +287,7 @@ def events(
     case_row = get_case_range_row(database, case_id)
     from_ts, to_ts = resolve_case_range(case_row, request)
     requested_limit = number_or_none(request.query_params.get("limit"))
-    limit = int(max(1, min(1000, requested_limit))) if requested_limit is not None else 300
+    limit = int(max(1, min(5000, requested_limit))) if requested_limit is not None else 300
     rows = database.execute(
         """
         SELECT id, event_ts, event_type, title, detail,
@@ -291,6 +356,13 @@ def effective_timeline(
          **({"masked": masked_by_minute[timestamp]} if timestamp in masked_by_minute else {})}
         for timestamp in sorted(by_minute)
     ]
+    step_raw = number_or_none(request.query_params.get("step"))
+    step_min = normalize_axis_step(step_raw) if step_raw is not None else 1
+    if step_min >= BUCKET_MIN_STEP:
+        anchor_raw = number_or_none(request.query_params.get("anchor"))
+        anchor = floor_minute(anchor_raw) if anchor_raw is not None else from_ts
+        rows = bucket_effective_rows(rows, step_min, anchor)
+        return {"case_id": case_id, "from": from_ts, "to": to_ts, "step": step_min, "rows": rows, "masks": masks}
     return {"case_id": case_id, "from": from_ts, "to": to_ts, "rows": rows, "masks": masks}
 
 
@@ -419,8 +491,7 @@ def time_axis(
     database: Connection = Depends(connection),
 ) -> dict:
     case_id = case_id_or_400(case_id_raw)
-    requested_step = number_or_none(request.query_params.get("step")) or 1
-    step_min = min(120, max(1, math.floor(requested_step + 0.5)))
+    step_min = normalize_axis_step(number_or_none(request.query_params.get("step")))
     row = get_case_range_row(database, case_id)
     start_ts = floor_minute(row["start_time"])
     end_ts = (
@@ -428,9 +499,17 @@ def time_axis(
         if row["status"] == "active"
         else floor_minute(row["discharge_time"] or 0)
     )
-    step_ms = step_min * MINUTE_MS
-    axis = list(range(start_ts, end_ts + 1, step_ms))
-    return {"case_id": case_id, "axis": axis, "server_time": now_ms()}
+    # Optional window (Day N view) and grid anchor (coarse steps align to the clinical day).
+    anchor_raw = number_or_none(request.query_params.get("anchor"))
+    from_raw = number_or_none(request.query_params.get("from"))
+    to_raw = number_or_none(request.query_params.get("to"))
+    axis = axis_points(
+        start_ts, end_ts, step_min,
+        anchor=floor_minute(anchor_raw) if anchor_raw is not None else None,
+        window_from=floor_minute(from_raw) if from_raw is not None else None,
+        window_to=floor_minute(to_raw) if to_raw is not None else None,
+    )
+    return {"case_id": case_id, "axis": axis, "step": step_min, "server_time": now_ms()}
 
 
 @router.get("/{case_id_raw}/detail-draft")
@@ -772,9 +851,11 @@ def io_summary(
     case_row = get_case_range_row(database, case_id)
     from_ts, to_ts = resolve_case_range(case_row, request)
     requested_bucket = number_or_none(request.query_params.get("bucket"))
-    bucket_min = int(max(1, min(60, math.floor(requested_bucket)))) if requested_bucket is not None else 1
+    bucket_min = int(max(1, min(1440, math.floor(requested_bucket)))) if requested_bucket is not None else 1
     bucket_ms = bucket_min * MINUTE_MS
-    range_end_exclusive = to_ts + bucket_ms
+    # Totals cover from..to (inclusive minute) whatever the bucket width, so a coarse bucket
+    # (summary-only callers) gives the same totals as bucket=1.
+    range_end_exclusive = to_ts + MINUTE_MS
     effective_end_exclusive = min(range_end_exclusive, now_ms())
     bucket_count = max(1, math.floor((to_ts - from_ts) / bucket_ms) + 1)
     buckets = [

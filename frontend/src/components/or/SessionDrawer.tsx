@@ -5,6 +5,7 @@ import {
   restoreOrSession, unassignOrBed, updateOrSession, CLOSED_STATES, DESTINATIONS,
   type OrOptions, type OrRoom, type OrSession, type SessionEvent, type SessionInput, type TeamMember,
 } from "../../api/orScheduleApi";
+import SessionTransfer from "./SessionTransfer";
 import { ageAt, ageTextAt, formatAge, normalizeBirthdate, todayIso } from "../../utils/patientAge";
 
 /**
@@ -291,6 +292,8 @@ export default function SessionDrawer({ options, rooms, session, start, onClose,
               {warning ? <p className="text-xs text-amber-600 dark:text-amber-300">{warning}</p> : null}
             </> : null}
             {current.journeyState === "in_recovery" ? <div className="text-sm">In recovery at <b>{current.bedName}</b>{current.recoveryInAt ? ` since ${new Date(current.recoveryInAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}.</div> : null}
+            {current.journeyState === "in_or" || current.journeyState === "in_recovery" ? <SessionTransfer session={current} busy={busy}
+              field={field} button={button} label={label} onChanged={row => { setCurrent(row); onSaved(row); }} /> : null}
             <div className="space-y-1 border-t border-[var(--app-border)] pt-2">
               <div className={label}>Discharge out of the OR ward</div>
               <div className="flex flex-wrap gap-2">

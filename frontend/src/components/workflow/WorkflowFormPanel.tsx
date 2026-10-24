@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { patchCaseWorkflowForm, type CaseWorkflowForm } from "../../api/workflowApi";
+import { patchCaseWorkflowForm, patchFormEntry, type CaseWorkflowForm, type FormEntry } from "../../api/workflowApi";
 import { useLanguage } from "../../context/LanguageContext";
 import type { Issue, JsonValue, RecordData } from "../../formdev/core/types";
 import { validateRecord } from "../../formdev/core/validate";
@@ -29,16 +29,36 @@ type Props = {
   hint?: string;
   readOnly?: boolean;
   hidden?: boolean;
+  /** A scheduled form's entry: load from and save to the entry endpoints instead of the case's single record. */
+  entry?: FormEntry;
+  /** Shown under the title, e.g. the entry's slot label. */
+  subtitle?: string;
+  /** After each save of an entry (the server's copy). */
+  onEntrySaved?: (entry: FormEntry) => void;
 };
 
-export default function WorkflowFormPanel({ caseId, formId, form, hint = "", readOnly = false, hidden = false }: Props) {
+export default function WorkflowFormPanel({ caseId, formId, form, hint = "", readOnly = false, hidden = false, entry, subtitle, onEntrySaved }: Props) {
   const { t, language } = useLanguage();
-  const [value, setValue] = useState<RecordData>(() => ({ ...(form.record?.data || {}) }));
-  const [status, setStatus] = useState<"draft" | "completed">(form.record?.status === "completed" ? "completed" : "draft");
+  const source = entry ?? form.record;
+  const entryId = entry?.id ?? null;
+  const [value, setValue] = useState<RecordData>(() => ({ ...(source?.data || {}) }));
+  const [status, setStatus] = useState<"draft" | "completed">(source?.status === "completed" ? "completed" : "draft");
   const [save, setSave] = useState<SaveState>({ status: "idle" });
   const [issues, setIssues] = useState<Issue[]>([]);
   const leafCase = useMemo(() => ({ caseId }), [caseId]);
-  const baseline = useRef<RecordData>({ ...(form.record?.data || {}) });
+  const baseline = useRef<RecordData>({ ...(source?.data || {}) });
+  const onEntrySavedRef = useRef(onEntrySaved);
+  useEffect(() => { onEntrySavedRef.current = onEntrySaved; }, [onEntrySaved]);
+
+  /** One PATCH: the entry's when bound to one, else the case's single record. */
+  const send = useCallback((patch: RecordData, nextStatus?: "draft" | "completed") => {
+    if (!entryId) return patchCaseWorkflowForm(caseId, formId, patch, nextStatus);
+    return patchFormEntry(caseId, formId, entryId, patch, nextStatus).then(result => {
+      if (result?.entry) onEntrySavedRef.current?.(result.entry);
+      const saved = result?.entry?.status;
+      return { record: saved === "completed" || saved === "draft" ? { status: saved } : undefined };
+    });
+  }, [caseId, formId, entryId]);
   const latest = useRef(value);
   const timer = useRef<number | null>(null);
   const inFlight = useRef<Promise<void> | null>(null);
@@ -50,7 +70,7 @@ export default function WorkflowFormPanel({ caseId, formId, form, hint = "", rea
     const patch = changedKeys(sent, baseline.current);
     if (!Object.keys(patch).length && !nextStatus) return;
     setSave({ status: "saving" });
-    const request = patchCaseWorkflowForm(caseId, formId, patch, nextStatus)
+    const request = send(patch, nextStatus)
       .then(result => {
         baseline.current = { ...baseline.current, ...patch };
         if (result?.record?.status === "completed" || result?.record?.status === "draft") setStatus(result.record.status);
@@ -64,16 +84,16 @@ export default function WorkflowFormPanel({ caseId, formId, form, hint = "", rea
       .finally(() => { inFlight.current = null; });
     inFlight.current = request;
     await request;
-  }, [caseId, formId]);
+  }, [send]);
 
   // Save what is pending when the panel goes away (case switch, view change).
   useEffect(() => () => {
     if (timer.current != null) {
       window.clearTimeout(timer.current);
       const patch = changedKeys(latest.current, baseline.current);
-      if (Object.keys(patch).length) void patchCaseWorkflowForm(caseId, formId, patch).catch(() => undefined);
+      if (Object.keys(patch).length) void send(patch).catch(() => undefined);
     }
-  }, [caseId, formId]);
+  }, [send]);
 
   const onChange = (next: RecordData) => {
     if (readOnly) return;
@@ -106,6 +126,7 @@ export default function WorkflowFormPanel({ caseId, formId, form, hint = "", rea
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div className="min-w-0">
         <h2 className="font-semibold">{form.definition.title || formId}</h2>
+        {subtitle ? <p className="text-xs font-semibold text-[var(--app-accent)]">{subtitle}</p> : null}
         {form.definition.description ? <p className="mt-0.5 text-xs text-[var(--app-muted)]">{form.definition.description}</p> : null}
         {hint ? <p className="mt-1 rounded-lg bg-[var(--app-accent)]/10 px-2 py-1 text-xs text-[var(--app-text)]">ℹ {hint}</p> : null}
       </div>

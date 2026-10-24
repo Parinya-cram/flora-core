@@ -149,6 +149,18 @@ def ingest_batch(batch: SyncBatch, database: Connection = Depends(connection)) -
             accepted += 1
             if message.entity_type != "case_snapshot":
                 continue
+            # sync_message is the duplicate-delivery log (unique message_id); nothing reads old payloads,
+            # and the latest copy lives in sync_case_index. Keep the full payload only on the newest
+            # snapshot per case, so a 30-day ICU stay does not keep thousands of full snapshots.
+            # (UPDATE, not DELETE: flora_sync has no DELETE on sync_message, and the row keeps
+            # rejecting a re-delivered message.) Each new snapshot blanks the previous ones, so only
+            # recent revisions need looking at (index leaf_id, revision).
+            database.execute(
+                """UPDATE sync_message SET payload='{}'::jsonb
+                   WHERE leaf_id=%s AND revision >= %s AND id < %s AND entity_type='case_snapshot'
+                     AND entity_id=%s AND payload <> '{}'::jsonb""",
+                (batch.leaf_id, message.revision - 7 * 86_400_000, inserted["id"], message.entity_id),
+            )
             case = message.payload.get("case") or {}
             global_case_id = _global_case_id(batch.hospital_id, batch.leaf_id, message.entity_id)
             if database.execute(
@@ -193,9 +205,10 @@ def ingest_batch(batch: SyncBatch, database: Connection = Depends(connection)) -
                 with database.transaction():
                     billing.project_snapshot(database, global_case_id, batch.leaf_id, message.entity_id,
                                              message.payload, message.revision, int(time.time() * 1000))
-            if message.payload.get("workflow_forms"):
+            if message.payload.get("workflow_forms") or message.payload.get("workflow_entries"):
                 workflow_forms.append({"global_case_id": str(global_case_id), "hn": case.get("hn"),
-                                       "workflow_forms": message.payload["workflow_forms"]})
+                                       "workflow_forms": message.payload.get("workflow_forms") or {},
+                                       "workflow_entries": message.payload.get("workflow_entries") or []})
         assignment = database.execute(
             """SELECT desired_config,desired_version,applied_version
                FROM canopy_leaf_assignment WHERE leaf_id=%s""",

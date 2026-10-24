@@ -5,6 +5,7 @@ queues anything a gateway must do in that gateway's desired configuration, which
 the gateway collects on its next check-in.
 """
 import time
+import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,7 +13,7 @@ from psycopg import Connection, errors
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
-from .. import workflows
+from .. import case_transfer, workflows
 from ..database import connection
 from .sync_ingest import DEVICE_FIELDS, require_sync_secret
 
@@ -73,9 +74,24 @@ def ward(payload: WardExchange, database: Connection = Depends(connection)) -> d
         for row in cases:
             by_leaf.setdefault(row["leaf_id"], []).append(row)
         released = database.execute(
-            """SELECT id AS handover_id, from_case_id AS source_case_id, to_leaf_id, global_case_id::text
+            """SELECT id AS handover_id, from_case_id AS source_case_id, to_leaf_id, global_case_id::text, kind
                FROM canopy_case_handover WHERE from_leaf_id=%s AND status IN ('claimed','imported')""",
             (payload.leaf_id,)).fetchall()
+        # Transfers waiting for Receive (to this Leaf), offered from this Leaf, and ward-desk bed moves for it.
+        offers = database.execute(
+            """SELECT h.id AS handover_id, h.kind, h.global_case_id::text, h.from_leaf_id, h.from_case_id AS source_case_id,
+                      h.to_leaf_id, h.to_bed_location_id, h.to_bed_label, h.initiated_from, h.requested_by, h.note, h.created_at,
+                      i.hn, i.snapshot->'patient'->'row'->>'name' AS patient_name,
+                      i.snapshot->'case'->>'admission_number' AS admission_number,
+                      i.snapshot->'case'->>'bed_label' AS from_bed_label,
+                      coalesce(nullif(n.canopy_display_name,''), n.display_name, h.from_leaf_id) AS from_leaf_name,
+                      coalesce(nullif(t.canopy_display_name,''), t.display_name, h.to_leaf_id) AS to_leaf_name
+               FROM canopy_case_handover h
+               LEFT JOIN sync_case_index i ON i.global_case_id = h.global_case_id
+               LEFT JOIN sync_leaf_node n ON n.leaf_id = h.from_leaf_id
+               LEFT JOIN sync_leaf_node t ON t.leaf_id = h.to_leaf_id
+               WHERE h.status = 'offered' AND (h.to_leaf_id = %s OR h.from_leaf_id = %s)
+               ORDER BY h.created_at""", (payload.leaf_id, payload.leaf_id)).fetchall()
         handovers = database.execute(
             """SELECT id, global_case_id::text, from_leaf_id, to_leaf_id, to_case_id, status, created_at
                FROM canopy_case_handover WHERE (from_leaf_id = ANY(%s) OR to_leaf_id = ANY(%s)) AND created_at > %s
@@ -89,6 +105,9 @@ def ward(payload: WardExchange, database: Connection = Depends(connection)) -> d
         "gateways": gateways,
         "released": released,
         "handovers": handovers,
+        "transfers_in": [row for row in offers if row["kind"] == "transfer" and row["to_leaf_id"] == payload.leaf_id],
+        "transfers_out": [row for row in offers if row["kind"] == "transfer" and row["from_leaf_id"] == payload.leaf_id],
+        "bed_moves": [row for row in offers if row["kind"] == "bed_move" and row["from_leaf_id"] == payload.leaf_id],
         # Workflow Studio: published workflows of this ward and their pinned Form Studio forms.
         "workflows": workflows.leaf_delivery(database, unit["key"] if unit else None),
         "server_ts": current,
@@ -205,6 +224,8 @@ class HandoverClaim(BaseModel):
     actor: str | None = None
     # OR ward: a recovery bed's Leaf moving in a case that moved out of the OR room.
     admission_id: str | None = None
+    # Receive of an offered transfer (case_transfer.py).
+    handover_id: int | None = None
 
 
 @router.post("/handover/claim")
@@ -218,6 +239,15 @@ def claim_handover(payload: HandoverClaim, database: Connection = Depends(connec
                 raise HTTPException(404, "case not known to Canopy")
             if index["leaf_id"] == payload.leaf_id:
                 raise HTTPException(409, "this Leaf already owns the case")
+            offered = None
+            if payload.handover_id is not None:
+                offered = database.execute(
+                    """SELECT * FROM canopy_case_handover WHERE id=%s AND global_case_id=%s AND kind='transfer' FOR UPDATE""",
+                    (payload.handover_id, index["global_case_id"])).fetchone()
+                if offered is None or offered["status"] != "offered":
+                    raise HTTPException(409, "this transfer was withdrawn or already received")
+                if offered["to_leaf_id"] != payload.leaf_id:
+                    raise HTTPException(409, "this transfer is for another workstation")
             if index["status"] != "ACTIVE" and not payload.admission_id:
                 raise HTTPException(409, f"only an active case can be taken over (status {index['status']})")
             export = database.execute(
@@ -233,18 +263,25 @@ def claim_handover(payload: HandoverClaim, database: Connection = Depends(connec
                     raise HTTPException(409, str(error)) from None
             moved = move_devices(database, index["leaf_id"], payload.leaf_id,
                                  f"handover {index['leaf_id']} -> {payload.leaf_id}") if payload.move_devices else []
-            handover = database.execute(
-                """INSERT INTO canopy_case_handover (global_case_id, from_leaf_id, from_case_id, to_leaf_id, status,
-                       move_devices, moved_devices, requested_by, export_revision, created_at, updated_at)
-                   VALUES (%s,%s,%s,%s,'claimed',%s,%s,%s,%s,%s,%s) RETURNING id""",
-                (index["global_case_id"], index["leaf_id"], index["source_case_id"], payload.leaf_id,
-                 payload.move_devices, Jsonb(moved), payload.actor, export["revision"], current, current)).fetchone()
+            if offered is not None:
+                handover = database.execute(
+                    """UPDATE canopy_case_handover SET status='claimed', export_revision=%s, updated_at=%s
+                       WHERE id=%s RETURNING id, to_bed_label, admission_id""",
+                    (export["revision"], current, offered["id"])).fetchone()
+            else:
+                handover = database.execute(
+                    """INSERT INTO canopy_case_handover (global_case_id, from_leaf_id, from_case_id, to_leaf_id, status,
+                           move_devices, moved_devices, requested_by, export_revision, created_at, updated_at)
+                       VALUES (%s,%s,%s,%s,'claimed',%s,%s,%s,%s,%s,%s) RETURNING id, to_bed_label, admission_id""",
+                    (index["global_case_id"], index["leaf_id"], index["source_case_id"], payload.leaf_id,
+                     payload.move_devices, Jsonb(moved), payload.actor, export["revision"], current, current)).fetchone()
             database.execute("UPDATE sync_case_index SET status='HANDED_OVER' WHERE global_case_id=%s",
                              (index["global_case_id"],))
     except errors.UniqueViolation:
         raise HTTPException(409, "this case is already being handed over") from None
     return {"handover_id": handover["id"], "from_leaf_id": index["leaf_id"], "export": export["export"],
-            "export_age_sec": max(0, (current - export["revision"]) // 1000), "moved_devices": moved}
+            "export_age_sec": max(0, (current - export["revision"]) // 1000), "moved_devices": moved,
+            "transfer": offered is not None, "to_bed_label": handover["to_bed_label"]}
 
 
 class HandoverResult(BaseModel):
@@ -254,10 +291,12 @@ class HandoverResult(BaseModel):
 
 @router.post("/handover/{handover_id}/imported")
 def handover_imported(handover_id: int, payload: HandoverResult, database: Connection = Depends(connection)) -> dict:
-    database.execute(
-        "UPDATE canopy_case_handover SET status='imported', to_case_id=%s, updated_at=%s WHERE id=%s AND status='claimed'",
-        (payload.to_case_id, now_ms(), handover_id))
-    database.commit()
+    with database.transaction():
+        row = database.execute(
+            "UPDATE canopy_case_handover SET status='imported', to_case_id=%s, updated_at=%s WHERE id=%s AND status='claimed' RETURNING *",
+            (payload.to_case_id, now_ms(), handover_id)).fetchone()
+        if row:
+            case_transfer.on_imported(database, row)
     return {"ok": True}
 
 
@@ -272,9 +311,116 @@ def handover_cancel(handover_id: int, payload: HandoverResult, database: Connect
                              (row["global_case_id"],))
             if row["move_devices"]:
                 move_devices(database, row["to_leaf_id"], row["from_leaf_id"], f"handover {handover_id} cancelled")
-            from .. import or_sessions
-            or_sessions.recovery_cancel(database, row)
+            if row["kind"] == "transfer":
+                # A failed Receive: the offer stands again, so the destination can retry.
+                database.execute("UPDATE canopy_case_handover SET status='offered', updated_at=%s WHERE id=%s",
+                                 (now_ms(), handover_id))
+            else:
+                from .. import or_sessions
+                or_sessions.recovery_cancel(database, row)
     return {"ok": True, "cancelled": bool(row)}
+
+
+# ---------------------------------------------------------------- transfer (case_transfer.py)
+
+class TransferTargets(BaseModel):
+    leaf_id: str = Field(min_length=1, max_length=120)
+    hospital_id: str | None = None
+
+
+@router.post("/transfer-targets")
+def transfer_targets(payload: TransferTargets, database: Connection = Depends(connection)) -> dict[str, Any]:
+    """Beds of this ward a case can be transferred to, with their Leaf and current case."""
+    _, leaf_ids = ward_leaf_ids(database, payload.leaf_id, payload.hospital_id)
+    return {"beds": case_transfer.ward_beds(database, list({*leaf_ids, payload.leaf_id}))}
+
+
+class TransferOffer(BaseModel):
+    leaf_id: str = Field(min_length=1, max_length=120)
+    source_case_id: int
+    to_leaf_id: str | None = Field(default=None, max_length=120)
+    to_bed_location_id: int | None = None
+    to_bed_label: str | None = Field(default=None, max_length=60)
+    note: str | None = Field(default=None, max_length=500)
+    actor: str | None = None
+    # The source's newest full copy, so Receive does not miss what was charted since the last sync.
+    export: dict[str, Any] | None = None
+
+
+def _index(database: Connection, leaf_id: str, source_case_id: Any) -> dict[str, Any]:
+    index = database.execute(
+        "SELECT * FROM sync_case_index WHERE leaf_id=%s AND source_case_id=%s FOR UPDATE",
+        (leaf_id, str(source_case_id))).fetchone()
+    if index is None:
+        raise HTTPException(409, "Canopy does not know this case yet; wait for the next sync")
+    return index
+
+
+@router.post("/handover/offer")
+def offer_transfer(payload: TransferOffer, database: Connection = Depends(connection)) -> dict[str, Any]:
+    current = now_ms()
+    with database.transaction():
+        index = _index(database, payload.leaf_id, payload.source_case_id)
+        if payload.export:
+            database.execute(
+                """INSERT INTO canopy_case_export (global_case_id, leaf_id, source_case_id, revision, export, updated_at)
+                   VALUES (%s,%s,%s,%s,%s,%s)
+                   ON CONFLICT (global_case_id) DO UPDATE SET revision=excluded.revision, export=excluded.export,
+                     updated_at=excluded.updated_at WHERE excluded.revision > canopy_case_export.revision""",
+                (index["global_case_id"], payload.leaf_id, str(payload.source_case_id), current, Jsonb(payload.export), current))
+        to_leaf, bed_label = payload.to_leaf_id, payload.to_bed_label
+        try:
+            if payload.to_bed_location_id is not None:
+                bed = case_transfer.bed_target(database, payload.to_bed_location_id)
+                to_leaf, bed_label = bed["leaf_id"], bed_label or bed["name"]
+            if not to_leaf:
+                raise case_transfer.TransferRefused("choose a bed or workstation")
+            if database.execute("SELECT 1 FROM sync_leaf_node WHERE leaf_id=%s", (to_leaf,)).fetchone() is None:
+                raise case_transfer.TransferRefused(f"unknown workstation {to_leaf}")
+            row = case_transfer.offer(database, index, to_leaf_id=to_leaf, to_bed_location_id=payload.to_bed_location_id,
+                                      to_bed_label=bed_label, actor=payload.actor, initiated_from="leaf", note=payload.note)
+        except case_transfer.TransferRefused as error:
+            raise HTTPException(409, str(error)) from None
+    return {"handover_id": row["id"], "kind": row["kind"], "to_leaf_id": row["to_leaf_id"], "to_bed_label": row["to_bed_label"]}
+
+
+class LeafOnly(BaseModel):
+    leaf_id: str = Field(min_length=1, max_length=120)
+    actor: str | None = None
+
+
+@router.post("/handover/{handover_id}/withdraw")
+def withdraw_transfer(handover_id: int, payload: LeafOnly, database: Connection = Depends(connection)) -> dict[str, Any]:
+    with database.transaction():
+        row = case_transfer.withdraw(database, handover_id, leaf_id=payload.leaf_id, actor=payload.actor)
+    if row is None:
+        raise HTTPException(409, "this transfer was already received or withdrawn")
+    return {"ok": True}
+
+
+@router.post("/handover/{handover_id}/bed-moved")
+def bed_moved(handover_id: int, payload: LeafOnly, database: Connection = Depends(connection)) -> dict[str, Any]:
+    with database.transaction():
+        row = case_transfer.bed_moved(database, handover_id, payload.leaf_id)
+    return {"ok": True, "applied": bool(row)}
+
+
+class LeafBedMove(BaseModel):
+    leaf_id: str = Field(min_length=1, max_length=120)
+    source_case_id: int
+    bed_label: str = Field(min_length=1, max_length=60)
+    actor: str | None = None
+
+
+@router.post("/cases/bed-move")
+def leaf_bed_move(payload: LeafBedMove, database: Connection = Depends(connection)) -> dict[str, Any]:
+    """A Leaf moved its own case to another of its beds (best effort: the snapshot carries it anyway)."""
+    with database.transaction():
+        index = database.execute("SELECT * FROM sync_case_index WHERE leaf_id=%s AND source_case_id=%s",
+                                 (payload.leaf_id, str(payload.source_case_id))).fetchone()
+        if index:
+            case_transfer.record_leaf_bed_move(database, index, payload.bed_label, payload.actor)
+    return {"ok": True, "known": bool(index)}
 
 
 # ---------------------------------------------------------------- Leaf picks its bed (Settings > Location)
@@ -328,3 +474,32 @@ def patient_journey(payload: JourneyQuery, database: Connection = Depends(connec
     """The earlier (and other) cases of the same AN, e.g. OR → Recovery → ICU, with their medications."""
     from .. import patient_journey as journey
     return {"cases": journey.journey(database, payload.admission_number, payload.leaf_id, payload.case_id)}
+
+
+# ---------------------------------------------------------------- Central Charting on a Leaf
+
+class CentralQuery(BaseModel):
+    leaf_id: str = Field(min_length=1, max_length=120)
+    limit_points: int = Field(default=30, ge=12, le=120)
+
+
+def _leaf_ward(database: Connection, leaf_id: str) -> list[str]:
+    """A Leaf sees the Central Charting of its own ward only (none when it has no ward)."""
+    row = database.execute("SELECT unit_key FROM canopy_leaf_unit WHERE leaf_id=%s", (leaf_id,)).fetchone()
+    if row is None or not row["unit_key"]:
+        raise HTTPException(404, "this Leaf is not assigned to a ward in Canopy")
+    return [str(row["unit_key"])]
+
+
+@router.post("/central/overview")
+def central_overview(payload: CentralQuery, database: Connection = Depends(connection)) -> dict[str, Any]:
+    """Canopy's Central Charting overview (`/api/fleet/icu-overview`) for the Leafs of this Leaf's ward."""
+    from .fleet_read import icu_overview
+    return icu_overview(limit_points=payload.limit_points, scope=_leaf_ward(database, payload.leaf_id), database=database)
+
+
+@router.post("/central/cases/{global_case_id}/snapshot")
+def central_snapshot(global_case_id: uuid.UUID, payload: CentralQuery, database: Connection = Depends(connection)) -> dict:
+    """One chart of the Central Charting view, limited to this Leaf's ward."""
+    from .fleet_read import case_snapshot
+    return case_snapshot(global_case_id, scope=_leaf_ward(database, payload.leaf_id), database=database)

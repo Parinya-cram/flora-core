@@ -550,7 +550,7 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
 
   return (
     <main className="min-h-full bg-[var(--app-bg)] px-4 py-4 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-[1180px] space-y-4">
+      <div className="w-full space-y-4">
         {!patientReady ? (
           <div className="space-y-4">
             <section className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-4 sm:p-5">

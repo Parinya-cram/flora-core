@@ -36,7 +36,11 @@ class DetailsInput(BaseModel):
     asa_status: str | None = Field(default=None, max_length=16)
     asa_emergency: bool = False
     surgical_priority: str | None = Field(default=None, max_length=80)
+    # Surgeon and anaesthetist: picked from the staff directory (name + staff code) or typed (name only).
     surgeon: str | None = Field(default=None, max_length=200)
+    surgeon_code: str | None = Field(default=None, max_length=64)
+    anaesthetist: str | None = Field(default=None, max_length=200)
+    anaesthetist_code: str | None = Field(default=None, max_length=64)
     # Workflow Studio: preset for the Leaf start dialog (a workflow assigned to the ward).
     workflow_id: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{1,63}$")
 

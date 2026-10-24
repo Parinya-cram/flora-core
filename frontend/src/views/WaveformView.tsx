@@ -270,7 +270,7 @@ export default function WaveformView({ caseStatus, sessionUser }: { caseStatus: 
   if (caseStatus.status === "IDLE") return <main className="p-6 text-sm text-[var(--app-muted)]">{L.noCase}</main>;
 
   return <main className="min-h-full bg-[#020604] px-3 py-3 text-gray-100 sm:px-5">
-    <div className="mx-auto max-w-[1400px] space-y-3">
+    <div className="w-full space-y-3">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-lg font-bold">{L.title}</h1>
         {caseStatus.bed_label ? <span className="rounded-md bg-emerald-500/15 px-2 py-0.5 text-xs font-bold text-emerald-300">{L.bed} {caseStatus.bed_label}</span> : null}

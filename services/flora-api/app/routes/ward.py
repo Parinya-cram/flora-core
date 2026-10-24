@@ -13,6 +13,7 @@ import urllib.request
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 
@@ -67,6 +68,9 @@ def overview(_: dict = Depends(require_permission("case.read")), database: Conne
         "peers": [leaf for leaf in payload.get("leaves") or [] if leaf.get("leaf_id") != LEAF_ID],
         "gateways": payload.get("gateways") or [],
         "handovers": payload.get("handovers") or [],
+        # Transfer: cases offered to this Leaf (Receive) and cases of this Leaf waiting at another bed.
+        "transfers_in": payload.get("transfers_in") or [],
+        "transfers_out": payload.get("transfers_out") or [],
         "device_source": source,
         "gateway_links": [case_bindings.link_public(row) for row in
                           database.execute("SELECT * FROM leaf_gateway_link ORDER BY is_default DESC, id").fetchall()],
@@ -139,12 +143,64 @@ def put_state(payload: dict[str, Any], _: dict = Depends(service_only), database
             released.append(int(item["source_case_id"]))
             if row:
                 case_bindings.release(database, row["id"], "archived", current)
+                if item.get("kind") == "transfer":
+                    # The booking went on with the case; this locked copy no longer reports it.
+                    database.execute("UPDATE cases SET canopy_admission_id=NULL WHERE id=%s", (row["id"],))
                 database.execute(
                     """INSERT INTO case_clinical_audit (case_id, action, before_json, after_json, actor_username, actor_role, created_at)
                        VALUES (%s, 'handover.released', NULL, %s, 'canopy-sync', 'integration', %s)""",
                     (row["id"], json.dumps(item), current),
                 )
+        # A transfer the ward desk offered: the patient leaves this bed, so its devices are free for the next one.
+        for item in payload.get("transfers_out") or []:
+            if item.get("initiated_from") != "canopy" or transfer_noted(database, item):
+                continue
+            case = database.execute("SELECT id FROM cases WHERE id=%s AND status='active'", (int(item["source_case_id"]),)).fetchone()
+            if case:
+                case_bindings.release(database, case["id"], "transferred", current)
+                audit(database, case["id"], "transfer.offered", item, "canopy-sync", current)
+        # Bed moves on this Leaf asked by the ward desk.
+        moved = []
+        for item in payload.get("bed_moves") or []:
+            case = database.execute("SELECT id, bed_label FROM cases WHERE id=%s AND status='active' FOR UPDATE",
+                                    (int(item["source_case_id"]),)).fetchone()
+            label = str(item.get("to_bed_label") or "").strip()
+            if case is None or not label or bed_taken(database, label, case["id"]):
+                continue
+            if (case["bed_label"] or "") != label:
+                move_bed(database, case, label, f"canopy:{item.get('requested_by') or 'ward desk'}", current)
+            moved.append(item["handover_id"])
+    for handover_id in moved:
+        try:
+            canopy("POST", f"/api/sync/v1/handover/{handover_id}/bed-moved", {"leaf_id": LEAF_ID}, timeout=5)
+        except HTTPException:
+            pass  # applied here; Canopy hears it again on the next pass
     return {"ok": True, "released": released}
+
+
+def audit(database: Connection, case_id: int, action: str, after: Any, actor: str, current: int, before: Any = None) -> None:
+    database.execute(
+        """INSERT INTO case_clinical_audit (case_id, action, before_json, after_json, actor_username, actor_role, created_at)
+           VALUES (%s, %s, %s, %s, %s, 'integration', %s)""",
+        (case_id, action, None if before is None else json.dumps(before), json.dumps(after), actor, current))
+
+
+def transfer_noted(database: Connection, item: dict[str, Any]) -> bool:
+    return database.execute(
+        "SELECT 1 FROM case_clinical_audit WHERE case_id=%s AND action='transfer.offered' AND after_json::jsonb->>'handover_id' = %s",
+        (int(item["source_case_id"]), str(item["handover_id"]))).fetchone() is not None
+
+
+def bed_taken(database: Connection, label: str, case_id: int | None = None) -> bool:
+    """Another active case already lies on this bed of this Leaf."""
+    return database.execute(
+        """SELECT 1 FROM cases WHERE status='active' AND id IS DISTINCT FROM %s::bigint
+             AND lower(trim(coalesce(bed_label,''))) = lower(trim(%s))""", (case_id, label)).fetchone() is not None
+
+
+def move_bed(database: Connection, case: dict[str, Any], label: str, actor: str, current: int) -> None:
+    database.execute("UPDATE cases SET bed_label=%s, updated_at=%s WHERE id=%s", (label, current, case["id"]))
+    audit(database, case["id"], "case.bed_move", {"bed_label": label}, actor, current, before={"bed_label": case["bed_label"]})
 
 
 @router.get("/cases/{case_id}/export")
@@ -188,15 +244,33 @@ def take_over(payload: dict[str, Any] = Body(...), actor: dict = Depends(require
     global_case_id = str(payload.get("global_case_id") or "").strip()
     if not global_case_id:
         raise HTTPException(400, "global_case_id required")
+    # Receive of a Transfer: the bed here and the devices of that bed, checked before Canopy is asked.
+    handover_id = payload.get("handover_id")
+    bed_label = str(payload.get("bed_label") or "").strip() or None
+    devices = None
+    if payload.get("devices") is not None:
+        try:
+            devices = case_bindings.normalize(database, payload.get("devices"))
+            case_bindings.check_clash(database, devices)
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from None
+        except case_bindings.DeviceInUse as clash:
+            return JSONResponse(status_code=409, content=clash.body())
+    if bed_label and bed_taken(database, bed_label):
+        raise HTTPException(409, f"bed {bed_label} already has an active case on this workstation")
     claim = canopy("POST", "/api/sync/v1/handover/claim", {
         "leaf_id": os.getenv("FLORA_LEAF_ID", ""), "global_case_id": global_case_id,
-        "move_devices": bool(payload.get("move_devices")), "actor": actor["username"]})
+        "move_devices": bool(payload.get("move_devices")), "actor": actor["username"],
+        **({"handover_id": int(handover_id)} if handover_id is not None else {})})
     try:
         with database.transaction():
             database.execute("SELECT pg_advisory_xact_lock(6893, 1)")
             result = case_handover.import_case(
                 database, claim["export"], from_leaf_id=claim["from_leaf_id"], global_case_id=global_case_id,
-                actor=actor["username"], now=now_ms())
+                actor=actor["username"], now=now_ms(), bed_label=bed_label or claim.get("to_bed_label"),
+                keep_admission=bool(claim.get("transfer")))
+            if devices:
+                case_bindings.replace(database, result["case_id"], devices)
     except Exception as error:
         try:
             canopy("POST", f"/api/sync/v1/handover/{claim['handover_id']}/cancel", {"reason": str(error)[:300]})
@@ -208,6 +282,68 @@ def take_over(payload: dict[str, Any] = Body(...), actor: dict = Depends(require
     canopy("POST", f"/api/sync/v1/handover/{claim['handover_id']}/imported", {"to_case_id": result["case_id"]})
     return {**result, "handover_id": claim["handover_id"], "from_leaf_id": claim["from_leaf_id"],
             "moved_devices": claim.get("moved_devices") or [], "export_age_sec": claim.get("export_age_sec")}
+
+
+# ---------------------------------------------------------------- transfer (no discharge; app/case_transfer.py)
+
+@router.get("/transfer-targets")
+def transfer_targets(_: dict = Depends(require_permission("case.read"))) -> dict:
+    """Beds of this ward (with their Leaf and current case) a case can move to."""
+    result = canopy("POST", "/api/sync/v1/transfer-targets", {"leaf_id": LEAF_ID}, timeout=5)
+    return {**result, "leaf_id": LEAF_ID}
+
+
+@router.post("/cases/{case_id}/transfer")
+def transfer_case(case_id: int, payload: dict[str, Any] = Body(...), actor: dict = Depends(require_permission("case.discharge")),
+                  database: Connection = Depends(connection)) -> dict:
+    """Move this active case to another bed without discharging it. A bed of this Leaf: moved at once.
+    A bed of another Leaf: offered there (Receive on that Leaf); this case stays open until then and its
+    devices are released for the next patient."""
+    to_leaf = str(payload.get("to_leaf_id") or "").strip() or None
+    to_bed = payload.get("to_bed_location_id")
+    label = str(payload.get("to_bed_label") or "").strip()
+    current = now_ms()
+    if to_leaf == LEAF_ID or (to_leaf is None and not isinstance(to_bed, int)):
+        if not label:
+            raise HTTPException(400, "choose a bed")
+        with database.transaction():
+            case = database.execute("SELECT id, bed_label, status FROM cases WHERE id=%s FOR UPDATE", (case_id,)).fetchone()
+            if case is None or case["status"] != "active":
+                raise HTTPException(409, "only an active case can move bed")
+            if bed_taken(database, label, case_id):
+                raise HTTPException(409, f"bed {label} already has an active case")
+            move_bed(database, case, label, actor["username"], current)
+        try:
+            canopy("POST", "/api/sync/v1/cases/bed-move",
+                   {"leaf_id": LEAF_ID, "source_case_id": case_id, "bed_label": label, "actor": actor["username"]}, timeout=5)
+        except HTTPException:
+            pass  # Canopy sees the bed in the next snapshot
+        return {"kind": "bed_move", "case_id": case_id, "bed_label": label}
+    case = database.execute("SELECT status FROM cases WHERE id=%s", (case_id,)).fetchone()
+    if case is None or case["status"] != "active":
+        raise HTTPException(409, "only an active case can be transferred")
+    export = case_handover.export_case(database, case_id)
+    result = canopy("POST", "/api/sync/v1/handover/offer", {
+        "leaf_id": LEAF_ID, "source_case_id": case_id, "to_leaf_id": to_leaf,
+        "to_bed_location_id": to_bed if isinstance(to_bed, int) else None, "to_bed_label": label or None,
+        "note": payload.get("note"), "actor": actor["username"], "export": export}, timeout=30)
+    with database.transaction():
+        case_bindings.release(database, case_id, "transferred", current)
+        audit(database, case_id, "transfer.offered", {**result, "source_case_id": case_id}, actor["username"], current)
+    return {**result, "case_id": case_id}
+
+
+@router.post("/cases/{case_id}/transfer/withdraw")
+def withdraw_transfer(case_id: int, payload: dict[str, Any] = Body(...), actor: dict = Depends(require_permission("case.discharge")),
+                      database: Connection = Depends(connection)) -> dict:
+    """Cancel a transfer nobody received yet. The case's devices are bound again in Devices."""
+    handover_id = payload.get("handover_id")
+    if not isinstance(handover_id, int):
+        raise HTTPException(400, "handover_id required")
+    canopy("POST", f"/api/sync/v1/handover/{handover_id}/withdraw", {"leaf_id": LEAF_ID, "actor": actor["username"]})
+    with database.transaction():
+        audit(database, case_id, "transfer.withdrawn", {"handover_id": handover_id}, actor["username"], now_ms())
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------- gateway setup wizard

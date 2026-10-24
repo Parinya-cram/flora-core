@@ -80,7 +80,7 @@ export default function CanopyAdmissionFormEditor({ admission, onClose, onChange
   return (
     <div className="app-theme-scope fixed inset-0 z-[1100] flex flex-col bg-[var(--app-bg)] text-[var(--app-text)]" role="dialog" aria-modal="true" aria-label={`Forms for ${patient.patient_name || current.hn}`}>
       <header className="shrink-0 border-b border-[var(--app-border)] bg-[var(--app-panel-bg)] px-4 py-3 shadow-sm">
-        <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-3">
+        <div className="w-full flex flex-wrap items-center gap-3">
           <button type="button" onClick={onClose} className="inline-flex h-12 min-w-12 items-center justify-center gap-2 rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] px-4 text-sm font-bold hover:bg-[var(--app-control-bg-hover)]" aria-label="Close form">
             <span aria-hidden="true" className="text-lg">‹</span><span>Done</span>
           </button>

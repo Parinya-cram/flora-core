@@ -863,11 +863,13 @@ export async function getCaseIoSummary(
   caseId: number,
   from: number,
   to: number,
+  /** Bucket width (min). Totals do not depend on it; summary-only callers pass a coarse one for long stays. */
+  bucketMin = 1440,
 ): Promise<CaseIoSummaryTotals> {
   const params = new URLSearchParams({
     from: String(from),
     to: String(to),
-    bucket: "1",
+    bucket: String(Math.max(1, Math.min(1440, Math.round(bucketMin)))),
   });
   const res = await fetch(`${BASE}/${caseId}/io/summary?${params.toString()}`);
   await throwIfError(res, "io summary failed");

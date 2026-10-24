@@ -15,7 +15,7 @@ from psycopg import Connection
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
-from .. import directory, or_journey, staff_sync
+from .. import case_transfer, directory, or_journey, staff_sync
 from ..or_sessions import record_event
 from ..database import connection
 from .canopy_admissions import DetailsInput, PatientInput, _allowed
@@ -536,6 +536,69 @@ def assign_recovery(session_id: str, payload: AssignInput, user: dict = Depends(
     busy = bed_cases(database, [bed]).get(bed["id"])
     return {"row": one(database, session_id, scope),
             "warning": f"{bed['name']} still has an active case (HN {busy['hn']})" if busy else None}
+
+
+def session_case(database: Connection, row: dict[str, Any]) -> dict[str, Any] | None:
+    """The active Leaf case of an OR session (the Leaf running it now)."""
+    if not row.get("claimed_leaf_id") or not row.get("global_case_id"):
+        return None
+    return database.execute(
+        # No row lock: the ward desk may only read the index; the open-handover unique index stops a double offer.
+        "SELECT * FROM sync_case_index WHERE global_case_id=%s AND leaf_id=%s AND status='ACTIVE'",
+        (row["global_case_id"], row["claimed_leaf_id"])).fetchone()
+
+
+@router.get("/api/fleet/admissions/or/sessions/{session_id}/transfer")
+def transfer_options(session_id: str, user: dict = Depends(mover), scope: list[str] | None = Depends(ward_scope),
+                     database: Connection = Depends(connection)) -> dict[str, Any]:
+    """Transfer without discharge: the beds of this ward and the transfer waiting for Receive, if any."""
+    row = load(database, session_id, scope)
+    case = session_case(database, row)
+    leaf_ids = [item["leaf_id"] for item in database.execute(
+        "SELECT leaf_id FROM canopy_leaf_unit WHERE unit_key=%s", (row["unit_key"],)).fetchall()]
+    pending = database.execute(
+        """SELECT id AS handover_id, kind, to_leaf_id, to_bed_label, initiated_from, requested_by, created_at
+           FROM canopy_case_handover WHERE global_case_id=%s AND status='offered'""",
+        (case["global_case_id"],)).fetchone() if case else None
+    return {"case": {"leaf_id": case["leaf_id"], "bed_label": (case["snapshot"].get("case") or {}).get("bed_label")} if case else None,
+            "pending": pending, "beds": case_transfer.ward_beds(database, list({*leaf_ids, *([case["leaf_id"]] if case else [])}))}
+
+
+@router.post("/api/fleet/admissions/or/sessions/{session_id}/transfer")
+def request_transfer(session_id: str, payload: AssignInput, user: dict = Depends(mover), scope: list[str] | None = Depends(ward_scope),
+                     database: Connection = Depends(connection)) -> dict[str, Any]:
+    """Move the running case to another bed without discharging it: another room's Leaf receives it
+    (Receive on that Leaf), or the same multi-bed Leaf (Recovery) moves it to the bed at its next sync."""
+    with database.transaction():
+        row = load(database, session_id, scope, lock=True)
+        if row["journey_state"] not in ("in_or", "in_recovery"):
+            raise HTTPException(409, "only a patient in a room or recovery bed can be transferred")
+        case = session_case(database, row)
+        if case is None:
+            raise HTTPException(409, "Canopy has not seen this patient's case yet; wait for the Leaf to sync")
+        try:
+            bed = case_transfer.bed_target(database, payload.bed_location_id)
+            offer = case_transfer.offer(database, case, to_leaf_id=bed["leaf_id"], to_bed_location_id=bed["id"],
+                                        to_bed_label=bed["name"], actor=user["username"], initiated_from="canopy")
+        except case_transfer.TransferRefused as error:
+            raise HTTPException(409, str(error)) from None
+    busy = bed_cases(database, [{"id": bed["id"], "leaf_id": bed["leaf_id"]}]).get(bed["id"])
+    return {"row": one(database, session_id, scope), "handover_id": offer["id"], "kind": offer["kind"],
+            "warning": f"{bed['name']} still has an active case (HN {busy['hn']})" if busy and busy["hn"] != case["hn"] else None}
+
+
+@router.post("/api/fleet/admissions/or/sessions/{session_id}/transfer/withdraw")
+def withdraw_transfer(session_id: str, user: dict = Depends(mover), scope: list[str] | None = Depends(ward_scope),
+                      database: Connection = Depends(connection)) -> dict[str, Any]:
+    with database.transaction():
+        row = load(database, session_id, scope, lock=True)
+        case = session_case(database, row)
+        pending = database.execute(
+            "SELECT id FROM canopy_case_handover WHERE global_case_id=%s AND status='offered'",
+            (case["global_case_id"],)).fetchone() if case else None
+        if pending is None or case_transfer.withdraw(database, pending["id"], actor=user["username"]) is None:
+            raise HTTPException(409, "no transfer is waiting for this patient")
+    return {"row": one(database, session_id, scope)}
 
 
 class DischargeInput(BaseModel):

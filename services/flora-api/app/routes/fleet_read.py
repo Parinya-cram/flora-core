@@ -332,6 +332,8 @@ def active_cases(scope: list[str] | None = Depends(fleet_scope), database: Conne
         SELECT c.global_case_id, c.hospital_id, c.leaf_id,
                coalesce(nullif(l.canopy_display_name,''),l.display_name) AS leaf_name,
                c.source_case_id, c.case_code, c.hn, c.status, c.start_time,
+               NULLIF(c.snapshot#>>'{patient,row,patient_name}', '') AS patient_name,
+               COALESCE(NULLIF(c.snapshot#>>'{patient,row,an}', ''), NULLIF(c.snapshot->'case'->>'admission_number', '')) AS an,
                c.discharge_time, c.last_synced_at,
                COALESCE(NULLIF(c.snapshot->'case'->>'admission_source', ''), 'unknown') AS admission_source,
                COALESCE(NULLIF(c.snapshot#>>'{patient,row,source}', ''),
@@ -354,6 +356,10 @@ def active_cases(scope: list[str] | None = Depends(fleet_scope), database: Conne
 def cases(
     status: str | None = Query(default=None, max_length=24),
     limit: int = Query(default=50, ge=1, le=500),
+    from_ts: int | None = Query(default=None, alias="from", ge=0),
+    to_ts: int | None = Query(default=None, alias="to", ge=0),
+    q: str = Query(default="", max_length=80),
+    leaf_id: str = Query(default="", max_length=120),
     scope: list[str] | None = Depends(fleet_scope),
     database: Connection = Depends(connection),
 ) -> dict:
@@ -365,6 +371,8 @@ def cases(
         SELECT c.global_case_id, c.hospital_id, c.leaf_id,
                coalesce(nullif(l.canopy_display_name,''),l.display_name) AS leaf_name,
                c.source_case_id, c.case_code, c.hn, c.status, c.start_time,
+               NULLIF(c.snapshot#>>'{patient,row,patient_name}', '') AS patient_name,
+               COALESCE(NULLIF(c.snapshot#>>'{patient,row,an}', ''), NULLIF(c.snapshot->'case'->>'admission_number', '')) AS an,
                c.discharge_time, c.last_synced_at,
                COALESCE(NULLIF(c.snapshot->'case'->>'admission_source', ''), 'unknown') AS admission_source,
                COALESCE(NULLIF(c.snapshot#>>'{patient,row,source}', ''),
@@ -376,10 +384,16 @@ def cases(
         JOIN sync_leaf_node l ON l.leaf_id = c.leaf_id
         LEFT JOIN canopy_leaf_unit scope_unit ON scope_unit.leaf_id = c.leaf_id
         WHERE (%s = '' OR upper(c.status) = %s) AND {IN_SCOPE}
+          -- Case List filters: case start in [from, to), patient (HN, AN, name, case code), workstation.
+          AND (%s::bigint IS NULL OR c.start_time >= %s) AND (%s::bigint IS NULL OR c.start_time < %s)
+          AND (%s = '' OR c.leaf_id = %s)
+          AND (%s = '' OR concat_ws(' ', c.hn, c.case_code, c.snapshot#>>'{patient,row,an}',
+                                    c.snapshot->'case'->>'admission_number', c.snapshot#>>'{patient,row,patient_name}') ILIKE %s)
         ORDER BY c.last_synced_at DESC, c.start_time DESC NULLS LAST
         LIMIT %s
         """.replace("{IN_SCOPE}", IN_SCOPE),
-        (normalized_status, normalized_status, scope, scope, limit),
+        (normalized_status, normalized_status, scope, scope, from_ts, from_ts, to_ts, to_ts, leaf_id, leaf_id,
+         q.strip(), f"%{q.strip()}%", limit),
     ).fetchall()
     return {"rows": rows}
 

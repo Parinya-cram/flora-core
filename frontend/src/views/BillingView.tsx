@@ -240,7 +240,7 @@ export default function BillingView({ caseStatus }: { caseStatus: CaseStatus }) 
   const input = "rounded-md border border-[var(--app-border)] bg-[var(--app-control-bg,transparent)] px-2 py-1 text-sm";
 
   return (
-    <div className="app-theme-scope mx-auto max-w-[1500px] space-y-3 p-4 pb-16 text-[var(--app-text)]">
+    <div className="app-theme-scope w-full space-y-3 p-4 pb-16 text-[var(--app-text)]">
       <div className="sticky top-2 z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-panel-bg)]/95 p-3 shadow-sm backdrop-blur">
         <div className="min-w-56">
           <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--app-muted)]">Billing</div>

@@ -8,6 +8,7 @@ import {
 } from "../api/orScheduleApi";
 import SessionDrawer from "../components/or/SessionDrawer";
 import CanopyAdmissionFormEditor from "./CanopyAdmissionFormEditor";
+import { clock, DAY_START_HOUR, dayStart, scheduleDayOf, scheduleWindow, teamLine } from "../utils/orSession";
 
 /**
  * Canopy → OR schedule. One day of an OR ward:
@@ -30,24 +31,23 @@ const primary = "rounded-lg border border-[var(--app-accent)] bg-[var(--app-acce
 const field = "rounded-lg border border-[var(--app-border)] bg-[var(--app-control-bg)] px-2.5 py-1.5 text-sm text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]";
 const errorText = (reason: unknown) => (reason instanceof Error ? reason.message : String(reason));
 const pad = (n: number) => String(n).padStart(2, "0");
-const clock = (ms: number | null) => { if (!ms) return "—"; const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
-const dayStart = (ms: number) => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); };
-const isAnaesthesia = (roleId: string) => /anesth|anaesth/i.test(roleId);
-type Tab = "schedule" | "list" | "board" | "recovery" | "setup";
+export type OrScheduleTab = "schedule" | "list" | "board" | "recovery" | "setup";
+type Tab = OrScheduleTab;
 type Drag = { id: string; mode: "move" | "resize"; x: number; y: number; dx: number; dy: number; moved: boolean };
 
-function teamLine(session: OrSession, anaesthesia: boolean): string {
-  const people = session.team.filter(member => isAnaesthesia(member.role_id) === anaesthesia).map(member => member.name || member.staff_code || "");
-  return people.filter(Boolean).join(", ") || (anaesthesia ? "" : session.admission.surgeon || "");
-}
+/** Shown inside the Admission page: the page owns the ward, the day and which panel is shown. */
+export type OrScheduleEmbed = { unitKey: string; date: number; tab: Tab; reloadKey?: number; onChanged?: () => void };
 
-export default function CanopyOrScheduleView({ sessionUser }: { sessionUser: AuthUser | null }) {
+export default function CanopyOrScheduleView({ sessionUser, embed }: { sessionUser: AuthUser | null; embed?: OrScheduleEmbed }) {
   const canSetup = Boolean(sessionUser?.permissions?.includes("config.manage")) || String(sessionUser?.role || "").toLowerCase() === "admin";
   const [options, setOptions] = useState<OrOptions | null>(null);
-  const [unitKey, setUnitKey] = useState(() => (readSelectedWard() === ALL_WARDS ? "" : readSelectedWard()));
-  const [date, setDate] = useState(() => dayStart(Date.now()));
+  const [ownUnitKey, setUnitKey] = useState(() => (readSelectedWard() === ALL_WARDS ? "" : readSelectedWard()));
+  const [ownDate, setDate] = useState(() => scheduleDayOf(Date.now()));
   const [orType, setOrType] = useState("");
-  const [tab, setTab] = useState<Tab>("schedule");
+  const [ownTab, setTab] = useState<Tab>("schedule");
+  const unitKey = embed ? embed.unitKey : ownUnitKey;
+  const date = embed ? embed.date : ownDate;
+  const tab = embed ? embed.tab : ownTab;
   const [data, setData] = useState<OrDay | null>(null);
   const [error, setError] = useState("");
   const [drawer, setDrawer] = useState<{ session: OrSession | null; start?: { roomId: number; at: number } } | null>(null);
@@ -67,10 +67,12 @@ export default function CanopyOrScheduleView({ sessionUser }: { sessionUser: Aut
   const load = useCallback(async () => {
     if (!unitKey) return;
     try {
-      setData(await getOrDay(unitKey, date, date + 24 * HOUR_MS));
+      // A schedule day: 06:00 → 05:59 the next morning.
+      setData(await getOrDay(unitKey, ...scheduleWindow(date)));
       setError("");
     } catch (reason) { setError(errorText(reason)); }
-  }, [unitKey, date]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reloadKey: the Admission page asks for a reload
+  }, [unitKey, date, embed?.reloadKey]);
   useEffect(() => {
     void Promise.resolve().then(load);
     const timer = window.setInterval(() => { setNowTs(Date.now()); void load(); }, 30_000);
@@ -85,17 +87,9 @@ export default function CanopyOrScheduleView({ sessionUser }: { sessionUser: Aut
   const sessions = useMemo(() => (data?.sessions || []).filter(row => !orType || row.orTypeCode === orType || orRooms.some(room => room.id === row.roomId)), [data, orType, orRooms]);
   const orTypeName = useMemo(() => new Map((options?.orTypes || []).map(row => [row.code, row.name])), [options]);
 
-  // Hours shown: 07–20 by default, widened to cover the day's bookings.
-  const [firstHour, lastHour] = useMemo(() => {
-    let first = 7;
-    let last = 20;
-    for (const row of sessions) {
-      if (!row.scheduledAt) continue;
-      first = Math.min(first, Math.floor((row.scheduledAt - date) / HOUR_MS));
-      last = Math.max(last, Math.ceil((row.scheduledAt + row.durationMin * MIN_MS - date) / HOUR_MS));
-    }
-    return [Math.max(0, first), Math.min(24, last)];
-  }, [sessions, date]);
+  // The grid shows one schedule day: 06:00 → 05:59 the next morning.
+  const firstHour = DAY_START_HOUR;
+  const lastHour = DAY_START_HOUR + 24;
   const slots = (lastHour - firstHour) * (60 / SLOT_MIN);
   const gridStart = date + firstHour * HOUR_MS;
   const slotAt = (clientX: number) => {
@@ -162,13 +156,19 @@ export default function CanopyOrScheduleView({ sessionUser }: { sessionUser: Aut
 
   // The page follows the selected ward: "OR schedule", "ER schedule", …
   const wardName = (options?.wards || []).find(ward => ward.key === unitKey)?.name || "";
-  const today = dayStart(nowTs) === date;
+  const today = scheduleDayOf(nowTs) === date;
   const nowLeft = LABEL_PX + ((nowTs - gridStart) / (SLOT_MIN * MIN_MS)) * SLOT_PX;
+  // List / Board: the same schedule day as the grid.
   const sorted = [...sessions].sort((a, b) => (a.scheduledAt || 0) - (b.scheduledAt || 0) || String(a.roomName).localeCompare(String(b.roomName)));
 
   return (
-    <div className="app-theme-scope mx-auto max-w-[1700px] space-y-3 p-4 pb-24 text-[var(--app-text)]">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+    <div className={embed ? "space-y-3 text-[var(--app-text)]" : "app-theme-scope w-full space-y-3 p-3 sm:p-5 pb-24 text-[var(--app-text)]"}>
+      {embed ? <div className="flex flex-wrap items-center justify-end gap-2">
+        <select className={field} value={orType} onChange={e => setOrType(e.target.value)} aria-label="OR type">
+          <option value="">All OR types</option>{(options?.orTypes || []).filter(row => row.is_active).map(row => <option key={row.code} value={row.code}>{row.name}</option>)}
+        </select>
+        <button type="button" className={primary} disabled={!orRooms.length} onClick={() => setDrawer({ session: null, start: { roomId: orRooms[0].id, at: date + 8 * HOUR_MS } })}>+ Book</button>
+      </div> : <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">ESM Flora Canopy · schedule</div>
           <h1 className="mt-1 text-2xl font-semibold">{wardName ? `${wardName} schedule` : "Schedule"}</h1>
@@ -181,7 +181,7 @@ export default function CanopyOrScheduleView({ sessionUser }: { sessionUser: Aut
           <input type="date" className={field} value={(() => { const d = new Date(date); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; })()}
             onChange={e => e.target.value && setDate(dayStart(new Date(`${e.target.value}T00:00:00`).getTime()))} aria-label="Day" />
           <button type="button" className={button} onClick={() => setDate(value => value + 24 * HOUR_MS)} aria-label="Next day">›</button>
-          <button type="button" className={button} onClick={() => setDate(dayStart(Date.now()))}>Today</button>
+          <button type="button" className={button} onClick={() => setDate(scheduleDayOf(Date.now()))}>Today</button>
           <select className={field} value={orType} onChange={e => setOrType(e.target.value)} aria-label="OR type">
             <option value="">All OR types</option>{(options?.orTypes || []).filter(row => row.is_active).map(row => <option key={row.code} value={row.code}>{row.name}</option>)}
           </select>
@@ -193,7 +193,7 @@ export default function CanopyOrScheduleView({ sessionUser }: { sessionUser: Aut
           </div>
           <button type="button" className={primary} disabled={!orRooms.length} onClick={() => setDrawer({ session: null, start: { roomId: orRooms[0].id, at: date + 8 * HOUR_MS } })}>+ Book</button>
         </div>
-      </header>
+      </header>}
 
       {error ? <div className="rounded-xl border border-rose-400/40 bg-rose-500/10 p-3 text-sm text-rose-500">{error}</div> : null}
       {data && !(data.rooms || []).some(room => room.room_type === "or") ? <div className="rounded-xl border border-amber-400/50 bg-amber-400/10 p-3 text-sm">No room of {wardName || "this ward"} is marked as an OR room yet; all rooms are shown. {canSetup ? "Mark them under Setup." : ""}</div> : null}
@@ -203,12 +203,12 @@ export default function CanopyOrScheduleView({ sessionUser }: { sessionUser: Aut
         {placing ? <span className="ml-auto rounded-lg border border-[var(--app-accent)] px-2 py-1">Click a slot to place <b>{placing.patient.patient_name}</b> · <button type="button" className="underline" onClick={() => setPlacing(null)}>cancel</button></span> : null}
       </div>
 
-      {tab === "schedule" ? <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
+      {tab === "schedule" ? <div className={embed ? "" : "grid gap-3 xl:grid-cols-[minmax(0,1fr)_260px]"}>
         <div ref={gridRef} className={`${card} relative overflow-x-auto`} onPointerMove={onPointerMove}>
           <div style={{ width: LABEL_PX + slots * SLOT_PX }} className="relative select-none">
             <div className="sticky top-0 z-20 flex border-b border-[var(--app-border)] bg-[var(--app-panel-bg)]">
               <div style={{ width: LABEL_PX }} className="sticky left-0 z-30 shrink-0 bg-[var(--app-panel-bg)] px-3 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--app-muted)]">Room</div>
-              {Array.from({ length: lastHour - firstHour }, (_, i) => <div key={i} style={{ width: SLOT_PX * 4 }} className="shrink-0 border-l border-[var(--app-border)] px-1 py-2 text-xs font-bold">{pad(firstHour + i)}:00</div>)}
+              {Array.from({ length: lastHour - firstHour }, (_, i) => <div key={i} style={{ width: SLOT_PX * 4 }} className="shrink-0 border-l border-[var(--app-border)] px-1 py-2 text-xs font-bold">{pad((firstHour + i) % 24)}:00</div>)}
             </div>
             {orRooms.map(room => (
               <div key={room.id} className="relative flex border-b border-[var(--app-border)]" style={{ height: ROW_PX }}>
@@ -248,14 +248,15 @@ export default function CanopyOrScheduleView({ sessionUser }: { sessionUser: Aut
           </div>
           {!orRooms.length ? <p className="p-6 text-center text-sm text-[var(--app-muted)]">No rooms in this ward.</p> : null}
         </div>
-        <aside className={`${card} h-fit space-y-2 p-3`}>
+        {/* On the Admission page these are its Waiting List tab. */}
+        {embed ? null : <aside className={`${card} h-fit space-y-2 p-3`}>
           <h2 className="text-sm font-bold">Not in a room yet <span className="text-[var(--app-muted)]">{data?.unscheduled.length || 0}</span></h2>
           <p className="text-[11px] text-[var(--app-muted)]">Bookings from HIS or the admissions page without a room or time. Pick one, then click a slot.</p>
           {(data?.unscheduled || []).map(row => <button key={row.id} type="button" onClick={() => setPlacing(row)}
             className={`w-full rounded-lg border px-2 py-1.5 text-left text-xs ${placing?.id === row.id ? "border-[var(--app-accent)] bg-[var(--app-accent)]/10" : "border-[var(--app-border)]"}`}>
             <b>{row.patient.patient_name}</b> · HN {row.hn}<div className="truncate text-[var(--app-muted)]">{row.admission.operation || "—"}{row.source === "hl7" ? " · HIS" : ""}</div>
           </button>)}
-        </aside>
+        </aside>}
       </div> : null}
 
       {tab === "list" ? <div className={`${card} overflow-x-auto`}>
@@ -307,7 +308,7 @@ export default function CanopyOrScheduleView({ sessionUser }: { sessionUser: Aut
       {tab === "setup" && canSetup && options ? <SetupPanel rooms={data?.rooms || []} options={options} onChanged={async () => { setOptions(await getOrOptions()); await load(); }} onError={setError} /> : null}
 
       {drawer && options ? <SessionDrawer options={options} rooms={data?.rooms || []} session={drawer.session} start={drawer.start}
-        onClose={() => setDrawer(null)} onSaved={() => void load()} onOpenPreop={id => void openPreop(id)} /> : null}
+        onClose={() => setDrawer(null)} onSaved={() => { void load(); embed?.onChanged?.(); }} onOpenPreop={id => void openPreop(id)} /> : null}
       {preop ? <CanopyAdmissionFormEditor admission={preop} onClose={() => { setPreop(null); void load(); }} /> : null}
     </div>
   );

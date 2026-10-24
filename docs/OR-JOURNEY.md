@@ -57,6 +57,24 @@ A patient can go from `in_or`, or while waiting for recovery, straight to `disch
 
 Every step is written to `canopy_session_event` (the drawer's History) and to `canopy_patient_movement` (the Digital twin). The OR room's Leaf keeps reporting its closed case for a while; Canopy ignores those reports (`handed_from_leaf_id`) instead of flagging a conflict.
 
+## Transfer without discharge (room or bed change)
+
+**Transfer** moves a running case to another bed and the chart continues: same case, same booking, no new
+Post-Anesthesia case. **Discharge** stays the way to leave for real (to another Leaf as a new case, or out of the ward).
+
+- **Start it** on the source Leaf (Ward › case row › *Transfer*, choose a bed of the ward) or at the ward desk
+  (OR session drawer › *Transfer (case continues)*, for a patient in a room or a recovery bed).
+- **Another Leaf's bed:** Canopy holds the offer (`canopy_case_handover` status `offered`, migration 0095). The source case
+  stays open and its devices are released at once. The destination Leaf lists the patient under *Incoming transfers*;
+  *Receive* picks the bed label and that bed's devices, imports Canopy's newest full copy and keeps `canopy_admission_id`.
+  Canopy moves the booking to the new Leaf (the old one becomes `handed_from_leaf_id`) and the source locks its copy at its
+  next sync (`released`, kind `transfer`). Either side may *Cancel transfer* until Receive.
+- **Another bed of the same Leaf** (multi-bed Recovery): pressed on the Leaf, the bed changes at once. From the ward desk,
+  the Leaf applies it at its next sync (`bed_moves`) and confirms it (`/handover/{id}/bed-moved`).
+- Code: `services/flora-api/app/case_transfer.py` (Canopy), `routes/sync_ward.py` (offer / claim / withdraw / targets),
+  `routes/ward.py` (Leaf: `/api/ward/cases/{id}/transfer`, Receive via `/api/ward/handover`), `routes/or_schedule.py`
+  (`/sessions/{id}/transfer`), UI `components/ward/TransferDialogs.tsx`, `components/or/SessionTransfer.tsx`.
+
 ## Demo: several OR-suite workstations on one screen
 
 `./demo/workstations.sh up` starts two lean Leaf stacks next to OR-1, on the shared docker network `flora-demo-leaves`:

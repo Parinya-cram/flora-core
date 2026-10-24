@@ -520,7 +520,7 @@ export default function App() {
           onLogout={logout}
         />
 
-        <div className="app-main flex-1 overflow-auto">
+        <div className={`app-main flex-1 overflow-auto${isCanopy ? "" : " app-main--leaf"}`}>
           {/* Canopy views wait for a validated ward and remount when it changes so every view refetches in scope. */}
           {isCanopy && !ward.ready ? null : <MainArea
             key={isCanopy ? `ward:${ward.selected}` : "leaf"}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getCaseWorkflow, type CaseWorkflow } from "../../api/workflowApi";
+import { getCaseWorkflow, type CaseWorkflow, type FormScheduleSummary, type WorkflowFormSchedule } from "../../api/workflowApi";
 
 const EMPTY: CaseWorkflow = { workflow: null, forms: {} };
 
@@ -17,7 +17,13 @@ export function useCaseWorkflow(caseId: number | null): CaseWorkflow {
   return state.caseId === caseId ? state.value : EMPTY;
 }
 
-export type WorkflowFormTab = { formId: string; title: string; required: boolean; phase: string; afterSection: string | null; hint: string };
+export type WorkflowFormTab = {
+  formId: string; title: string; required: boolean; phase: string; afterSection: string | null; hint: string;
+  /** Filled once per slot (ScheduledFormPanel); null: one record per case. */
+  schedule: WorkflowFormSchedule | null;
+  /** Due/overdue counts of a scheduled form when the case's workflow was read. */
+  summary: FormScheduleSummary | null;
+};
 
 /** Workflow form tabs in the workflow's order (only forms the Leaf has a definition for). */
 export function workflowFormTabs(value: CaseWorkflow): WorkflowFormTab[] {
@@ -32,6 +38,8 @@ export function workflowFormTabs(value: CaseWorkflow): WorkflowFormTab[] {
       phase: ref.phase || "any",
       afterSection: ref.after_section || null,
       hint: ref.hint || "",
+      schedule: value.forms[ref.form_id].schedule ?? ref.schedule ?? null,
+      summary: value.forms[ref.form_id].summary ?? null,
     }));
 }
 

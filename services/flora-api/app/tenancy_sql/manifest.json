@@ -72,5 +72,8 @@
  "0091-or-transfer.sql",
  "0092-canopy-case-binding.sql",
  "0093-case-staff-times.sql",
- "0094-leaf-transfer.sql"
+ "0094-leaf-transfer.sql",
+ "0095-case-transfer.sql",
+ "0096-canopy-activity-log.sql",
+ "0097-case-form-entry.sql"
 ]

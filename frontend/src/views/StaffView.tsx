@@ -19,11 +19,77 @@ import {
   type StaffRole,
 } from "../api/staffApi";
 import StaffSyncPanel from "../components/staff/StaffSyncPanel";
-import ClinicalDateTimeInput from "../components/ClinicalDateTimeInput";
 import { useWorkstationSettings } from "../hooks/useWorkstationSettings";
 import { timestampToWallClockInput, wallClockInputToTimestamp } from "../utils/dateTime";
+import { formatDateInputDDMMYYYY, formatTimeInputHHMM } from "../utils/clinicalInput";
 
 const nowMinute = () => Math.floor(Date.now() / 60_000) * 60_000;
+
+const timeFieldClass = "h-8 rounded border bg-white dark:bg-gray-950 px-2 text-sm tabular-nums";
+
+/** Compact date + HH:mm of one case staff time; the global picker adds the calendar / time grid. */
+function StaffTimeField({ label, value, timezone, onChange, emptyAction, invalid = false }: {
+  label: string;
+  value: number | null;
+  timezone: string;
+  onChange: (value: number | null) => void;
+  emptyAction: string;
+  invalid?: boolean;
+}) {
+  const split = (timestamp: number | null) => {
+    const wall = timestamp == null ? "" : timestampToWallClockInput(timestamp, timezone);
+    const [date = "", time = ""] = wall.split("T");
+    const [year, month, day] = date.split("-");
+    return { date: date ? `${day}/${month}/${year}` : "", time };
+  };
+  const [shown, setShown] = useState(value);
+  const [draft, setDraft] = useState(() => split(value));
+  if (shown !== value) {
+    setShown(value);
+    setDraft(split(value));
+  }
+  const update = (next: { date: string; time: string }) => {
+    setDraft(next);
+    const d = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(next.date);
+    const t = /^(\d{2}):(\d{2})$/.exec(next.time);
+    if (!d || !t) return;
+    const timestamp = wallClockInputToTimestamp(`${d[3]}-${d[2]}-${d[1]}T${t[1]}:${t[2]}`, timezone);
+    if (timestamp !== null && timestamp !== value) onChange(timestamp);
+  };
+  const border = invalid ? "border-red-500" : "border-gray-300 dark:border-gray-700";
+  return (
+    <div className="flex items-center gap-1" title={invalid ? "Time out is before time in" : undefined}>
+      <span className={`w-7 text-[10px] font-bold uppercase tracking-wider ${invalid ? "text-red-600" : "text-gray-500 dark:text-gray-400"}`}>{label}</span>
+      {value == null ? (
+        <button type="button" onClick={() => onChange(nowMinute())} className="h-8 w-[11.5rem] rounded border border-dashed border-gray-300 dark:border-gray-700 px-2 text-xs text-gray-600 dark:text-gray-300 hover:border-blue-500">
+          {emptyAction}
+        </button>
+      ) : (
+        <>
+          <input
+            className={`${timeFieldClass} ${border} w-[6.75rem]`}
+            placeholder="DD/MM/YYYY"
+            maxLength={10}
+            value={draft.date}
+            onChange={event => update({ ...draft, date: formatDateInputDDMMYYYY(event.target.value) })}
+            onBlur={() => setDraft(split(value))}
+          />
+          <input
+            className={`${timeFieldClass} ${border} w-[4.25rem] text-center`}
+            placeholder="HH:mm"
+            maxLength={5}
+            value={draft.time}
+            onChange={event => update({ ...draft, time: formatTimeInputHHMM(event.target.value) })}
+            onBlur={() => setDraft(split(value))}
+          />
+          <button type="button" onClick={() => onChange(null)} className="h-8 w-5 text-gray-400 hover:text-red-600" title={`Clear time ${label.toLowerCase()}`} aria-label={`Clear time ${label.toLowerCase()}`}>
+            ×
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
 
 /** Where a directory row comes from and whether it reaches Canopy. */
 function syncBadge(item: StaffMember, needsCode: boolean): { label: string; className: string; title: string } {
@@ -520,18 +586,6 @@ export default function StaffView({ caseStatus, sessionUser, defaultTab = "curre
     setStaff(prev => prev.map((item, i) => (i === index ? { ...item, [key]: value } : item)));
   };
 
-  const staffTimeInput = (index: number, key: "time_in" | "time_out", value: number) => (
-    <ClinicalDateTimeInput
-      value={timestampToWallClockInput(value, workstation.timezone)}
-      onChange={next => {
-        const timestamp = wallClockInputToTimestamp(next, workstation.timezone);
-        if (timestamp !== null) setStaffTime(index, key, timestamp);
-      }}
-      dateFormat={workstation.dateFormat}
-      timeFormat={workstation.timeFormat}
-    />
-  );
-
   const timesInvalid = staff.some(item => item.time_in != null && item.time_out != null && item.time_out < item.time_in);
 
   const removeCaseStaff = (index: number) => {
@@ -732,13 +786,9 @@ export default function StaffView({ caseStatus, sessionUser, defaultTab = "curre
                       {staff.map((row, index) => (
                         <div
                           key={`${fillDisplayName(row)}-${row.role_id || row.role}-${row.hospital_id || "-"}-${index}`}
-                          className="rounded border border-gray-200 dark:border-gray-800 px-2 py-1.5 space-y-1"
+                          className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded border border-gray-200 dark:border-gray-800 px-2 py-1.5"
                         >
-                        <div
-                          className="app-tooltip flex items-center justify-between gap-2"
-                          data-tooltip={toTooltip(row, fields)}
-                        >
-                          <div className="min-w-0">
+                          <div className="app-tooltip min-w-[10rem] flex-1" data-tooltip={toTooltip(row, fields)}>
                             <div className="truncate">
                               {fillDisplayName(row)}
                               {row.hospital_id ? (
@@ -753,44 +803,28 @@ export default function StaffView({ caseStatus, sessionUser, defaultTab = "curre
                               {row.entry_year ? ` | Entry ${row.entry_year}` : ""}
                             </div>
                           </div>
+                          <StaffTimeField
+                            label="In"
+                            value={row.time_in ?? null}
+                            timezone={workstation.timezone}
+                            onChange={value => setStaffTime(index, "time_in", value)}
+                            emptyAction="In now"
+                          />
+                          <StaffTimeField
+                            label="Out"
+                            value={row.time_out ?? null}
+                            timezone={workstation.timezone}
+                            onChange={value => setStaffTime(index, "time_out", value)}
+                            emptyAction="Out now"
+                            invalid={row.time_in != null && row.time_out != null && row.time_out < row.time_in}
+                          />
                           <button
                             type="button"
                             onClick={() => removeCaseStaff(index)}
-                            className="text-xs text-red-500 hover:text-red-600"
+                            className="rounded border border-gray-300 dark:border-gray-700 px-2 py-1 text-xs text-red-500 hover:text-red-600"
                           >
                             Remove
                           </button>
-                        </div>
-                        <div className="flex flex-wrap items-end gap-x-4 gap-y-1">
-                          <div>
-                            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Time in</div>
-                            {row.time_in != null ? (
-                              staffTimeInput(index, "time_in", row.time_in)
-                            ) : (
-                              <button type="button" onClick={() => setStaffTime(index, "time_in", nowMinute())} className="mt-2 rounded border border-gray-300 dark:border-gray-700 px-2 py-1 text-xs">
-                                In now
-                              </button>
-                            )}
-                          </div>
-                          <div>
-                            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Time out</div>
-                            {row.time_out != null ? (
-                              <div className="flex items-end gap-1">
-                                {staffTimeInput(index, "time_out", row.time_out)}
-                                <button type="button" onClick={() => setStaffTime(index, "time_out", null)} className="mb-3 text-xs text-gray-500 hover:text-red-600" title="Clear time out">
-                                  Clear
-                                </button>
-                              </div>
-                            ) : (
-                              <button type="button" onClick={() => setStaffTime(index, "time_out", nowMinute())} className="mt-2 rounded border border-gray-300 dark:border-gray-700 px-2 py-1 text-xs">
-                                Out now
-                              </button>
-                            )}
-                          </div>
-                          {row.time_in != null && row.time_out != null && row.time_out < row.time_in ? (
-                            <div className="mb-3 text-xs text-red-600 dark:text-red-400">Time out is before time in</div>
-                          ) : null}
-                        </div>
                         </div>
                       ))}
                     </div>

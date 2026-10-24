@@ -3,6 +3,7 @@ import { readStoredAuthToken } from "./authApi";
 import { wardHeaders } from "./wardSelection";
 import type { AdmissionPatient } from "./admissionApi";
 import type { StaffRoleRow } from "./staffDirectoryApi";
+import type { TransferBed } from "./wardApi";
 
 /** Canopy → OR schedule: sessions (admissions booked into OR rooms) and their OR-ward journey. */
 
@@ -14,6 +15,7 @@ export type OrConflict = { kind: "room" | "staff"; with: string; staff_code?: st
 export type SessionDetails = {
   diagnosis?: string | null; operation?: string | null; anaesthesia_technique?: string | null; asa_status?: string | null;
   asa_emergency?: boolean; surgical_priority?: string | null; surgeon?: string | null; workflow_id?: string | null;
+  surgeon_code?: string | null; anaesthetist?: string | null; anaesthetist_code?: string | null;
   position?: string | null; source_ward?: string | null; post_op_ward?: string | null; emergency?: boolean;
 };
 export type OrSession = {
@@ -89,6 +91,16 @@ export const requestOrDischarge = (id: string, destination: string, note: string
   request<{ row: OrSession }>(`${OR}/sessions/${encodeURIComponent(id)}/discharge`, { method: "POST", body: JSON.stringify({ destination, note }) });
 /** Where a patient goes when leaving the OR ward. */
 export const DESTINATIONS = ["ICU", "IPD ward", "Home", "Other hospital", "Other"];
+/** Transfer without discharge: beds of the ward, the running case and a transfer waiting for Receive. */
+export type SessionTransferOptions = {
+  case: { leaf_id: string; bed_label?: string | null } | null;
+  pending: { handover_id: number; kind: "transfer" | "bed_move"; to_leaf_id: string; to_bed_label?: string | null; initiated_from?: string | null; requested_by?: string | null; created_at: number } | null;
+  beds: TransferBed[];
+};
+export const getOrTransferOptions = (id: string) => request<SessionTransferOptions>(`${OR}/sessions/${encodeURIComponent(id)}/transfer`);
+export const requestOrTransfer = (id: string, bedId: number) =>
+  request<{ row: OrSession; kind: "transfer" | "bed_move"; warning: string | null }>(`${OR}/sessions/${encodeURIComponent(id)}/transfer`, { method: "POST", body: JSON.stringify({ bed_location_id: bedId }) });
+export const withdrawOrTransfer = (id: string) => request<{ row: OrSession }>(`${OR}/sessions/${encodeURIComponent(id)}/transfer/withdraw`, { method: "POST", body: "{}" });
 export const restoreOrSession = (id: string) => request<{ row: OrSession }>(`${OR}/sessions/${encodeURIComponent(id)}/restore`, { method: "POST", body: "{}" });
 export const saveOrRoom = (id: number, body: { room_type: string | null; or_type_code: string | null }) =>
   request<{ id: number }>(`/api/fleet/control/or/rooms/${id}`, { method: "PUT", body: JSON.stringify(body) });

@@ -109,7 +109,7 @@ export default function CanopyStaffView({ sessionUser }: { sessionUser: AuthUser
   }, "Import finished.");
 
   return (
-    <div className="app-theme-scope mx-auto max-w-[1500px] space-y-4 p-4 pb-24 text-[var(--app-text)]">
+    <div className="app-theme-scope w-full space-y-4 p-3 sm:p-5 pb-24 text-[var(--app-text)]">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">ESM Flora Canopy · master data</div>

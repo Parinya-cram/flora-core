@@ -160,7 +160,9 @@ def staff_values(db,payload,old=None):
     if not values["staff_name"]:
         raise HTTPException(400,"staff name required")
     profile["display_name"]=values["staff_name"]
-    entry=number(mapped.get("entry_year",source.get("entry_year",old.get("entry_year"))),"entry_year",1900)
+    entry=mapped.get("entry_year",source.get("entry_year",old.get("entry_year")))
+    # Older clients sent 0 for "no entry year".
+    entry=number(None if entry in (0,"0") else entry,"entry_year",1900)
     values["entry_year"]=int(entry) if entry else None
     values["profile_data"]=Jsonb(profile)
     return values

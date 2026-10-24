@@ -1,4 +1,4 @@
-import type { AxisStepMin } from "../views/clinical-chart/constants";
+import { AXIS_STEPS, type AxisStepMin } from "../views/clinical-chart/constants";
 
 /** Brand shown in the header, the sign-in page and the browser tab. */
 export const BRAND_NAME = "ESM Flora";
@@ -30,7 +30,7 @@ const EDITION_CONFIG: Record<FloraEditionCode, EditionInfo> = {
     productName: "Flora",
     displayName: "Flora",
     shortBadge: "",
-    allowedTimelineScales: [1, 120],
+    allowedTimelineScales: [...AXIS_STEPS],
     allowedReportModes: ["standard", "smart_fit", "detail"],
   },
   rcat: {
@@ -132,13 +132,21 @@ export function getEditionInfo(): EditionInfo {
   return EDITION_CONFIG[code];
 }
 
+/** Scale picker options: the chart steps within the edition's min..max. */
+export function editionTimelineScaleOptions(allowedTimelineScales: AxisStepMin[]): AxisStepMin[] {
+  const minimum = Math.min(...allowedTimelineScales);
+  const maximum = Math.max(...allowedTimelineScales);
+  return AXIS_STEPS.filter(step => step >= minimum && step <= maximum);
+}
+
+/** Snaps a stored/preferred scale to the nearest picker option (ties go to the finer one). */
 export function clampEditionTimelineScale(
   value: AxisStepMin,
   allowedTimelineScales: AxisStepMin[],
 ): AxisStepMin {
-  const minimum = Math.min(...allowedTimelineScales);
-  const maximum = Math.max(...allowedTimelineScales);
-  return Math.min(maximum, Math.max(minimum, Number.isFinite(value) ? Math.round(value) : minimum));
+  const options = editionTimelineScaleOptions(allowedTimelineScales);
+  if (!Number.isFinite(value)) return options[0];
+  return options.reduce((best, step) => (Math.abs(step - value) < Math.abs(best - value) ? step : best), options[0]);
 }
 
 export function clampEditionReportMode(
