@@ -1,0 +1,4 @@
+# Site data written by the installers: never commit.
+backups/
+last-answers.env
+windows/dist/
