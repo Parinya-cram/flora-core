@@ -1,4 +1,4 @@
-import type { DeviceBindingInput } from "../../api/caseApi";
+import type { ActiveCase, DeviceBindingInput } from "../../api/caseApi";
 import type { GatewayLink, WardBed } from "../../api/wardApi";
 
 /** The bed a session is being started at, from the Ward page's bed board to the start page (one hand-off). */
@@ -33,4 +33,14 @@ export function bedBindings(bed: WardBed, links: readonly GatewayLink[]): { devi
     else unlinked.push(device.label || device.device_id);
   }
   return { devices, unlinked };
+}
+
+/** Each bed's session (its active case) and the active cases that match no bed. */
+export function placeCases(beds: readonly WardBed[], cases: readonly ActiveCase[]): { byBed: Map<number, ActiveCase>; loose: ActiveCase[] } {
+  const byBed = new Map<number, ActiveCase>(), used = new Set<number>();
+  for (const bed of beds) {
+    const found = cases.find(item => !used.has(item.case_id) && bedMatches(bed, item.bed_label));
+    if (found) { byBed.set(bed.bed_location_id, found); used.add(found.case_id); }
+  }
+  return { byBed, loose: cases.filter(item => !used.has(item.case_id)) };
 }

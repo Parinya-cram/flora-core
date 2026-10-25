@@ -17,7 +17,8 @@ import type { WorklistCase } from "../api/workflowApi";
 import { useCaseWorklist } from "../components/workflow/caseWorklist";
 import WorklistBadge from "../components/workflow/WorklistBadge";
 import BedBoard from "../components/ward/BedBoard";
-import { bedBindings, setBedSessionPreset } from "../components/ward/bedSession";
+import BedDialog from "../components/ward/BedDialog";
+import { bedBindings, placeCases, setBedSessionPreset } from "../components/ward/bedSession";
 
 type Props = {
   caseStatus: CaseStatus;
@@ -168,6 +169,7 @@ export default function WardView({ caseStatus, activeCases, sessionUser, onOpenC
   const [transferFor, setTransferFor] = useState<ActiveCase | null>(null);
   const [receiving, setReceiving] = useState<WardTransfer | null>(null);
   const [notice, setNotice] = useState("");
+  const [bedView, setBedView] = useState<number | null>(null);
   const permissions = sessionUser?.permissions || [];
   const canConfigure = permissions.includes("config.manage");
   const canStart = permissions.includes("case.create");
@@ -333,7 +335,7 @@ export default function WardView({ caseStatus, activeCases, sessionUser, onOpenC
           {tab === "active" && data?.beds?.length ? <div className="mb-4">
             <BedBoard beds={data.beds} cases={hereCases} gateways={data.gateways} leafId={data.leaf.id} openCaseId={openCaseId}
               linkedGateways={new Set((links || []).map(link => link.gateway_id).filter((id): id is string => Boolean(id)))}
-              canStart={canStart} onOpen={caseId => onOpenCase(caseId)} onStart={startAtBed} />
+              canStart={canStart} onOpen={caseId => onOpenCase(caseId)} onStart={startAtBed} onView={bed => setBedView(bed.bed_location_id)} />
           </div> : null}
           {tab === "active" ? <div className="space-y-2">
             {[...hereCases].sort((a, b) => String(a.bed_label || "~").localeCompare(String(b.bed_label || "~"), undefined, { numeric: true }) || a.start_time - b.start_time).map(item => (
@@ -474,6 +476,17 @@ export default function WardView({ caseStatus, activeCases, sessionUser, onOpenC
     </div> : null}
 
     {wizardOpen && data ? <GatewayWizard overview={data} onClose={() => { setWizardOpen(false); void load(); }} /> : null}
+    {bedView != null && data?.beds?.some(bed => bed.bed_location_id === bedView) ? (() => {
+      const bed = data.beds!.find(item => item.bed_location_id === bedView)!;
+      return <BedDialog bed={bed} beds={data.beds!} occupant={placeCases(data.beds!, hereCases).byBed.get(bed.bed_location_id)}
+        gateways={data.gateways} leafId={data.leaf.id}
+        linkedGateways={new Set((links || []).map(link => link.gateway_id).filter((id): id is string => Boolean(id)))}
+        canStart={canStart} canConfigure={canConfigure}
+        onOpen={caseId => { setBedView(null); onOpenCase(caseId); }}
+        onStart={target => { setBedView(null); startAtBed(target); }}
+        onSaved={() => { window.setTimeout(() => void load(), 2500); window.setTimeout(() => void load(), 8000); }}
+        onClose={() => setBedView(null)} />;
+    })() : null}
     {linksOpen && data ? <GatewayLinksDialog gateways={data.gateways} onClose={() => { setLinksOpen(false); void load(); }} /> : null}
     {transferFor && data ? <TransferDialog item={transferFor} leafId={data.leaf.id} onClose={() => setTransferFor(null)}
       onDone={() => { setTransferFor(null); void load(); void onCaseChanged(); }} /> : null}

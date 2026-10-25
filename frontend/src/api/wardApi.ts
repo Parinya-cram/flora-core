@@ -216,6 +216,9 @@ const post = <T,>(path: string, body: unknown) => request<T>(path, { method: "PO
 
 export const getWardOverview = () => request<WardOverview>("/overview");
 export const requestWardSync = () => request<{ requested_at: number }>("/sync", { method: "POST" });
+/** The devices fixed at one of this Leaf's beds, saved in Canopy (needs config.manage). */
+export const setBedDevices = (bedLocationId: number, devices: WardBedDevice[]) =>
+  request<{ bed: WardBed }>(`/beds/${bedLocationId}/devices`, { method: "PUT", body: JSON.stringify({ devices }) });
 export const takeOverCase = (globalCaseId: string, moveDevices: boolean) =>
   post<HandoverResult>("/handover", { global_case_id: globalCaseId, move_devices: moveDevices });
 /** Receive a transfer offered to this Leaf: the chart continues here, on this bed, with these devices. */

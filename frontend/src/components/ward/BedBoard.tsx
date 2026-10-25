@@ -1,17 +1,17 @@
 import type { ActiveCase } from "../../api/caseApi";
 import type { GatewayDevice, RegisteredGateway, WardBed, WardBedDevice } from "../../api/wardApi";
 import { useLanguage } from "../../context/LanguageContext";
-import { bedMatches } from "./bedSession";
+import { placeCases } from "./bedSession";
 
 const TEXT = {
   en: {
-    title: "Beds and sessions", hint: "One session per bed: the patient there and the bed's devices. Tap a bed to open its session.",
+    title: "Beds and sessions", hint: "One session per bed: the patient there and the bed's devices. Tap a bed to see it.",
     free: "Free", start: "Start session", open: "Open session", started: "started", noDevices: "No devices placed at this bed",
     devices: "devices", bound: "bound", offline: "offline", otherLeaf: "set for another Leaf", noLink: "no link to its gateway",
     primary: "this workstation's bed", other: "Sessions without a bed",
   },
   th: {
-    title: "เตียงและ session", hint: "หนึ่งเตียงมีหนึ่ง session คือผู้ป่วยที่เตียงนั้นกับอุปกรณ์ของเตียง แตะที่เตียงเพื่อเข้า session",
+    title: "เตียงและ session", hint: "หนึ่งเตียงมีหนึ่ง session คือผู้ป่วยที่เตียงนั้นกับอุปกรณ์ของเตียง แตะที่เตียงเพื่อเข้าดู",
     free: "ว่าง", start: "เริ่ม session", open: "เข้า session", started: "เริ่ม", noDevices: "ยังไม่มีอุปกรณ์ประจำเตียงนี้",
     devices: "อุปกรณ์", bound: "เชื่อมแล้ว", offline: "ออฟไลน์", otherLeaf: "ถูกตั้งให้ Leaf อื่น", noLink: "ยังไม่ได้เชื่อม Gateway นี้",
     primary: "เตียงหลักของเครื่องนี้", other: "Session ที่ยังไม่ระบุเตียง",
@@ -29,6 +29,8 @@ type Props = {
   canStart: boolean;
   onOpen: (caseId: number) => void;
   onStart: (bed: WardBed) => void;
+  /** Opens the bed's own view (its session and devices). */
+  onView: (bed: WardBed) => void;
 };
 
 const since = (ms: number) => {
@@ -37,17 +39,10 @@ const since = (ms: number) => {
 };
 
 /** The Leaf's beds as a board: a free bed starts a session there, an occupied bed opens its session. */
-export default function BedBoard({ beds, cases, gateways, linkedGateways, leafId, openCaseId, canStart, onOpen, onStart }: Props) {
+export default function BedBoard({ beds, cases, gateways, linkedGateways, leafId, openCaseId, canStart, onOpen, onStart, onView }: Props) {
   const { language } = useLanguage();
   const L = TEXT[language === "th" ? "th" : "en"];
-  const placed = new Set<number>();
-  const caseOf = (bed: WardBed) => {
-    const found = cases.find(item => !placed.has(item.case_id) && bedMatches(bed, item.bed_label));
-    if (found) placed.add(found.case_id);
-    return found;
-  };
-  const occupant = new Map(beds.map(bed => [bed.bed_location_id, caseOf(bed)]));
-  const loose = cases.filter(item => !placed.has(item.case_id));
+  const { byBed: occupant, loose } = placeCases(beds, cases);
   const device = (wanted: WardBedDevice): { info?: GatewayDevice; online: boolean; problem?: string } => {
     const gateway = gateways.find(item => item.gateway_id === wanted.gateway_id);
     const info = gateway?.devices.find(item => item.device_id === wanted.device_id);
@@ -67,9 +62,8 @@ export default function BedBoard({ beds, cases, gateways, linkedGateways, leafId
         const item = occupant.get(bed.bed_location_id);
         const open = item && item.case_id === openCaseId;
         const bound = item ? item.devices.filter(binding => !binding.released_at).length : 0;
-        const act = () => (item ? onOpen(item.case_id) : canStart ? onStart(bed) : undefined);
-        return <article key={bed.bed_location_id} role="button" tabIndex={0} onClick={act}
-          onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); act(); } }}
+        return <article key={bed.bed_location_id} role="button" tabIndex={0} onClick={() => onView(bed)}
+          onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onView(bed); } }}
           aria-label={`${bed.bed_name}: ${item ? item.patient_name || item.hn : L.free}`}
           className={`flex min-h-36 cursor-pointer flex-col gap-2 rounded-2xl border p-3 text-left transition hover:border-[var(--app-accent)]
             ${item ? "border-[var(--app-border)] bg-[var(--app-panel-bg)]" : "border-dashed border-[var(--app-border)] bg-[var(--app-control-bg)]"}
@@ -102,8 +96,10 @@ export default function BedBoard({ beds, cases, gateways, linkedGateways, leafId
             })}
           </ul> : <div className="text-[11px] text-[var(--app-muted)]">{L.noDevices}</div>}
           <div className="mt-auto flex justify-end">
-            {item ? <span className="rounded-lg border border-[var(--app-accent)] px-3 py-1 text-xs font-bold text-[var(--app-accent)]">{L.open}</span>
-              : canStart ? <span className="rounded-lg bg-[var(--app-accent)] px-3 py-1 text-xs font-bold text-[var(--app-accent-contrast)]">+ {L.start}</span> : null}
+            {item ? <button type="button" onClick={event => { event.stopPropagation(); onOpen(item.case_id); }}
+                className="rounded-lg border border-[var(--app-accent)] px-3 py-1 text-xs font-bold text-[var(--app-accent)]">{L.open}</button>
+              : canStart ? <button type="button" onClick={event => { event.stopPropagation(); onStart(bed); }}
+                className="rounded-lg bg-[var(--app-accent)] px-3 py-1 text-xs font-bold text-[var(--app-accent-contrast)]">+ {L.start}</button> : null}
           </div>
         </article>;
       })}

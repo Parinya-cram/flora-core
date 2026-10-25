@@ -450,6 +450,56 @@ def leaf_bed_move(payload: LeafBedMove, database: Connection = Depends(connectio
     return {"ok": True, "known": bool(index)}
 
 
+# ---------------------------------------------------------------- devices of a bed, set from its Leaf
+
+class BedDevice(BaseModel):
+    gateway_id: str = Field(min_length=1, max_length=120)
+    device_id: str = Field(min_length=1, max_length=120)
+    label: str | None = Field(default=None, max_length=200)
+    device_type: str | None = Field(default=None, max_length=80)
+
+
+class BedDevices(BaseModel):
+    leaf_id: str = Field(min_length=1, max_length=120)
+    bed_location_id: int
+    devices: list[BedDevice] = Field(default_factory=list, max_length=50)
+    actor: str | None = None
+
+
+@router.put("/beds/devices")
+def set_bed_devices(payload: BedDevices, database: Connection = Depends(connection)) -> dict[str, Any]:
+    """The devices fixed at one of this Leaf's beds (Canopy → Devices `bed_id`), chosen on the Leaf. A gateway
+    device not registered yet is registered (registry_status 'auto') in the bed's care unit."""
+    with database.transaction():
+        bed = next((row for row in case_transfer.leaf_beds(database, payload.leaf_id)
+                    if row["bed_location_id"] == payload.bed_location_id), None)
+        if bed is None:
+            raise HTTPException(403, "this Leaf does not look after that bed")
+        unit = database.execute(
+            """SELECT room.parent_id AS unit_id FROM canopy_location bed JOIN canopy_location room ON room.id = bed.parent_id
+               WHERE bed.id=%s""", (payload.bed_location_id,)).fetchone()
+        current, actor = now_ms(), f"leaf {payload.leaf_id}: {payload.actor or 'unknown'}"
+        wanted = {(item.gateway_id, item.device_id): item for item in payload.devices}
+        database.execute(
+            """UPDATE canopy_medical_device SET bed_id=NULL, updated_at=%s, updated_by=%s
+               WHERE bed_id=%s AND (gateway_id, gateway_device_id) NOT IN (SELECT * FROM unnest(%s::text[], %s::text[]))""",
+            (current, actor, payload.bed_location_id, [key[0] for key in wanted] or [""], [key[1] for key in wanted] or [""]))
+        for (gateway_id, device_id), item in wanted.items():
+            row = database.execute(
+                """UPDATE canopy_medical_device SET bed_id=%s, updated_at=%s, updated_by=%s
+                   WHERE gateway_id=%s AND gateway_device_id=%s RETURNING id""",
+                (payload.bed_location_id, current, actor, gateway_id, device_id)).fetchone()
+            if row is None:
+                database.execute(
+                    """INSERT INTO canopy_medical_device (display_name, device_type, unit_id, bed_id, registry_status, gateway_id,
+                         gateway_device_id, created_at, created_by, updated_at, updated_by)
+                       VALUES (%s,%s,%s,%s,'auto',%s,%s,%s,%s,%s,%s)""",
+                    (item.label or device_id, item.device_type, unit["unit_id"] if unit else None, payload.bed_location_id,
+                     gateway_id, device_id, current, actor, current, actor))
+    return {"bed": next(row for row in case_transfer.leaf_beds(database, payload.leaf_id)
+                        if row["bed_location_id"] == payload.bed_location_id)}
+
+
 # ---------------------------------------------------------------- Leaf picks its bed (Settings > Location)
 
 class LocationQuery(BaseModel):

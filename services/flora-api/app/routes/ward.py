@@ -545,6 +545,21 @@ def gateway_link_devices(link_id: int, online_window_sec: int = 30, _: dict = De
 
 # ---------------------------------------------------------------- Settings > Location from Canopy
 
+@router.put("/beds/{bed_location_id}/devices")
+def set_bed_devices(bed_location_id: int, payload: dict[str, Any] = Body(...), actor: dict = Depends(require_permission("config.manage")),
+                    database: Connection = Depends(connection)) -> dict:
+    """The devices fixed at one of this Leaf's beds, saved in Canopy; the bed board shows them after the next ward sync
+    (asked for here at once)."""
+    devices = [{key: item.get(key) for key in ("gateway_id", "device_id", "label", "device_type")}
+               for item in payload.get("devices") or [] if isinstance(item, dict)]
+    result = canopy("PUT", "/api/sync/v1/beds/devices", {"leaf_id": LEAF_ID, "bed_location_id": bed_location_id,
+                                                       "devices": devices, "actor": actor["username"]})
+    database.execute("""INSERT INTO leaf_sync_control (id, requested_at) VALUES (1, %s)
+                        ON CONFLICT (id) DO UPDATE SET requested_at = excluded.requested_at""", (now_ms(),))
+    database.commit()
+    return result
+
+
 @router.get("/locations")
 def canopy_locations(_: dict = Depends(require_permission("config.manage"))) -> dict:
     """Canopy's location tree for the Location settings pickers (503 when Canopy is unreachable)."""
