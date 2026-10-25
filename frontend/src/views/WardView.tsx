@@ -201,7 +201,7 @@ export default function WardView({ caseStatus, activeCases, sessionUser, onOpenC
   // A free bed on the bed board: start its session with the bed and its devices filled in.
   const startAtBed = (bed: WardBed) => {
     const { devices, unlinked } = bedBindings(bed, links || []);
-    setBedSessionPreset({ bedLabel: bed.bed_name, devices });
+    setBedSessionPreset({ bedLabel: bed.bed_name, roomName: bed.room_name, devices });
     if (unlinked.length) setNotice(`${L.unlinkedDevices}: ${unlinked.join(", ")}`);
     onNewCase();
   };

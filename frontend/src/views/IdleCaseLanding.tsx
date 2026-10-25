@@ -570,7 +570,7 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
                   </div>
                   <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] px-4 py-3">
                     <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">{t("landing.roomBed")}</div>
-                    <div className="mt-1 flex min-w-0 items-baseline gap-2 text-lg font-bold text-[var(--app-text)]"><span className="truncate">{workstation?.roomName || "—"}</span><span className="text-[var(--app-muted)]">·</span><span className="truncate text-[var(--app-accent)]">{workstation?.bedName || "—"}</span></div>
+                    <div className="mt-1 flex min-w-0 items-baseline gap-2 text-lg font-bold text-[var(--app-text)]"><span className="truncate">{(preset && bedLabel.trim() === preset.bedLabel ? preset.roomName : null) || workstation?.roomName || "—"}</span><span className="text-[var(--app-muted)]">·</span><span className="truncate text-[var(--app-accent)]">{bedLabel.trim() || workstation?.bedName || "—"}</span></div>
                   </div>
                 </div>
                 <div className="shrink-0 lg:text-right">

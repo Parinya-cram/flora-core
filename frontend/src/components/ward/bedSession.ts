@@ -2,7 +2,7 @@ import type { ActiveCase, DeviceBindingInput } from "../../api/caseApi";
 import type { GatewayLink, WardBed } from "../../api/wardApi";
 
 /** The bed a session is being started at, from the Ward page's bed board to the start page (one hand-off). */
-export type BedSessionPreset = { bedLabel: string; devices: DeviceBindingInput[] };
+export type BedSessionPreset = { bedLabel: string; roomName?: string | null; devices: DeviceBindingInput[] };
 
 let pending: BedSessionPreset | null = null;
 
