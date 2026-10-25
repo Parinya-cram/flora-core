@@ -30,6 +30,7 @@ services:
         required: false
     environment:
       FLORA_DATABASE_URL: postgresql://flora_app:${LEAF_DB_APP_PASSWORD}@leaf-db:5432/flora
+      FLORA_MIGRATION_DATABASE_URL: postgresql://flora_admin:${LEAF_DB_ADMIN_PASSWORD}@leaf-db:5432/flora
       FLORA_API_ENV: production
       FLORA_API_MODE: leaf
       FLORA_LEAF_WRITE_API: "true"
@@ -90,6 +91,7 @@ services:
         required: false
     environment:
       FLORA_DATABASE_URL: postgresql://flora_app:${LEAF_DB_APP_PASSWORD}@leaf-db:5432/flora
+      FLORA_MIGRATION_DATABASE_URL: postgresql://flora_admin:${LEAF_DB_ADMIN_PASSWORD}@leaf-db:5432/flora
       FLORA_API_MODE: leaf
       FLORA_LEAF_ID: ${FLORA_LEAF_ID}
       FLORA_HOSPITAL_ID: ${FLORA_HOSPITAL_ID}

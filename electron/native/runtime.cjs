@@ -145,6 +145,7 @@ async function prepareLeaf(node, appliance, baseDir) {
 function leafEnv(s) {
   return {
     FLORA_DATABASE_URL: `postgresql://flora_app:${s.passwords.FLORA_DB_APP_PASSWORD}@127.0.0.1:${s.dbPort}/flora`,
+    FLORA_MIGRATION_DATABASE_URL: `postgresql://flora_admin:${s.passwords.FLORA_DB_ADMIN_PASSWORD}@127.0.0.1:${s.dbPort}/flora`,
     FLORA_API_ENV: "production", FLORA_API_MODE: "leaf", FLORA_LEAF_WRITE_API: "true",
     FLORA_BOOTSTRAP_ADMIN_ENABLED: "true", FLORA_BOOTSTRAP_ADMIN_USERNAME: "admin", FLORA_BOOTSTRAP_ADMIN_PASSWORD: s.adminPassword,
     FLORA_BOOTSTRAP_ADMIN_MUST_CHANGE_PASSWORD: "true", FLORA_BOOTSTRAP_ADMIN_NAME: "Administrator",
