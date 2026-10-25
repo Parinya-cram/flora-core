@@ -1,4 +1,4 @@
-# Flora Gateway (Windows): builds the native serial-controller.exe (opens real COM ports).          # build serial-controller.exe สำหรับ Windows (เปิดพอร์ต COM จริง)
+﻿# Flora Gateway (Windows): builds the native serial-controller.exe (opens real COM ports).          # build serial-controller.exe สำหรับ Windows (เปิดพอร์ต COM จริง)
 # Needs Rust with the MSVC toolchain: https://rustup.rs + "Desktop development with C++" (VS Build Tools).  # ต้องติดตั้ง Rust (MSVC) และ Visual Studio Build Tools
 # Usage: .\windows\build-serial-controller.ps1                                                     # วิธีใช้
 $ErrorActionPreference = 'Stop'                                                                    # หยุดเมื่อมีข้อผิดพลาด

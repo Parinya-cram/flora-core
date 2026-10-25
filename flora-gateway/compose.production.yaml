@@ -30,9 +30,16 @@ x-serial-devices: &serial-devices                       # รายการพ�
   # เพิ่มพอร์ตจริง (เช่น USB-RS232) ให้เพิ่มบรรทัดแบบนี้:                                         # ตัวอย่างการเพิ่มพอร์ต USB
   # - /dev/serial/by-id/usb-FTDI_xxx-if00-port0:/dev/serial/by-id/usb-FTDI_xxx-if00-port0      # ใช้ชื่อถาวรจาก /dev/serial/by-id/
 
+x-logging: &logging                                     # หมุนเวียน log ของ Docker: กันดิสก์เต็มจาก log ที่โตไม่หยุด
+  driver: json-file                                     # รูปแบบ log มาตรฐานของ Docker
+  options:                                              # จำกัดขนาด
+    max-size: "10m"                                     # ไฟล์ละไม่เกิน 10 MB
+    max-file: "3"                                       # เก็บ 3 ไฟล์ต่อ service (สูงสุด ~30 MB)
+
 services:                                               # รายการ service ทั้งหมด
   # ------------------------------------------------------------------------------------------ # ส่วนเก็บข้อมูลกลาง
   kafka:                                                # ท่อส่งข้อความกลางระหว่างทุก service
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
     image: apache/kafka:3.9.1                           # image ของ Kafka
     environment:                                        # ค่าตั้ง Kafka (โหมด KRaft เครื่องเดียว)
       KAFKA_NODE_ID: 1                                  # หมายเลข node
@@ -50,6 +57,7 @@ services:                                               # รายการ ser
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"           # สร้าง topic อัตโนมัติ (gw.raw.<pod> ฯลฯ)
       KAFKA_NUM_PARTITIONS: 1                           # 1 partition ต่อ topic
       KAFKA_LOG_RETENTION_HOURS: 72                     # เก็บข้อความ 72 ชั่วโมง
+      KAFKA_LOG_DIRS: /var/lib/kafka/data               # เก็บข้อมูล Kafka ใน volume kafka_data (ไม่หายเมื่อสร้าง container ใหม่)
       KAFKA_HEAP_OPTS: -Xmx512m -Xms256m                # จำกัดหน่วยความจำ Java ของ Kafka
     ports:                                              # พอร์ตที่เปิดบนเครื่อง
       - "127.0.0.1:${FLORA_GATEWAY_KAFKA_PORT:-7414}:9094"   # Kafka สำหรับตรวจสอบ (เฉพาะเครื่องนี้)
@@ -64,6 +72,7 @@ services:                                               # รายการ ser
     restart: unless-stopped                             # ล่มแล้วเริ่มใหม่เอง
 
   gateway-db:                                           # ฐานข้อมูล PostgreSQL ของ gateway
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
     image: postgres:17.6-alpine                         # image ของ PostgreSQL
     environment:                                        # ค่าตั้งฐานข้อมูล
       POSTGRES_DB: flora_gateway                        # ชื่อฐานข้อมูล
@@ -84,6 +93,7 @@ services:                                               # รายการ ser
 
   # ------------------------------------------------------------------------------------------ # ด่านตรวจพอร์ตจริง
   port-guard:                                           # ตรวจ config ก่อนทุกครั้ง: serial pod ต้องเป็นพอร์ตจริงเท่านั้น
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
     image: alpine:3.20                                  # image ขนาดเล็กสำหรับรันสคริปต์ตรวจ
     devices: *serial-devices                            # map พอร์ตจริงชุดเดียวกับ serial-controller เพื่อตรวจว่ามีอยู่จริง
     volumes:                                            # ไฟล์ที่ต้องตรวจ
@@ -106,6 +116,7 @@ services:                                               # รายการ ser
 
   # ------------------------------------------------------------------------------------------ # ชั้นรับข้อมูลจากเครื่องมือแพทย์ (Rust)
   serial-controller:                                    # อ่าน/เขียนพอร์ต RS-232 จริง
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
     <<: *rust                                           # ใช้แม่แบบ Rust
     command: ["serial-controller"]                      # โปรแกรมที่รัน
     environment:                                        # ตัวแปรของ serial-controller
@@ -119,12 +130,14 @@ services:                                               # รายการ ser
       port-guard: {condition: service_completed_successfully}   # รอด่านตรวจผ่าน (ถ้าพบพอร์ตเสมือน จะไม่ start)
 
   feeder-controller:                                    # ไปดึงข้อมูลจาก HTTP API ของเครื่องเป็นระยะ
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
     <<: *rust                                           # ใช้แม่แบบ Rust
     command: ["feeder-controller"]                      # โปรแกรมที่รัน
     ports:                                              # พอร์ตที่เปิดบนเครื่อง
       - "127.0.0.1:7402:5002"                           # สถานะของ feeder-controller (เฉพาะเครื่องนี้)
 
   webhook-controller:                                   # รับข้อมูลที่เครื่องส่งมาเองทาง HTTP POST
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
     <<: *rust                                           # ใช้แม่แบบ Rust
     command: ["webhook-controller"]                     # โปรแกรมที่รัน
     ports:                                              # พอร์ตที่เปิดบนเครื่อง
@@ -132,6 +145,7 @@ services:                                               # รายการ ser
       - "${FLORA_GATEWAY_WEBHOOK_PORT:-7423}:9003"      # พอร์ต LAN จริงที่เครื่องส่ง HTTP เข้ามา
 
   socket-controller:                                    # รับข้อมูลผ่าน LAN จริง (TCP/UDP)
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
     <<: *rust                                           # ใช้แม่แบบ Rust
     command: ["socket-controller"]                      # โปรแกรมที่รัน
     ports:                                              # พอร์ต LAN จริงที่เครื่องมือแพทย์ต่อเข้ามา
@@ -143,6 +157,7 @@ services:                                               # รายการ ser
 
   # ------------------------------------------------------------------------------------------ # ชั้นแปลงข้อมูล (Python)
   parser-image:                                         # build image ของ parser (gateway-service สร้าง parser ต่อ device จาก image นี้)
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
     build:                                              # วิธี build
       context: ./python/device-medical-service          # ซอร์สโค้ดของ parser
     image: ${FLORA_IMAGE_PARSER:-flora-gateway-parser:dev}   # ชื่อ image ของ parser
@@ -151,6 +166,7 @@ services:                                               # รายการ ser
 
   # ------------------------------------------------------------------------------------------ # ชั้นเก็บและให้บริการข้อมูล (Rust)
   collector:                                            # บันทึกค่าที่แปลงแล้วลงฐานข้อมูล
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
     <<: *rust                                           # ใช้แม่แบบ Rust
     command: ["collector"]                              # โปรแกรมที่รัน
     ports:                                              # พอร์ตที่เปิดบนเครื่อง
@@ -160,6 +176,7 @@ services:                                               # รายการ ser
       gateway-db: {condition: service_healthy}          # รอฐานข้อมูลพร้อม
 
   server:                                               # API อ่านค่าที่วัดได้ (ให้ kong/Leaf)
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
     <<: *rust                                           # ใช้แม่แบบ Rust
     command: ["server"]                                 # โปรแกรมที่รัน
     depends_on:                                         # ต้องรอก่อน start
@@ -171,12 +188,14 @@ services:                                               # รายการ ser
       retries: 10                                       # ล้มเหลว 10 ครั้งจึงถือว่า unhealthy
 
   publisher:                                            # ส่งค่าออกไปยังระบบปลายทาง (ถ้าตั้งไว้)
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
     <<: *rust                                           # ใช้แม่แบบ Rust
     command: ["publisher"]                              # โปรแกรมที่รัน
     ports:                                              # พอร์ตที่เปิดบนเครื่อง
       - "127.0.0.1:7406:5006"                           # สถานะของ publisher (เฉพาะเครื่องนี้)
 
   kong:                                                 # ประตู data-api ให้ Leaf ดึงข้อมูล (แยกตาม Leaf)
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
     image: kong:3.9                                     # image ของ Kong
     environment:                                        # ค่าตั้ง Kong
       KONG_DATABASE: "off"                              # ไม่ใช้ฐานข้อมูล (อ่าน route จากไฟล์)
@@ -201,6 +220,7 @@ services:                                               # รายการ ser
 
   # ------------------------------------------------------------------------------------------ # ส่วนควบคุมและหน้า admin
   gateway-service:                                      # หน้า admin, สร้าง parser ต่อ device, check-in Canopy, ไลเซนส์, alert
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
     build:                                              # วิธี build
       context: ./python/gateway-service                 # ซอร์สโค้ดของ gateway-service
     image: ${FLORA_IMAGE_SERVICE:-flora-gateway-service:dev}   # ชื่อ image
@@ -219,6 +239,7 @@ services:                                               # รายการ ser
       GATEWAY_DATA_API_URL: ${GATEWAY_DATA_API_URL:-http://host.docker.internal:7410/data-api}   # data-api ที่แจ้งให้ Leaf ใช้
       HABER_GATEWAY_TOKEN: ${HABER_GATEWAY_TOKEN:-haber-gateway-demo-token}           # token ของ gateway กับ Haber
       GATEWAY_LICENSE_REQUIRED: ${GATEWAY_LICENSE_REQUIRED:-true}                     # ต้องมีไลเซนส์จึงเพิ่ม device ได้
+      GATEWAY_DATA_RETENTION_DAYS: ${GATEWAY_DATA_RETENTION_DAYS:-30}               # เก็บค่าวัดกี่วัน (0 = ไม่ลบ)
       GATEWAY_SYNC_INTERVAL_SEC: ${GATEWAY_SYNC_INTERVAL_SEC:-20}                     # check-in ทุก 20 วินาที
       GATEWAY_ADMIN_KEY: ${GATEWAY_ADMIN_KEY:-}         # key สำหรับเรียก API แบบสคริปต์ (ถ้าตั้ง)
       GATEWAY_ADMIN_USERNAME: ${GATEWAY_ADMIN_USERNAME:-admin}   # ผู้ใช้ admin เริ่มต้น
@@ -243,6 +264,7 @@ services:                                               # รายการ ser
     restart: unless-stopped                             # ล่มแล้วเริ่มใหม่เอง
 
   updater:                                              # อัปเดต gateway ตาม release ที่อนุมัติใน Canopy
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
     build:                                              # วิธี build
       context: ../flora-updater                         # ซอร์สโค้ดของ updater
     image: ${FLORA_IMAGE_UPDATER:-flora-updater:dev}    # ชื่อ image
@@ -267,6 +289,7 @@ services:                                               # รายการ ser
     restart: unless-stopped                             # ล่มแล้วเริ่มใหม่เอง
 
   edge:                                                 # ทางเข้า HTTPS (หน้า admin และ data-api)
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
     image: nginx:1.27-alpine                            # image ของ nginx
     ports:                                              # พอร์ตที่เปิดบนเครื่อง
       - "${GATEWAY_HTTPS_PORT:-443}:443"                # HTTPS

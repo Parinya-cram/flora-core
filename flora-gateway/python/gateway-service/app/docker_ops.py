@@ -11,6 +11,7 @@ NATIVE = os.getenv("FLORA_GATEWAY_RUNTIME", "docker") == "native"
 if not NATIVE:
     import docker
     from docker.errors import DockerException, ImageNotFound, NotFound
+    from docker.types import LogConfig
 
 from . import settings
 
@@ -50,6 +51,8 @@ def start_parser(instance: dict[str, Any], device_type: dict[str, Any]) -> str:
         detach=True,
         network=settings.DOCKER_NETWORK,
         restart_policy={"Name": "unless-stopped"},
+        log_config=LogConfig(type="json-file", config={"max-size": settings.PARSER_LOG_MAX_SIZE,
+                                                        "max-file": settings.PARSER_LOG_MAX_FILE}),
         environment={
             "FLORA_KAFKA_BROKERS": settings.KAFKA_BROKERS,
             "DEVICE_ID": instance["device_id"],
@@ -78,6 +81,8 @@ def start_pod_parser(pod: str, image: str, device_map: list[dict[str, Any]], con
         detach=True,
         network=settings.DOCKER_NETWORK,
         restart_policy={"Name": "unless-stopped"},
+        log_config=LogConfig(type="json-file", config={"max-size": settings.PARSER_LOG_MAX_SIZE,
+                                                        "max-file": settings.PARSER_LOG_MAX_FILE}),
         environment={
             "FLORA_KAFKA_BROKERS": settings.KAFKA_BROKERS,
             "POD_DEMUX": "1",
@@ -124,9 +129,17 @@ def image_tags(container) -> list[str]:
         return []
 
 
+def image_id(reference: str) -> str | None:
+    """ID of the local image a tag points to now (it moves when a tag such as :dev is rebuilt)."""
+    try:
+        return client().images.get(reference).id
+    except (ImageNotFound, DockerException):
+        return None
+
+
 def _state(container) -> dict[str, Any]:
     return {"container": container.name, "status": container.status, "image": image_tags(container),
-            "image_ref": container.attrs["Config"]["Image"]}
+            "image_ref": container.attrs["Config"]["Image"], "image_id": container.attrs["Image"]}
 
 
 def parser_states() -> dict[str, dict[str, Any]]:
@@ -214,7 +227,7 @@ def service_states() -> dict[str, str]:
 
 
 __all__ = ["start_parser", "stop_parser", "parser_states", "start_pod_parser", "stop_pod_parser", "pod_parser_states",
-           "pod_parser_name", "restart_service", "stop_service", "start_service",
+           "pod_parser_name", "image_id", "restart_service", "stop_service", "start_service",
            "service_states", "service_wiring", "ImageNotFound", "DockerException"]
 
 if NATIVE:   # the same names, run as processes (replaces every definition above)

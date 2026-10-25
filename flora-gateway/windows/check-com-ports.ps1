@@ -1,4 +1,4 @@
-# Flora Gateway (Windows): verifies every serial pod in the config is a PHYSICAL COM port.            # ตรวจว่า serial pod ทุกตัวใน config เป็นพอร์ต COM จริง
+﻿# Flora Gateway (Windows): verifies every serial pod in the config is a PHYSICAL COM port.            # ตรวจว่า serial pod ทุกตัวใน config เป็นพอร์ต COM จริง
 # Rejects virtual/emulated ports (com0com, Eltima/VSPD, VSPE, other root-enumerated software ports). # ปฏิเสธพอร์ตเสมือน (com0com, Eltima/VSPD, VSPE และพอร์ตที่ซอฟต์แวร์สร้าง)
 # Usage: .\windows\check-com-ports.ps1 [-Config config\gateway.windows.toml]                      # วิธีใช้
 param(                                                                                             # รับพารามิเตอร์

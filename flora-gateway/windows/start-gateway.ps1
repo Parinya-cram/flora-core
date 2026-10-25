@@ -1,4 +1,4 @@
-# Flora Gateway (Windows 10/11): checks real COM ports, starts Docker services, then runs the native  # ตรวจพอร์ต COM จริง → start service ใน Docker → รัน serial-controller บน Windows
+﻿# Flora Gateway (Windows 10/11): checks real COM ports, starts Docker services, then runs the native  # ตรวจพอร์ต COM จริง → start service ใน Docker → รัน serial-controller บน Windows
 # serial-controller and restarts it whenever it exits (stop it to apply new pod settings).             # และ restart serial-controller ให้เองทุกครั้งที่หยุด (หยุดเพื่อให้ใช้ค่าพอร์ตใหม่)
 # Usage (PowerShell, from anywhere): .\windows\start-gateway.ps1 [-Build]                             # วิธีใช้ (-Build = build image/exe ใหม่ก่อน)
 param(                                                                                                 # รับพารามิเตอร์
@@ -33,14 +33,22 @@ if ($LASTEXITCODE -ne 0) { throw 'Docker Desktop is not running (enable "Start D
 
 # --- 3. everything except serial-controller in Docker -------------------------------------------------  # 3. start service ใน Docker
 $compose = @('compose', '-p', 'flora-gateway', '-f', 'compose.windows.yaml', 'up', '-d')               # คำสั่ง compose
-if ($Build) { $compose += '--build' }                                                                  # -Build = build image ใหม่
+$hasSource = Test-Path (Join-Path $root 'rust\Cargo.toml')                                             # มี source code ในโฟลเดอร์ไหม (ชุดติดตั้ง .exe ไม่มี)
+if ($Build -and $hasSource) { $compose += '--build' }                                                  # -Build = build image ใหม่ (เฉพาะเมื่อมี source)
+if (-not $hasSource) { $compose += '--no-build' }                                                      # ไม่มี source = ใช้ image ที่โหลดไว้แล้วเท่านั้น
 Log "docker $($compose -join ' ')"                                                                     # แจ้งคำสั่ง
 docker @compose                                                                                        # รัน compose
 if ($LASTEXITCODE -ne 0) { throw "docker compose failed ($LASTEXITCODE)" }                             # ไม่ผ่าน = หยุด
 
 # --- 4. native serial-controller --------------------------------------------------------------------  # 4. เตรียม serial-controller.exe
-$exe = Join-Path $root 'rust\target\release\serial-controller.exe'                                     # ตำแหน่งไฟล์ exe
-if ($Build -or -not (Test-Path $exe)) { & (Join-Path $PSScriptRoot 'build-serial-controller.ps1') }    # ยังไม่มีหรือสั่ง build = build ใหม่
+$exe = Join-Path $root 'windows\bin\serial-controller.exe'                                             # exe สำเร็จรูปที่มากับชุดติดตั้ง
+if (-not (Test-Path $exe) -or ($Build -and $hasSource)) {                                              # ไม่มี exe สำเร็จรูป หรือสั่ง build เอง
+    $exe = Join-Path $root 'rust\target\release\serial-controller.exe'                                # ตำแหน่ง exe ที่ build จาก source
+    if ($Build -or -not (Test-Path $exe)) {                                                            # ยังไม่มี หรือสั่ง build
+        if (-not $hasSource) { throw 'serial-controller.exe not found (windows\bin\) and no source to build it' }   # ไม่มีทั้ง exe และ source
+        & (Join-Path $PSScriptRoot 'build-serial-controller.ps1')                                      # build ใหม่
+    }                                                                                                  # จบการ build
+}                                                                                                      # จบการเลือก exe
 Log "waiting for Kafka on 127.0.0.1:$kafkaPort"                                                        # แจ้งสถานะ
 for ($i = 0; $i -lt 90; $i++) { if ((Test-NetConnection 127.0.0.1 -Port $kafkaPort -WarningAction SilentlyContinue).TcpTestSucceeded) { break }; Start-Sleep 2 }   # รอ Kafka สูงสุด 3 นาที
 

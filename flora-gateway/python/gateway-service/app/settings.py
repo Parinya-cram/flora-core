@@ -25,6 +25,12 @@ DATA_SERVER_URL = os.getenv("GATEWAY_DATA_SERVER_URL", "http://server:8080")
 DOCKER_NETWORK = os.getenv("GATEWAY_DOCKER_NETWORK", "flora-gateway_default")
 COMPOSE_PROJECT = os.getenv("GATEWAY_COMPOSE_PROJECT", "flora-gateway")
 PARSER_IMAGE = os.getenv("GATEWAY_PARSER_IMAGE", "flora-gateway-parser:dev")
+# Stored observations/measurements older than this are deleted (0 keeps everything). Leaf and Canopy hold the
+# clinical record; the gateway only needs a buffer for replay, the live view and troubleshooting.
+DATA_RETENTION_DAYS = int(os.getenv("GATEWAY_DATA_RETENTION_DAYS", "30"))
+# Docker log rotation for the parser containers this service starts (compose services set their own).
+PARSER_LOG_MAX_SIZE = os.getenv("GATEWAY_PARSER_LOG_MAX_SIZE", "10m")
+PARSER_LOG_MAX_FILE = os.getenv("GATEWAY_PARSER_LOG_MAX_FILE", "3")
 
 # Controller name → admin URL inside the gateway network.
 CONTROLLERS = {

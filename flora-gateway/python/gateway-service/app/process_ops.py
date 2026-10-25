@@ -82,6 +82,11 @@ def stop_parser(device_id: str) -> None:
             entry["process"].kill()
 
 
+def image_id(reference: str) -> str | None:
+    """No images in native mode: parsers run from the bundled runtime."""
+    return None
+
+
 def pod_parser_name(pod: str) -> str:
     return "flora-gw-parser-pod-" + re.sub(r"[^a-zA-Z0-9_.-]", "-", pod)
 
@@ -163,5 +168,5 @@ def service_states() -> dict[str, str]:
 
 
 __all__ = ["start_parser", "stop_parser", "parser_states", "start_pod_parser", "stop_pod_parser", "pod_parser_states",
-           "pod_parser_name", "restart_service", "stop_service", "start_service",
+           "pod_parser_name", "image_id", "restart_service", "stop_service", "start_service",
            "service_states", "service_wiring", "ImageNotFound", "DockerException"]

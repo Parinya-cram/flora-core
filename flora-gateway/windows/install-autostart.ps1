@@ -1,4 +1,4 @@
-# Flora Gateway (Windows 10/11): starts the gateway automatically when this user signs in.           # ตั้งให้ gateway เริ่มเองเมื่อผู้ใช้นี้ login
+﻿# Flora Gateway (Windows 10/11): starts the gateway automatically when this user signs in.           # ตั้งให้ gateway เริ่มเองเมื่อผู้ใช้นี้ login
 # Docker Desktop on Windows runs inside the user session, so the task runs at sign-in.               # Docker Desktop ทำงานใน session ของผู้ใช้ จึงต้องเริ่มตอน login
 # Usage: .\windows\install-autostart.ps1        (install)                                            # ติดตั้ง
 #        .\windows\install-autostart.ps1 -Remove (uninstall)                                         # ถอนการติดตั้ง

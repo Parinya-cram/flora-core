@@ -62,6 +62,7 @@ id = "icu-monitor"
 port = 9002
 framing = "raw"
 auto_ack = false
+transport = "tcp"
 
 [[socket.pods]]
 id = "m540-relay"

@@ -1,3 +1,5 @@
 __pycache__/
 .pytest_cache/
 rust/target/
+# Ready-made Windows binaries (built by install/windows/build-setup.sh)
+windows/bin/

@@ -99,6 +99,30 @@ async def background_loop() -> None:
 
 STATUS_SAMPLE_SEC = 30
 STATUS_RETENTION_MS = 7 * 86_400_000
+DATA_PURGE_BATCH = 20_000            # rows per delete, so the collector is never blocked for long
+
+
+def purge_old_data(now: int) -> dict[str, int]:
+    """Deletes stored observations and measurements older than GATEWAY_DATA_RETENTION_DAYS (0 = keep all)."""
+    if settings.DATA_RETENTION_DAYS <= 0:
+        return {}
+    cutoff = now - settings.DATA_RETENTION_DAYS * 86_400_000
+    removed: dict[str, int] = {}
+    for table in ("gateway_observation", "gateway_measurement"):
+        total = 0
+        while True:
+            with db.pool.connection() as connection:
+                count = connection.execute(
+                    f"DELETE FROM {table} WHERE id IN (SELECT id FROM {table} WHERE system_ts < %s LIMIT %s)",
+                    (cutoff, DATA_PURGE_BATCH)).rowcount
+            total += count
+            if count < DATA_PURGE_BATCH:
+                break
+        if total:
+            removed[table] = total
+    if removed:
+        log.info("retention (%s days): removed %s", settings.DATA_RETENTION_DAYS, removed)
+    return removed
 DEVICE_SILENT_MS = 120_000          # an enabled device with no data for this long counts as down
 CONTROLLER_LABELS = {"serial-controller": "Serial (RS-232)", "feeder-controller": "Feeder (HTTP poll)",
                      "webhook-controller": "Webhook (HTTP push)", "socket-controller": "Socket (TCP/UDP)",
@@ -178,6 +202,11 @@ async def status_sampler() -> None:
                     [(now, lane, state, detail) for lane, state, detail in rows])
                 if count % 120 == 0:
                     connection.execute("DELETE FROM gateway_status_sample WHERE ts < %s", (now - STATUS_RETENTION_MS,))
+            if count % 120 == 0:   # hourly (and once at start)
+                try:
+                    await asyncio.to_thread(purge_old_data, now)
+                except Exception as error:
+                    log.warning("data retention failed: %s", error)
             count += 1
         except Exception as error:
             log.warning("status sample failed: %s", error)
@@ -566,7 +595,12 @@ def reconcile() -> dict[str, Any]:
         if wanted and running and not upgraded:
             # A newly approved gateway release pins a new parser image: replace one parser per
             # cycle so a bad image takes down one device feed, not all of them at once.
-            if device_type and state.get("image_ref") and state["image_ref"] != device_type["image"]:
+            # Replace the parser when the type now names another image, or when that image tag was rebuilt
+            # (same name, new image ID) - otherwise a rebuilt parser image never reaches running devices.
+            current = docker_ops.image_id(device_type["image"]) if device_type else None
+            if device_type and state.get("image_ref") and (
+                    state["image_ref"] != device_type["image"]
+                    or (current and state.get("image_id") and state["image_id"] != current)):
                 try:
                     start_instance(instance["device_id"])
                     upgraded.append(instance["device_id"])
