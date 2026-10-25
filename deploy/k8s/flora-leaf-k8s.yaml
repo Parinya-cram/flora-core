@@ -139,6 +139,42 @@ spec:
   selector: { app: leaf-api }
   ports: [ { port: 8000, targetPort: 8000 } ]
 ---
+# Live stream (docs/live-stream/PROTOCOL.md): connects out to the gateway's stream-hub for every session's devices,
+# stores each second, and serves the screens (/api/live/ws through leaf-web).
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: leaf-live, namespace: flora-leaf }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: leaf-live } }
+  template:
+    metadata: { labels: { app: leaf-live } }
+    spec:
+      containers:
+        - name: leaf-live
+          image: flora-canopy-canopy-api:latest
+          imagePullPolicy: Never
+          command: ["uvicorn", "app.live.server:app", "--host", "0.0.0.0", "--port", "8000"]
+          env:
+            - { name: FLORA_DATABASE_URL, value: "postgresql://flora_app:admin@leaf-db:5432/flora" }
+            - { name: FLORA_MIGRATION_DATABASE_URL, value: "postgresql://flora_admin:admin@leaf-db:5432/flora" }
+            - { name: FLORA_API_MODE, value: "leaf" }
+            - { name: FLORA_LEAF_ID, value: "leaf-or-01" }
+            - { name: FLORA_HOSPITAL_ID, value: "hospital-01" }
+          ports: [ { containerPort: 8000 } ]
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata: { name: leaf-live, namespace: flora-leaf }
+spec:
+  selector: { app: leaf-live }
+  ports: [ { port: 8000, targetPort: 8000 } ]
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata: { name: leaf-web, namespace: flora-leaf }
@@ -154,6 +190,8 @@ spec:
           imagePullPolicy: Never
           env:
             - { name: API_UPSTREAM, value: "http://leaf-api:8000" }
+            - { name: NGINX_RESOLVER, value: "10.96.0.10" }   # cluster DNS (kube-dns)
+            - { name: LIVE_HOST, value: "leaf-live.flora-leaf.svc.cluster.local:8000" }
           ports: [ { containerPort: 80 } ]
 ---
 apiVersion: v1

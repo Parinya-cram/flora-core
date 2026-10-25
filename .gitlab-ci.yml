@@ -182,6 +182,7 @@ deploy-k8s:
     - kubectl -n flora-root   set image deploy/root-api   root-api=flora-root-root-api:$TAG
     - kubectl -n flora-appliance set image deploy/haber  haber=flora-canopy-haber:$TAG
     - kubectl -n flora-leaf   set image deploy/leaf-sync-worker leaf-sync-worker=flora-leaf-sync-worker:$TAG
+    - kubectl -n flora-leaf   set image deploy/leaf-live  leaf-live=flora-canopy-canopy-api:$TAG || echo "no leaf-live deployment yet"
     - kubectl -n flora-canopy rollout status deploy/canopy-api --timeout=300s
     - kubectl -n flora-canopy rollout status deploy/sync-api  --timeout=300s
     - kubectl -n flora-canopy rollout status deploy/canopy-web --timeout=300s
