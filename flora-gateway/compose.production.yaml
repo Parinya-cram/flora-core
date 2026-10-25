@@ -194,6 +194,16 @@ services:                                               # รายการ ser
     ports:                                              # พอร์ตที่เปิดบนเครื่อง
       - "127.0.0.1:7406:5006"                           # สถานะของ publisher (เฉพาะเครื่องนี้)
 
+  stream-hub:                                           # ส่งค่าสดรายวินาทีให้ Leaf ตาม session (docs/live-stream/PROTOCOL.md)
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
+    <<: *rust                                           # ใช้แม่แบบ Rust
+    command: ["stream-hub"]                             # โปรแกรมที่รัน
+    ports:                                              # พอร์ตที่เปิดบนเครื่อง
+      - "${FLORA_GATEWAY_STREAM_PORT:-7407}:7407"       # Leaf ต่อเข้ามาที่ ws://<gateway>:7407/stream/v1 (LAN)
+    depends_on:                                         # ต้องมี Kafka และฐานข้อมูลก่อน
+      kafka: {condition: service_healthy}               # อ่านค่าจาก Kafka
+      gateway-db: {condition: service_healthy}          # token ของ Leaf และบันทึกการผูกเคส
+
   kong:                                                 # ประตู data-api ให้ Leaf ดึงข้อมูล (แยกตาม Leaf)
     logging: *logging                                   # หมุนเวียน log (10 MB x 3)
     image: kong:3.9                                     # image ของ Kong
