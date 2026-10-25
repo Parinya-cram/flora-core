@@ -87,6 +87,19 @@ export type RegisteredGateway = {
 
 export type SyncComponent = { component: string; last_attempt_at?: number | null; last_ok_at?: number | null; last_error?: string | null };
 
+/** A device placed at a bed in Canopy (Devices → bed), as its gateway knows it. */
+export type WardBedDevice = { gateway_id: string; device_id: string; label?: string | null; device_type?: string | null; category?: string | null };
+/** A bed this Leaf looks after (Canopy → Topology → Physical). One session (patient) per bed. */
+export type WardBed = {
+  bed_location_id: number;
+  bed_name: string;
+  bed_code?: string | null;
+  room_name?: string | null;
+  room_type?: string | null;
+  is_primary: boolean;
+  devices: WardBedDevice[];
+};
+
 export type WardOverview = {
   leaf: { id: string; name: string };
   ward: { key?: string | null; name?: string | null };
@@ -99,6 +112,8 @@ export type WardOverview = {
   adopted?: string[] | null;   // device-type codes downloaded for this hospital; null = show all
   /** Multi-gateway Leaf (migration 0090); absent on older Leaf APIs. */
   gateway_links?: GatewayLink[] | null;
+  /** Beds this Leaf looks after; empty for a Leaf with one bed. Absent on older Leaf APIs. */
+  beds?: WardBed[];
   sync: { auto_interval_sec: number; requested_at?: number | null; ward_synced_at?: number | null; last_ok_at?: number | null; components: SyncComponent[] };
   /** Transfer (no discharge): offered to this Leaf, waiting for Receive. Absent on older Leaf APIs. */
   transfers_in?: WardTransfer[];

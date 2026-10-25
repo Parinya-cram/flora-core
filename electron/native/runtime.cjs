@@ -169,6 +169,9 @@ async function startLeaf(s, supervisor, log) {
   supervisor.start("leaf-api", PYTHON(), pythonApp(api, "app.main:app", "127.0.0.1", s.apiPort), { env, cwd: api, logDir });
   await waitFor(() => httpOk(`http://127.0.0.1:${s.apiPort}/health`), 180, "Leaf API");
   supervisor.start("leaf-sync", PYTHON(), pythonScript(sync, "sync_worker.pyc"), { env, cwd: sync, logDir });
+  // Live stream (docs/live-stream/PROTOCOL.md): gateway stream-hub -> stored seconds -> the screens.
+  if (!s.livePort) { s.livePort = await freePort(s.apiPort + 2); fs.writeFileSync(path.join(s.dir, "leaf.json"), JSON.stringify(s, null, 2)); }
+  supervisor.start("leaf-live", PYTHON(), pythonApp(api, "app.live.server:app", "127.0.0.1", s.livePort), { env, cwd: api, logDir });
   return `http://127.0.0.1:${s.apiPort}`;
 }
 

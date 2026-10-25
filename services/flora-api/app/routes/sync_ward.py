@@ -119,6 +119,7 @@ def ward(payload: WardExchange, database: Connection = Depends(connection)) -> d
                FROM canopy_case_handover WHERE (from_leaf_id = ANY(%s) OR to_leaf_id = ANY(%s)) AND created_at > %s
                ORDER BY created_at DESC LIMIT 20""", (leaf_ids, leaf_ids, current - 7 * 86_400_000)).fetchall()
         gateways = gateway_list(database)
+        my_beds = case_transfer.leaf_beds(database, payload.leaf_id)
     return {
         "unit": unit,
         "leaves": [{**leaf, "online": bool(leaf["last_seen"] and current - leaf["last_seen"] < ONLINE_MS),
@@ -130,6 +131,8 @@ def ward(payload: WardExchange, database: Connection = Depends(connection)) -> d
         "transfers_in": [row for row in offers if row["kind"] == "transfer" and row["to_leaf_id"] == payload.leaf_id],
         "transfers_out": [row for row in offers if row["kind"] == "transfer" and row["from_leaf_id"] == payload.leaf_id],
         "bed_moves": [row for row in offers if row["kind"] == "bed_move" and row["from_leaf_id"] == payload.leaf_id],
+        # The beds this Leaf looks after and the devices at each (one session per bed).
+        "my_beds": my_beds,
         # Workflow Studio: published workflows of this ward and their pinned Form Studio forms.
         "workflows": workflows.leaf_delivery(database, unit["key"] if unit else None),
         # The hospital's name and logo for printed reports and forms (hospital_profile.py).

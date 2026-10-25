@@ -42,6 +42,26 @@ def ward_beds(database: Connection, leaf_ids: list[str]) -> list[dict[str, Any]]
     return [{**row, "busy": busy.get(row["bed_location_id"])} for row in rows]
 
 
+def leaf_beds(database: Connection, leaf_id: str) -> list[dict[str, Any]]:
+    """The beds one Leaf looks after (its assigned bed first, then further beds), each with the gateway devices
+    placed at it (Canopy → Devices: a registered device with a bed and a gateway link). A Leaf runs one session
+    per bed; starting a session at a bed binds that bed's devices."""
+    beds = [row for row in ward_beds(database, [leaf_id]) if row["leaf_id"] == leaf_id]
+    if not beds:
+        return []
+    devices = database.execute(
+        """SELECT d.bed_id, d.gateway_id, d.gateway_device_id AS device_id, d.display_name AS label, d.device_type, d.category
+           FROM canopy_medical_device d
+           WHERE d.bed_id = ANY(%s) AND d.gateway_device_id IS NOT NULL AND d.status <> 'retired'
+           ORDER BY d.display_name""", ([bed["bed_location_id"] for bed in beds],)).fetchall()
+    by_bed: dict[int, list[dict[str, Any]]] = {}
+    for device in devices:
+        by_bed.setdefault(device.pop("bed_id"), []).append(device)
+    beds.sort(key=lambda bed: (not bed["is_primary"], bed["room_name"] or "", bed["bed_name"] or ""))
+    return [{key: bed[key] for key in ("bed_location_id", "bed_name", "bed_code", "room_name", "room_type", "is_primary")}
+            | {"devices": by_bed.get(bed["bed_location_id"], [])} for bed in beds]
+
+
 def bed_target(database: Connection, bed_location_id: int) -> dict[str, Any]:
     row = database.execute(
         """SELECT bed.id, bed.name, coalesce(assignment.leaf_id, leaf_bed.leaf_id) AS leaf_id

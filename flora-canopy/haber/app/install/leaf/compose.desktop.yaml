@@ -65,6 +65,33 @@ services:
       retries: 30
     restart: unless-stopped
 
+
+  # Live stream (docs/live-stream/PROTOCOL.md): connects out to each gateway's stream-hub, stores every second of
+  # the devices bound to a session, then serves it to the screens. Runs whether or not a screen is open.
+  leaf-live:
+    image: ${FLORA_IMAGE_API}
+    command: ["uvicorn", "app.live.server:app", "--host", "0.0.0.0", "--port", "8000"]
+    env_file:
+      - path: ./certs/trust.env
+        required: false
+    environment:
+      FLORA_DATABASE_URL: postgresql://flora_app:${LEAF_DB_APP_PASSWORD}@leaf-db:5432/flora
+      FLORA_API_MODE: leaf
+      FLORA_LEAF_ID: ${FLORA_LEAF_ID}
+      FLORA_HOSPITAL_ID: ${FLORA_HOSPITAL_ID}
+    ports:
+      - "127.0.0.1:${LEAF_LIVE_PORT:-7303}:8000"     # desktop app's live screens (loopback only)
+    volumes:
+      - ./certs:/etc/flora/certs:ro
+    depends_on:
+      leaf-api: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+
   leaf-sync:
     image: ${FLORA_IMAGE_SYNC}
     env_file:

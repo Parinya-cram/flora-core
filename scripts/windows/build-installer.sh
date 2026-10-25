@@ -15,9 +15,9 @@ sudo -n nerdctl run --rm -v "$ROOT_DIR/flora-gateway/rust:/src:ro" -v "$ROOT_DIR
     rustup target add x86_64-pc-windows-gnu >/dev/null
     # librdkafka's Windows SASL code needs the SSPI library (secur32) at link time.
     cd /src && RUSTFLAGS='-C link-arg=-lsecur32 -C link-arg=-lcrypt32' CARGO_TARGET_DIR=/target cargo build --release --locked --target x86_64-pc-windows-gnu \
-      -p serial-controller -p feeder-controller -p webhook-controller -p socket-controller -p collector -p server -p publisher
+      -p serial-controller -p feeder-controller -p webhook-controller -p socket-controller -p collector -p server -p publisher -p stream-hub
     mkdir -p /out/gateway-bin
-    for b in serial-controller feeder-controller webhook-controller socket-controller collector server publisher; do
+    for b in serial-controller feeder-controller webhook-controller socket-controller collector server publisher stream-hub; do
       cp /target/x86_64-pc-windows-gnu/release/\$b.exe /out/gateway-bin/; done
     cp /out/gateway-bin/serial-controller.exe /out/ && chown -R $UID_GID /out/serial-controller.exe /out/gateway-bin"
 

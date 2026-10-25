@@ -118,6 +118,15 @@ services:
     <<: *rust
     command: ["publisher"]
 
+
+  # Live stream to Leafs (docs/live-stream/PROTOCOL.md): Leafs connect here through the edge (/stream/v1).
+  stream-hub:
+    <<: *rust
+    command: ["stream-hub"]
+    depends_on:
+      kafka: {condition: service_healthy}
+      gateway-db: {condition: service_healthy}
+
   kong:
     image: ${FLORA_IMAGE_KONG}
     environment:

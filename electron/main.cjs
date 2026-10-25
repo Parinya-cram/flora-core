@@ -13,6 +13,7 @@ app.commandLine.appendSwitch("enable-print-browser");
 
 // Set by the first-run setup (flora-node.json): the Leaf API this machine runs, on loopback.
 let API_BASE_URL = String(process.env.FLORA_API_BASE_URL || "http://127.0.0.1:6893").replace(/\/+$/, "");
+let LIVE_BASE_URL = "";   // the installed Leaf's leaf-live; empty: the screens use API_BASE_URL
 const EDITION_CODE = String(process.env.FLORA_EDITION || packageJson.floraEdition || "full").toLowerCase();
 const PRODUCT_NAME = EDITION_CODE === "eforl" ? "Flora EforL" : EDITION_CODE === "rcat" ? "Flora RCAT" : "Flora iCIS";
 const APP_ID = EDITION_CODE === "eforl" ? "com.flora.eforl.desktop" : EDITION_CODE === "rcat" ? "com.flora.rcat.desktop" : "com.flora.desktop";
@@ -79,6 +80,7 @@ async function createSetupWindow() {
 
 function applyState(state) {
   if (state && state.leaf && state.leaf.apiPort) API_BASE_URL = `http://127.0.0.1:${state.leaf.apiPort}`;
+  if (state && state.leaf && state.leaf.livePort) LIVE_BASE_URL = `http://127.0.0.1:${state.leaf.livePort}`;
 }
 
 // The native serial-controller (COM ports) of a Windows gateway: Docker cannot pass COM ports in.
@@ -128,7 +130,7 @@ ipcMain.handle("flora:setup:install", async (_event, form) => {
       // Canopy + appliance first; Leaf / gateway on this PC then install from that new appliance.
       if (installer.nativeAvailable()) {
         state.site = await installer.installSiteNative({ root: form.root, code: form.siteCode, baseDir }, setupLog, nativeSupervisor);
-        await installer.exposeOnLan([...Object.values(state.site.ports), ...(roles.has("gateway") ? [7410] : [])], setupLog, { proxy: false });
+        await installer.exposeOnLan([...Object.values(state.site.ports), ...(roles.has("gateway") ? [7410, 7407] : [])], setupLog, { proxy: false });
         appliance = `http://127.0.0.1:${state.site.ports.haber}`;
       } else {
         state.site = await installer.installSite({ root: form.root, code: form.siteCode }, setupLog);
@@ -148,7 +150,7 @@ ipcMain.handle("flora:setup:install", async (_event, form) => {
       ? await installer.installGatewayNative({ appliance, code: form.gatewayCode, baseDir }, setupLog, nativeSupervisor)
       : await installer.installGateway({ appliance, code: form.gatewayCode, baseDir }, setupLog);
     if (!roles.has("canopy") && roles.has("gateway") && state.gateway.native)
-      await installer.exposeOnLan([7410], setupLog, { proxy: false });
+      await installer.exposeOnLan([7410, 7407], setupLog, { proxy: false });
     installer.writeState(dataDir(), state);
     if (process.platform === "win32") app.setLoginItemSettings({ openAtLogin: true });
     return { ok: true, site: state.site, leaf: state.leaf, gateway: state.gateway };
@@ -196,6 +198,7 @@ ipcMain.on("flora:app:get-edition-code", event => { event.returnValue = EDITION_
 ipcMain.on("flora:app:get-product-name", event => { event.returnValue = PRODUCT_NAME; });
 ipcMain.on("flora:app:get-version", event => { event.returnValue = app.getVersion(); });
 ipcMain.on("flora:app:get-backend-base-url", event => { event.returnValue = API_BASE_URL; });
+ipcMain.on("flora:app:get-live-base-url", event => { event.returnValue = LIVE_BASE_URL; });
 
 app.on("certificate-error", (event, _contents, url, _error, _cert, callback) => {
   if (/^https:\/\/(127\.0\.0\.1|localhost)(:\d+)?\//.test(url)) { event.preventDefault(); callback(true); } else callback(false);

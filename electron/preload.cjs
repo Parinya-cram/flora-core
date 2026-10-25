@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld("floraDesktop", {
   }),
   getBackendBaseUrl: () =>
     ipcRenderer.sendSync("flora:app:get-backend-base-url"),
+  getLiveBaseUrl: () =>
+    ipcRenderer.sendSync("flora:app:get-live-base-url"),
   setZoomLevel: (level) => webFrame.setZoomLevel(level),
   getZoomLevel: () => webFrame.getZoomLevel(),
   getBootstrapStatus: () =>

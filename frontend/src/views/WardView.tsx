@@ -4,7 +4,7 @@ import type { AuthUser } from "../auth/useAuth";
 import { useLanguage } from "../context/LanguageContext";
 import {
   gatewayLinkLabel, getGatewayLinks, getWardOverview, requestWardSync, takeOverCase, withdrawTransfer,
-  type GatewayLink, type WardAdmission, type WardOverview, type WardPeer, type WardPeerCase, type WardTransfer,
+  type GatewayLink, type WardAdmission, type WardBed, type WardOverview, type WardPeer, type WardPeerCase, type WardTransfer,
 } from "../api/wardApi";
 import { deviceInUseMessage, moveInRecovery, startCase } from "../api/caseApi";
 import GatewayWizard from "../components/ward/GatewayWizard";
@@ -16,6 +16,8 @@ import { liveHealth, useLiveCase } from "../hooks/useLiveCase";
 import type { WorklistCase } from "../api/workflowApi";
 import { useCaseWorklist } from "../components/workflow/caseWorklist";
 import WorklistBadge from "../components/workflow/WorklistBadge";
+import BedBoard from "../components/ward/BedBoard";
+import { bedBindings, setBedSessionPreset } from "../components/ward/bedSession";
 
 type Props = {
   caseStatus: CaseStatus;
@@ -52,6 +54,7 @@ const TEXT = {
     transfer: "Transfer", transferPending: "Transfer waiting at", byCanopy: "asked by the ward desk", cancelTransfer: "Cancel transfer",
     incoming: "Incoming transfers", incomingHint: "Patients moving to this workstation; the chart continues here", receive: "Receive",
     withdrawn: "Transfer cancelled. Bind this bed's devices again under Devices.",
+    unlinkedDevices: "Not bound (this Leaf has no link to their gateway; add it under Manage gateways)",
   },
   th: {
     ward: "หอผู้ป่วย", thisLeaf: "เครื่องนี้", noCase: "ไม่มีเคสที่กำลังทำอยู่บนเครื่องนี้", openCase: "เปิดเคส",
@@ -73,6 +76,7 @@ const TEXT = {
     transfer: "Transfer", transferPending: "รอรับที่", byCanopy: "สั่งจากเคาน์เตอร์ ward", cancelTransfer: "ยกเลิก Transfer",
     incoming: "ผู้ป่วยย้ายเข้า (Transfer)", incomingHint: "ผู้ป่วยที่กำลังย้ายมาเครื่องนี้ chart ต่อเนื่องที่นี่", receive: "Receive",
     withdrawn: "ยกเลิก Transfer แล้ว ผูกอุปกรณ์ของเตียงนี้ใหม่ได้ที่ อุปกรณ์",
+    unlinkedDevices: "ยังไม่ได้ผูก (เครื่องนี้ยังไม่ได้เชื่อม Gateway ของอุปกรณ์เหล่านี้ เพิ่มได้ที่ จัดการ Gateway)",
   },
 };
 
@@ -191,6 +195,14 @@ export default function WardView({ caseStatus, activeCases, sessionUser, onOpenC
   useEffect(() => {
     if (syncing && data?.sync.ward_synced_at && data.sync.ward_synced_at >= syncing) setSyncing(null);
   }, [data, syncing]);
+
+  // A free bed on the bed board: start its session with the bed and its devices filled in.
+  const startAtBed = (bed: WardBed) => {
+    const { devices, unlinked } = bedBindings(bed, links || []);
+    setBedSessionPreset({ bedLabel: bed.bed_name, devices });
+    if (unlinked.length) setNotice(`${L.unlinkedDevices}: ${unlinked.join(", ")}`);
+    onNewCase();
+  };
 
   const syncNow = async () => {
     try {
@@ -318,6 +330,11 @@ export default function WardView({ caseStatus, activeCases, sessionUser, onOpenC
             </div>
             {tab === "active" && canStart ? <button type="button" className={hereCases.length ? button : primary} onClick={onNewCase}>{hereCases.length ? `+ ${L.newCase}` : L.startCase}</button> : null}
           </div>
+          {tab === "active" && data?.beds?.length ? <div className="mb-4">
+            <BedBoard beds={data.beds} cases={hereCases} gateways={data.gateways} leafId={data.leaf.id} openCaseId={openCaseId}
+              linkedGateways={new Set((links || []).map(link => link.gateway_id).filter((id): id is string => Boolean(id)))}
+              canStart={canStart} onOpen={caseId => onOpenCase(caseId)} onStart={startAtBed} />
+          </div> : null}
           {tab === "active" ? <div className="space-y-2">
             {[...hereCases].sort((a, b) => String(a.bed_label || "~").localeCompare(String(b.bed_label || "~"), undefined, { numeric: true }) || a.start_time - b.start_time).map(item => (
               <ActiveCaseRow key={item.case_id} item={item} ward={wardCaseById.get(item.case_id)} open={item.case_id === openCaseId} L={L}

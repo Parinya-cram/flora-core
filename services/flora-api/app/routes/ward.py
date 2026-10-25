@@ -83,6 +83,8 @@ def overview(_: dict = Depends(require_permission("case.read")), database: Conne
         "admissions": [inbox_public(row) for row in admissions],
         "peers": [leaf for leaf in payload.get("leaves") or [] if leaf.get("leaf_id") != LEAF_ID],
         "gateways": payload.get("gateways") or [],
+        # Beds this Leaf looks after, from Canopy (Topology → Physical); empty for a single-bed Leaf.
+        "beds": payload.get("my_beds") or [],
         "handovers": payload.get("handovers") or [],
         # Transfer: cases offered to this Leaf (Receive) and cases of this Leaf waiting at another bed.
         "transfers_in": payload.get("transfers_in") or [],

@@ -29,6 +29,12 @@ flush_ms = 500
 [server]
 listen = "0.0.0.0:8080"
 
+[stream_hub]
+listen = "0.0.0.0:7407"
+admin_port = 5007
+settle_ms = 300
+max_unacked = 300
+
 [publisher]
 admin_port = 5006
 targets = []

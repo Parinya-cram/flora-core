@@ -39,6 +39,7 @@ import {
   normalizePatientNameLanguage,
   type PatientNameLanguage,
 } from "../utils/patientName";
+import { takeBedSessionPreset } from "../components/ward/bedSession";
 
 type Props = {
   sessionUser: AuthUser | null;
@@ -189,8 +190,10 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
   /** The clinician's workflow pick, valid only for the admission it was made for. */
   const [workflowPick, setWorkflowPick] = useState<{ admissionId: string; id: string } | null>(null);
   /** Multi-case Leaf: bed label and Gateway devices for the new case. */
-  const [bedLabel, setBedLabel] = useState("");
-  const [bindings, setBindings] = useState<DeviceBindingInput[]>([]);
+  // Started from a bed on the Ward page: that bed and its devices are already filled in.
+  const [preset] = useState(takeBedSessionPreset);
+  const [bedLabel, setBedLabel] = useState(preset?.bedLabel ?? "");
+  const [bindings, setBindings] = useState<DeviceBindingInput[]>(preset?.devices ?? []);
   const B = BED_TEXT[language === "th" ? "th" : "en"];
   const startError = (cause: unknown) => deviceInUseMessage(cause, language) || (cause instanceof Error ? cause.message : t("landing.startFailed"));
   const bedAndDevices = (

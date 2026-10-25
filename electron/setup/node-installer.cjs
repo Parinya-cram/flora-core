@@ -186,7 +186,8 @@ async function installLeafNative({ appliance, code, baseDir }, log, supervisor) 
     await native.startLeaf(settings, supervisor, log);
     await report(appliance, code, "installed");
     log(`Leaf ${node.node_id} is running`);
-    return { native: true, nodeId: node.node_id, label: node.label, dir: settings.dir, apiPort: settings.apiPort, adminPassword: settings.adminPassword };
+    return { native: true, nodeId: node.node_id, label: node.label, dir: settings.dir, apiPort: settings.apiPort,
+      livePort: settings.livePort, adminPassword: settings.adminPassword };
   } catch (error) {
     await report(appliance, code, "failed", error.message);
     throw error;
@@ -274,17 +275,21 @@ async function installLeaf({ appliance, code, baseDir, registry: registryOverrid
     log("Writing settings and secrets (kept on this machine)");
     fs.writeFileSync(path.join(dir, "compose.yaml"), await request(`${appliance}/install/files/leaf/compose.desktop.yaml`));
     const envFile = path.join(dir, ".env");
-    let apiPort;
+    let apiPort, livePort;
     if (!fs.existsSync(envFile)) {
       apiPort = await freePort(7301);
+      livePort = await freePort(apiPort + 2);
       fs.writeFileSync(envFile, envText({
         FLORA_LEAF_ID: node.node_id, FLORA_LEAF_NAME: `"${String(node.label || node.node_id).replace(/"/g, "")}"`,
         FLORA_HOSPITAL_ID: node.tenant_id, CANOPY_SYNC_URL: node.canopy_sync_url, HABER_URL: appliance,
         HABER_NODE_TOKEN: node.node_token, FLORA_SYNC_SHARED_SECRET: node.sync_secret, FLORA_LEAF_SERVICE_SECRET: secret(),
         LEAF_DB_ADMIN_PASSWORD: secret(), LEAF_DB_APP_PASSWORD: secret(), LEAF_DB_VIEW_PASSWORD: secret(), LEAF_DB_SYNC_PASSWORD: secret(),
-        LEAF_ADMIN_PASSWORD: secret(8), LEAF_API_PORT: apiPort,
+        LEAF_ADMIN_PASSWORD: secret(8), LEAF_API_PORT: apiPort, LEAF_LIVE_PORT: livePort,
       }));
-    } else apiPort = Number((fs.readFileSync(envFile, "utf8").match(/^LEAF_API_PORT=(\d+)/m) || [])[1]);
+    } else {
+      apiPort = Number((fs.readFileSync(envFile, "utf8").match(/^LEAF_API_PORT=(\d+)/m) || [])[1]);
+      livePort = Number((fs.readFileSync(envFile, "utf8").match(/^LEAF_LIVE_PORT=(\d+)/m) || [])[1]) || 7303;
+    }
     if (node.canopy_sync_url.startsWith("https:")) {
       log("Trusting the hospital's Canopy certificate");
       const pem = await peerCertificatePem(node.canopy_sync_url);
@@ -299,7 +304,7 @@ async function installLeaf({ appliance, code, baseDir, registry: registryOverrid
     await report(appliance, code, "installed");
     const adminPassword = (fs.readFileSync(envFile, "utf8").match(/^LEAF_ADMIN_PASSWORD=(.*)$/m) || [])[1];
     log(`Leaf ${node.node_id} is running`);
-    return { nodeId: node.node_id, label: node.label, dir, project, apiPort, adminPassword, release: images.release };
+    return { nodeId: node.node_id, label: node.label, dir, project, apiPort, livePort, adminPassword, release: images.release };
   } catch (error) {
     await report(appliance, code, "failed", error.message);
     throw error;

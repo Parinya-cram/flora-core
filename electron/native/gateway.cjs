@@ -7,7 +7,9 @@ const path = require("path");
 const rt = require("./runtime.cjs");
 const edge = require("./edge.cjs");
 
-const RUST = ["serial-controller", "feeder-controller", "webhook-controller", "socket-controller", "collector", "server", "publisher"];
+// stream-hub: live 1-second chunks to Leafs (docs/live-stream/PROTOCOL.md), ws://<gateway>:7407/stream/v1.
+const RUST = ["serial-controller", "feeder-controller", "webhook-controller", "socket-controller", "collector", "server", "publisher",
+  "stream-hub"];
 const ADMIN_PORTS = { "serial-controller": 5001, "feeder-controller": 5002, "webhook-controller": 5003, "socket-controller": 5004,
   collector: 5005, publisher: 5006 };
 
