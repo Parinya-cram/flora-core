@@ -71,14 +71,20 @@ export default function DateTimePickerAssist() {
 
   useEffect(() => {
     if (!desktop) return;
-    const onFocus = (event: FocusEvent) => {
-      const kind = kindOf(event.target);
+    // Only open for focus the user caused (click / Tab), not autoFocus when a dialog appears.
+    let lastUserInput = 0;
+    const markUserInput = () => { lastUserInput = Date.now(); };
+    const open = (input: HTMLInputElement) => {
+      const kind = kindOf(input);
       if (!kind) return;
-      const input = event.target as HTMLInputElement;
       if (kind === "date") setMonth(parseDate(input.value) || new Date());
       setHour(kind === "time" ? parseTime(input.value)?.hour ?? null : null);
       setRect(input.getBoundingClientRect());
       setTarget({ input, anchor: input, kind });
+    };
+    const onFocus = (event: FocusEvent) => {
+      if (Date.now() - lastUserInput > 500) return;
+      if (event.target instanceof HTMLInputElement) open(event.target);
     };
     const onFocusOut = (event: FocusEvent) => {
       // Keep the panel while focus moves into it (it never takes focus, but be safe).
@@ -87,6 +93,8 @@ export default function DateTimePickerAssist() {
     };
     const onNativeClick = (event: MouseEvent) => {
       const input = event.target;
+      // Clicking a field that was auto-focused opens its panel.
+      if (input instanceof HTMLInputElement && input === document.activeElement) open(input);
       if (input instanceof HTMLInputElement && NATIVE_PICKER_TYPES.has(input.type) && !input.disabled && !input.readOnly
           && input.dataset.noPicker == null && typeof input.showPicker === "function") {
         try { input.showPicker(); } catch { /* not allowed for this input; the browser control still works */ }
@@ -106,6 +114,8 @@ export default function DateTimePickerAssist() {
       setRect(request.anchor.getBoundingClientRect());
       setTarget({ kind: "time", ...request });
     });
+    document.addEventListener("pointerdown", markUserInput, true);
+    document.addEventListener("keydown", markUserInput, true);
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("focusin", onFocus);
     document.addEventListener("focusout", onFocusOut);
@@ -117,6 +127,8 @@ export default function DateTimePickerAssist() {
       document.removeEventListener("click", onNativeClick);
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("pointerdown", markUserInput, true);
+      document.removeEventListener("keydown", markUserInput, true);
       registerTimePicker(null);
     };
   }, [desktop]);

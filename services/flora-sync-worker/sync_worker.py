@@ -28,6 +28,16 @@ PLAN_LIMIT = int(os.getenv("FLORA_SYNC_PLAN_LIMIT", "100"))
 IDLE_PER_CYCLE = int(os.getenv("FLORA_SYNC_IDLE_PER_CYCLE", "10"))
 BATCH_MESSAGES = 100
 BATCH_BYTES = 8 * 1024 * 1024
+# Full raw export of active cases, so another Leaf can take a case over (handover).
+LAST_EXPORT_DIGEST: dict[str, str] = {}
+# The export holds every vital minute of the stay (large for a 14-30 day ICU case), so an active
+# case is exported at most this often; first send and status changes go out at once.
+EXPORT_MIN_INTERVAL_S = max(0.0, float(os.getenv("FLORA_SYNC_EXPORT_MIN_INTERVAL_S", "900")))
+LAST_EXPORT_CHECKED_AT: dict[str, float] = {}
+LAST_EXPORT_STATUS: dict[str, str] = {}
+# Cases this Leaf has offered to another bed (ward exchange transfers_out): exported every cycle
+# so the receiving Leaf gets a current copy.
+EXPORT_EVERY_CYCLE: set[str] = set()
 # Handovers whose old case this Leaf has locked; acknowledged on the next ward exchange.
 RELEASED_ACK: list[int] = []
 # Workflow Studio: digest of the ward's workflow set last stored on the Leaf.
@@ -112,8 +122,10 @@ def build_snapshot(client: httpx.Client, case: dict[str, Any], case_forms_active
         "io_summary": f"/api/case/{case_id}/io/summary?from={from_ms}&to={end_ms}&bucket=1",
         "workflow": f"/api/case/{case_id}/workflow-snapshot",
         "workflow_forms": f"/api/case/{case_id}/workflow-forms",
+        "workflow_entries": f"/api/case/{case_id}/workflow-entries",
         "billing": f"/api/case/{case_id}/billing",
         "scores": f"/api/case/{case_id}/scores?from={from_ms}&to={end_ms}",
+        "devices": f"/api/case/{case_id}/devices",
     }
     # complete: the snapshot holds the case from its start (else only its latest part, see FINAL_HISTORY_DAYS).
     snapshot: dict[str, Any] = {"case": case, "window": {"from": from_ms, "to": end_ms, "complete": from_ms <= start_ms}}
@@ -127,7 +139,25 @@ def build_snapshot(client: httpx.Client, case: dict[str, Any], case_forms_active
             if error.response.status_code != 404:
                 raise
             snapshot[key] = None
+    # Gateway bindings without the live stream state, which changes every second.
+    for binding in (snapshot.get("devices") or {}).get("devices") or []:
+        binding.pop("stream", None)
     return snapshot
+
+
+def export_due(case_id: str, status: str, active: bool) -> bool:
+    """Closed cases: every cycle (digest decides, as before). Active cases: first send, a status
+    change, or EXPORT_MIN_INTERVAL_S since the last check."""
+    if not active or case_id not in LAST_EXPORT_DIGEST or LAST_EXPORT_STATUS.get(case_id) != status \
+            or case_id in EXPORT_EVERY_CYCLE:
+        return True
+    return time.monotonic() - LAST_EXPORT_CHECKED_AT.get(case_id, 0.0) >= EXPORT_MIN_INTERVAL_S
+
+
+def mark_export_checked(case_id: str, status: str) -> None:
+    LAST_EXPORT_CHECKED_AT[case_id] = time.monotonic()
+    if status:
+        LAST_EXPORT_STATUS[case_id] = status
 
 
 def make_message(snapshot: dict[str, Any]) -> tuple[dict[str, Any], str]:
@@ -203,18 +233,24 @@ def synchronize() -> dict[str, Any]:
                     items.append((message, {"case_id": case_id, "sent_digest": digest}))
                 # Active cases, and recently closed ones (their final copy, e.g. a case moved out of the OR room that a
                 # recovery bed's Leaf continues). Unchanged copies are not sent again (export_digest).
-                recently_closed = (str(case.get("status") or "").upper() == "DISCHARGED"
+                # The export holds every vital minute of the stay, so an active case is exported at most every
+                # EXPORT_MIN_INTERVAL_S (first send, a status change and cases offered to another bed go at once).
+                status = str(case.get("status") or "").upper()
+                recently_closed = (status == "DISCHARGED"
                                    and int(case.get("discharge_time") or 0) >= time.time_ns() // 1_000_000 - RECENT_MS)
-                if str(case.get("status") or "").upper() == "ACTIVE" or recently_closed:
+                if (status == "ACTIVE" or recently_closed) and export_due(str(case_id), status, status == "ACTIVE"):
                     export = get_json(client, f"/api/ward/cases/{case_id}/export")
                     export_digest = hashlib.sha256(json.dumps(export, sort_keys=True, default=str).encode()).hexdigest()
-                    if planned.get("export_digest") != export_digest:
+                    LAST_EXPORT_DIGEST[str(case_id)] = export_digest
+                    if planned.get("export_digest") == export_digest:
+                        mark_export_checked(str(case_id), status)
+                    else:
                         items.append(({
                             "message_id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"flora:{LEAF_ID}:export:{case_id}:{export_digest}")),
                             "entity_type": "case_export", "entity_id": str(case_id), "operation": "upsert",
                             "revision": time.time_ns() // 1_000_000,
                             "occurred_at": datetime.now(timezone.utc).isoformat(), "payload": export,
-                        }, {"case_id": case_id, "export_digest": export_digest}))
+                        }, {"case_id": case_id, "export_digest": export_digest, "status": status}))
             except Exception as error:  # this case only: the others are still sent
                 results[case_id]["error"] = f"{type(error).__name__}: {error}"
                 print(f"sync leaf={LEAF_ID} case={case_id} skipped: {type(error).__name__}: {error}", flush=True)
@@ -230,6 +266,8 @@ def synchronize() -> dict[str, Any]:
             accepted += int(result.get("accepted") or 0)
             duplicates += int(result.get("duplicates") or 0)
             for _, record in batch:
+                if "export_digest" in record:
+                    mark_export_checked(str(record["case_id"]), record.pop("status"))
                 results[record["case_id"]].update({key: value for key, value in record.items() if key != "case_id"})
         stored = client.put(f"{LEAF_API}/api/leaf-sync/cases", headers={"X-FLORA-Service-Secret": LEAF_SERVICE_SECRET},
                             json={"results": list(results.values())})
@@ -441,7 +479,7 @@ def set_state(client: httpx.Client, key: str, value: Any) -> None:
 
 def synchronize_ward() -> dict[str, Any]:
     """Ward peers, registered gateways and released handovers for the Leaf Ward page."""
-    global RELEASED_ACK, LAST_WORKFLOWS_DIGEST, LAST_PROFILE_DIGEST
+    global RELEASED_ACK, LAST_WORKFLOWS_DIGEST, LAST_PROFILE_DIGEST, EXPORT_EVERY_CYCLE
     with httpx.Client(timeout=20) as client:
         response = client.post(
             f"{CANOPY_SYNC_API}/api/sync/v1/ward",
@@ -461,6 +499,8 @@ def synchronize_ward() -> dict[str, Any]:
                 if stored.status_code != 404:  # a Leaf API without the hospital profile
                     stored.raise_for_status()
                     LAST_PROFILE_DIGEST = digest
+        EXPORT_EVERY_CYCLE = {str(item.get("source_case_id")) for item in ward.get("transfers_out") or []
+                              if item.get("source_case_id") is not None}
         workflows = ward.pop("workflows", None)
         if isinstance(workflows, dict):
             digest = hashlib.sha256(json.dumps(workflows, sort_keys=True, default=str).encode()).hexdigest()

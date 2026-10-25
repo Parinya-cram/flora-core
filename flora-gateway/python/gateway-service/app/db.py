@@ -60,6 +60,10 @@ def upsert_manufacturer(code: str, name: str | None = None) -> None:
                ON CONFLICT (code) DO NOTHING""", (code, name or code, current, current))
 
 
+# Types whose instances share a pod and run as one pod parser, when Canopy does not say.
+DEMUX_DEFAULT = {"draeger-iacs-m540"}
+
+
 def upsert_device_types(types: list[dict[str, Any]], source: str) -> int:
     current = now_ms()
     for item in types:
@@ -70,8 +74,8 @@ def upsert_device_types(types: list[dict[str, Any]], source: str) -> int:
             connection.execute(
                 """INSERT INTO gateway_device_type
                      (code,label,category,protocol,controller,parser,image,default_options,source,haber_version,synced_at,
-                      manufacturer,model,description,connection_defaults,origin)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                      manufacturer,model,description,connection_defaults,origin,demux)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                    ON CONFLICT (code) DO UPDATE SET label=excluded.label, category=excluded.category,
                      protocol=excluded.protocol, controller=excluded.controller, parser=excluded.parser,
                      image=excluded.image, default_options=excluded.default_options, source=excluded.source,
@@ -79,6 +83,7 @@ def upsert_device_types(types: list[dict[str, Any]], source: str) -> int:
                      manufacturer=COALESCE(excluded.manufacturer, gateway_device_type.manufacturer),
                      model=COALESCE(excluded.model, gateway_device_type.model),
                      description=COALESCE(excluded.description, gateway_device_type.description),
+                     demux=COALESCE(excluded.demux, gateway_device_type.demux),
                      connection_defaults=CASE WHEN excluded.connection_defaults = '{}'::jsonb
                        THEN gateway_device_type.connection_defaults ELSE excluded.connection_defaults END""",
                 (item["code"], item["label"], item.get("category", "device"), item["protocol"], item["controller"],
@@ -87,7 +92,8 @@ def upsert_device_types(types: list[dict[str, Any]], source: str) -> int:
                  item.get("manufacturer"), item.get("model"), item.get("description"),
                  Jsonb(item.get("connection_defaults") or {}),
                  # Canopy marks a hospital's own types origin="canopy"; everything else came from a Root release.
-                 "canopy" if item.get("origin") == "canopy" else "root"),
+                 "canopy" if item.get("origin") == "canopy" else "root",
+                 item["demux"] if isinstance(item.get("demux"), bool) else (True if item["code"] in DEMUX_DEFAULT else None)),
             )
     return len(types)
 

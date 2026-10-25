@@ -128,7 +128,7 @@ export default function PhysicalTopologyView({ isAdmin }: { isAdmin: boolean }) 
 
   return (
     <div className="h-full overflow-y-auto p-3 sm:p-5">
-      <div className="mx-auto max-w-[1500px] space-y-4">
+      <div className="w-full space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           <select className="rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] px-3 py-2 text-sm text-[var(--app-text)]"
             value={unitKey} onChange={event => setUnitKey(event.target.value)} aria-label="Care unit">

@@ -28,6 +28,9 @@ export type AdmissionDetails = {
   asa_emergency?: boolean;
   surgical_priority?: string | null;
   surgeon?: string | null;
+  surgeon_code?: string | null;
+  anaesthetist?: string | null;
+  anaesthetist_code?: string | null;
 };
 
 export type Admission = {

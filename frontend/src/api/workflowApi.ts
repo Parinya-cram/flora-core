@@ -25,8 +25,25 @@ export type WorkflowFormRef = {
   repeatable?: boolean;
   /** Most copies of a repeatable form (2-99; none: up to 99). */
   max_instances?: number;
+  /** Fill the form once per slot (ICU rounds, docs/ICU-ROUNDS.md); absent or null: one record per case. */
+  schedule?: WorkflowFormSchedule | null;
 };
 export type WorkflowFormDisplay = "tab" | "report";
+
+/** daily: at HH:MM every day; every: every N h from the workflow's day_start; per_shift: at each shift start. */
+export type WorkflowScheduleKind = "daily" | "every" | "per_shift";
+export type WorkflowFormSchedule = {
+  kind: WorkflowScheduleKind;
+  /** daily only, HH:MM. */
+  at?: string;
+  /** every only, 1–24. */
+  every_hours?: number;
+  /** null: until discharge; N: only the first N days of the stay. */
+  days?: number | null;
+  /** Due until slot + grace, then overdue (default 120; per_shift: the shift length). */
+  grace_min?: number | null;
+};
+export type WorkflowShift = { code: string; label?: string; start: string };
 
 /** A form's suggested Leaf placement (Form Studio's AI builder, extensions["flora.leaf_placement"]). */
 export type WorkflowPlacement = { phase: WorkflowPhase; after_section: string | null };
@@ -51,6 +68,10 @@ export type WorkflowDefinition = {
   billing?: { template_id: string | null };
   /** Clinical scores (Workflow Studio → Scores) the Leaf computes for cases of this workflow. */
   scores?: string[];
+  /** Day 1 of a stay starts at the first day_start at or before the case start (HH:MM, default 07:00). */
+  day_start?: string;
+  /** Shifts for per_shift schedules (default D 07:00, E 15:00, N 23:00), ordered by start. */
+  shifts?: WorkflowShift[];
   bundled_forms?: Record<string, { version: number; definition: unknown }>;
 };
 
@@ -173,8 +194,17 @@ export type CaseWorkflowFormRecord = {
   data: RecordData; status: "draft" | "completed"; updatedAt?: number | string | null; updatedBy?: string | null;
   createdAt?: number | null; createdBy?: string | null; authors?: Record<string, CaseFormAuthor>; sync?: CaseFormSync;
 };
+export type FormScheduleSummary = { due: number; overdue: number; done: number };
 /** A form of the case; a further copy of a repeatable form also names the form it copies (`of`) and its number. */
-export type CaseWorkflowForm = { definition: FormDefinition; record: CaseWorkflowFormRecord | null; of?: string; instance?: number };
+export type CaseWorkflowForm = {
+  definition: FormDefinition;
+  /** Null for a scheduled form: its fills are entries (getFormEntries). */
+  record: CaseWorkflowFormRecord | null;
+  of?: string;
+  instance?: number;
+  schedule?: WorkflowFormSchedule | null;
+  summary?: FormScheduleSummary | null;
+};
 export type CaseWorkflow = { workflow: WorkflowDefinition | null; forms: Record<string, CaseWorkflowForm> };
 
 export const getCaseWorkflow = (caseId: number) =>
@@ -242,6 +272,67 @@ export async function getCaseFormFile(caseId: number, sha256: string): Promise<B
   const response = await fetch(`${CASE_BASE}/${caseId}/workflow-forms-files/${sha256}`);
   return response.ok ? await response.blob() : null;
 }
+
+// ---------------------------------------------------------------- scheduled forms (docs/ICU-ROUNDS.md)
+
+export type FormSlotStatus = "done" | "draft" | "due" | "overdue" | "skipped" | "upcoming";
+/** A computed slot; slot_ts is epoch ms. */
+export type FormSlot = { slot_ts: number; day: number; shift: string | null; label: string; status: FormSlotStatus; entry_id: string | null };
+export type FormEntryStatus = "draft" | "completed" | "skipped";
+export type FormEntry = {
+  id: string;
+  /** null: an unscheduled entry. */
+  slot_ts: number | null;
+  status: FormEntryStatus;
+  data: RecordData;
+  formVersion?: number | null;
+  updatedAt?: string | number | null;
+  updatedBy?: string | null;
+  completedAt?: string | number | null;
+  completedBy?: string | null;
+  skipReason?: string | null;
+};
+export type FormEntries = {
+  form_id: string;
+  schedule: WorkflowFormSchedule | null;
+  timezone?: string | null;
+  slots: FormSlot[];
+  unscheduled: FormEntry[];
+  summary: FormScheduleSummary;
+};
+
+const entriesUrl = (caseId: number, formId: string) => `${CASE_BASE}/${caseId}/workflow-forms/${encodeURIComponent(formId)}/entries`;
+const jsonInit = (method: string, body: unknown): RequestInit => ({ method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+export const getFormEntries = (caseId: number, formId: string) =>
+  leafJson<Partial<FormEntries>>(entriesUrl(caseId, formId)).then(data => ({
+    form_id: data.form_id || formId,
+    schedule: data.schedule ?? null,
+    timezone: data.timezone ?? null,
+    slots: data.slots || [],
+    unscheduled: data.unscheduled || [],
+    summary: data.summary || { due: 0, overdue: 0, done: 0 },
+  }) as FormEntries);
+/** Idempotent per slot: returns the slot's existing entry. slot_ts null adds an unscheduled entry. */
+export const createFormEntry = (caseId: number, formId: string, slotTs: number | null) =>
+  leafJson<{ entry: FormEntry }>(entriesUrl(caseId, formId), jsonInit("POST", { slot_ts: slotTs })).then(data => data.entry);
+export const getFormEntry = (caseId: number, formId: string, entryId: string) =>
+  leafJson<{ definition?: FormDefinition; entry: FormEntry }>(`${entriesUrl(caseId, formId)}/${encodeURIComponent(entryId)}`);
+export const patchFormEntry = (caseId: number, formId: string, entryId: string, patch: RecordData, status?: "draft" | "completed") =>
+  leafJson<{ entry: FormEntry }>(`${entriesUrl(caseId, formId)}/${encodeURIComponent(entryId)}`, jsonInit("PATCH", { patch, ...(status ? { status } : {}) }));
+export const skipFormEntry = (caseId: number, formId: string, entryId: string, reason: string) =>
+  leafJson<{ entry: FormEntry }>(`${entriesUrl(caseId, formId)}/${encodeURIComponent(entryId)}/skip`, jsonInit("POST", { reason })).then(data => data.entry);
+
+export type WorklistForm = { form_id: string; title?: string | null; due: number; overdue: number; next_slot_ts?: number | null };
+export type WorklistCase = { case_id: number; due: number; overdue: number; forms: WorklistForm[] };
+/** Due/overdue scheduled forms of every active case; an empty list when the server has no worklist (older Leaf). */
+export const getCaseWorklist = async (): Promise<WorklistCase[]> => {
+  const response = await fetch(`${CASE_BASE}/worklist`);
+  if (response.status === 404) return [];
+  const data = await response.json().catch(() => ({})) as { cases?: WorklistCase[] };
+  if (!response.ok) throw new Error(errorMessage(data, response.status));
+  return data.cases || [];
+};
 
 // ---------------------------------------------------------------- itemize (billing) templates
 

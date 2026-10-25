@@ -156,7 +156,7 @@ export default function CanopyReportsView() {
 
   if (!selected) {
     return <div className="h-full overflow-auto p-4 sm:p-6">
-      <div className="mx-auto max-w-[1500px] space-y-5">
+      <div className="w-full space-y-5">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div><div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">Flora iCIS Canopy · reporting platform</div><h1 className="mt-1 text-3xl font-semibold text-[var(--app-text)]">Reports</h1><p className="mt-1 max-w-3xl text-sm text-[var(--app-muted)]">Run the prebuilt NIT reports and the reports your team builds in Report Studio. Both use the same report-definition model.</p></div>
           <div className="flex gap-2"><button type="button" disabled className="rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] px-4 py-2.5 text-sm font-bold text-[var(--app-muted)] opacity-70">Ask Flora · next</button><button type="button" disabled className="rounded-xl border border-[var(--app-accent)] bg-[var(--app-accent)] px-4 py-2.5 text-sm font-bold text-[var(--app-accent-contrast)] opacity-70">Create report · next</button></div>
@@ -186,7 +186,7 @@ export default function CanopyReportsView() {
   const columnLabels = Object.fromEntries((result?.columns || []).map(column => [column.key, column.label]));
   const columns = result?.columns?.length ? result.columns.map(column => column.key) : rows.length ? Object.keys(rows[0]) : [];
   const pagination = result?.pagination;
-  return <div className="h-full overflow-auto p-4 sm:p-6"><div className="mx-auto max-w-[1600px] space-y-4">
+  return <div className="h-full overflow-auto p-4 sm:p-6"><div className="w-full space-y-4">
     <header className="sticky top-0 z-20 -mx-4 -mt-4 flex flex-wrap items-start justify-between gap-3 border-b border-[var(--app-border)] bg-[var(--app-bg)] px-4 py-4 shadow-sm sm:-mx-6 sm:-mt-6 sm:px-6"><div><button type="button" onClick={() => setSelected(null)} className="mb-2 text-sm font-bold text-[var(--app-accent)]">← Report library</button><div className="text-xs font-extrabold uppercase tracking-[0.14em] text-[var(--app-accent)]">{categoryLabel[selected.category]} · Prebuilt definition</div><h1 className="mt-1 text-2xl font-semibold text-[var(--app-text)]">{selected.title}</h1><p className="mt-1 text-sm text-[var(--app-muted)]">{selected.description}</p></div><div className="flex gap-2"><button type="button" disabled={!result || running} onClick={() => void exportReport(selected.id, params(), "csv")} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] px-3 py-2 text-sm font-bold text-[var(--app-text)] disabled:opacity-40">CSV</button><button type="button" disabled={!result || running} onClick={() => void exportReport(selected.id, params(), "xlsx")} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] px-3 py-2 text-sm font-bold text-[var(--app-text)] disabled:opacity-40">Excel</button></div></header>
     <section className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-4">
       <div className="grid gap-x-3 gap-y-4 md:grid-cols-3 2xl:grid-cols-[minmax(190px,1.05fr)_minmax(160px,.8fr)_minmax(210px,1fr)_minmax(180px,.8fr)_170px_auto]">

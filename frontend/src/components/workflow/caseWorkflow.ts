@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getCaseWorkflow, type CaseFormSync, type CaseWorkflow } from "../../api/workflowApi";
+import { getCaseWorkflow, type CaseFormSync, type CaseWorkflow, type FormScheduleSummary, type WorkflowFormSchedule } from "../../api/workflowApi";
 
 const EMPTY: CaseWorkflow = { workflow: null, forms: {} };
 /** How often an open case re-reads its forms: Canopy's receipts and amendments arrive through the sync worker. */
@@ -45,6 +45,10 @@ export type WorkflowFormTab = {
   of: string; instance: number;
   /** On the last tab of a repeatable form: the key of the next copy it may have, else null. */
   nextCopy: string | null;
+  /** Filled once per slot (ScheduledFormPanel); null: one record per case. */
+  schedule: WorkflowFormSchedule | null;
+  /** Due/overdue counts of a scheduled form when the case's workflow was read. */
+  summary: FormScheduleSummary | null;
 };
 
 /** Most copies of a repeatable form when the workflow sets no max_instances (case_forms.MAX_INSTANCES). */
@@ -61,8 +65,9 @@ export function workflowFormTabs(value: CaseWorkflow, added: readonly string[] =
     .filter(ref => value.forms[ref.form_id]?.definition && ref.display !== "report")
     .flatMap(ref => {
       const title = ref.title || value.forms[ref.form_id].definition.title || ref.form_id;
+      const schedule = value.forms[ref.form_id].schedule ?? ref.schedule ?? null;
       const numbers = [1];
-      if (ref.repeatable) {
+      if (ref.repeatable && !schedule) {
         for (const form of Object.values(value.forms)) if (form.of === ref.form_id && form.instance && form.instance > 1) numbers.push(form.instance);
         for (const key of added) {
           const match = /^(.+)~(\d+)$/.exec(key);
@@ -86,7 +91,10 @@ export function workflowFormTabs(value: CaseWorkflow, added: readonly string[] =
           synced: Boolean(record?.sync?.current),
           of: ref.form_id,
           instance,
-          nextCopy: ref.repeatable && last && instance < limit ? copyKey(ref.form_id, instance + 1) : null,
+          // A scheduled form has no copies: its fills are entries per slot.
+          nextCopy: ref.repeatable && !schedule && last && instance < limit ? copyKey(ref.form_id, instance + 1) : null,
+          schedule,
+          summary: value.forms[ref.form_id].summary ?? null,
         };
       });
     });
@@ -95,7 +103,8 @@ export function workflowFormTabs(value: CaseWorkflow, added: readonly string[] =
 /** Required workflow forms of the case not completed yet (warned about at discharge): the form itself, and every
  * further copy of it someone started. */
 export function incompleteRequiredForms(value: CaseWorkflow): WorkflowFormTab[] {
-  return workflowFormTabs(value).filter(tab => tab.required && tab.status !== "completed" && (tab.instance === 1 || tab.status !== "empty"));
+  return workflowFormTabs(value).filter(tab => tab.required && !tab.schedule && tab.status !== "completed"
+    && (tab.instance === 1 || tab.status !== "empty"));
 }
 
 export type CaseTab = { kind: "record"; id: string } | { kind: "form"; tab: WorkflowFormTab };

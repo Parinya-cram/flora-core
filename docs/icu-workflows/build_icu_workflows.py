@@ -115,6 +115,11 @@ def form(form_id, title, description, sections, **kw):
     return d
 
 
+def v1_dropped(*fields):
+    """v2 migration: v1 kept these as a repeat/array; v2 is one entry per slot, so the old key goes."""
+    return {"from": 1, "ops": [{"op": "remove_field", "field": name} for name in fields]}
+
+
 GCS_E = [("4", "4 – Spontaneous"), ("3", "3 – To voice"), ("2", "2 – To pain"), ("1", "1 – None")]
 GCS_V = [("5", "5 – Oriented"), ("4", "4 – Confused"), ("3", "3 – Words"), ("2", "2 – Sounds"), ("1", "1 – None"),
          ("t", "T – Intubated")]
@@ -190,12 +195,11 @@ icu_admission = form("icu_admission", "ICU Admission Assessment",
     ]),
 ])
 
+# v2: one entry per ICU day (workflow schedule daily 07:00, docs/ICU-ROUNDS.md); the slot carries the date and
+# the ICU day, so v1's per-day repeat, round_date and icu_day are gone.
 icu_daily_round = form("icu_daily_round", "ICU Daily Round (FAST HUGS BID)",
-                       "แบบบันทึก round ประจำวัน – one card per ICU day", [
-    section("days", "Daily rounds · บันทึกรายวัน", [
-        f("rounds", "repeat", "ICU day", min_items=1, view="cards", fields=[
-            f("round_date", "date", "Date", required=True),
-            integer("icu_day", "ICU day", None, 1, 365),
+                       "แบบบันทึก round ประจำวัน – one entry per ICU day (07:00 round)", [
+    section("round", "Daily round · บันทึกรายวัน", [
             radio("rass", "RASS", RASS, option_columns=5),
             radio("rass_target", "RASS target", [("0", "0"), ("-1", "−1"), ("-2", "−2"), ("-3", "−3 or deeper")],
                   option_columns=4),
@@ -222,9 +226,8 @@ icu_daily_round = form("icu_daily_round", "ICU Daily Round (FAST HUGS BID)",
             note("plan", "Problems and plan", max_length=3000),
             check("family_updated", "Family updated today"),
             text("round_by", "Physician"),
-        ]),
     ]),
-])
+], schema_version=2, migration=v1_dropped("rounds"))
 
 icu_lines_devices = form("icu_lines_devices", "ICU Lines & Devices",
                          "ติดตามสายและอุปกรณ์ (CLABSI / CAUTI / VAP prevention)", [
@@ -401,12 +404,10 @@ neuro_icu_obs_chart = form("neuro_icu_obs_chart", "Neuro Observation Chart",
     ]),
 ])
 
+# v2: one entry per shift (workflow schedule per_shift); the slot carries the date and shift.
 neuro_icu_brain_bundle = form("neuro_icu_brain_bundle", "Brain Protection Bundle",
-                              "ป้องกัน secondary brain injury – checked every shift", [
-    section("shifts", "Shift checks · ตรวจทุกเวร", [
-        f("checks", "repeat", "Shift", view="cards", fields=[
-            f("shift_date", "date", "Date", required=True),
-            radio("shift", "Shift", [("day", "Day"), ("evening", "Evening"), ("night", "Night")], option_columns=3),
+                              "ป้องกัน secondary brain injury – one entry per shift", [
+    section("shift", "Shift check · ตรวจทุกเวร", [
             check("hob", "Head of bed 30°, head neutral, collar / ETT ties not tight"),
             check("spo2_ok", "SpO₂ ≥ 94 %"),
             check("paco2_ok", "PaCO₂ / EtCO₂ 35–40 mmHg (no prophylactic hyperventilation)"),
@@ -423,20 +424,18 @@ neuro_icu_brain_bundle = form("neuro_icu_brain_bundle", "Brain Protection Bundle
                 ("tier1_osm", "Tier 1 – mannitol / hypertonic saline"), ("tier2", "Tier 2 – deeper sedation / mild hypocapnia"),
                 ("tier3", "Tier 3 – barbiturate / decompression")], option_columns=2),
             text("by", "Nurse", max_length=60),
-        ]),
     ]),
-])
+], schema_version=2, migration=v1_dropped("checks"))
 
 # ===================================================================================
 # Critical care forms
 # ===================================================================================
 CV_SOFA = [("0", "0 – MAP ≥ 70"), ("1", "1 – MAP < 70"), ("2", "2 – Dopamine ≤ 5 or dobutamine"),
            ("3", "3 – Dopamine > 5 or NE / Epi ≤ 0.1"), ("4", "4 – Dopamine > 15 or NE / Epi > 0.1")]
+# v2: one entry per ICU day (workflow schedule daily 07:00); the slot carries the date.
 critical_icu_sofa = form("critical_icu_sofa", "SOFA Score – Daily",
-                         "คะแนน SOFA รายวัน คำนวณจากค่าแลบ", [
+                         "คะแนน SOFA รายวัน คำนวณจากค่าแลบ – one entry per day", [
     section("sofa", "Daily SOFA · คะแนน SOFA", [
-        f("days", "repeat", "Day", view="cards", min_items=1, fields=[
-            f("sofa_date", "date", "Date", required=True),
             num("pao2", "PaO₂", "mmHg", 20, 700),
             integer("fio2", "FiO₂", "%", 21, 100),
             check("resp_support", "Mechanical respiratory support"),
@@ -458,10 +457,9 @@ critical_icu_sofa = form("critical_icu_sofa", "SOFA Score – Daily",
             calc("s_renal", "Renal",
                  "MAX(IF(creatinine >= 5, 4, IF(creatinine >= 3.5, 3, IF(creatinine >= 2, 2, IF(creatinine >= 1.2, 1, 0)))),"
                  " IF(urine_24h < 200, 4, IF(urine_24h < 500, 3, 0)))"),
-            calc("sofa_total", "SOFA total", "s_resp + s_coag + s_liver + s_cv + s_cns + s_renal"),
-        ]),
+            calc("sofa_total", "SOFA total", "s_resp + s_coag + s_liver + s_cv + s_cns + s_renal", indexed=True),
     ]),
-])
+], schema_version=2, migration=v1_dropped("days"))
 
 critical_icu_sepsis_bundle = form("critical_icu_sepsis_bundle", "Sepsis Hour-1 Bundle",
                                   "Surviving Sepsis Campaign hour-1 bundle", [
@@ -496,8 +494,9 @@ critical_icu_sepsis_bundle = form("critical_icu_sepsis_bundle", "Sepsis Hour-1 B
     ]),
 ])
 
-critical_icu_ventilator = form("critical_icu_ventilator", "Ventilator & VAP Bundle",
-                               "การตั้งเครื่องช่วยหายใจ lung-protective และ VAP bundle", [
+# v2: the per-shift VAP checks moved to critical_icu_vap_check (one entry per shift).
+critical_icu_ventilator = form("critical_icu_ventilator", "Ventilator & Weaning",
+                               "การตั้งเครื่องช่วยหายใจ lung-protective และการหย่าเครื่อง", [
     section("airway", "Airway · ทางเดินหายใจ", [
         f("intubated_at", "datetime", "Intubated", indexed=True),
         num("ett_size", "ETT size", "mm", 2, 10, decimals=1),
@@ -529,18 +528,6 @@ critical_icu_ventilator = form("critical_icu_ventilator", "Ventilator & VAP Bund
         check("nmb", "Neuromuscular blockade"),
         check("conservative_fluid", "Conservative fluid strategy"),
     ]),
-    section("vap", "VAP bundle · bundle ป้องกัน VAP (every shift)", [
-        f("vap_checks", "repeat", "Shift", view="table", fields=[
-            f("date", "date", "Date", required=True),
-            select("shift", "Shift", [("day", "Day"), ("evening", "Evening"), ("night", "Night")]),
-            check("hob", "HOB 30–45°"),
-            check("oral_care", "Oral care"),
-            check("cuff", "Cuff 20–30 cmH₂O"),
-            check("subglottic", "Subglottic suction"),
-            check("sat_sbt", "SAT / SBT assessed"),
-            text("by", "Nurse", max_length=30),
-        ]),
-    ]),
     section("weaning", "Weaning and extubation · การหย่าเครื่อง", [
         f("sbt_at", "datetime", "SBT"),
         radio("sbt_result", "SBT result", [("pass", "Pass"), ("fail", "Fail")], option_columns=2),
@@ -551,24 +538,53 @@ critical_icu_ventilator = form("critical_icu_ventilator", "Ventilator & VAP Bund
         check("reintubated_48h", "Re-intubated within 48 h"),
         integer("mv_days", "Ventilator days", "d", 0, 365),
     ]),
+], schema_version=2, migration=v1_dropped("vap_checks"))
+
+critical_icu_vap_check = form("critical_icu_vap_check", "VAP Bundle – Shift Check",
+                              "bundle ป้องกัน VAP – one entry per shift while ventilated", [
+    section("vap", "VAP bundle · bundle ป้องกัน VAP", [
+        check("ventilated", "Patient on invasive ventilation this shift"),
+        check("hob", "HOB 30–45°"),
+        check("oral_care", "Oral care (chlorhexidine / toothbrushing)"),
+        check("cuff", "Cuff pressure 20–30 cmH₂O"),
+        check("subglottic", "Subglottic suction"),
+        check("sat_sbt", "SAT / SBT assessed"),
+        text("by", "Nurse", max_length=60),
+    ]),
 ])
 
 FORMS = [icu_admission, icu_daily_round, icu_lines_devices, icu_discharge, neuro_icu_assessment, neuro_icu_obs_chart,
-         neuro_icu_brain_bundle, critical_icu_sofa, critical_icu_sepsis_bundle, critical_icu_ventilator]
+         neuro_icu_brain_bundle, critical_icu_sofa, critical_icu_sepsis_bundle, critical_icu_ventilator,
+         critical_icu_vap_check]
 BY_ID = {d["form_id"]: d for d in FORMS}
 
 
+# Scheduled forms (docs/ICU-ROUNDS.md): filled once per slot; the others once per case.
+DAILY_0700 = {"kind": "daily", "at": "07:00", "days": None}
+PER_SHIFT = {"kind": "per_shift", "days": None}
+SCHEDULES = {"icu_daily_round": DAILY_0700, "critical_icu_sofa": DAILY_0700,
+             "neuro_icu_brain_bundle": PER_SHIFT, "critical_icu_vap_check": PER_SHIFT}
+SHIFTS = [{"code": "D", "label": "Day", "start": "07:00"}, {"code": "E", "label": "Evening", "start": "15:00"},
+          {"code": "N", "label": "Night", "start": "23:00"}]
+
+
 def workflow(id, name, description, forms):
-    entries = [{"form_id": fid, "version": 1, "title": BY_ID[fid]["title"], "phase": phase, "required": required}
-               for fid, phase, required in forms]
+    entries = []
+    for fid, phase, required in forms:
+        entry = {"form_id": fid, "version": BY_ID[fid]["schema_version"], "title": BY_ID[fid]["title"], "phase": phase,
+                 "required": required}
+        if fid in SCHEDULES:
+            entry["schedule"] = dict(SCHEDULES[fid])
+        entries.append(entry)
     return {
         "format": "flora-workflow/1", "id": id, "name": name, "description": description,
+        "day_start": "07:00", "shifts": SHIFTS,
         "anesthesia_record": {"enabled": True, "sections": ["caseInfo", "outcome"],
                               "optional_sections": ["line", "comorbid", "pain"]},
         "forms": entries,
         "packet": [{"kind": "anesthesia_report", "mode": "standard"}] +
                   [{"kind": "form", "form_id": fid} for fid, _, _ in forms],
-        "bundled_forms": {fid: {"version": 1, "definition": BY_ID[fid]} for fid, _, _ in forms},
+        "bundled_forms": {fid: {"version": BY_ID[fid]["schema_version"], "definition": BY_ID[fid]} for fid, _, _ in forms},
     }
 
 
@@ -586,11 +602,12 @@ WORKFLOWS = [
              ]),
     workflow("icu_critical", "Critical Care ICU",
              "Medical / surgical critical care: shock, sepsis and respiratory failure – daily SOFA, sepsis hour-1 "
-             "bundle, lung-protective ventilation with VAP bundle, daily rounds, devices, discharge.", [
+             "bundle, lung-protective ventilation with a per-shift VAP bundle, daily rounds, devices, discharge.", [
                  ("icu_admission", "preop", True),
                  ("critical_icu_sofa", "intraop", True),
                  ("critical_icu_sepsis_bundle", "preop", False),
                  ("critical_icu_ventilator", "intraop", False),
+                 ("critical_icu_vap_check", "intraop", False),
                  ("icu_daily_round", "intraop", True),
                  ("icu_lines_devices", "intraop", False),
                  ("icu_discharge", "postop", True),
@@ -601,6 +618,7 @@ WORKFLOWS = [
 def main() -> int:
     sys.path.insert(0, str(ROOT / "services/flora-api"))
     from app.formdev.definition import validate_definition
+    from app import form_schedule
 
     failed = False
     for definition in FORMS:
@@ -608,6 +626,13 @@ def main() -> int:
         for issue in issues:
             failed = True
             print(f"{definition['form_id']}: {issue}")
+    for wf in WORKFLOWS:
+        issues = form_schedule.day_settings_issues(wf.get("day_start"), wf.get("shifts"))
+        for index, entry in enumerate(wf["forms"]):
+            issues += form_schedule.schedule_issues(entry.get("schedule"), f"$.forms[{index}].schedule")
+        for issue in issues:
+            failed = True
+            print(f"{wf['id']}: {issue}")
     if failed:
         return 1
     for wf in WORKFLOWS:

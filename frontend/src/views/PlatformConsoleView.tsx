@@ -157,7 +157,7 @@ export default function PlatformConsoleView({ user, onLogout }: Props) {
         <button type="button" className={buttonClass} onClick={onLogout}>Sign out</button>
       </div>
     </header>
-    <main className="mx-auto max-w-[1100px] space-y-4 p-4 md:p-6">
+    <main className="w-full space-y-4 p-4 md:p-6">
       <p className="text-sm text-[var(--app-muted)]">Each account is one hospital with its own database schema. Platform administrators manage accounts here but cannot open any account's patients or settings.</p>
       {secret ? <SecretNotice code={secret.code} secret={secret.secret} onClose={() => setSecret(null)} /> : null}
       {error ? <p role="alert" className="rounded-lg border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-500">{error}</p> : null}

@@ -204,7 +204,7 @@ export default function AccountView({ sessionUser }: { sessionUser: AuthUser | n
     finally { setSaving(false); }
   };
 
-  return <div className="mx-auto flex h-full w-full max-w-[1180px] flex-col gap-4 overflow-y-auto p-4 md:p-6">
+  return <div className="flex h-full w-full flex-col gap-4 overflow-y-auto p-4 md:p-6">
     <header><h1 className="text-xl font-bold text-[var(--app-text)]">Account settings</h1><p className="text-sm text-[var(--app-muted)]">Personal profile and workspace preferences</p></header>
     {error ? <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</div> : null}
     {message ? <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{message}</div> : null}
@@ -239,7 +239,7 @@ export default function AccountView({ sessionUser }: { sessionUser: AuthUser | n
       <section className="space-y-4 rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-5">
         <h2 className="font-semibold">Chart preferences</h2>
         <div className="grid max-w-xl gap-3 sm:grid-cols-2">
-          <label className="block text-sm">Default time scale<select className="mt-1 w-full rounded-lg border border-[var(--app-border)] px-3 py-2" value={scale} onChange={e => setScale(Number(e.target.value))}>{[1,5,10,15,30,60].map(value => <option key={value} value={value}>{value} min</option>)}</select></label>
+          <label className="block text-sm">Default time scale<select className="mt-1 w-full rounded-lg border border-[var(--app-border)] px-3 py-2" value={scale} onChange={e => setScale(Number(e.target.value))}>{[1,5,15,30,60,120,240,360,720,1440].map(value => <option key={value} value={value}>{value < 60 ? `${value} min` : value === 1440 ? "1 day" : `${value / 60} h`}</option>)}</select></label>
           <label className="block text-sm">Future columns<input type="number" min={0} max={MAX_FUTURE_COLUMNS} step={1} className="mt-1 w-full rounded-lg border border-[var(--app-border)] px-3 py-2" value={futureColumns} onChange={event => setFutureColumns(normalizeFutureColumns(event.target.value))} /></label>
         </div>
         <div className="grid gap-2 sm:grid-cols-2">{PARAMETERS.map(([key, label]) => <label key={key} className="flex items-center gap-2 rounded-lg border border-[var(--app-border)] px-3 py-2 text-sm"><input type="checkbox" checked={parameters.includes(key)} onChange={() => toggleParameter(key)} />{label}</label>)}</div>

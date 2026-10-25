@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from device_medical_service.envelope import RawFrame, now_ms
+from device_medical_service.envelope import RawFrame, now_ms, wave_chunk
 
 # Flora parameter keys (`ivy_param`) understood by the Leaf device writer.
 FLORA_PARAMS = {
@@ -32,6 +32,7 @@ class Parser:
         self.pod = pod
         self.options = options or {}
         self._measurements = []
+        self._waves = []
         codes = {str(k).lower(): v for k, v in self.default_codes.items()}
         codes.update({str(k).lower(): v for k, v in (self.options.get("codes") or {}).items()})
         self.codes = codes
@@ -63,6 +64,15 @@ class Parser:
             "system_ts": frame.ts, "device_ts": None,
             "gateway_id": frame.gateway_id, "seq": frame.seq,
         })
+
+    def drain_waves(self) -> list[dict[str, Any]]:
+        """Waveform runs (`gw.wave`) recorded by feed()."""
+        rows, self._waves = self._waves, []
+        return rows
+
+    def record_wave(self, channel: str, rate_hz: float, t0: int, samples: list[int], device_id: str | None = None):
+        if samples:
+            self._waves.append(wave_chunk(device_id or self.device_id, self.pod, channel, rate_hz, t0, samples))
 
     def feed(self, frame: RawFrame) -> list[dict[str, Any]]:
         raise NotImplementedError

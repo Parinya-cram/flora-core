@@ -4,6 +4,7 @@ start through request files and reads their state from services.json (FLORA_NATI
 results as docker_ops, so main.py does not change."""
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -21,7 +22,7 @@ PORTS = {"kafka": {"9094/tcp": ["7414"]}, "gateway-db": {"5432/tcp": ["7412"]}, 
          "socket-controller": {"9001/tcp": ["9001"], "9002/tcp": ["9002"], "9500/tcp": ["9500"], "2051/tcp": ["2051"]},
          "webhook-controller": {"9003/tcp": ["9003"]}, "gateway-service": {"8000/tcp": ["7400"]}, "kong": {"8000/tcp": ["7410"]}}
 
-_parsers: dict[str, dict[str, Any]] = {}   # device_id -> {process, spec, wanted}
+_parsers: dict[str, dict[str, Any]] = {}   # device_id (or "pod:<pod>") -> {process, spec, wanted}
 _lock = threading.Lock()
 
 
@@ -33,11 +34,14 @@ class DockerException(Exception):
     pass
 
 
-def _launch(device_id: str, spec: dict[str, Any]) -> subprocess.Popen:
+def _launch(key: str, spec: dict[str, Any]) -> subprocess.Popen:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
-    log = open(LOG_DIR / f"parser-{device_id}.log", "ab")
-    env = {**os.environ, "FLORA_KAFKA_BROKERS": settings.KAFKA_BROKERS, "DEVICE_ID": device_id, "POD": spec["pod"],
-           "PARSER": spec["parser"], "PARSER_OPTIONS": json.dumps(spec["options"]), "PYTHONUNBUFFERED": "1"}
+    log = open(LOG_DIR / f"parser-{re.sub(r'[^a-zA-Z0-9_.-]', '-', key)}.log", "ab")
+    if spec.get("demux"):   # one process for every device on the pod, split by source_ip
+        extra = {"POD_DEMUX": "1", "POD": spec["pod"], "DEVICE_MAP": json.dumps(spec["device_map"])}
+    else:
+        extra = {"DEVICE_ID": key, "POD": spec["pod"], "PARSER": spec["parser"], "PARSER_OPTIONS": json.dumps(spec["options"])}
+    env = {**os.environ, "FLORA_KAFKA_BROKERS": settings.KAFKA_BROKERS, **extra, "PYTHONUNBUFFERED": "1"}
     code = f"import sys, runpy; sys.path.insert(0, r'{PARSER_HOME}'); runpy.run_module('device_medical_service', run_name='__main__')"
     flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     return subprocess.Popen([sys.executable, "-c", code], env=env, stdout=log, stderr=log, creationflags=flags)
@@ -78,11 +82,48 @@ def stop_parser(device_id: str) -> None:
             entry["process"].kill()
 
 
-def parser_states() -> dict[str, dict[str, Any]]:
+def pod_parser_name(pod: str) -> str:
+    return "flora-gw-parser-pod-" + re.sub(r"[^a-zA-Z0-9_.-]", "-", pod)
+
+
+def start_pod_parser(pod: str, image: str, device_map: list[dict[str, Any]], config_hash: str) -> str:
+    key = f"pod:{pod}"
+    stop_pod_parser(pod)
+    spec = {"demux": True, "pod": pod, "device_map": device_map, "config_hash": config_hash, "parser": "pod"}
     with _lock:
-        return {device_id: {"container": f"parser-{device_id}", "status": "running" if entry["process"].poll() is None else "exited",
-                            "image": [f"native:{entry['spec']['parser']}"], "image_ref": "native"}
-                for device_id, entry in _parsers.items()}
+        process = _launch(key, spec)
+        _parsers[key] = {"process": process, "spec": spec, "wanted": True}
+    return f"pid-{process.pid}"
+
+
+def stop_pod_parser(pod: str) -> None:
+    stop_parser(f"pod:{pod}")
+
+
+def _state(key: str, entry: dict[str, Any]) -> dict[str, Any]:
+    return {"container": pod_parser_name(entry["spec"]["pod"]) if entry["spec"].get("demux") else f"parser-{key}",
+            "status": "running" if entry["process"].poll() is None else "exited",
+            "image": [f"native:{entry['spec']['parser']}"], "image_ref": "native"}
+
+
+def parser_states() -> dict[str, dict[str, Any]]:
+    """By device_id, like docker_ops: a device parsed by a pod process reports that process, with `pod` set."""
+    states: dict[str, dict[str, Any]] = {}
+    with _lock:
+        for key, entry in _parsers.items():
+            if entry["spec"].get("demux"):
+                for item in entry["spec"]["device_map"]:
+                    states.setdefault(item["device_id"], {**_state(key, entry), "pod": entry["spec"]["pod"]})
+            else:
+                states[key] = _state(key, entry)
+    return states
+
+
+def pod_parser_states() -> dict[str, dict[str, Any]]:
+    with _lock:
+        return {entry["spec"]["pod"]: {**_state(key, entry), "config_hash": entry["spec"]["config_hash"],
+                                       "device_ids": [item["device_id"] for item in entry["spec"]["device_map"]]}
+                for key, entry in _parsers.items() if entry["spec"].get("demux")}
 
 
 def _services() -> dict[str, str]:
@@ -121,5 +162,6 @@ def service_states() -> dict[str, str]:
     return _services()
 
 
-__all__ = ["start_parser", "stop_parser", "parser_states", "restart_service", "stop_service", "start_service",
+__all__ = ["start_parser", "stop_parser", "parser_states", "start_pod_parser", "stop_pod_parser", "pod_parser_states",
+           "pod_parser_name", "restart_service", "stop_service", "start_service",
            "service_states", "service_wiring", "ImageNotFound", "DockerException"]

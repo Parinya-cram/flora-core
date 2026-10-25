@@ -35,7 +35,8 @@ const AnoraStartSurgeryIcon = pngEventIcon("startsurgery.png", "Start Surgery");
 const AnoraEndSurgeryIcon = pngEventIcon("endsurgery.png", "End Surgery");
 const PositioningIcon = pngEventIcon("position.png", "Positioning");
 
-export const AXIS_STEPS = [1, 120] as const;
+/** Chart column widths (minutes) the scale picker offers; editions limit them by min/max. */
+export const AXIS_STEPS = [1, 5, 15, 30, 60, 120, 240, 360, 720, 1440] as const;
 export type AxisStepMin = number;
 export const DEFAULT_AXIS_STEP: AxisStepMin = 1;
 export type RowGroup = "core" | "measured" | "set";

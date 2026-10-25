@@ -2,12 +2,13 @@
 // so a demo can follow a patient from the OR room to recovery on one screen. Each switch signs out.
 // Only in dev builds (vite) or when VITE_FLORA_DEMO_WORKSTATIONS=1.
 
-export type DemoWorkstation = { id: string; name: string; role: string; apiBase: string };
+// liveBase is that Leaf's leaf-live port (/api/live/ws); leaf-api refuses the WebSocket.
+export type DemoWorkstation = { id: string; name: string; role: string; apiBase: string; liveBase: string };
 
 export const DEMO_WORKSTATIONS: DemoWorkstation[] = [
-  { id: "leaf-or-01", name: "OR-1", role: "Operating Room 1", apiBase: "http://127.0.0.1:7301" },
-  { id: "leaf-or-02", name: "OR-2", role: "Operating Room 2", apiBase: "http://127.0.0.1:7361" },
-  { id: "leaf-recovery-01", name: "Recovery", role: "OR1 Recovery", apiBase: "http://127.0.0.1:7371" },
+  { id: "leaf-or-01", name: "OR-1", role: "Operating Room 1", apiBase: "http://127.0.0.1:7301", liveBase: "http://127.0.0.1:7303" },
+  { id: "leaf-or-02", name: "OR-2", role: "Operating Room 2", apiBase: "http://127.0.0.1:7361", liveBase: "http://127.0.0.1:7363" },
+  { id: "leaf-recovery-01", name: "Recovery", role: "OR1 Recovery", apiBase: "http://127.0.0.1:7371", liveBase: "http://127.0.0.1:7373" },
 ];
 
 const STORAGE_KEY = "flora.demo.workstation";

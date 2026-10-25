@@ -13,13 +13,25 @@ services:
   leaf-api:
     environment:
       FLORA_DATABASE_URL: postgresql://flora_app:${LEAF_DB_APP_PASSWORD:-flora-leaf-app-local-only}@${FLORA_LEAF_ID}-db:5432/flora
+      FLORA_MIGRATION_DATABASE_URL: postgresql://flora_admin:${LEAF_DB_ADMIN_PASSWORD:-flora-leaf-admin-local-only}@${FLORA_LEAF_ID}-db:5432/flora
       FLORA_STT_URL: http://${FLORA_LEAF_ID}-stt:8000
     networks:
       default:
         aliases: ["${FLORA_LEAF_ID}-api"]
+  leaf-live:
+    environment:
+      FLORA_DATABASE_URL: postgresql://flora_app:${LEAF_DB_APP_PASSWORD:-flora-leaf-app-local-only}@${FLORA_LEAF_ID}-db:5432/flora
+      FLORA_MIGRATION_DATABASE_URL: postgresql://flora_admin:${LEAF_DB_ADMIN_PASSWORD:-flora-leaf-admin-local-only}@${FLORA_LEAF_ID}-db:5432/flora
+    networks:
+      default:
+        aliases: ["${FLORA_LEAF_ID}-live"]
   leaf-sync:
     environment:
       FLORA_LEAF_API_URL: http://${FLORA_LEAF_ID}-api:8000
+  leaf-web:
+    environment:
+      VITE_API_PROXY_TARGET: http://${FLORA_LEAF_ID}-api:8000
+      VITE_LIVE_PROXY_TARGET: http://${FLORA_LEAF_ID}-live:8000
 networks:
   default:
     name: flora-demo-leaves

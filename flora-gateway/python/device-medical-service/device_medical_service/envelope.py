@@ -10,6 +10,8 @@ from typing import Any
 OBS_TOPIC = "gw.obs"
 MEASUREMENT_TOPIC = "gw.measurements"
 LOG_TOPIC = "gw.logs"
+# Waveform runs, keyed by device_id: {device_id, pod, channel, rate_hz, t0 (ms), samples: [int16]}.
+WAVE_TOPIC = "gw.wave"
 
 
 def now_ms() -> int:
@@ -61,6 +63,12 @@ class RawFrame:
     @property
     def text(self) -> str:
         return self.data.decode("utf-8", errors="replace")
+
+
+def wave_chunk(device_id: str, pod: str, channel: str, rate_hz: float, t0: int, samples: list[int]) -> dict[str, Any]:
+    """`WaveChunk` in envelope.rs; samples must fit int16."""
+    return {"device_id": device_id, "pod": pod, "channel": channel, "rate_hz": rate_hz, "t0": int(t0),
+            "samples": [max(-32768, min(32767, int(sample))) for sample in samples]}
 
 
 def command(pod: str, data: bytes | str, **meta: Any) -> dict[str, Any]:

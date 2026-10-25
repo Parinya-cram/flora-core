@@ -148,6 +148,19 @@ services:
     ports:
       - "127.0.0.1:7406:5006"
 
+  # Live one-second chunks to Leaves over WebSocket (docs/live-stream/PROTOCOL.md);
+  # Leaves reach it through the edge at /stream/v1.
+  stream-hub:
+    <<: *rust
+    # Opt-in (--profile live) until a signed release ships the stream-hub binary.
+    profiles: ["live"]
+    command: ["stream-hub"]
+    ports:
+      - "127.0.0.1:${FLORA_GATEWAY_STREAM_PORT:-7407}:7407"
+    depends_on:
+      kafka: {condition: service_healthy}
+      gateway-db: {condition: service_healthy}
+
   kong:
     image: kong:3.9
     environment:
@@ -230,6 +243,7 @@ services:
     profiles: ["demo"]
     environment:
       SIM_INTERVAL_SEC: ${SIM_INTERVAL_SEC:-5}
+      SIM_M540_MONITORS: ${SIM_M540_MONITORS:-3}
     ports:
       - "127.0.0.1:${FLORA_GATEWAY_SIMULATOR_PORT:-7420}:8000"
     depends_on:

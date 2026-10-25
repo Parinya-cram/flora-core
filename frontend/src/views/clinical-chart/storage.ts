@@ -2,7 +2,7 @@ import { AXIS_STEPS, DEFAULT_AXIS_STEP, type AxisStepMin } from "./constants";
 
 function parseAxisStep(raw: string | null): AxisStepMin | null {
   const n = Number(raw);
-  if (Number.isInteger(n) && n >= AXIS_STEPS[0] && n <= AXIS_STEPS[1]) return n;
+  if (Number.isInteger(n) && n >= AXIS_STEPS[0] && n <= AXIS_STEPS[AXIS_STEPS.length - 1]) return n;
   return null;
 }
 

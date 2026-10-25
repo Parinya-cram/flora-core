@@ -10,5 +10,11 @@
   {"device_id": "icu-ventilator-01", "label": "ICU bed 1 ventilator", "device_type": "http-ventilator",
    "pod": "feeder.icu-ventilator", "leaf_id": "leaf-icu-01"},
   {"device_id": "or-vista-01", "label": "OR-1 Dräger Vista 120 S (simulated)", "device_type": "draeger-vista-120s",
-   "pod": "socket.vista", "leaf_id": "leaf-or-01"}
+   "pod": "socket.vista", "leaf_id": "leaf-or-01"},
+  {"device_id": "m540-sim-1", "label": "Simulated Dräger M540 #1", "device_type": "draeger-iacs-m540",
+   "pod": "socket.m540-relay", "options": {"source_ip": "10.20.0.11", "wave_channels": {"1-1": "ecg", "25-1": "pleth"}}},
+  {"device_id": "m540-sim-2", "label": "Simulated Dräger M540 #2", "device_type": "draeger-iacs-m540",
+   "pod": "socket.m540-relay", "options": {"source_ip": "10.20.0.12", "wave_channels": {"1-1": "ecg", "25-1": "pleth"}}},
+  {"device_id": "m540-sim-3", "label": "Simulated Dräger M540 #3", "device_type": "draeger-iacs-m540",
+   "pod": "socket.m540-relay", "options": {"source_ip": "10.20.0.13", "wave_channels": {"1-1": "ecg", "25-1": "pleth"}}}
 ]

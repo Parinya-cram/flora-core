@@ -338,16 +338,17 @@ function EcgPicker({ value, displayCode, onChange }: {
 
 function clinicalCellTooltip(value: string, fallbackHint: string, preferences: DateTimePreferences, detail?: TimelineCellProvenance) {
   if (!detail || detail.source !== "override") return fallbackHint ? `${value} (${fallbackHint})` : value;
-  const original = detail.original_value == null || detail.original_value === "" ? "No device reading" : String(detail.original_value);
+  const entered = detail.original_value == null || detail.original_value === "";  // typed where the device had no reading
+  const original = entered ? "No device reading" : String(detail.original_value);
   const source = String(detail.original_source || "medical device").replace(/^./, character => character.toUpperCase());
   const actor = detail.actor_name || detail.updated_by || detail.actor_username || "Unknown user";
   const editedAt = Number(detail.edited_at || detail.updated_at);
   const lines = [
-    `Edited value: ${value || "—"}`,
+    `${entered ? "Entered" : "Edited"} value: ${value || "—"}`,
     `Original ${source}: ${original}`,
-    `Edited by: ${actor}`,
+    `${entered ? "Entered" : "Edited"} by: ${actor}`,
   ];
-  if (Number.isFinite(editedAt)) lines.push(`Edited: ${formatConfiguredDateTime(editedAt, preferences)}`);
+  if (Number.isFinite(editedAt)) lines.push(`${entered ? "Entered" : "Edited"}: ${formatConfiguredDateTime(editedAt, preferences)}`);
   if (detail.reason) lines.push(`Reason: ${detail.reason}`);
   if (detail.note) lines.push(`Note: ${detail.note}`);
   if ((detail.audit_count || 0) > 0) lines.push(`Audit entries: ${detail.audit_count}`);
@@ -1351,6 +1352,41 @@ export default function ClinicalTimelineGrid({
       const selectionMasked = Boolean(maskedInWindow(maskSelection.rowId, maskSelection.columnIndex));
       const [from, to] = columnWindow(maskSelection.columnIndex);
       const keep = (event: ReactMouseEvent) => event.preventDefault();  // keep the cell focused
+      // A value a clinician typed is never masked: it is reverted (device reading shows again) or removed.
+      const columnTs = columns[maskSelection.columnIndex];
+      const shown = getDisplayCell(maskSelection.rowId, columnTs, maskSelection.columnIndex);
+      const enteredTs = shown.sourceTs ?? columnTs;
+      const entered = selectionMasked ? undefined : cellProvenance?.[maskSelection.rowId]?.[enteredTs];
+      const deviceReading = entered && entered.original_value != null && entered.original_value !== "" ? String(entered.original_value) : null;
+      if (entered && shown.value != null && shown.value !== "") {
+        return createPortal(
+          <div
+            className="app-theme-scope fixed z-[1150] flex items-center gap-1 rounded-xl border border-[var(--app-tooltip-border)] bg-[var(--app-tooltip-bg)] p-1 text-[var(--app-tooltip-text)] shadow-xl"
+            style={{ left: Math.max(8, rect.left + rect.width / 2 - 20), top: Math.max(8, rect.top - 40) }}
+            role="toolbar"
+            aria-label={`${maskSelection.rowLabel} entered value`}
+            onMouseDown={keep}
+          >
+            <button
+              type="button"
+              onMouseDown={keep}
+              onClick={() => {
+                // Leave the cell first (its draft still equals the value, so nothing is saved), or the
+                // input would write its draft back when it loses focus after the value is gone.
+                (maskSelection.element.querySelector("input") as HTMLInputElement | null)?.blur();
+                onChange?.(maskSelection.rowId, enteredTs, undefined);
+                setMaskSelection(null);
+              }}
+              title={deviceReading ? `Undo the edit: the device reading ${deviceReading} is shown again` : "Remove the entered value"}
+              className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true"><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></svg>
+              {deviceReading ? `Revert to ${deviceReading}` : "Remove value"}
+            </button>
+          </div>,
+          document.body,
+        );
+      }
       return createPortal(
         <div
           className="app-theme-scope fixed z-[1150] flex items-center gap-1 rounded-xl border border-[var(--app-tooltip-border)] bg-[var(--app-tooltip-bg)] p-1 text-[var(--app-tooltip-text)] shadow-xl"

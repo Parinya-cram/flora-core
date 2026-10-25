@@ -99,6 +99,47 @@ def _filters(status: str | None, q: str | None, date_from: int | None, date_to: 
     return " AND ".join(where), params
 
 
+def _combined_groups(database: Connection, ids: list[str]) -> dict[str, dict[str, Any]]:
+    """OR → Recovery transfers whose billing is combined: {global_case_id: {admission_id, part, ids}}."""
+    if not ids or database.execute(
+            "SELECT 1 FROM information_schema.columns WHERE table_name='canopy_admission' AND column_name='billing_mode'"
+    ).fetchone() is None:
+        return {}
+    rows = database.execute(
+        """SELECT id, or_global_case_id::text AS or_id, global_case_id::text AS recovery_id FROM canopy_admission
+           WHERE billing_mode='combined' AND or_global_case_id IS NOT NULL AND global_case_id IS NOT NULL
+             AND or_global_case_id <> global_case_id
+             AND (or_global_case_id::text = ANY(%s) OR global_case_id::text = ANY(%s))""", (ids, ids)).fetchall()
+    out = {}
+    for row in rows:
+        group = {"admission_id": str(row["id"]), "ids": [row["or_id"], row["recovery_id"]]}
+        out[row["or_id"]] = {**group, "part": "or"}
+        out[row["recovery_id"]] = {**group, "part": "recovery"}
+    return out
+
+
+def _merge(parts: list[dict[str, Any]]) -> dict[str, Any]:
+    """One bill from the OR and Recovery orders (OR first)."""
+    parts = sorted(parts, key=lambda row: 0 if row.get("_part") == "or" else 1)
+    base = dict(parts[0])
+    amounts = [row.get("total_amount") for row in parts if row.get("total_amount") is not None]
+    starts = [row.get("anesthesia_start") for row in parts if row.get("anesthesia_start")]
+    base.update({
+        "combined": True,
+        "status": "submitted" if all(row.get("status") == "submitted" for row in parts) else "draft",
+        "item_count": sum(int(row.get("item_count") or 0) for row in parts),
+        "total_amount": sum(float(value) for value in amounts) if amounts else None,
+        "anesthesia_start": min(starts) if starts else base.get("anesthesia_start"),
+        "order_updated_at": max(row.get("order_updated_at") or 0 for row in parts) or None,
+        "leaf_name": " + ".join(filter(None, (row.get("leaf_name") or row.get("leaf_id") for row in parts))),
+        "parts": [{"part": row.get("_part"), "global_case_id": str(row["global_case_id"]), "leaf_name": row.get("leaf_name"),
+                   "status": row.get("status"), "item_count": row.get("item_count"), "total_amount": row.get("total_amount"),
+                   "case_code": row.get("case_code")} for row in parts],
+    })
+    base.pop("_part", None)
+    return base
+
+
 @router.get("/api/fleet/billing/orders")
 def orders(status: str | None = Query(default=None, pattern="^(draft|submitted|void)$"),
            q: str | None = Query(default=None, max_length=80), date_from: int | None = Query(default=None, alias="from"),
@@ -115,15 +156,43 @@ def orders(status: str | None = Query(default=None, pattern="^(draft|submitted|v
             FROM canopy_case_billing_item i JOIN canopy_case_billing b ON b.global_case_id=i.global_case_id
             LEFT JOIN canopy_leaf_unit scope_unit ON scope_unit.leaf_id = b.leaf_id
             WHERE {where} GROUP BY i.item_code ORDER BY min(i.group_code), min(i.name)""", params).fetchall()
-    return {"rows": [billing.row_dict(r) for r in rows], "item_totals": [billing.row_dict(r) for r in totals]}
+    rows = [billing.row_dict(r) for r in rows]
+    # OR + Recovery of one transfer with combined billing: one row (the other part is added even when filtered out).
+    groups = _combined_groups(database, [str(row["global_case_id"]) for row in rows])
+    out, seen = [], set()
+    for row in rows:
+        group = groups.get(str(row["global_case_id"]))
+        if group is None:
+            out.append(row)
+            continue
+        if group["admission_id"] in seen:
+            continue
+        seen.add(group["admission_id"])
+        parts = database.execute(
+            f"""SELECT b.*, coalesce(nullif(l.canopy_display_name,''),l.display_name) AS leaf_name {ORDER_FROM}
+                WHERE b.global_case_id::text = ANY(%s) AND {IN_SCOPE}""", (group["ids"], scope, scope)).fetchall()
+        out.append(_merge([{**billing.row_dict(part), "_part": groups[str(part["global_case_id"])]["part"]} for part in parts]))
+    return {"rows": out, "item_totals": [billing.row_dict(r) for r in totals]}
 
 
 @router.get("/api/fleet/billing/orders/{global_case_id}")
 def order(global_case_id: str, scope: list[str] | None = Depends(fleet_scope), database: Connection = Depends(connection)) -> dict:
-    row = database.execute(f"SELECT b.* {ORDER_FROM} WHERE b.global_case_id::text=%s AND {IN_SCOPE}",
-                           (global_case_id, scope, scope)).fetchone()
-    if not row:
+    group = _combined_groups(database, [global_case_id]).get(global_case_id)
+    ids = group["ids"] if group else [global_case_id]
+    rows = database.execute(
+        f"""SELECT b.*, coalesce(nullif(l.canopy_display_name,''),l.display_name) AS leaf_name {ORDER_FROM}
+            WHERE b.global_case_id::text = ANY(%s) AND {IN_SCOPE}""", (ids, scope, scope)).fetchall()
+    if not rows:
         raise HTTPException(404, "billing order not found")
-    items = database.execute("SELECT * FROM canopy_case_billing_item WHERE global_case_id::text=%s ORDER BY line_no",
-                             (global_case_id,)).fetchall()
-    return {"order": billing.row_dict(row), "items": [billing.row_dict(r) for r in items]}
+    parts = {str(row["global_case_id"]): (_combined_groups(database, ids).get(str(row["global_case_id"])) or {}).get("part")
+             for row in rows}
+    items = database.execute(
+        "SELECT * FROM canopy_case_billing_item WHERE global_case_id::text = ANY(%s) ORDER BY line_no", ([str(r["global_case_id"]) for r in rows],)
+    ).fetchall()
+    # Combined bill: OR lines first, then Recovery; each line says which part it came from.
+    lines = sorted(({**billing.row_dict(r), "part": parts.get(str(r["global_case_id"]))} for r in items),
+                   key=lambda line: (0 if line.get("part") in (None, "or") else 1, line.get("line_no") or 0))
+    if len(rows) == 1:
+        return {"order": billing.row_dict(rows[0]), "items": lines}
+    return {"order": _merge([{**billing.row_dict(row), "_part": parts.get(str(row["global_case_id"]))} for row in rows]),
+            "items": lines}

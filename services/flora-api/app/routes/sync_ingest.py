@@ -195,6 +195,18 @@ def ingest_batch(batch: SyncBatch, database: Connection = Depends(connection)) -
             accepted += 1
             if message.entity_type != "case_snapshot":
                 continue
+            # sync_message is the duplicate-delivery log (unique message_id); nothing reads old payloads,
+            # and the latest copy lives in sync_case_index. Keep the full payload only on the newest
+            # snapshot per case, so a 30-day ICU stay does not keep thousands of full snapshots.
+            # (UPDATE, not DELETE: flora_sync has no DELETE on sync_message, and the row keeps
+            # rejecting a re-delivered message.) Each new snapshot blanks the previous ones, so only
+            # recent revisions need looking at (index leaf_id, revision).
+            database.execute(
+                """UPDATE sync_message SET payload='{}'::jsonb
+                   WHERE leaf_id=%s AND revision >= %s AND id < %s AND entity_type='case_snapshot'
+                     AND entity_id=%s AND payload <> '{}'::jsonb""",
+                (batch.leaf_id, message.revision - 7 * 86_400_000, inserted["id"], message.entity_id),
+            )
             case = message.payload.get("case") or {}
             global_case_id = _global_case_id(batch.hospital_id, batch.leaf_id, message.entity_id)
             if database.execute(
@@ -239,10 +251,13 @@ def ingest_batch(batch: SyncBatch, database: Connection = Depends(connection)) -
                 with database.transaction():
                     billing.project_snapshot(database, global_case_id, batch.leaf_id, message.entity_id,
                                              message.payload, message.revision, int(time.time() * 1000))
-            # Leafs with the case form exchange (app/case_forms.py) send their forms there, field by field with receipts.
-            if message.payload.get("workflow_forms") and not message.payload.get("case_forms_channel"):
+            # Leafs with the case form exchange (app/case_forms.py) send their forms there, field by field with
+            # receipts; scheduled entries (workflow_entries) still come this way.
+            forms = {} if message.payload.get("case_forms_channel") else (message.payload.get("workflow_forms") or {})
+            if forms or message.payload.get("workflow_entries"):
                 workflow_forms.append({"global_case_id": str(global_case_id), "hn": case.get("hn"),
-                                       "workflow_forms": message.payload["workflow_forms"]})
+                                       "workflow_forms": forms,
+                                       "workflow_entries": message.payload.get("workflow_entries") or []})
         assignment = database.execute(
             """SELECT desired_config,desired_version,applied_version
                FROM canopy_leaf_assignment WHERE leaf_id=%s""",
@@ -577,6 +592,8 @@ def _claim(database: Connection, admission_id: str, leaf_id: str, case: dict[str
         return "missing"
     if row["claimed_leaf_id"] and row["claimed_leaf_id"] != leaf_id:
         from .. import or_sessions
+        if or_sessions.transfer_claim(database, row, leaf_id, case):
+            return "claimed"  # OR → Recovery transfer: the recovery bed's new case takes the booking
         if or_sessions.is_previous_leaf(database, str(row["id"]), leaf_id):
             return "previous"  # the OR room's Leaf, after the case moved on to recovery
         if case is not None and row["status"] != "conflict":
@@ -603,6 +620,44 @@ def claim_admission(admission_id: str, payload: AdmissionClaim, database: Connec
         result = _claim(database, admission_id, payload.leaf_id)
     if result in {"taken", "missing"}:
         raise HTTPException(status_code=409, detail="admission already started elsewhere or cancelled")
+    return {"ok": True, "result": result}
+
+
+class TransferOut(BaseModel):
+    leaf_id: str
+    to_leaf_id: str
+    case_id: int
+    global_case_id: str | None = None
+    admission_id: str | None = None
+    hn: str | None = None
+    admission_number: str | None = None
+    patient: dict[str, Any] = Field(default_factory=dict)
+    billing_mode: str | None = None
+    at: int | None = None
+    by: str | None = None
+
+
+@router.post("/transfers", dependencies=[Depends(require_sync_secret)])
+def transfer_out(payload: TransferOut, database: Connection = Depends(connection)) -> dict[str, Any]:
+    """A Leaf discharges its case to another Leaf (or_sessions.transfer_out)."""
+    from .. import or_sessions
+    try:
+        with database.transaction():
+            admission_id = or_sessions.transfer_out(database, payload.leaf_id, payload.model_dump())
+    except or_sessions.ReopenRefused as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return {"ok": True, "admission_id": admission_id}
+
+
+@router.post("/admissions/{admission_id}/reopen", dependencies=[Depends(require_sync_secret)])
+def reopen_admission(admission_id: str, payload: AdmissionClaim, database: Connection = Depends(connection)) -> dict[str, Any]:
+    """The Leaf cancels the discharge / transfer of this admission's case (or_sessions.reopen)."""
+    from .. import or_sessions
+    try:
+        with database.transaction():
+            result = or_sessions.reopen(database, admission_id, payload.leaf_id)
+    except or_sessions.ReopenRefused as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     return {"ok": True, "result": result}
 
 

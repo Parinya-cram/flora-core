@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import copy
 import json
+import uuid
 from typing import Any, Literal
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
@@ -13,7 +14,7 @@ from psycopg import Connection
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
-from .. import case_forms, form_sync
+from .. import case_forms, form_schedule, form_sync
 from ..clinical import case_audit
 from ..database import connection
 from .auth_leaf import now_ms, require_permission, service_only
@@ -176,7 +177,8 @@ def apply_on_start(database: Connection, case_id: int, workflow: dict[str, Any] 
 # ---------------------------------------------------------------- case forms
 
 def case_row(database: Connection, case_id: int, lock: bool = False) -> dict[str, Any]:
-    row = database.execute("SELECT id, status, workflow FROM cases WHERE id=%s" + (" FOR UPDATE" if lock else ""),
+    row = database.execute("SELECT id, status, workflow, start_time, discharge_time, created_at FROM cases WHERE id=%s"
+                           + (" FOR UPDATE" if lock else ""),
                            (case_id,)).fetchone()
     if row is None:
         raise HTTPException(404, "case not found")
@@ -232,6 +234,80 @@ def strip_bundle(workflow: dict[str, Any] | None) -> dict[str, Any] | None:
     return {key: value for key, value in workflow.items() if key not in {"bundled_forms", "bundled_scores"}}
 
 
+# ---------------------------------------------------------------- scheduled forms (ICU rounds, docs/ICU-ROUNDS.md)
+
+def schedule_of(entry: dict[str, Any]) -> dict[str, Any] | None:
+    schedule = entry.get("schedule")
+    return schedule if isinstance(schedule, dict) and schedule.get("kind") in form_schedule.KINDS else None
+
+
+def entry_rows(database: Connection, case_id: int, form_id: str | None = None) -> list[dict[str, Any]]:
+    if form_id is None:
+        return database.execute("SELECT * FROM case_form_entry WHERE case_id=%s ORDER BY form_id, slot_ts NULLS LAST, created_at",
+                                (case_id,)).fetchall()
+    return database.execute("SELECT * FROM case_form_entry WHERE case_id=%s AND form_id=%s ORDER BY slot_ts NULLS LAST, created_at",
+                            (case_id, form_id)).fetchall()
+
+
+def public_entry(row: dict[str, Any]) -> dict[str, Any]:
+    return {"id": str(row["id"]), "slot_ts": row["slot_ts"], "status": row["status"], "data": row["data"] or {},
+            "formVersion": row["form_version"], "updatedAt": row["updated_at"], "updatedBy": row.get("updated_by"),
+            "completedAt": row.get("completed_at"), "completedBy": row.get("completed_by"),
+            "skipReason": row.get("skip_reason")}
+
+
+def case_start(case: dict[str, Any]) -> int:
+    return int(case.get("start_time") or case.get("created_at") or now_ms())
+
+
+def case_end(case: dict[str, Any]) -> int | None:
+    """No new slots after discharge (late documentation of earlier slots is still allowed)."""
+    if case.get("status") in ("discharged", "archived"):
+        return int(case.get("discharge_time") or now_ms())
+    return int(case["discharge_time"]) if case.get("discharge_time") else None
+
+
+def form_slots(case: dict[str, Any], entry: dict[str, Any], rows: list[dict[str, Any]], current: int,
+               timezone: str) -> list[dict[str, Any]]:
+    schedule = schedule_of(entry)
+    if schedule is None:
+        return []
+    workflow = case.get("workflow") or {}
+    return form_schedule.slots(schedule, case_start(case), case_end(case), current, timezone,
+                               form_schedule.workflow_day_start(workflow), form_schedule.workflow_shifts(workflow),
+                               [row for row in rows if row["slot_ts"] is not None])
+
+
+def form_title(database: Connection, workflow: dict[str, Any], entry: dict[str, Any]) -> str:
+    if entry.get("title"):
+        return str(entry["title"])
+    definition = definition_for(database, workflow, entry) or {}
+    return str(definition.get("title") or entry["form_id"])
+
+
+@router.get("/worklist")
+def worklist(_: dict = Depends(require_permission("case.read")), database: Connection = Depends(connection)) -> dict[str, Any]:
+    """Due / overdue scheduled forms of every active case (Ward page, case switcher)."""
+    timezone = form_schedule.timezone_of(database)
+    current = now_ms()
+    cases = database.execute(
+        "SELECT id, status, workflow, start_time, discharge_time, created_at FROM cases WHERE status='active' ORDER BY id").fetchall()
+    out = []
+    for case in cases:
+        workflow = case["workflow"] or {}
+        forms = []
+        scheduled = [entry for entry in workflow.get("forms") or [] if isinstance(entry, dict) and schedule_of(entry)]
+        rows = entry_rows(database, case["id"]) if scheduled else []
+        for entry in scheduled:
+            slot_list = form_slots(case, entry, [row for row in rows if row["form_id"] == entry["form_id"]], current, timezone)
+            counts = form_schedule.summary(slot_list)
+            forms.append({"form_id": entry["form_id"], "title": form_title(database, workflow, entry), "due": counts["due"],
+                          "overdue": counts["overdue"], "next_slot_ts": form_schedule.next_slot_ts(slot_list)})
+        out.append({"case_id": case["id"], "due": sum(form["due"] for form in forms),
+                    "overdue": sum(form["overdue"] for form in forms), "forms": forms})
+    return {"cases": out}
+
+
 @router.get("/{case_id}/workflow")
 def case_workflow(case_id: int, _: dict = Depends(require_permission("case.read")),
                   database: Connection = Depends(connection)) -> dict[str, Any]:
@@ -240,13 +316,20 @@ def case_workflow(case_id: int, _: dict = Depends(require_permission("case.read"
     if workflow is None:
         return {"workflow": None, "forms": {}}
     saved = records(database, case_id)
+    timezone = form_schedule.timezone_of(database)
     forms = {}
     for entry in workflow.get("forms") or []:
         if isinstance(entry, dict) and entry.get("form_id"):
+            schedule = schedule_of(entry)
             definition = definition_for(database, workflow, entry)
-            forms[entry["form_id"]] = {"definition": definition, "record": public_record(saved.get(entry["form_id"]))}
+            forms[entry["form_id"]] = {"definition": definition,
+                                       "record": None if schedule else public_record(saved.get(entry["form_id"])),
+                                       "schedule": schedule}
+            if schedule:
+                rows = entry_rows(database, case_id, entry["form_id"])
+                forms[entry["form_id"]]["summary"] = form_schedule.summary(form_slots(case, entry, rows, now_ms(), timezone))
             # A repeatable form: its further copies, each under its own key ("<form_id>~2"...).
-            for key in copies(saved, entry["form_id"]) if entry.get("repeatable") else []:
+            for key in copies(saved, entry["form_id"]) if entry.get("repeatable") and not schedule else []:
                 forms[key] = {"definition": definition, "record": public_record(saved[key]),
                               "of": entry["form_id"], "instance": case_forms.instance_of(key)}
     return {"workflow": strip_bundle(workflow), "forms": forms}
@@ -560,3 +643,152 @@ def get_form_file(case_id: int, sha256: str, _: dict = Depends(require_permissio
     disposition = "inline" if meta["media_type"] in INLINE_TYPES else "attachment"
     return Response(content=content, media_type=meta["media_type"], headers={
         "Content-Disposition": disposition, "X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=3600"})
+
+
+# ---------------------------------------------------------------- scheduled form entries
+
+@router.get("/{case_id}/workflow-entries")
+def workflow_entries(case_id: int, _: dict = Depends(require_permission("case.read")),
+                     database: Connection = Depends(connection)) -> list[dict[str, Any]]:
+    """Every scheduled-form entry of the case, [Entry + form_id] (sync worker snapshot `workflow_entries`)."""
+    case_row(database, case_id)
+    if database.execute("SELECT to_regclass('case_form_entry') AS t").fetchone()["t"] is None:
+        return []  # Leaf database without migration 0097 yet
+    return [{**public_entry(row), "form_id": row["form_id"]} for row in entry_rows(database, case_id)]
+
+
+def scheduled_entry(case: dict[str, Any], form_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    entry = form_entry(case["workflow"], form_id)
+    schedule = schedule_of(entry)
+    if schedule is None:
+        raise HTTPException(400, f"form '{form_id}' is not scheduled in this case's workflow")
+    return entry, schedule
+
+
+def writable(case: dict[str, Any]) -> None:
+    if case["status"] == "archived":
+        raise HTTPException(409, "archived case is read-only")
+
+
+def entry_row(database: Connection, case_id: int, form_id: str, entry_id: uuid.UUID, lock: bool = False) -> dict[str, Any]:
+    row = database.execute("SELECT * FROM case_form_entry WHERE id=%s AND case_id=%s AND form_id=%s"
+                           + (" FOR UPDATE" if lock else ""), (entry_id, case_id, form_id)).fetchone()
+    if row is None:
+        raise HTTPException(404, "entry not found")
+    return row
+
+
+@router.get("/{case_id}/workflow-forms/{form_id}/entries")
+def list_entries(case_id: int, form_id: str, _: dict = Depends(require_permission("case.read")),
+                 database: Connection = Depends(connection)) -> dict[str, Any]:
+    case = case_row(database, case_id)
+    entry = form_entry(case["workflow"], form_id)
+    timezone = form_schedule.timezone_of(database)
+    rows = entry_rows(database, case_id, form_id)
+    slot_list = form_slots(case, entry, rows, now_ms(), timezone)
+    return {"form_id": form_id, "schedule": schedule_of(entry), "timezone": timezone, "slots": slot_list,
+            "unscheduled": [public_entry(row) for row in rows if row["slot_ts"] is None],
+            "summary": form_schedule.summary(slot_list)}
+
+
+class EntryCreate(BaseModel):
+    slot_ts: int | None = None
+
+
+@router.post("/{case_id}/workflow-forms/{form_id}/entries")
+def create_entry(case_id: int, form_id: str, payload: EntryCreate, actor: dict = Depends(require_permission("case.chart")),
+                 database: Connection = Depends(connection)) -> dict[str, Any]:
+    """A new entry for a slot (idempotent: the slot's existing entry is returned) or an unscheduled one (slot_ts null)."""
+    with database.transaction():
+        case = case_row(database, case_id, lock=True)
+        writable(case)
+        entry, _schedule = scheduled_entry(case, form_id)
+        current = now_ms()
+        if payload.slot_ts is not None:
+            slot_list = form_slots(case, entry, [], current, form_schedule.timezone_of(database))
+            if payload.slot_ts not in {slot["slot_ts"] for slot in slot_list}:
+                raise HTTPException(400, f"{payload.slot_ts} is not a slot of form '{form_id}'")
+            existing = database.execute("SELECT * FROM case_form_entry WHERE case_id=%s AND form_id=%s AND slot_ts=%s",
+                                        (case_id, form_id, payload.slot_ts)).fetchone()
+            if existing is not None:
+                return {"entry": public_entry(existing)}
+        row = database.execute(
+            """INSERT INTO case_form_entry (id, case_id, form_id, form_version, slot_ts, status, created_at, created_by,
+                                            updated_at, updated_by)
+               VALUES (%s,%s,%s,%s,%s,'draft',%s,%s,%s,%s)
+               ON CONFLICT (case_id, form_id, slot_ts) WHERE slot_ts IS NOT NULL DO NOTHING RETURNING *""",
+            (uuid.uuid4(), case_id, form_id, int(entry["version"]), payload.slot_ts, current, actor["username"],
+             current, actor["username"])).fetchone()
+        if row is None:  # created concurrently for the same slot
+            row = database.execute("SELECT * FROM case_form_entry WHERE case_id=%s AND form_id=%s AND slot_ts=%s",
+                                   (case_id, form_id, payload.slot_ts)).fetchone()
+        else:
+            case_audit(database, case_id, f"workflow_form_entry.create:{form_id}", None,
+                       {"entry_id": str(row["id"]), "slot_ts": payload.slot_ts}, actor)
+    return {"entry": public_entry(row)}
+
+
+@router.get("/{case_id}/workflow-forms/{form_id}/entries/{entry_id}")
+def get_entry(case_id: int, form_id: str, entry_id: uuid.UUID, _: dict = Depends(require_permission("case.read")),
+              database: Connection = Depends(connection)) -> dict[str, Any]:
+    case = case_row(database, case_id)
+    entry = form_entry(case["workflow"], form_id)
+    row = entry_row(database, case_id, form_id, entry_id)
+    return {"definition": definition_for(database, case["workflow"], {**entry, "version": row["form_version"]})
+            or definition_for(database, case["workflow"], entry), "entry": public_entry(row)}
+
+
+@router.patch("/{case_id}/workflow-forms/{form_id}/entries/{entry_id}")
+def patch_entry(case_id: int, form_id: str, entry_id: uuid.UUID, payload: FormPatch,
+                actor: dict = Depends(require_permission("case.chart")),
+                database: Connection = Depends(connection)) -> dict[str, Any]:
+    with database.transaction():
+        case = case_row(database, case_id, lock=True)
+        writable(case)
+        form_entry(case["workflow"], form_id)
+        row = entry_row(database, case_id, form_id, entry_id, lock=True)
+        old = dict(row["data"] or {})
+        merged = {**old, **payload.patch}
+        current = now_ms()
+        versions = form_sync.stamp_changes(old, merged, row["field_versions"] or {}, current, set(payload.patch))
+        status = payload.status or row["status"]
+        completed_at, completed_by = row["completed_at"], row["completed_by"]
+        if payload.status == "completed" and row["status"] != "completed":
+            completed_at, completed_by = current, actor["username"]
+        elif payload.status == "draft":
+            completed_at = completed_by = None
+        skip_reason = row["skip_reason"] if status == "skipped" else None
+        saved = database.execute(
+            """UPDATE case_form_entry SET data=%s, field_versions=%s, status=%s, skip_reason=%s, updated_at=%s,
+                 updated_by=%s, completed_at=%s, completed_by=%s WHERE id=%s RETURNING *""",
+            (Jsonb(merged), Jsonb(versions), status, skip_reason, current, actor["username"], completed_at, completed_by,
+             entry_id)).fetchone()
+        case_audit(database, case_id, f"workflow_form_entry.patch:{form_id}",
+                   {"entry_id": str(entry_id), "data": old, "status": row["status"]},
+                   {"entry_id": str(entry_id), "data": merged, "status": status}, actor)
+    return {"entry": public_entry(saved)}
+
+
+class EntrySkip(BaseModel):
+    reason: str = ""
+
+
+@router.post("/{case_id}/workflow-forms/{form_id}/entries/{entry_id}/skip")
+def skip_entry(case_id: int, form_id: str, entry_id: uuid.UUID, payload: EntrySkip,
+               actor: dict = Depends(require_permission("case.chart")),
+               database: Connection = Depends(connection)) -> dict[str, Any]:
+    with database.transaction():
+        case = case_row(database, case_id, lock=True)
+        writable(case)
+        form_entry(case["workflow"], form_id)
+        row = entry_row(database, case_id, form_id, entry_id, lock=True)
+        reason = payload.reason.strip()[:500]
+        current = now_ms()
+        saved = database.execute(
+            """UPDATE case_form_entry SET status='skipped', skip_reason=%s, updated_at=%s, updated_by=%s,
+                 completed_at=NULL, completed_by=NULL WHERE id=%s RETURNING *""",
+            (reason or None, current, actor["username"], entry_id)).fetchone()
+        case_audit(database, case_id, f"workflow_form_entry.skip:{form_id}",
+                   {"entry_id": str(entry_id), "status": row["status"]},
+                   {"entry_id": str(entry_id), "status": "skipped", "reason": reason}, actor)
+    return {"entry": public_entry(saved)}

@@ -7,9 +7,11 @@ Manufacturers, local device types and installed devices are edited on the admin 
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import re
 import json
 import logging
+import secrets
 import tomllib
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -24,7 +26,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import AfterValidator, BaseModel, BeforeValidator, Field
 from psycopg.types.json import Jsonb
 
-from . import activity, alerts, auth, connection, db, docker_ops, settings
+from . import activity, alerts, auth, case_bindings, connection, db, docker_ops, settings
 from .streams import WINDOW_SEC, monitor
 
 log = logging.getLogger("gateway-service")
@@ -86,6 +88,10 @@ async def background_loop() -> None:
             STATE["activity_push"] = {**await activity.push(), "at": db.now_ms(), "error": None}
         except Exception as error:  # kept and resent next round
             STATE["activity_push"] = {"sent": 0, "at": db.now_ms(), "error": str(error)}
+        try:
+            STATE["case_bindings_push"] = {**await case_bindings.push(), "at": db.now_ms(), "error": None}
+        except Exception as error:  # kept and resent next round
+            STATE["case_bindings_push"] = {"sent": 0, "at": db.now_ms(), "error": str(error)}
         await asyncio.sleep(settings.SYNC_INTERVAL_SEC)
 
 
@@ -96,7 +102,7 @@ STATUS_RETENTION_MS = 7 * 86_400_000
 DEVICE_SILENT_MS = 120_000          # an enabled device with no data for this long counts as down
 CONTROLLER_LABELS = {"serial-controller": "Serial (RS-232)", "feeder-controller": "Feeder (HTTP poll)",
                      "webhook-controller": "Webhook (HTTP push)", "socket-controller": "Socket (TCP/UDP)",
-                     "collector": "Collector", "publisher": "Publisher"}
+                     "collector": "Collector", "publisher": "Publisher", "stream-hub": "Stream hub (Leaf live)"}
 
 
 async def sample_status() -> list[tuple[str, str, str | None]]:
@@ -509,27 +515,57 @@ def apply_type_to_pod(pod: str, device_type_code: str, device_id: str | None) ->
     return {"pod": pod, "changed": changes, "restarted": restarted}
 
 
-def start_instance(device_id: str) -> dict[str, Any]:
+def is_demux(device_type: dict[str, Any] | None) -> bool:
+    """Types whose instances share a pod run as one pod parser that splits frames by source_ip."""
+    return bool(device_type and device_type.get("demux"))
+
+
+def start_instance(device_id: str, force: bool = False) -> dict[str, Any]:
     instance = db.instance_row(db.fetch_one("SELECT * FROM gateway_device_instance WHERE device_id=%s", (device_id,)))
-    container_id = docker_ops.start_parser(instance, get_type(instance["device_type"]))
+    device_type = get_type(instance["device_type"])
+    if is_demux(device_type):
+        # The pod's parser carries every instance on the pod; reconcile rebuilds it when they change.
+        if force:
+            docker_ops.stop_pod_parser(instance["pod"])
+        return {"device_id": device_id, "pod_parser": docker_ops.pod_parser_name(instance["pod"]), **reconcile()}
+    container_id = docker_ops.start_parser(instance, device_type)
     db.execute("UPDATE gateway_device_instance SET container_id=%s, updated_at=%s WHERE device_id=%s",
                (container_id, db.now_ms(), device_id))
     return {"device_id": device_id, "container_id": container_id}
 
 
+def pod_device_map(members: list[tuple[dict[str, Any], dict[str, Any]]]) -> list[dict[str, Any]]:
+    return sorted(({"device_id": instance["device_id"], "parser": device_type["parser"],
+                    "options": {**(device_type.get("default_options") or {}), **(instance.get("options") or {})}}
+                   for instance, device_type in members), key=lambda item: item["device_id"])
+
+
 def reconcile() -> dict[str, Any]:
     """Parser containers follow the instance table, the license and the device type's image."""
     states = docker_ops.parser_states()
+    pod_states = docker_ops.pod_parser_states()
     licensed = license_state()["valid"]
+    types = {row["code"]: row for row in db.fetch_all("SELECT * FROM gateway_device_type")}
     started, stopped, upgraded = [], [], []
+    pods: dict[str, list[tuple[dict[str, Any], dict[str, Any]]]] = {}
     for instance in db.fetch_all("SELECT * FROM gateway_device_instance"):
+        device_type = types.get(instance["device_type"])
         state = states.get(instance["device_id"], {})
-        running = state.get("status") == "running"
         wanted = instance["enabled"] and licensed
+        if is_demux(device_type):
+            if state and not state.get("pod"):
+                # Left over from before the type ran as a pod parser.
+                docker_ops.stop_parser(instance["device_id"])
+                stopped.append(instance["device_id"])
+            if wanted:
+                pods.setdefault(instance["pod"], []).append((db.instance_row(instance), device_type))
+            continue
+        if state.get("pod"):
+            state = {}   # the type stopped being demux; its pod parser goes below
+        running = state.get("status") == "running"
         if wanted and running and not upgraded:
             # A newly approved gateway release pins a new parser image: replace one parser per
             # cycle so a bad image takes down one device feed, not all of them at once.
-            device_type = db.fetch_one("SELECT image FROM gateway_device_type WHERE code=%s", (instance["device_type"],))
             if device_type and state.get("image_ref") and state["image_ref"] != device_type["image"]:
                 try:
                     start_instance(instance["device_id"])
@@ -543,9 +579,31 @@ def reconcile() -> dict[str, Any]:
                 started.append(instance["device_id"])
             except Exception as error:
                 log.warning("cannot start %s: %s", instance["device_id"], error)
-        elif not wanted and instance["device_id"] in states:
+        elif not wanted and state:
             docker_ops.stop_parser(instance["device_id"])
             stopped.append(instance["device_id"])
+    for pod, members in sorted(pods.items()):
+        device_map = pod_device_map(members)
+        images = sorted({device_type["image"] for _, device_type in members})
+        if len(images) > 1:
+            log.warning("pod %s: device types use different images %s; using %s", pod, images, images[0])
+        image = images[0]
+        config_hash = hashlib.sha1(json.dumps(device_map, sort_keys=True).encode()).hexdigest()[:16]
+        state = pod_states.get(pod) or {}
+        try:
+            if state.get("status") != "running" or state.get("config_hash") != config_hash:
+                docker_ops.start_pod_parser(pod, image, device_map, config_hash)
+                started.append(f"pod:{pod}")
+                log.info("pod parser %s started for %s", pod, ", ".join(item["device_id"] for item in device_map))
+            elif state.get("image_ref") != image and not upgraded:
+                docker_ops.start_pod_parser(pod, image, device_map, config_hash)
+                upgraded.append(f"pod:{pod}")
+                log.info("pod parser %s now on %s", pod, image)
+        except Exception as error:
+            log.warning("cannot start pod parser %s: %s", pod, error)
+    for pod in set(pod_states) - set(pods):
+        docker_ops.stop_pod_parser(pod)
+        stopped.append(f"pod:{pod}")
     return {"started": started, "stopped": stopped, "upgraded": upgraded, "licensed": licensed}
 
 
@@ -589,6 +647,36 @@ def list_instances():
     return {"rows": rows}
 
 
+UNREGISTERED_WINDOW_MS = 10 * 60 * 1000
+
+
+@app.get("/api/pods/demux")
+def demux_pods():
+    """Pods parsed by one pod parser: the listener, its parser container, the sub devices
+    (instances tagged by source_ip) and monitors heard on the pod that no instance claims."""
+    pod_states = docker_ops.pod_parser_states()
+    rows = db.fetch_all(
+        "SELECT i.device_id, i.pod, i.device_type, i.options->>'source_ip' AS source_ip FROM gateway_device_instance i "
+        "JOIN gateway_device_type t ON t.code = i.device_type WHERE t.demux ORDER BY i.device_id")
+    pods: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        pod = pods.setdefault(row["pod"], {"pod": row["pod"], "device_types": [], "devices": [], "unregistered": []})
+        if row["device_type"] not in pod["device_types"]:
+            pod["device_types"].append(row["device_type"])
+        pod["devices"].append({"device_id": row["device_id"], "source_ip": row["source_ip"]})
+    heard = db.fetch_all(
+        "SELECT pod, detail->>'source_ip' AS source_ip, max(ts) AS last_seen FROM gateway_log "
+        "WHERE detail->>'event' = 'unregistered_monitor' AND ts > %s GROUP BY 1, 2 ORDER BY 2",
+        (db.now_ms() - UNREGISTERED_WINDOW_MS,))
+    for row in heard:
+        pod = pods.get(row["pod"])
+        if pod and row["source_ip"] not in {d["source_ip"] for d in pod["devices"]}:
+            pod["unregistered"].append({"source_ip": row["source_ip"], "last_seen": row["last_seen"]})
+    for pod in pods.values():
+        pod["container"] = pod_states.get(pod["pod"])
+    return {"rows": sorted(pods.values(), key=lambda p: p["pod"])}
+
+
 @app.post("/api/instances", dependencies=[Depends(require_admin)], status_code=201)
 def create_instance(payload: InstanceIn):
     get_type(payload.device_type)
@@ -629,7 +717,7 @@ def restart_instance(device_id: str):
     if instance is None:
         raise HTTPException(404, "device not found")
     check_license(instance["device_type"], adding=False)
-    return start_instance(device_id)
+    return start_instance(device_id, force=True)
 
 
 @app.post("/api/instances/{device_id}/enabled/{enabled}", dependencies=[Depends(require_admin)])
@@ -649,13 +737,77 @@ def set_enabled(device_id: str, enabled: bool):
 @app.delete("/api/instances/{device_id}", dependencies=[Depends(require_admin)])
 def delete_instance(device_id: str):
     docker_ops.stop_parser(device_id)
+    row = db.fetch_one("SELECT t.demux FROM gateway_device_instance i JOIN gateway_device_type t ON t.code = i.device_type "
+                       "WHERE i.device_id=%s", (device_id,))
     db.execute("DELETE FROM gateway_device_instance WHERE device_id=%s", (device_id,))
+    if row and row["demux"]:
+        reconcile()   # rebuilds (or stops) the pod parser without this device
     return {"deleted": device_id}
 
 
 @app.post("/api/instances/reconcile", dependencies=[Depends(require_admin)])
 def reconcile_now():
     return reconcile()
+
+
+# ------------------------------------------------------------------ Leaf live stream (stream-hub)
+
+class LeafTokenIn(BaseModel):
+    leaf_id: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,120}$")
+    label: str | None = Field(default=None, max_length=120)
+
+
+@app.get("/api/leaf-tokens")
+def list_leaf_tokens():
+    """Never returns a token; only its owner, label and state."""
+    return {"rows": db.fetch_all(
+        """SELECT t.id, t.leaf_id, t.label, t.created_at, t.created_by, t.revoked_at,
+                  (SELECT count(*) FROM gateway_case_binding b WHERE b.leaf_id = t.leaf_id AND b.unbound_at IS NULL) AS open_bindings
+           FROM gateway_leaf_token t ORDER BY t.revoked_at IS NOT NULL, t.leaf_id, t.created_at DESC""")}
+
+
+@app.post("/api/leaf-tokens", dependencies=[Depends(require_admin), Depends(auth.require_role_admin)], status_code=201)
+def create_leaf_token(payload: LeafTokenIn, request: Request):
+    """The plaintext token is in this response only; the gateway keeps its sha256."""
+    token = secrets.token_urlsafe(32)
+    row = db.fetch_one(
+        """INSERT INTO gateway_leaf_token (leaf_id, token_hash, label, created_by) VALUES (%s,%s,%s,%s)
+           RETURNING id, leaf_id, label, created_at""",
+        (payload.leaf_id, hashlib.sha256(token.encode()).hexdigest(), payload.label, request.state.user["username"]))
+    log.info("leaf token %s issued for %s by %s", row["id"], payload.leaf_id, request.state.user["username"])
+    return {**row, "token": token}
+
+
+@app.post("/api/leaf-tokens/{token_id}/revoke", dependencies=[Depends(require_admin), Depends(auth.require_role_admin)])
+def revoke_leaf_token(token_id: int, request: Request):
+    """The stream hub re-checks tokens every few seconds and closes a revoked Leaf's bindings ('revoked')."""
+    row = db.fetch_one("UPDATE gateway_leaf_token SET revoked_at = now() WHERE id=%s AND revoked_at IS NULL "
+                       "RETURNING id, leaf_id, revoked_at", (token_id,))
+    if row is None:
+        raise HTTPException(409, "token not found or already revoked")
+    log.info("leaf token %s (%s) revoked by %s", token_id, row["leaf_id"], request.state.user["username"])
+    return row
+
+
+@app.get("/api/case-bindings")
+def list_case_bindings(open: bool = False, leaf_id: str | None = None, device_id: str | None = None,
+                  case_uuid: str | None = None, limit: int = 200):
+    """Audit of case UUID ↔ device bindings from the stream hub; open ones first."""
+    where, params = [], []
+    if open:
+        where.append("b.unbound_at IS NULL")
+    for column, value in (("b.leaf_id", leaf_id), ("b.device_id", device_id), ("b.case_uuid::text", case_uuid)):
+        if value:
+            where.append(f"{column} = %s")
+            params.append(value)
+    rows = db.fetch_all(
+        f"""SELECT b.*, i.label AS device_label FROM gateway_case_binding b
+            LEFT JOIN gateway_device_instance i ON i.device_id = b.device_id
+            {'WHERE ' + ' AND '.join(where) if where else ''}
+            ORDER BY b.unbound_at IS NOT NULL, b.bound_at DESC LIMIT %s""",
+        (*params, max(1, min(limit, 1000))))
+    counts = db.fetch_one("SELECT count(*) FILTER (WHERE unbound_at IS NULL) AS open, count(*) AS total FROM gateway_case_binding")
+    return {"rows": rows, "counts": counts}
 
 
 # ------------------------------------------------------------------ manufacturers + device types

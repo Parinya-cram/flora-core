@@ -7,6 +7,7 @@ import ClinicalTimelineGrid, {
 import type { ClinicalTimelineRow, ClinicalTimelineValues } from "../components/clinical-timeline/types";
 import VitalSignsTrendChart from "../components/vitals/VitalSignsTrendChart";
 import HeaderCard from "../components/case/HeaderCard";
+import CaseDeviceSessions from "../components/canopy/CaseDeviceSessions";
 import CanopyCaseDetailPanel, { type CanopyCasePanel } from "./CanopyCaseDetailPanel";
 import CaseFormsReview from "../components/workflow/CaseFormsReview";
 import CaseDocumentsReview from "../components/workflow/CaseDocumentsReview";
@@ -341,6 +342,7 @@ export default function CanopyCaseChartView({ entry, data, onBack, onRefresh, re
       </div>
 
       {isInnovian ? <div className={`mb-2 flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border px-4 py-2 text-xs ${archiveDetailAvailable ? "border-amber-500/30 bg-amber-500/8 text-[var(--app-muted)]" : "border-amber-500/50 bg-amber-500/12 text-amber-800 dark:text-amber-200"}`}><strong className="text-[var(--app-text)]">{archiveDetailAvailable ? "Migrated from Innovian" : "Innovian case index only"}</strong><span>Source case {text(source.case_id, entry.source_case_id)}</span><span>{text(source.mapping_profile, "Mapping version unavailable")}</span>{archiveDetailAvailable ? <span>{number(coverage.minutes_loaded)} / {number(coverage.minutes_total)} chart minutes loaded</span> : <span>Detailed vitals, forms, staff and clinical entries have not been migrated for this case yet.</span>}{coverage.truncated ? <span className="font-bold text-amber-700 dark:text-amber-300">Long case truncated by archive safety limit</span> : null}</div> : null}
+      {!isInnovian && entry.global_case_id ? <CaseDeviceSessions caseUuid={entry.global_case_id} /> : null}
 
       {activePanel === "chart" && archiveDetailAvailable ? <>
 

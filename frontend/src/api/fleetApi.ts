@@ -46,6 +46,8 @@ export type ControlPlaneLeaf = LeafNode & {
   desired_config?: Record<string, unknown> | null;
   desired_version?: number | null;
   applied_version?: number | null;
+  /** Further beds this workstation serves besides its primary (assigned) bed. */
+  extra_bed_ids?: number[];
   config_status: "unassigned" | "pending" | "outdated" | "synced";
 };
 
@@ -63,6 +65,8 @@ export type FleetCase = {
   source_case_id: string;
   case_code?: string | null;
   hn?: string | null;
+  patient_name?: string | null;
+  an?: string | null;
   status: string;
   start_time?: number | null;
   discharge_time?: number | null;
@@ -195,9 +199,15 @@ async function sendJson<T>(path: string, method: "POST" | "PUT", body: unknown):
 export const getLeaves = () => rows<LeafNode>("/api/fleet/leaves");
 export const getActiveFleetCases = () => rows<FleetCase>("/api/fleet/active-cases");
 export const getIcuOverview = (limitPoints = 30) => getJson<IcuOverview>(`/api/fleet/icu-overview?limit_points=${limitPoints}`);
-export const getFleetCases = (limit = 50, status?: "ACTIVE" | "DISCHARGED" | "ARCHIVED") => {
+/** Case List filters: case start in [from, to), patient text (HN, AN, name, case code), workstation. */
+export type FleetCaseFilter = { from?: number; to?: number; q?: string; leafId?: string };
+export const getFleetCases = (limit = 50, status?: "ACTIVE" | "DISCHARGED" | "ARCHIVED", filter: FleetCaseFilter = {}) => {
   const params = new URLSearchParams({ limit: String(limit) });
   if (status) params.set("status", status);
+  if (filter.from) params.set("from", String(filter.from));
+  if (filter.to) params.set("to", String(filter.to));
+  if (filter.q) params.set("q", filter.q);
+  if (filter.leafId) params.set("leaf_id", filter.leafId);
   return rows<FleetCase>(`/api/fleet/cases?${params.toString()}`);
 };
 export const getFleetCaseSnapshot = (globalCaseId: string) =>
@@ -428,11 +438,5 @@ export type PhysicalTopology = {
   gateways: Record<string, { gateway_id: string; name: string; connection_status: "online" | "delayed" | "offline" | "pending" }>;
 };
 export const getPhysicalTopology = () => getJson<PhysicalTopology>("/api/fleet/topology/physical");
-export async function setLeafBeds(leafId: string, bedIds: number[]): Promise<{ ok: boolean; bed_ids: number[] }> {
-  const response = await fetch(`${BACKEND_BASE}/api/fleet/control/leaves/${encodeURIComponent(leafId)}/beds`, {
-    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bed_ids: bedIds }),
-  });
-  const data = await response.json().catch(() => ({})) as { detail?: string; ok?: boolean; bed_ids?: number[] };
-  if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : `Saving beds failed (${response.status})`);
-  return data as { ok: boolean; bed_ids: number[] };
-}
+export const setLeafBeds = (leafId: string, bedIds: number[]) =>
+  sendJson<{ ok: boolean; bed_ids: number[] }>(`/api/fleet/control/leaves/${encodeURIComponent(leafId)}/beds`, "PUT", { bed_ids: bedIds });

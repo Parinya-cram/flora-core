@@ -42,7 +42,7 @@ const sectionCopy: Record<CanopySection, { title: string; description: string; e
     empty: "No completed Flora cases are available.",
   },
   legacy: {
-    title: "Innovian archive",
+    title: "Data archive",
     description: "Historical cases imported specifically from Innovian.",
     empty: "No Innovian cases have been imported yet.",
   },
@@ -120,7 +120,7 @@ function legacyFleetEntry(entry: LegacyArchiveCase): FleetCase {
     global_case_id: entry.id,
     hospital_id: "innovian-archive",
     leaf_id: "innovian-archive",
-    leaf_name: "Innovian archive",
+    leaf_name: "Data archive",
     source_case_id: entry.source_case_id,
     case_code: `Innovian #${entry.source_case_id}`,
     hn: entry.patient?.reference || null,
@@ -151,6 +151,20 @@ export default function CanopyFleetView() {
   const [legacyReportCatalogs, setLegacyReportCatalogs] = useState<Record<string, LegacyReportCatalog | null>>({});
   const legacyReportCatalogsRef = useRef<Record<string, LegacyReportCatalog | null>>({});
   const [legacyQuery, setLegacyQuery] = useState("");
+  // Live / Archive: filters the list (HN, AN, name, case code). Legacy: the archive search below.
+  const [patientQuery, setPatientQuery] = useState("");
+  // Live / Archive filters: case start date range (yyyy-mm-dd, inclusive) and workstation; applied by Canopy too,
+  // so the archive is searched beyond the latest cases.
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+  const [leafFilter, setLeafFilter] = useState("");
+  const [serverQuery, setServerQuery] = useState("");
+  useEffect(() => {
+    const timer = window.setTimeout(() => setServerQuery(patientQuery.trim()), 400);
+    return () => window.clearTimeout(timer);
+  }, [patientQuery]);
+  const fromMs = rangeFrom ? new Date(`${rangeFrom}T00:00:00`).getTime() : undefined;
+  const toMs = rangeTo ? new Date(`${rangeTo}T00:00:00`).getTime() + 86_400_000 : undefined;
   const [legacyPeriodInput, setLegacyPeriodInput] = useState("");
   const legacyPeriod = useMemo(() => parseArchivePeriod(legacyPeriodInput), [legacyPeriodInput]);
   const [legacyCursor, setLegacyCursor] = useState<string | null>(null);
@@ -193,7 +207,7 @@ export default function CanopyFleetView() {
       setSelected({ kind: "innovian", entry: legacyFleetEntry(archive), archive, snapshot });
       setError("");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "The Innovian archive chart could not be opened.");
+      setError(reason instanceof Error ? reason.message : "The data archive chart could not be opened.");
     } finally {
       setOpeningId("");
     }
@@ -216,7 +230,7 @@ export default function CanopyFleetView() {
       setLegacyLoaded(true);
       setError("");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "The Innovian archive could not be loaded.");
+      setError(reason instanceof Error ? reason.message : "The data archive could not be loaded.");
     } finally {
       setLegacyLoading(false);
     }
@@ -226,7 +240,7 @@ export default function CanopyFleetView() {
     if (!quiet) setLoading(true);
     try {
       const [active, recent, leafRows] = await Promise.all([
-        getActiveFleetCases(), getFleetCases(100), getLeaves(),
+        getActiveFleetCases(), getFleetCases(500, undefined, { from: fromMs, to: toMs, q: serverQuery || undefined, leafId: leafFilter || undefined }), getLeaves(),
       ]);
       const merged = new Map<string, FleetCase>();
       [...active, ...recent].forEach(item => merged.set(item.global_case_id, item));
@@ -247,7 +261,7 @@ export default function CanopyFleetView() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fromMs, toMs, serverQuery, leafFilter]);
 
   useEffect(() => {
     void load();
@@ -295,10 +309,15 @@ export default function CanopyFleetView() {
     return source.includes("innovian");
   }, []);
   const sectionCases = useMemo(() => cases.filter(entry => {
+    const q = patientQuery.trim().toLowerCase();
+    if (q && !`${entry.hn || ""} ${entry.an || ""} ${entry.patient_name || ""} ${entry.case_code || ""}`.toLowerCase().includes(q)) return false;
+    if (leafFilter && entry.leaf_id !== leafFilter) return false;
+    if (fromMs && (entry.start_time || 0) < fromMs) return false;
+    if (toMs && (entry.start_time || 0) >= toMs) return false;
     if (section === "live") return entry.status === "ACTIVE";
     if (section === "legacy") return false;
     return entry.status !== "ACTIVE" && !isInnovian(entry);
-  }), [cases, isInnovian, section]);
+  }), [cases, isInnovian, section, patientQuery, leafFilter, fromMs, toMs]);
   const counts = useMemo(() => ({
     live: cases.filter(entry => entry.status === "ACTIVE").length,
     archive: cases.filter(entry => entry.status !== "ACTIVE" && !isInnovian(entry)).length,
@@ -308,9 +327,10 @@ export default function CanopyFleetView() {
     setSection(next);
     setSelected(null);
   };
-  const canopyNavigation = (
-    <nav className="shrink-0 border-b border-[var(--app-border)] bg-[var(--app-panel-bg)] px-3 py-2 sm:px-5" aria-label="Canopy records">
-      <div className="mx-auto flex max-w-7xl items-center gap-2">
+  // Tabs sit under the page title in the list; above an opened chart they stay a top bar.
+  const canopyNavigation = (inline: boolean) => (
+    <nav className={inline ? "border-b border-[var(--app-border)] pb-3" : "shrink-0 border-b border-[var(--app-border)] bg-[var(--app-panel-bg)] px-3 py-2 sm:px-5"} aria-label="Canopy records">
+      <div className="flex w-full items-center gap-2">
         {(["live", "archive", "legacy"] as const).map(item => (
           <button
             key={item}
@@ -324,7 +344,12 @@ export default function CanopyFleetView() {
             <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${section === item ? "bg-black/15" : "bg-[var(--app-control-bg)]"}`}>{item === "legacy" && legacyHasMore ? `${counts[item]}+` : counts[item]}</span>
           </button>
         ))}
-        <span className="ml-auto hidden text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--app-muted)] sm:block">Canopy · read-only</span>
+        <input type="search" value={section === "legacy" ? legacyQuery : patientQuery} aria-label="Search patient"
+          onChange={event => (section === "legacy" ? setLegacyQuery : setPatientQuery)(event.target.value)}
+          onKeyDown={event => { if (event.key === "Enter" && section === "legacy") void loadLegacy(); }}
+          placeholder={section === "legacy" ? "Search archive (Enter)" : "Search patient (HN, AN, name)"}
+          className="ml-auto h-10 w-72 max-w-[45vw] rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] px-3 text-sm text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]" />
+        <span className="hidden text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--app-muted)] xl:block">Canopy · read-only</span>
       </div>
     </nav>
   );
@@ -333,18 +358,18 @@ export default function CanopyFleetView() {
     const refreshSelected = selected.kind === "innovian"
       ? () => void openLegacyCase(selected.archive)
       : () => void load();
-    return <div className="flex h-full min-h-0 flex-col">{canopyNavigation}<div className="min-h-0 flex-1"><CanopyCaseChartView entry={selected.entry} data={selected.snapshot} onBack={() => setSelected(null)} onRefresh={refreshSelected} refreshing={loading || legacyLoading} /></div></div>;
+    return <div className="flex h-full min-h-0 flex-col">{canopyNavigation(false)}<div className="min-h-0 flex-1"><CanopyCaseChartView entry={selected.entry} data={selected.snapshot} onBack={() => setSelected(null)} onRefresh={refreshSelected} refreshing={loading || legacyLoading} /></div></div>;
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--app-bg)]">
-      {canopyNavigation}
       <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
-      <div className="mx-auto max-w-7xl space-y-4">
+      <div className="w-full space-y-4">
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div><div className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--app-accent)]">{section === "legacy" ? "Historical Innovian records" : "Synchronized Flora records"}</div><h1 className="mt-1 text-2xl font-semibold text-[var(--app-text)]">{sectionCopy[section].title}</h1><p className="mt-1 text-sm text-[var(--app-muted)]">{sectionCopy[section].description}</p></div>
           <button type="button" onClick={() => section === "legacy" ? void loadLegacy() : void load()} disabled={loading || legacyLoading} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] px-4 py-2.5 text-sm font-semibold text-[var(--app-text)] disabled:opacity-50">{loading || legacyLoading ? "Refreshing…" : "Refresh"}</button>
         </header>
+        {canopyNavigation(true)}
 
         {error ? <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">{error}</div> : null}
 
@@ -393,13 +418,17 @@ export default function CanopyFleetView() {
             </section>
           </>
         ) : (
+          <>
+          <CaseFilters from={rangeFrom} to={rangeTo} leafId={leafFilter} leaves={leaves}
+            onChange={next => { setRangeFrom(next.from); setRangeTo(next.to); setLeafFilter(next.leafId); }} />
+          <CaseStatistics rows={sectionCases} />
           <section className="overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[var(--app-panel-bg)]">
             <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(180px,.8fr)_140px_150px_96px] gap-3 border-b border-[var(--app-border)] px-4 py-3 text-[10px] font-extrabold uppercase tracking-[0.12em] text-[var(--app-muted)] max-lg:hidden"><span>Patient / case</span><span>Leaf</span><span>Started</span><span>Last sync</span><span /></div>
             {sectionCases.map(entry => {
               const leaf = leafMap.get(entry.leaf_id);
               return (
                 <article key={entry.global_case_id} className="grid grid-cols-1 gap-3 border-b border-[var(--app-border)] px-4 py-4 last:border-b-0 lg:grid-cols-[minmax(0,1.5fr)_minmax(180px,.8fr)_140px_150px_96px] lg:items-center">
-                  <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><strong className="truncate text-sm text-[var(--app-text)]">HN {entry.hn || "—"}</strong><span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusTone[entry.status] || statusTone.ARCHIVED}`}>{entry.status}</span></div><div className="mt-1 truncate text-xs text-[var(--app-muted)]">{entry.case_code || entry.source_case_id}</div></div>
+                  <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><strong className="truncate text-sm text-[var(--app-text)]">{entry.patient_name ? `${entry.patient_name} · ` : ""}HN {entry.hn || "—"}{entry.an ? ` · AN ${entry.an}` : ""}</strong><span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusTone[entry.status] || statusTone.ARCHIVED}`}>{entry.status}</span></div><div className="mt-1 truncate text-xs text-[var(--app-muted)]">{entry.case_code || entry.source_case_id}</div></div>
                   <div><div className="text-sm font-semibold text-[var(--app-text)]">{entry.leaf_name || leaf?.display_name || entry.leaf_id}</div><div className="text-xs text-[var(--app-muted)]">{leaf?.connection_status || entry.sync_status}</div></div>
                   <div className="text-xs text-[var(--app-muted)]">{dateTime(entry.start_time)}</div>
                   <div className="text-xs text-[var(--app-muted)]"><span className="font-semibold text-[var(--app-text)]">{entry.sync_status}</span><br />{freshness(entry.last_synced_at)}</div>
@@ -409,9 +438,78 @@ export default function CanopyFleetView() {
             })}
             {!loading && sectionCases.length === 0 ? <div className="px-6 py-16 text-center"><div className="text-lg font-semibold text-[var(--app-text)]">{sectionCopy[section].empty}</div><div className="mt-1 text-sm text-[var(--app-muted)]">Select another Canopy section or refresh after new records arrive.</div></div> : null}
           </section>
+          </>
         )}
       </div>
       </div>
     </div>
+  );
+}
+
+const isoDate = (ms: number) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const filterField = "h-10 rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] px-3 text-sm text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]";
+
+/** Case start period (with quick ranges) and workstation. */
+function CaseFilters({ from, to, leafId, leaves, onChange }: {
+  from: string; to: string; leafId: string; leaves: LeafNode[]; onChange: (next: { from: string; to: string; leafId: string }) => void;
+}) {
+  const preset = (days: number) => {
+    const end = Date.now();
+    onChange({ from: isoDate(end - (days - 1) * 86_400_000), to: isoDate(end), leafId });
+  };
+  const chip = "h-10 rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] px-3 text-sm font-semibold text-[var(--app-text)] hover:border-[var(--app-accent)]";
+  return (
+    <div className="flex flex-wrap items-end gap-2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-3">
+      <label className="grid gap-1 text-xs font-bold text-[var(--app-muted)]">From<input type="date" data-no-picker className={filterField} value={from} onChange={event => onChange({ from: event.target.value, to, leafId })} /></label>
+      <label className="grid gap-1 text-xs font-bold text-[var(--app-muted)]">To<input type="date" data-no-picker className={filterField} value={to} onChange={event => onChange({ from, to: event.target.value, leafId })} /></label>
+      <button type="button" className={chip} onClick={() => preset(1)}>Today</button>
+      <button type="button" className={chip} onClick={() => preset(7)}>7 days</button>
+      <button type="button" className={chip} onClick={() => preset(30)}>30 days</button>
+      <label className="grid gap-1 text-xs font-bold text-[var(--app-muted)]">Workstation
+        <select className={filterField} value={leafId} onChange={event => onChange({ from, to, leafId: event.target.value })}>
+          <option value="">All workstations</option>
+          {leaves.map(leaf => <option key={leaf.leaf_id} value={leaf.leaf_id}>{leaf.display_name || leaf.leaf_id}</option>)}
+        </select>
+      </label>
+      {from || to || leafId ? <button type="button" className={`${chip} text-[var(--app-muted)]`} onClick={() => onChange({ from: "", to: "", leafId: "" })}>Clear filters</button> : null}
+    </div>
+  );
+}
+
+/** Numbers for the cases shown: totals, case length and where they ran. */
+function CaseStatistics({ rows }: { rows: FleetCase[] }) {
+  const closed = rows.filter(row => row.status !== "ACTIVE");
+  const lengths = closed.map(row => (row.discharge_time && row.start_time ? row.discharge_time - row.start_time : 0)).filter(ms => ms > 0);
+  const average = lengths.length ? lengths.reduce((sum, ms) => sum + ms, 0) / lengths.length : 0;
+  const hours = (ms: number) => (ms ? `${Math.floor(ms / 3_600_000)}h ${String(Math.round((ms % 3_600_000) / 60_000)).padStart(2, "0")}m` : "—");
+  const byLeaf = new Map<string, number>();
+  for (const row of rows) byLeaf.set(row.leaf_name || row.leaf_id, (byLeaf.get(row.leaf_name || row.leaf_id) || 0) + 1);
+  const fromHis = rows.filter(row => /hl7|his/i.test(`${row.source_system || ""} ${row.admission_source || ""}`)).length;
+  const tiles: Array<[string, string | number]> = [
+    ["Cases", rows.length],
+    ["Active", rows.filter(row => row.status === "ACTIVE").length],
+    ["Discharged", closed.filter(row => row.status === "DISCHARGED").length],
+    ["Archived", closed.filter(row => row.status === "ARCHIVED").length],
+    ["Avg case length", hours(average)],
+    ["Longest", hours(lengths.length ? Math.max(...lengths) : 0)],
+    ["From HIS", fromHis],
+    ["Workstations", byLeaf.size],
+  ];
+  return (
+    <section className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-3" aria-label="Case statistics">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
+        {tiles.map(([label, value]) => (
+          <div key={label} className="rounded-xl border border-[var(--app-border)] px-3 py-2">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[var(--app-muted)]">{label}</div>
+            <div className="text-xl font-bold text-[var(--app-text)]">{value}</div>
+          </div>
+        ))}
+      </div>
+      {byLeaf.size ? <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
+        {[...byLeaf.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => (
+          <span key={name} className="rounded-full border border-[var(--app-border)] px-2 py-0.5"><span className="text-[var(--app-muted)]">{name}</span> <b>{count}</b></span>
+        ))}
+      </div> : null}
+    </section>
   );
 }

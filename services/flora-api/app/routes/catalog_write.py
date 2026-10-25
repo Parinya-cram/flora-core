@@ -160,7 +160,9 @@ def staff_values(db,payload,old=None):
     if not values["staff_name"]:
         raise HTTPException(400,"staff name required")
     profile["display_name"]=values["staff_name"]
-    entry=number(mapped.get("entry_year",source.get("entry_year",old.get("entry_year"))),"entry_year",1900)
+    entry=mapped.get("entry_year",source.get("entry_year",old.get("entry_year")))
+    # Older clients sent 0 for "no entry year".
+    entry=number(None if entry in (0,"0") else entry,"entry_year",1900)
     values["entry_year"]=int(entry) if entry else None
     values["profile_data"]=Jsonb(profile)
     return values
@@ -271,17 +273,36 @@ def my_cases(hospital_id:str="",personal_id:str="",email:str="",staff_directory_
     return {"rows":rows}
 
 
+def staff_times(item):
+    """time_in / time_out of one case staff row (minute precision); out may not be before in."""
+    def minute(key):
+        value=item.get(key)
+        if value in (None,""): return None
+        try: return int(value)//60000*60000
+        except (TypeError,ValueError): raise HTTPException(400,f"{key} must be a time") from None
+    time_in,time_out=minute("time_in"),minute("time_out")
+    if time_in is not None and time_out is not None and time_out<time_in:
+        raise HTTPException(400,f'{text(item.get("name")) or "staff"}: time out is before time in')
+    return dict(time_in=time_in,time_out=time_out)
+
+
+def has_staff_times(db):
+    return db.execute("SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='case_staff' AND column_name='time_out'").fetchone() is not None
+
+
 @router.put("/{case_id}/staff")
 def replace_staff(case_id:int,payload:dict=Body(...),actor:dict=Depends(require_permission("case.chart")),database:Connection=Depends(connection)):
     raw=payload.get("staff") if isinstance(payload.get("staff"),list) else []
     if len(raw)>200: raise HTTPException(400,"too many staff rows")
     with database.transaction():
         editable_case(database,case_id)
+        times=has_staff_times(database)
         before=database.execute("SELECT * FROM case_staff WHERE case_id=%s ORDER BY seq,id",(case_id,)).fetchall()
         normalized=[]
         seen=set()
         for item in raw:
             values=staff_values(database,item)
+            if times: values.update(staff_times(item))
             key=(values["staff_name"].lower(),values["staff_role_id"],(values["hospital_id"] or "").lower())
             if key in seen: continue
             seen.add(key); normalized.append(values)
@@ -304,7 +325,7 @@ def replace_staff(case_id:int,payload:dict=Body(...),actor:dict=Depends(require_
                 used_count=staff_directory.used_count+1,last_used_at=excluded.last_used_at,updated_at=excluded.updated_at""",
               tuple(values[k] for k in ("hospital_id","personal_id","email","th_first_name","th_last_name","en_first_name","en_last_name","innovian_id","staff_role_id","staff_name","staff_role","entry_year","profile_data","staff_code"))+(current,current,current,values["staff_code"],current))
         case_audit(database,case_id,"staff.replace",before,rows,actor)
-    return {"ok":True,"case_id":case_id,"rows":[dict(id=r["id"],hospital_id=r["hospital_id"],personal_id=r["personal_id"],email=r["email"],th_first_name=r["th_first_name"],th_last_name=r["th_last_name"],en_first_name=r["en_first_name"],en_last_name=r["en_last_name"],innovian_id=r["innovian_id"],role_id=r["staff_role_id"],name=r["staff_name"],role=r["staff_role"],entry_year=r["entry_year"],profile_data=r["profile_data"],seq=r["seq"],staff_code=r.get("staff_code")) for r in rows]}
+    return {"ok":True,"case_id":case_id,"rows":[dict(id=r["id"],hospital_id=r["hospital_id"],personal_id=r["personal_id"],email=r["email"],th_first_name=r["th_first_name"],th_last_name=r["th_last_name"],en_first_name=r["en_first_name"],en_last_name=r["en_last_name"],innovian_id=r["innovian_id"],role_id=r["staff_role_id"],name=r["staff_name"],role=r["staff_role"],entry_year=r["entry_year"],profile_data=r["profile_data"],seq=r["seq"],staff_code=r.get("staff_code"),time_in=r.get("time_in"),time_out=r.get("time_out")) for r in rows]}
 
 
 def io_code(value):

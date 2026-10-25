@@ -45,6 +45,8 @@ services:
         required: false
     environment:
       FLORA_DATABASE_URL: postgresql://flora_app:${LEAF_DB_APP_PASSWORD:-flora-leaf-app-local-only}@leaf-db:5432/flora
+      # Database owner, only to apply migration 0090 to a database created before it (app/live_schema.py).
+      FLORA_MIGRATION_DATABASE_URL: postgresql://flora_admin:${LEAF_DB_ADMIN_PASSWORD:-flora-leaf-admin-local-only}@leaf-db:5432/flora
       FLORA_API_ENV: development
       FLORA_API_MODE: leaf
       FLORA_LEAF_WRITE_API: "true"
@@ -60,6 +62,8 @@ services:
       FLORA_ACCOUNT_CONFIG_SYNC_TIMEOUT_SECONDS: "1.5"
       # Leaf identity for directory sign-in (users of this Leaf's ward, checked by Canopy).
       FLORA_LEAF_ID: ${FLORA_LEAF_ID:-leaf-or-01}
+      # With FLORA_LEAF_ID: the case UUID sent to the Gateway (Canopy's global_case_id).
+      FLORA_HOSPITAL_ID: ${FLORA_HOSPITAL_ID:-hospital-01}
       # Leaf pulls device data from its Flora Gateway data-api (Vector-compatible).
       VECTOR_READ_URL: ${LEAF_DEVICE_READ_URL:-http://host.docker.internal:7410/data-api/leaf-or-01/api/observations}
       HIS_GATEWAY_BASE_URL: ${HIS_GATEWAY_BASE_URL:-http://127.0.0.1:9}
@@ -81,6 +85,40 @@ services:
     restart: unless-stopped
     volumes:
       - ./certs:/etc/flora/certs:ro
+
+  # Live stream from the Gateway stream-hub into the chart, and to browsers over /api/live/ws.
+  # Same image as leaf-api, without --reload so code edits do not drop the sockets.
+  leaf-live:
+    # Opt-in (--profile live) until a signed release ships app.live.
+    profiles: ["live"]
+    image: ${FLORA_IMAGE_API:-flora-leaf-api:dev}
+    build:
+      context: ../services/flora-api
+    command: ["uvicorn", "app.live.server:app", "--host", "0.0.0.0", "--port", "8000"]
+    env_file:
+      - path: ./certs/trust.env
+        required: false
+    environment:
+      FLORA_DATABASE_URL: postgresql://flora_app:${LEAF_DB_APP_PASSWORD:-flora-leaf-app-local-only}@leaf-db:5432/flora
+      FLORA_MIGRATION_DATABASE_URL: postgresql://flora_admin:${LEAF_DB_ADMIN_PASSWORD:-flora-leaf-admin-local-only}@leaf-db:5432/flora
+      FLORA_API_MODE: leaf
+      FLORA_LEAF_ID: ${FLORA_LEAF_ID:-leaf-or-01}
+      FLORA_HOSPITAL_ID: ${FLORA_HOSPITAL_ID:-hospital-01}
+    ports:
+      - "127.0.0.1:${LEAF_LIVE_PORT:-7303}:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      leaf-db: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+    volumes:
+      - ./certs:/etc/flora/certs:ro
+
   leaf-web:
     build:
       context: ..
@@ -89,6 +127,7 @@ services:
       CHOKIDAR_USEPOLLING: "true"
       VITE_FLORA_SURFACE: leaf
       VITE_API_PROXY_TARGET: http://leaf-api:8000
+      VITE_LIVE_PROXY_TARGET: http://leaf-live:8000
     ports:
       # Local only; browsers and tablets use the HTTPS edge (LEAF_HTTPS_PORT).
       - "127.0.0.1:${LEAF_WEB_PORT:-7300}:5173"

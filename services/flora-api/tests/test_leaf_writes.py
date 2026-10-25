@@ -86,11 +86,10 @@ class LeafWrites(unittest.TestCase):
     def setUp(self):
         # Every test starts without an active case, whatever an earlier test left behind.
         token = self.login()
-        status = request("/api/case/status", token=token)[1]
-        if status.get("status") == "ACTIVE":
-            ends = max(int(status["start_time"]) + 60_000, int(time.time() * 1000))
-            request("/api/case/discharge", {"case_id": status["case_id"], "discharge_time": ends}, token)
-            request("/api/case/archive", {"case_id": status["case_id"]}, token)
+        for case in request("/api/case/active", token=token)[1].get("cases", []):
+            ends = max(int(case["start_time"]) + 60_000, int(time.time() * 1000))
+            request("/api/case/discharge", {"case_id": case["case_id"], "discharge_time": ends}, token)
+            request("/api/case/archive", {"case_id": case["case_id"]}, token)
 
     @classmethod
     def tearDownClass(cls):
@@ -490,11 +489,17 @@ class LeafWrites(unittest.TestCase):
         token = self.login()
         start = 1750000000000
         self.assertEqual(request("/api/case/start",{"hn":"test","start_time":start})[0],401)
+        # Several cases may be active; two starts on one exclusive device: only one wins.
+        link = self.database.execute(
+            "INSERT INTO leaf_gateway_link(label,data_api_url,created_at,updated_at) VALUES ('test','http://127.0.0.1:9',1,1) RETURNING id"
+        ).fetchone()["id"]
+        device = {"gateway_link_id":link,"device_id":"concurrent-"+self.suffix,"mode":"exclusive"}
         def create(_):
-            return request("/api/case/start",{"hn":"TEST-"+self.suffix,"start_time":start},token)
+            return request("/api/case/start",{"hn":"TEST-"+self.suffix,"start_time":start,"devices":[device]},token)
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             responses = list(executor.map(create,range(2)))
         self.assertEqual(sorted(status for status,_ in responses),[200,409],responses)
+        self.assertEqual(next(body for status,body in responses if status == 409)["error"],"device_in_use")
         case = next(body for status,body in responses if status == 200)
         case_id = case["case_id"]
         runs = self.database.execute("SELECT * FROM case_io_run WHERE case_id=%s",(case_id,)).fetchall()

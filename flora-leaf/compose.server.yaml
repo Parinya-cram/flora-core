@@ -47,6 +47,8 @@ services:
       context: ../services/flora-api
     environment:
       FLORA_DATABASE_URL: postgresql://flora_app:${FLORA_DB_APP_PASSWORD:-admin}@leaf-db:5432/${FLORA_POSTGRES_DB:-flora}
+      # Database owner, only to apply migration 0090 to a database created before it (app/live_schema.py).
+      FLORA_MIGRATION_DATABASE_URL: postgresql://${FLORA_POSTGRES_ADMIN_USER:-flora_admin}:${FLORA_POSTGRES_ADMIN_PASSWORD:-admin}@leaf-db:5432/${FLORA_POSTGRES_DB:-flora}
       FLORA_API_ENV: development
       FLORA_API_MODE: leaf
       FLORA_LEAF_WRITE_API: "true"
@@ -62,6 +64,7 @@ services:
       # This leaf's identity — required so leaf-api sends a non-empty leaf_id to
       # Canopy (device assignment / account-config sync). Must match leaf-sync.
       FLORA_LEAF_ID: ${FLORA_LEAF_ID:-leaf-or-01}
+      # With FLORA_LEAF_ID: the case UUID sent to the Gateway (Canopy's global_case_id).
       FLORA_HOSPITAL_ID: ${FLORA_HOSPITAL_ID:-hospital-01}
       FLORA_LEAF_NAME: ${FLORA_LEAF_NAME:-Operating Room 1}
       # Device data from the real Gateway (172.22.1.233)
@@ -78,6 +81,39 @@ services:
       leaf-db:
         condition: service_healthy
       flora-liveagent:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # Live stream from the Gateway stream-hub into the chart, and to browsers over /api/live/ws
+  # (docs/live-stream/PROTOCOL.md); leaf-web proxies /api/live/ here.
+  # Opt-in like compose.yaml: add the "live" profile (Portainer: COMPOSE_PROFILES=live) until a
+  # signed release ships app.live, then drop `profiles`. Without it /api/live/ answers 502 and
+  # the chart keeps the minute pull.
+  leaf-live:
+    profiles: ["live"]
+    build:
+      context: ../services/flora-api
+    command: ["uvicorn", "app.live.server:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      FLORA_DATABASE_URL: postgresql://flora_app:${FLORA_DB_APP_PASSWORD:-admin}@leaf-db:5432/${FLORA_POSTGRES_DB:-flora}
+      FLORA_MIGRATION_DATABASE_URL: postgresql://${FLORA_POSTGRES_ADMIN_USER:-flora_admin}:${FLORA_POSTGRES_ADMIN_PASSWORD:-admin}@leaf-db:5432/${FLORA_POSTGRES_DB:-flora}
+      FLORA_API_MODE: leaf
+      FLORA_LEAF_ID: ${FLORA_LEAF_ID:-leaf-or-01}
+      FLORA_HOSPITAL_ID: ${FLORA_HOSPITAL_ID:-hospital-01}
+      # Retention for cases that are not active (hourly).
+      FLORA_STREAM_WAVE_RETENTION_DAYS: ${FLORA_STREAM_WAVE_RETENTION_DAYS:-7}
+      FLORA_STREAM_SECOND_RETENTION_DAYS: ${FLORA_STREAM_SECOND_RETENTION_DAYS:-30}
+    ports:
+      - "${FLORA_BIND_ADDR:-127.0.0.1}:${FLORA_LEAF_LIVE_PORT:-6898}:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      leaf-db:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]

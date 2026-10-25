@@ -1,10 +1,31 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import type { AuthUser } from "../auth/useAuth";
 import {
   getCanopyBillingCatalog, getCanopyBillingOrder, getCanopyBillingOrders, saveCanopyBillingItem,
   type BillingCatalog, type BillingItem, type BillingLine, type CanopyBillingOrder, type CanopyBillingTotal,
 } from "../api/billingApi";
 import { buildBillingSheetHtml, clock, printHtml, qtyText, span } from "../components/billing/billingSheet";
+import { buildBillingStatementHtml, buildBillingSummaryHtml } from "../components/billing/billingStatement";
+
+const PART_LABEL = { or: "OR · Anesthesia", recovery: "Recovery · Post-Anesthesia" } as const;
+
+/** Combined OR + Recovery bill for the printed sheet: one line per item (quantities and amounts summed). */
+function sumByItem(lines: BillingLine[]): BillingLine[] {
+  const out: BillingLine[] = [];
+  const byCode = new Map<string, BillingLine>();
+  for (const line of lines) {
+    const found = line.item_code ? byCode.get(line.item_code) : undefined;
+    if (!found) {
+      const copy = { ...line };
+      if (line.item_code) byCode.set(line.item_code, copy);
+      out.push(copy);
+      continue;
+    }
+    found.qty = Number(found.qty || 0) + Number(line.qty || 0);
+    if (found.amount != null || line.amount != null) found.amount = Number(found.amount || 0) + Number(line.amount || 0);
+  }
+  return out;
+}
 
 /**
  * Canopy billing: orders sent by every Leaf (OR billing checklist) and the item master
@@ -25,19 +46,20 @@ export default function CanopyBillingView({ sessionUser }: { sessionUser: AuthUs
   useEffect(() => { void reloadCatalog(); }, [reloadCatalog]);
 
   return (
-    <div className="app-theme-scope mx-auto max-w-[1500px] space-y-4 p-4 text-[var(--app-text)]">
-      <div className="flex flex-wrap items-end gap-3">
+    <div className="app-theme-scope w-full space-y-4 p-3 sm:p-5 text-[var(--app-text)]">
+      <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--app-muted)]">Canopy</div>
-          <h1 className="text-xl font-bold">Billing</h1>
+          <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">Flora iCIS Canopy · billing</div>
+          <h1 className="mt-1 text-2xl font-semibold">Billing</h1>
+          <p className="mt-1 text-sm text-[var(--app-muted)]">Charge orders from every Leaf case and the billing item master.</p>
         </div>
-        <div className="ml-auto inline-flex overflow-hidden rounded-xl border border-[var(--app-border)]" role="tablist">
-          {([["orders", "Orders"], ["master", "Item master"]] as const).map(([key, label]) => (
-            <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => setTab(key)}
-              className={`px-4 py-1.5 text-sm font-semibold ${tab === key ? "bg-[var(--app-accent)] text-[var(--app-accent-contrast)]" : ""}`}>{label}</button>
-          ))}
-        </div>
-      </div>
+      </header>
+      <nav className="flex items-center gap-2 border-b border-[var(--app-border)] pb-3" role="tablist" aria-label="Billing">
+        {([["orders", "Orders"], ["master", "Item master"]] as const).map(([key, label]) => (
+          <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => setTab(key)}
+            className={`inline-flex min-h-10 items-center rounded-xl border px-4 py-2 text-sm font-bold transition ${tab === key ? "border-[var(--app-accent)] bg-[var(--app-accent)] text-[var(--app-accent-contrast)]" : "border-transparent text-[var(--app-muted)] hover:border-[var(--app-border)] hover:bg-[var(--app-control-bg)] hover:text-[var(--app-text)]"}`}>{label}</button>
+        ))}
+      </nav>
       {tab === "orders" ? <Orders catalog={catalog} /> : <Master catalog={catalog} canManage={canManage} onSaved={reloadCatalog} />}
     </div>
   );
@@ -70,11 +92,16 @@ function Orders({ catalog }: { catalog: BillingCatalog | null }) {
     if (!selected || !catalog) return;
     const o = selected.order;
     printHtml(buildBillingSheetHtml({
-      catalog, lines: selected.items, signers: o.signers || [], dischargeLocation: o.discharge_location, status: o.status,
+      catalog, lines: o.combined ? sumByItem(selected.items) : selected.items, signers: o.signers || [], dischargeLocation: o.discharge_location, status: o.status,
       anesthesia: [o.anesthesia_start, o.anesthesia_end], surgery: [o.surgery_start, o.surgery_end],
       header: { patientName: o.patient_name, hn: o.hn, an: o.an, opDate: day(o.anesthesia_start || o.surgery_start), room: o.leaf_name || o.leaf_id },
     }));
   };
+  const printStatement = () => {
+    if (!selected) return;
+    printHtml(buildBillingStatementHtml({ catalog, order: selected.order, lines: selected.items, signers: selected.order.signers || [] }));
+  };
+  const printSummary = () => printHtml(buildBillingSummaryHtml({ from: range.from, to: range.to, status, q: q.trim(), rows, totals }));
   const grand = totals.reduce((sum, t) => sum + (t.amount || 0), 0);
 
   return (
@@ -89,6 +116,7 @@ function Orders({ catalog }: { catalog: BillingCatalog | null }) {
         </label>
         <label className="grid flex-1 gap-1 text-xs font-semibold">Search<input value={q} onChange={e => setQ(e.target.value)} placeholder="HN, AN, name, case" className={input} /></label>
         <button type="button" onClick={load} className="rounded-xl border border-[var(--app-border)] px-3 py-1.5 text-sm font-semibold">Refresh</button>
+        <button type="button" onClick={printSummary} className="rounded-xl border border-[var(--app-border)] px-3 py-1.5 text-sm font-semibold">Print summary</button>
       </div>
       {error ? <div className="text-sm text-red-600">{error}</div> : null}
       <div className="grid gap-3 xl:grid-cols-[3fr_2fr]">
@@ -104,7 +132,7 @@ function Orders({ catalog }: { catalog: BillingCatalog | null }) {
                   <td className="p-2">{day(row.anesthesia_start || row.order_updated_at)}</td>
                   <td className="p-2">{row.hn || "—"}<div className="text-xs text-[var(--app-muted)]">{row.an || ""}</div></td>
                   <td className="p-2">{row.patient_name || "—"}</td>
-                  <td className="p-2">{row.leaf_name || row.leaf_id}</td>
+                  <td className="p-2">{row.leaf_name || row.leaf_id}{row.combined ? <div><span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-800">OR + Recovery</span></div> : null}</td>
                   <td className="p-2">{clock(row.anesthesia_start)}–{clock(row.anesthesia_end)} <span className="text-xs text-[var(--app-muted)]">{span(row.anesthesia_start, row.anesthesia_end)}</span></td>
                   <td className="p-2 text-right">{row.item_count}</td>
                   <td className="p-2 text-right">{money(row.total_amount)}</td>
@@ -121,16 +149,19 @@ function Orders({ catalog }: { catalog: BillingCatalog | null }) {
               <div className="mb-2 flex items-center gap-2">
                 <div className="min-w-0 flex-1"><div className="font-bold">{selected.order.patient_name || selected.order.hn}</div>
                   <div className="text-xs text-[var(--app-muted)]">HN {selected.order.hn} · AN {selected.order.an || "—"} · {selected.order.signers?.map(s => s.name).join(", ")}</div></div>
-                <button type="button" onClick={print} className="rounded-xl border border-[var(--app-border)] px-3 py-1 text-sm font-semibold">Print</button>
+                <button type="button" onClick={printStatement} className="rounded-xl border border-[var(--app-accent)] bg-[var(--app-accent)] px-3 py-1 text-sm font-semibold text-[var(--app-accent-contrast)]">Print bill</button>
+                <button type="button" onClick={print} disabled={!catalog} title="Hospital paper form layout" className="rounded-xl border border-[var(--app-border)] px-3 py-1 text-sm font-semibold disabled:opacity-50">Print checklist</button>
               </div>
+              {selected.order.combined ? <div className="mb-2 text-xs text-[var(--app-muted)]">Combined bill: {selected.order.parts?.map(part => `${PART_LABEL[part.part || "or"]} (${part.leaf_name || part.case_code || "case"}, ${part.status})`).join(" + ")}</div> : null}
               <table className="w-full text-sm">
-                <tbody>{selected.items.map(line => (
-                  <tr key={line.line_no} className="border-t border-[var(--app-border)]">
+                <tbody>{selected.items.map((line, index) => <Fragment key={`${line.part || ""}-${line.line_no ?? index}`}>
+                  {selected.order.combined && line.part !== selected.items[index - 1]?.part ? <tr><td colSpan={3} className="pt-2 text-[11px] font-extrabold uppercase tracking-[0.1em] text-[var(--app-muted)]">{PART_LABEL[line.part || "or"]}</td></tr> : null}
+                  <tr className="border-t border-[var(--app-border)]">
                     <td className="py-1">{line.name}{line.variant ? ` (${line.variant})` : ""}</td>
                     <td className="py-1 text-right">{qtyText(line)} {line.qty_mode === "used" ? "" : line.unit || ""}</td>
                     <td className="py-1 text-right">{money(line.amount)}</td>
                   </tr>
-                ))}</tbody>
+                </Fragment>)}</tbody>
               </table>
             </div>
           ) : null}

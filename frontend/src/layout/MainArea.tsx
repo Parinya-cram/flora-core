@@ -1,11 +1,11 @@
 import { Component, lazy, Suspense, type ErrorInfo, type ReactNode } from "react";
-import type { CaseStatus } from "../api/caseApi";
+import type { ActiveCase, CaseStatus } from "../api/caseApi";
 import type { AuthUser } from "../auth/useAuth";
 import StaffView from "../views/StaffView";
 import ManageView from "../views/ManageView";
 import HistoryView from "../views/HistoryView";
 import InputOutputBalanceView from "../views/InputOutputBalanceView";
-import CanopyFleetView from "../views/CanopyFleetView";
+import CanopyActivityLogView from "../views/CanopyActivityLogView";
 import CanopyDashboardView from "../views/CanopyDashboardView";
 import CanopyHomeView from "../views/CanopyHomeView";
 import CanopyInfrastructureView from "../views/CanopyInfrastructureView";
@@ -17,13 +17,13 @@ import CanopyDigitalTwinView from "../views/CanopyDigitalTwinView";
 import IdleCaseLanding from "../views/IdleCaseLanding";
 import AccountView from "../views/AccountView";
 import CanopyReportsView from "../views/CanopyReportsView";
-import CanopyAdmissionsView from "../views/CanopyAdmissionsView";
+import CanopyAdmissionHubView from "../views/CanopyAdmissionHubView";
+import CanopyFleetView from "../views/CanopyFleetView";
 import CanopyFormDevView from "../views/CanopyFormDevView";
 import CanopyReportStudioView from "../views/CanopyReportStudioView";
 import CanopyAiStudioView from "../views/CanopyAiStudioView";
 import WorkflowStudioView from "../views/WorkflowStudioView";
 import CanopyStaffView from "../views/CanopyStaffView";
-import CanopyOrScheduleView from "../views/CanopyOrScheduleView";
 import { getSurfaceInfo } from "../edition/config";
 import CaseHeaderStrip from "../components/case/CaseHeaderStrip";
 
@@ -33,11 +33,18 @@ const WardView = lazy(() => import("../views/WardView"));
 const DiagnosisView = lazy(() => import("../views/DiagnosisView"));
 const ReportView = lazy(() => import("../views/ReportView"));
 const PatientView = lazy(() => import("../views/PatientView"));
+const PatientJourneyView = lazy(() => import("../views/PatientJourneyView"));
 const BillingView = lazy(() => import("../views/BillingView"));
+const WaveformView = lazy(() => import("../views/WaveformView"));
 const CanopyBillingView = lazy(() => import("../views/CanopyBillingView"));
 
 interface Props {
   caseStatus: CaseStatus;
+  /** Leaf: every active case (several beds on one Leaf). */
+  activeCases?: ActiveCase[];
+  onSelectCase?: (caseId: number) => void;
+  /** Opens the start landing while other cases keep running. */
+  onNewCase?: () => void;
   activeView:
     | "ward"
     | "case"
@@ -56,6 +63,7 @@ interface Props {
     | "infrastructure"
     | "topology"
     | "gateway-alerts"
+    | "activity"
     | "devices"
     | "distribution"
     | "twin"
@@ -66,17 +74,21 @@ interface Props {
     | "history"
     | "billing"
     | "staff-directory"
-    | "or-schedule";
+    | "or-schedule"
+    | "waveform"
+    | "journey";
   sessionUser: AuthUser | null;
   onCaseDischargeTimeUpdated?: (caseId: number, dischargeTime: number) => void;
   onCaseArchived?: (caseId: number) => void;
+  /** Discharge / transfer cancelled: the case is active again. */
+  onCaseReopened?: (caseId: number) => void;
   onStartNextCase?: () => void;
   onOpenCase?: (c: Exclude<CaseStatus, { status: "IDLE" }>) => void;
-  onCaseStarted?: () => Promise<void> | void;
-  onNavigate?: (view: "patient" | "diagnosis" | "io" | "case") => void;
+  onCaseStarted?: (caseId?: number) => Promise<void> | void;
+  onNavigate?: (view: "patient" | "diagnosis" | "io" | "case" | "journey") => void;
 }
 
-const CASE_PAGES = new Set<Props["activeView"]>(["form", "diagnosis", "staff", "io", "patient", "report", "billing"]);
+const CASE_PAGES = new Set<Props["activeView"]>(["form", "diagnosis", "staff", "io", "patient", "report", "billing", "waveform", "journey"]);
 
 class ViewErrorBoundary extends Component<
   { resetKey: string; children: ReactNode },
@@ -119,10 +131,14 @@ class ViewErrorBoundary extends Component<
 
 export default function MainArea({
   caseStatus,
+  activeCases = [],
+  onSelectCase,
+  onNewCase,
   activeView,
   sessionUser,
   onCaseDischargeTimeUpdated,
   onCaseArchived,
+  onCaseReopened,
   onStartNextCase,
   onOpenCase,
   onCaseStarted,
@@ -145,9 +161,14 @@ export default function MainArea({
       {activeView === "ward" ? (
         <WardView
           caseStatus={caseStatus}
+          activeCases={activeCases}
           sessionUser={sessionUser}
-          onOpenCase={() => onNavigate?.("case")}
-          onCaseChanged={async () => { await onCaseStarted?.(); }}
+          onOpenCase={caseId => {
+            if (caseId != null) onSelectCase?.(caseId);
+            onNavigate?.("case");
+          }}
+          onNewCase={() => (onNewCase ? onNewCase() : onNavigate?.("case"))}
+          onCaseChanged={async caseId => { await onCaseStarted?.(caseId); }}
         />
       ) : activeView === "case" && caseStatus.status === "IDLE" ? (
         <IdleCaseLanding
@@ -155,6 +176,8 @@ export default function MainArea({
           sessionUser={sessionUser}
           onCaseStarted={onCaseStarted ?? (() => {})}
         />
+      ) : activeView === "waveform" ? (
+        <WaveformView key={caseScopedKey} caseStatus={caseStatus} sessionUser={sessionUser} />
       ) : activeView === "form" ? (
         <FormView key={caseScopedKey} caseStatus={caseStatus} />
       ) : activeView === "diagnosis" ? (
@@ -173,6 +196,8 @@ export default function MainArea({
           : <CanopyBillingView sessionUser={sessionUser} />
       ) : activeView === "patient" ? (
         <PatientView key={caseScopedKey} caseStatus={caseStatus} />
+      ) : activeView === "journey" ? (
+        <PatientJourneyView key={caseScopedKey} caseStatus={caseStatus} />
       ) : activeView === "report" ? (
         surface.code === "canopy" ? <CanopyReportsView /> :
           <ReportView
@@ -182,12 +207,13 @@ export default function MainArea({
           />
       ) : activeView === "dashboard" ? (
         <CanopyHomeView />
-      ) : activeView === "admissions" ? (
-        <CanopyAdmissionsView sessionUser={sessionUser} />
-      ) : activeView === "monitoring" ? (
-        <CanopyDashboardView />
+      ) : activeView === "admissions" || activeView === "or-schedule" ? (
+        // One Admission page (admissions + schedule).
+        <CanopyAdmissionHubView key={activeView} sessionUser={sessionUser} initialView={activeView === "or-schedule" ? "schedule" : "table"} />
       ) : activeView === "fleet" ? (
         <CanopyFleetView />
+      ) : activeView === "monitoring" ? (
+        <CanopyDashboardView wardOnly={surface.code !== "canopy"} />
       ) : activeView === "topology" ? (
         <CanopyTopologyView sessionUser={sessionUser} />
       ) : activeView === "twin" ? (
@@ -198,6 +224,8 @@ export default function MainArea({
         <DeviceDistributionView />
       ) : activeView === "gateway-alerts" ? (
         <CanopyGatewayAlertsView />
+      ) : activeView === "activity" ? (
+        <CanopyActivityLogView />
       ) : activeView === "infrastructure" ? (
         <CanopyInfrastructureView />
       ) : activeView === "formdev" ? (
@@ -206,8 +234,6 @@ export default function MainArea({
         <CanopyReportStudioView sessionUser={sessionUser} />
       ) : activeView === "ai-studio" ? (
         <CanopyAiStudioView sessionUser={sessionUser} />
-      ) : activeView === "or-schedule" ? (
-        <CanopyOrScheduleView sessionUser={sessionUser} />
       ) : activeView === "staff-directory" ? (
         <CanopyStaffView sessionUser={sessionUser} />
       ) : activeView === "workflows" ? (
@@ -222,6 +248,7 @@ export default function MainArea({
           onNavigate={onNavigate}
           onCaseDischargeTimeUpdated={onCaseDischargeTimeUpdated}
           onCaseArchived={onCaseArchived}
+          onCaseReopened={onCaseReopened}
           onStartNextCase={onStartNextCase}
         />
       )}
@@ -231,7 +258,7 @@ export default function MainArea({
   return (
     <ViewErrorBoundary resetKey={resetKey}>
       {caseHeader ? (
-        <div className="case-header-frame flex h-full min-h-0 flex-col bg-gray-50 dark:bg-gray-900">
+        <div className="case-header-frame flex h-full min-h-0 flex-col bg-[var(--app-bg)]">
           <div className="case-header-frame__header shrink-0 px-2 pt-2">
             <CaseHeaderStrip key={caseStatus.case_id} caseStatus={caseStatus} sessionUser={sessionUser} onNavigate={onNavigate} />
           </div>

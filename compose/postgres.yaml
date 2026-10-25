@@ -99,6 +99,14 @@ services:
       - ../infrastructure/postgres/0091-repeatable-case-forms.sql:/docker-entrypoint-initdb.d/0091-repeatable-case-forms.sql:ro
       - ../infrastructure/postgres/0092-case-documents.sql:/docker-entrypoint-initdb.d/0092-case-documents.sql:ro
       - ../infrastructure/postgres/0071-io-catalog-sync.sql:/docker-entrypoint-initdb.d/0071-io-catalog-sync.sql:ro
+      - ../infrastructure/postgres/0090-leaf-live-stream.sql:/docker-entrypoint-initdb.d/0090-leaf-live-stream.sql:ro
+      - ../infrastructure/postgres/0091-or-transfer.sql:/docker-entrypoint-initdb.d/0091-or-transfer.sql:ro
+      - ../infrastructure/postgres/0092-canopy-case-binding.sql:/docker-entrypoint-initdb.d/0092-canopy-case-binding.sql:ro
+      - ../infrastructure/postgres/0093-case-staff-times.sql:/docker-entrypoint-initdb.d/0093-case-staff-times.sql:ro
+      - ../infrastructure/postgres/0094-leaf-transfer.sql:/docker-entrypoint-initdb.d/0094-leaf-transfer.sql:ro
+      - ../infrastructure/postgres/0095-case-transfer.sql:/docker-entrypoint-initdb.d/0095-case-transfer.sql:ro
+      - ../infrastructure/postgres/0096-canopy-activity-log.sql:/docker-entrypoint-initdb.d/0096-canopy-activity-log.sql:ro
+      - ../infrastructure/postgres/0097-case-form-entry.sql:/docker-entrypoint-initdb.d/0097-case-form-entry.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s

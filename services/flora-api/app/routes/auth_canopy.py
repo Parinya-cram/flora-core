@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from psycopg import Connection
 from pydantic import BaseModel
 
-from .. import central_auth, tenancy
+from .. import activity_log, central_auth, tenancy
 from ..database import connection
 from .auth_leaf import attach_entitlements, public_user as shared_public_user
 
@@ -129,7 +129,7 @@ def _account_info(account: tenancy.Account | None) -> dict[str, Any] | None:
 
 
 @router.post("/login")
-def login(payload: LoginRequest, database: Connection = Depends(connection)) -> dict:
+def login(payload: LoginRequest, request: Request, database: Connection = Depends(connection)) -> dict:
     username = payload.username.strip()
     if not username or not payload.password:
         raise HTTPException(status_code=400, detail="username and password are required")
@@ -154,8 +154,13 @@ def login(payload: LoginRequest, database: Connection = Depends(connection)) -> 
         # The connection was taken for the request's account; sign in to the one named in the form.
         with tenancy.using(account):
             tenancy.scope_connection(database)
-    user = central_auth.authenticate(database, username, payload.password)
+    try:
+        user = central_auth.authenticate(database, username, payload.password)
+    except HTTPException as error:
+        activity_log.record_sign_in(request, username, account, None, error.status_code, str(error.detail))
+        raise
     user = attach_entitlements(database, user)
+    activity_log.record_sign_in(request, username, account, user, 200)
     token, expires_at = create_token(user, account.code if account else None)
     return {
         "user": public_user(user),
