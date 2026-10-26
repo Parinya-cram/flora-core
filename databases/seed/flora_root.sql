@@ -1,4 +1,4 @@
--- Flora Root dev seed: dump of the demo Root database (flora_root), 2026-10-14T01:39Z.
+-- Flora Root dev seed: dump of the demo Root database (flora_root), 2026-10-26T08:19Z.
 -- Sanitised: sign-in sessions removed, every user's password = admin's, signing keys removed.
 -- Root creates a new Ed25519 signing key on first start: re-issue licenses and re-publish releases
 -- (demo/release.sh) after restoring, and give Haber the new public key.
@@ -9,7 +9,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict SWgpm5gCrXbjMFUuszonOzoGN88VZ8aew5u3ubYr59fp5XCgShbkThKsPYBKS7y
+\restrict uM97yuDWLoq0ZBzbg16VSGusLVyaEffWcd1mBBW19xakTlU1uA6ejdbmWEXVIwl
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -28,6 +28,7 @@ SET row_security = off;
 
 ALTER TABLE IF EXISTS ONLY public.root_session DROP CONSTRAINT IF EXISTS root_session_user_id_fkey;
 ALTER TABLE IF EXISTS ONLY public.root_license DROP CONSTRAINT IF EXISTS root_license_tenant_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.root_install DROP CONSTRAINT IF EXISTS root_install_tenant_id_fkey;
 ALTER TABLE IF EXISTS ONLY public.root_checkin DROP CONSTRAINT IF EXISTS root_checkin_tenant_id_fkey;
 ALTER TABLE IF EXISTS ONLY public.device_protocol DROP CONSTRAINT IF EXISTS device_protocol_source_id_fkey;
 ALTER TABLE IF EXISTS ONLY public.device_protocol_lane DROP CONSTRAINT IF EXISTS device_protocol_lane_source_id_fkey;
@@ -35,6 +36,7 @@ ALTER TABLE IF EXISTS ONLY public.device_manufacturer DROP CONSTRAINT IF EXISTS 
 ALTER TABLE IF EXISTS ONLY public.device_connection_type DROP CONSTRAINT IF EXISTS device_connection_type_source_id_fkey;
 DROP INDEX IF EXISTS public.root_session_expiry;
 DROP INDEX IF EXISTS public.root_license_current;
+DROP INDEX IF EXISTS public.root_install_tenant_idx;
 DROP INDEX IF EXISTS public.root_audit_at;
 DROP INDEX IF EXISTS public.device_type_status;
 DROP INDEX IF EXISTS public.device_type_manufacturer;
@@ -46,7 +48,10 @@ ALTER TABLE IF EXISTS ONLY public.root_session DROP CONSTRAINT IF EXISTS root_se
 ALTER TABLE IF EXISTS ONLY public.root_release DROP CONSTRAINT IF EXISTS root_release_pkey;
 ALTER TABLE IF EXISTS ONLY public.root_release DROP CONSTRAINT IF EXISTS root_release_component_version_key;
 ALTER TABLE IF EXISTS ONLY public.root_license DROP CONSTRAINT IF EXISTS root_license_pkey;
+ALTER TABLE IF EXISTS ONLY public.root_install DROP CONSTRAINT IF EXISTS root_install_pkey;
+ALTER TABLE IF EXISTS ONLY public.root_install DROP CONSTRAINT IF EXISTS root_install_code_hash_key;
 ALTER TABLE IF EXISTS ONLY public.root_global_config DROP CONSTRAINT IF EXISTS root_global_config_pkey;
+ALTER TABLE IF EXISTS ONLY public.root_device_profile DROP CONSTRAINT IF EXISTS root_device_profile_pkey;
 ALTER TABLE IF EXISTS ONLY public.root_checkin DROP CONSTRAINT IF EXISTS root_checkin_pkey;
 ALTER TABLE IF EXISTS ONLY public.root_audit DROP CONSTRAINT IF EXISTS root_audit_pkey;
 ALTER TABLE IF EXISTS ONLY public.device_type_source DROP CONSTRAINT IF EXISTS device_type_source_pkey;
@@ -64,7 +69,9 @@ DROP TABLE IF EXISTS public.root_signing_key;
 DROP TABLE IF EXISTS public.root_session;
 DROP TABLE IF EXISTS public.root_release;
 DROP TABLE IF EXISTS public.root_license;
+DROP TABLE IF EXISTS public.root_install;
 DROP TABLE IF EXISTS public.root_global_config;
+DROP TABLE IF EXISTS public.root_device_profile;
 DROP TABLE IF EXISTS public.root_checkin;
 DROP SEQUENCE IF EXISTS public.root_audit_id_seq;
 DROP TABLE IF EXISTS public.root_audit;
@@ -242,6 +249,30 @@ CREATE TABLE public.root_checkin (
 
 
 --
+-- Name: root_device_profile; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.root_device_profile (
+    code text NOT NULL,
+    label text NOT NULL,
+    category text,
+    protocol text,
+    controller text NOT NULL,
+    parser text NOT NULL,
+    image text DEFAULT 'parser'::text NOT NULL,
+    default_options jsonb DEFAULT '{}'::jsonb NOT NULL,
+    connection_defaults jsonb DEFAULT '{}'::jsonb NOT NULL,
+    models text[] DEFAULT '{}'::text[] NOT NULL,
+    notes text,
+    revision integer DEFAULT 1 NOT NULL,
+    status text DEFAULT 'active'::text NOT NULL,
+    updated_at bigint NOT NULL,
+    updated_by text,
+    CONSTRAINT root_device_profile_status_check CHECK ((status = ANY (ARRAY['active'::text, 'withdrawn'::text])))
+);
+
+
+--
 -- Name: root_global_config; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -249,6 +280,31 @@ CREATE TABLE public.root_global_config (
     key text NOT NULL,
     value jsonb NOT NULL,
     updated_at bigint NOT NULL
+);
+
+
+--
+-- Name: root_install; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.root_install (
+    install_id text NOT NULL,
+    tenant_id text NOT NULL,
+    kind text NOT NULL,
+    node_id text,
+    label text,
+    ward text,
+    room text,
+    bed text,
+    code_hash text NOT NULL,
+    status text DEFAULT 'pending'::text NOT NULL,
+    detail jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at bigint NOT NULL,
+    created_by text,
+    expires_at bigint NOT NULL,
+    updated_at bigint NOT NULL,
+    CONSTRAINT root_install_kind_check CHECK ((kind = ANY (ARRAY['site'::text, 'leaf'::text, 'gateway'::text]))),
+    CONSTRAINT root_install_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'claimed'::text, 'installed'::text, 'failed'::text, 'revoked'::text])))
 );
 
 
@@ -673,6 +729,7 @@ COPY public.root_audit (id, at, username, action, target, ip, detail) FROM stdin
 59	1791876593470	admin	POST /api/v1/releases	\N	192.168.112.1	{"via": "basic", "status": 201}
 60	1791877147662	admin	POST /api/v1/releases	\N	192.168.112.1	{"via": "basic", "status": 201}
 61	1791877464313	admin	POST /api/v1/releases	\N	192.168.112.1	{"via": "basic", "status": 201}
+62	1792461635962	admin	POST /api/v1/releases	\N	192.168.112.1	{"via": "basic", "status": 201}
 \.
 
 
@@ -681,7 +738,30 @@ COPY public.root_audit (id, at, username, action, target, ip, detail) FROM stdin
 --
 
 COPY public.root_checkin (tenant_id, last_seen_at, canopy_version, bundle_id, usage) FROM stdin;
-hospital-01	1791941964120	1.2.2	lic-e4011381788b	{"nodes": [{"state": "current", "node_id": "canopy", "component": "canopy", "last_seen": 1791941935282, "release_id": "canopy-1.2.9"}, {"state": "current", "node_id": "gateway-hospital-01-a", "component": "gateway", "last_seen": 1791941939962, "release_id": "gateway-0.2.4"}, {"state": "waiting", "node_id": "leaf-icu-01", "component": "leaf", "last_seen": 1791941959453, "release_id": "leaf-1.2.2"}, {"state": "waiting", "node_id": "leaf-or-01", "component": "leaf", "last_seen": 1791941959454, "release_id": "leaf-1.2.6"}], "leaves": 6, "gateways": 1, "leaf_ids": ["demo-leaf-01", "demo-leaf-02", "demo-leaf-03", "demo-leaf-04", "leaf-icu-01", "leaf-or-01"], "gateway_devices": 1}
+hospital-01	1793002780933	1.2.2	lic-e4011381788b	{"nodes": [{"state": "current", "node_id": "canopy", "component": "canopy", "last_seen": 1792997485626, "release_id": "canopy-1.2.9"}, {"state": "applying", "node_id": "gateway-hospital-01-a", "component": "gateway", "last_seen": 1792997465241, "release_id": null}, {"state": "drifted", "node_id": "leaf-icu-01", "component": "leaf", "last_seen": 1792861866153, "release_id": "leaf-1.2.9"}, {"state": "current", "node_id": "leaf-or-01", "component": "leaf", "last_seen": 1792997489261, "release_id": "leaf-1.2.9"}], "leaves": 9, "gateways": 1, "leaf_ids": ["demo-leaf-01", "demo-leaf-02", "demo-leaf-03", "demo-leaf-04", "leaf-icu-01", "leaf-or-01", "leaf-or-02", "leaf-recovery-01", "leaf-test-01"], "leaf_detail": [{"bed": "Demo OR 1 workstation", "name": "Demo OR 1", "room": "Demo OR 1", "ward": "Demo Ward", "leaf_id": "demo-leaf-01", "ward_key": "18", "last_seen": 1792557227031}, {"bed": "Demo OR 2 workstation", "name": "Demo OR 2", "room": "Demo OR 2", "ward": "Demo Ward", "leaf_id": "demo-leaf-02", "ward_key": "18", "last_seen": 1792557227031}, {"bed": "Demo OR 3 workstation", "name": "Demo OR 3", "room": "Demo OR 3", "ward": "Demo Ward", "leaf_id": "demo-leaf-03", "ward_key": "18", "last_seen": 1792557227031}, {"bed": "Demo OR 4 workstation", "name": "Demo OR 4", "room": "Demo OR 4", "ward": "Demo Ward", "leaf_id": "demo-leaf-04", "ward_key": "18", "last_seen": 1792557227031}, {"bed": "ICU Bed 1", "name": "ICU Bed 1", "room": "ICU Room 1", "ward": "ICU1", "leaf_id": "leaf-icu-01", "ward_key": "3", "last_seen": 1793002774879}, {"bed": "OR-1", "name": "Operating Room 1", "room": "Operating Room 1", "ward": "OR Suite", "leaf_id": "leaf-or-01", "ward_key": "6", "last_seen": 1793002778444}, {"bed": "OR-2", "name": "Operating Room 2", "room": "Operating Room 2", "ward": "OR Suite", "leaf_id": "leaf-or-02", "ward_key": "6", "last_seen": 1793002770741}, {"bed": "Recovery-1", "name": "Recovery", "room": "OR1 Recovery", "ward": "OR Suite", "leaf_id": "leaf-recovery-01", "ward_key": "6", "last_seen": 1793002779139}, {"bed": null, "name": "Sync Test Leaf", "room": null, "ward": null, "leaf_id": "leaf-test-01", "ward_key": null, "last_seen": 1793002778194}], "appliance_url": "http://localhost:7204", "gateway_detail": [{"site": "gateway-hospital-01-a", "devices": [{"pod": "socket.icu-monitor", "live": {"since": null, "state": "disabled", "detail": null, "last_in_ts": 1793002775283, "last_value_ts": null}, "label": "ICU bed 1 patient monitor", "enabled": false, "leaf_id": "leaf-or-01", "station": null, "location": null, "asset_tag": null, "device_id": "icu-monitor-01", "device_type": "hl7-patient-monitor", "parser_status": "absent", "serial_number": null}, {"pod": "feeder.icu-ventilator", "live": {"since": null, "state": "disabled", "detail": null, "last_in_ts": 1793002773758, "last_value_ts": null}, "label": "ICU bed 1 ventilator", "enabled": false, "leaf_id": "leaf-or-01", "station": null, "location": null, "asset_tag": null, "device_id": "icu-ventilator-01", "device_type": "http-ventilator", "parser_status": "absent", "serial_number": null}, {"pod": "socket.m540-relay", "live": {"since": null, "state": "disabled", "detail": null, "last_in_ts": 1793002776912, "last_value_ts": null}, "label": "Simulated Dräger M540 #1", "enabled": false, "leaf_id": null, "station": null, "location": null, "asset_tag": null, "device_id": "m540-sim-1", "device_type": "draeger-iacs-m540", "parser_status": "absent", "serial_number": null}, {"pod": "socket.m540-relay", "live": {"since": null, "state": "disabled", "detail": null, "last_in_ts": 1793002776912, "last_value_ts": null}, "label": "Simulated Dräger M540 #2", "enabled": false, "leaf_id": "leaf-icu-01", "station": null, "location": null, "asset_tag": null, "device_id": "m540-sim-2", "device_type": "draeger-iacs-m540", "parser_status": "absent", "serial_number": null}, {"pod": "socket.m540-relay", "live": {"since": null, "state": "disabled", "detail": null, "last_in_ts": 1793002776912, "last_value_ts": null}, "label": "Simulated Dräger M540 #3", "enabled": false, "leaf_id": null, "station": null, "location": null, "asset_tag": null, "device_id": "m540-sim-3", "device_type": "draeger-iacs-m540", "parser_status": "absent", "serial_number": null}, {"pod": "webhook.or-anesthesia", "live": {"since": null, "state": "disabled", "detail": null, "last_in_ts": 1793002772927, "last_value_ts": null}, "label": "OR-1 anesthesia machine", "enabled": false, "leaf_id": "leaf-or-01", "station": null, "location": null, "asset_tag": null, "device_id": "or-anesthesia-01", "device_type": "json-anesthesia-machine", "parser_status": "absent", "serial_number": null}, {"pod": "socket.or-monitor", "live": {"since": null, "state": "disabled", "detail": null, "last_in_ts": 1793002775283, "last_value_ts": null}, "label": "OR-1 patient monitor", "enabled": false, "leaf_id": null, "station": null, "location": null, "asset_tag": null, "device_id": "or-monitor-01", "device_type": "hl7-patient-monitor", "parser_status": "absent", "serial_number": null}, {"pod": "serial.COM2", "live": {"since": null, "state": "disabled", "detail": null, "last_in_ts": null, "last_value_ts": null}, "label": "OR-1 Acme T-200 (simulated)", "enabled": false, "leaf_id": null, "station": null, "location": null, "asset_tag": null, "device_id": "or-t200-01", "device_type": "acme-t200", "parser_status": "absent", "serial_number": null}, {"pod": "serial.COM1", "live": {"since": null, "state": "disabled", "detail": null, "last_in_ts": null, "last_value_ts": null}, "label": "OR-1 RS-232 temperature/CVP module", "enabled": false, "leaf_id": null, "station": null, "location": null, "asset_tag": null, "device_id": "or-temp-module-01", "device_type": "serial-temp-module", "parser_status": "absent", "serial_number": null}, {"pod": "socket.vista", "live": {"since": 1793002775585, "state": "receiving", "detail": null, "last_in_ts": 1793002776586, "last_value_ts": 1793002775585}, "label": "OR-1 Dräger Vista 120 S (simulated)", "enabled": true, "leaf_id": "leaf-or-01", "station": null, "location": null, "asset_tag": null, "device_id": "or-vista-01", "device_type": "draeger-vista-120s", "parser_status": "running", "serial_number": null}], "version": "0.1.0", "last_seen": 1793002776946, "gateway_id": "gateway-hospital-01-a"}], "gateway_devices": 1}
+\.
+
+
+--
+-- Data for Name: root_device_profile; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.root_device_profile (code, label, category, protocol, controller, parser, image, default_options, connection_defaults, models, notes, revision, status, updated_at, updated_by) FROM stdin;
+hl7-patient-monitor	Patient monitor (HL7 v2 / IHE PCD-01)	patient_monitor	hl7v2	socket	hl7v2	parser	{"timezone": "Asia/Bangkok"}	{"framing": "mllp", "auto_ack": true, "transport": "tcp"}	{}	\N	1	active	1792997408769	release
+json-anesthesia-machine	Anesthesia machine (JSON push)	anesthesia_machine	json	webhook	json_fields	parser	{"units": {"fio2": "%", "et_agent": "%", "fi_agent": "%", "airway_pressure_peak": "cmH2O"}}	{}	{}	\N	1	active	1792997408770	release
+http-ventilator	ICU ventilator (HTTP poll)	ventilator	json	feeder	json_fields	parser	{"codes": {"MODE": "set_vent_mode", "PEEP": "set_peep", "RR_SET": "set_rr", "VT_SET": "set_tidal_volume", "FIO2_SET": "set_fio2"}}	{"interval_ms": 5000}	{}	\N	1	active	1792997408770	release
+serial-temp-module	Temperature / CVP module (RS-232, polled)	temperature_module	ascii	serial	ascii_kv	parser	{"codes": {"CVP": "cvp", "TEMP": "temperature"}, "units": {"cvp": "mmHg", "temperature": "Cel"}, "poll_command": "?\\\\r\\\\n", "poll_interval_sec": 5}	{"baud": 9600, "parity": "none", "idle_ms": 80, "data_bits": 8, "stop_bits": 1, "flow_control": "none"}	{}	\N	1	active	1792997408770	release
+draeger-iacs-m540	Dräger M540 (IACS UDP, research mapping)	patient_monitor	draeger-iacs	socket	iacs_m540	parser	{}	{"auto_ack": false, "transport": "udp", "max_frame_bytes": 6096}	{}	\N	1	active	1792997408771	release
+draeger-medibus	Dräger MEDIBUS.X (RS-232 numeric data)	ventilator	draeger-medibus	serial	medibus	parser	{"poll_interval_sec": 1, "session_timeout_sec": 10, "response_timeout_sec": 3}	{"dtr": true, "rts": true, "baud": 19200, "parity": "even", "idle_ms": 20, "data_bits": 8, "stop_bits": 1, "flow_control": "none", "max_frame_bytes": 16384}	{}	\N	1	active	1792997408771	release
+ge-carestation-750	GE Carestation 750 (COM 1.2)	anesthesia_machine	ge-datex-com12	serial	ge_carestation	parser	{}	{"dtr": true, "rts": true, "baud": 19200, "parity": "odd", "idle_ms": 20, "data_bits": 7, "stop_bits": 1, "flow_control": "none"}	{}	\N	1	active	1792997408771	release
+ge-aisys-cs2	GE Aisys CS2 (Hidro COM 1.2 profile)	anesthesia_machine	ge-datex-com12	serial	ge_carestation	parser	{}	{"dtr": true, "rts": true, "baud": 19200, "parity": "odd", "idle_ms": 20, "data_bits": 7, "stop_bits": 1, "flow_control": "none"}	{}	\N	1	active	1792997408771	release
+ge-bx50-dri	GE Bx50 / B650 (Hidro DRI profile)	patient_monitor	ge-s5-dri	serial	ge_dri	parser	{"dri_levels": [12, 11, 10, 9, 8, 6], "checksum_mode": "escaped"}	{"dtr": true, "baud": 19200, "parity": "even", "idle_ms": 20, "data_bits": 8, "stop_bits": 1, "flow_control": "hardware"}	{}	\N	1	active	1792997408772	release
+ge-s5-dri	GE S/5 (DRI)	patient_monitor	ge-s5-dri	serial	ge_dri	parser	{"dri_levels": [9, 8, 7], "checksum_mode": "payload"}	{"dtr": true, "baud": 19200, "parity": "even", "idle_ms": 20, "data_bits": 8, "stop_bits": 1, "flow_control": "hardware"}	{}	\N	1	active	1792997408772	release
+ge-aisys-dri	GE Aisys (legacy DRI alternative)	anesthesia_machine	ge-s5-dri	serial	ge_dri	parser	{"dri_levels": [12, 11, 10, 9, 8, 6], "checksum_mode": "payload"}	{"dtr": true, "rts": true, "baud": 115200, "parity": "even", "idle_ms": 20, "data_bits": 8, "stop_bits": 1, "flow_control": "none"}	{}	\N	1	active	1792997408772	release
+bbraun-space-bcc	B. Braun SpaceCom (BCC TCP)	infusion_pump	bbraun-bcc	socket	bbraun_bcc	parser	{"bed_id": "1/1/1", "poll_interval_sec": 5}	{"framing": "raw", "auto_ack": false, "transport": "tcp", "reconnect_ms": 3000, "read_timeout_ms": 15000, "connect_timeout_ms": 3000}	{}	\N	1	active	1792997408772	release
+hidro-hl7-monitor	Hidro shared HL7 monitor (GE / configured vendor aliases)	patient_monitor	hl7v2	socket	hidro_hl7	parser	{"timezone": "Asia/Bangkok", "repair_segments": false}	{"framing": "mllp", "auto_ack": true, "transport": "tcp"}	{}	\N	1	active	1792997408772	release
+acme-t200	Acme T-200 temperature / CVP (RS-232, polled)	temperature_module	acme-t200	serial	acme_t200	parser	{"poll_interval_sec": 2}	{"baud": 9600, "parity": "none", "idle_ms": 50, "data_bits": 8, "stop_bits": 1, "flow_control": "none"}	{}	\N	1	active	1792997408773	release
+draeger-vista-120s	Dräger Vista 120 S patient monitor (CMS link, TCP)	patient_monitor	draeger-vista-s	socket	draeger_vista_s	parser	{"min_interval_sec": 1}	{"framing": "raw", "auto_ack": false, "transport": "tcp"}	{}	\N	1	active	1792997408773	release
 \.
 
 
@@ -694,6 +774,14 @@ terminology_release	"2026.09"	1790883710704
 minimum_versions	{"leaf": "1.2.0", "canopy": "1.2.0", "gateway": "0.1.0"}	1790883710704
 feature_flags	{"ai_assist": false, "archive_reports": true}	1790883710704
 sync_interval_sec	10	1790883710704
+\.
+
+
+--
+-- Data for Name: root_install; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.root_install (install_id, tenant_id, kind, node_id, label, ward, room, bed, code_hash, status, detail, created_at, created_by, expires_at, updated_at) FROM stdin;
 \.
 
 
@@ -737,6 +825,7 @@ leaf-1.2.7	leaf	1.2.7	stable	{"api": {"tag": "1.2.7", "digest": "sha256:24d6452b
 canopy-1.2.8	canopy	1.2.8	stable	{"api": {"tag": "1.2.8", "digest": "sha256:a72120f205889e2eefe55ef29ca8ea69cb7f84241c331124b2d1f4ed0705c8f8", "repository": "flora/canopy/api"}, "haber": {"tag": "1.2.8", "digest": "sha256:8b726954059f9a6c7a442de85eb979fef01ad29dd291df02c78286e6387ff466", "repository": "flora/canopy/haber"}}	[]	demo/release.sh	1791876593467	\N
 canopy-1.2.9	canopy	1.2.9	stable	{"api": {"tag": "1.2.9", "digest": "sha256:1632581f3f0c07244e70139b80caadd6256e323c59fa778665842933584c9792", "repository": "flora/canopy/api"}, "haber": {"tag": "1.2.9", "digest": "sha256:8b726954059f9a6c7a442de85eb979fef01ad29dd291df02c78286e6387ff466", "repository": "flora/canopy/haber"}}	[]	demo/release.sh	1791877147661	\N
 leaf-1.2.8	leaf	1.2.8	stable	{"api": {"tag": "1.2.8", "digest": "sha256:0dca7b8c033987d97f65c23c98dd2c7c8e4f30e7d3aa7319cecab72cadb0ba97", "repository": "flora/leaf/api"}, "sync": {"tag": "1.2.8", "digest": "sha256:66f7902736691665c81a073661944333b2c602e3f1c014a33270ca60b6c95e9c", "repository": "flora/leaf/sync"}}	[]	demo/release.sh	1791877464312	\N
+leaf-1.2.9	leaf	1.2.9	stable	{"api": {"tag": "1.2.9", "digest": "sha256:916d8bfebabed7cd5077d1bc2169fc5d4106421283d71cacb76e5937a5e87f24", "repository": "flora/leaf/api"}, "sync": {"tag": "1.2.9", "digest": "sha256:d63a5e19263c34a98ba6fa2834d637c57867358781022f88a939e30bc78a8027", "repository": "flora/leaf/sync"}}	[]	demo/release.sh	1792461635961	\N
 \.
 
 
@@ -779,7 +868,7 @@ COPY public.root_user (id, username, password_hash, display_name, role, enabled,
 -- Name: root_audit_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.root_audit_id_seq', 61, true);
+SELECT pg_catalog.setval('public.root_audit_id_seq', 62, true);
 
 
 --
@@ -854,11 +943,35 @@ ALTER TABLE ONLY public.root_checkin
 
 
 --
+-- Name: root_device_profile root_device_profile_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.root_device_profile
+    ADD CONSTRAINT root_device_profile_pkey PRIMARY KEY (code);
+
+
+--
 -- Name: root_global_config root_global_config_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.root_global_config
     ADD CONSTRAINT root_global_config_pkey PRIMARY KEY (key);
+
+
+--
+-- Name: root_install root_install_code_hash_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.root_install
+    ADD CONSTRAINT root_install_code_hash_key UNIQUE (code_hash);
+
+
+--
+-- Name: root_install root_install_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.root_install
+    ADD CONSTRAINT root_install_pkey PRIMARY KEY (install_id);
 
 
 --
@@ -947,6 +1060,13 @@ CREATE INDEX root_audit_at ON public.root_audit USING btree (at DESC);
 
 
 --
+-- Name: root_install_tenant_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX root_install_tenant_idx ON public.root_install USING btree (tenant_id, created_at DESC);
+
+
+--
 -- Name: root_license_current; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1001,6 +1121,14 @@ ALTER TABLE ONLY public.root_checkin
 
 
 --
+-- Name: root_install root_install_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.root_install
+    ADD CONSTRAINT root_install_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.root_tenant(tenant_id) ON DELETE CASCADE;
+
+
+--
 -- Name: root_license root_license_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1020,5 +1148,5 @@ ALTER TABLE ONLY public.root_session
 -- PostgreSQL database dump complete
 --
 
-\unrestrict SWgpm5gCrXbjMFUuszonOzoGN88VZ8aew5u3ubYr59fp5XCgShbkThKsPYBKS7y
+\unrestrict uM97yuDWLoq0ZBzbg16VSGusLVyaEffWcd1mBBW19xakTlU1uA6ejdbmWEXVIwl
 
