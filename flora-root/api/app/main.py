@@ -796,7 +796,7 @@ h1{font-size:24px;margin:0 0 4px} .sub{color:#65706a;margin:0 0 20px} .tabs{disp
 li{margin:6px 0} h2{font-size:16px;margin:0 0 8px}"""
     return HTMLResponse(f"""<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Flora iCIS · ติดตั้งโรงพยาบาลใหม่</title><style>{css}</style></head><body>
-<h1>ติดตั้งโรงพยาบาลใหม่</h1><p class="sub">Flora iCIS Root · เลือกระบบปฏิบัติการของเครื่อง server หลัก</p>
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><img src="/brand/flora-icis-logo.png" alt="Flora iCIS" style="height:44px;width:auto"><b style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#2f6f4f">Root</b></div><h1>ติดตั้งโรงพยาบาลใหม่</h1><p class="sub">Flora iCIS Root · เลือกระบบปฏิบัติการของเครื่อง server หลัก</p>
 <div class="tabs">{tabs}</div>{body}</body></html>""")
 
 
@@ -989,3 +989,9 @@ def health():
 @app.get("/")
 def index():
     return FileResponse(Path(__file__).parent / "static" / "index.html")
+
+
+@app.get("/brand/flora-icis-logo.png", include_in_schema=False)
+def brand_logo():
+    return FileResponse(Path(__file__).parent / "static" / "brand" / "flora-icis-logo.png",
+                        headers={"cache-control": "public, max-age=86400"})

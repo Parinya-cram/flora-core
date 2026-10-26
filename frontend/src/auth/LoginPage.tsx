@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { BootstrapStatus } from "../bootstrap/floraDesktop";
-import appIcon from "../assets/logos/flora-icis-icon.png";
 import ThemePicker from "../components/ThemePicker";
 import LanguagePicker from "../components/LanguagePicker";
 import { useLanguage } from "../context/LanguageContext";
@@ -11,6 +10,7 @@ import BranchNetwork from "./BranchNetwork";
 import "./canopyLogin.css";
 import { ReadinessRow, type Readiness } from "./ReadinessRow";
 import WorkstationSwitcher from "../demo/WorkstationSwitcher";
+import BrandLogo from "../components/BrandLogo";
 
 type Props = {
   onLogin: (username: string, password: string, accountCode?: string) => Promise<boolean> | boolean;
@@ -75,11 +75,8 @@ function WorkstationLoginPage({ onLogin, loginEnabled = true, bootstrapStatus }:
         <div ref={cardRef} className="overflow-hidden rounded-[20px] border border-[var(--app-border)] bg-[var(--app-panel-bg)] shadow-2xl">
           <header className="flex items-center justify-between border-b border-[var(--app-border)] px-[22px] py-[14px] sm:px-[26px]">
             <div className="flex items-center gap-[10px]">
-                <span className="inline-flex h-[40px] w-[40px] items-center justify-center rounded-lg border border-[var(--app-border)] bg-[var(--app-control-bg)]">
-                  <img src={appIcon} alt="" className="h-[34px] w-[34px] object-contain" />
-                </span>
+                <BrandLogo height={40} part={surface.code === "canopy" ? "Canopy" : "Leaf"} />
                 <div>
-                  <div className="text-[17px] font-bold leading-[21px] text-[var(--app-text)]">{productName}</div>
                   <div className="text-[11px] text-[var(--app-muted)]">{productDescription}</div>
                 </div>
             </div>

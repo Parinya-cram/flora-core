@@ -56,7 +56,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Flora Gateway Service", lifespan=lifespan)
-auth.install(app, [r"/health", r"/login", r"/api/auth/login", r"/api/site/label"])
+auth.install(app, [r"/health", r"/brand/.*", r"/login", r"/api/auth/login", r"/api/site/label"])
 
 
 def require_admin(request: Request) -> None:
@@ -1881,3 +1881,9 @@ def login_page(request: Request):
     if auth.resolve_user(request):
         return RedirectResponse("/", status_code=303)
     return FileResponse(Path(__file__).parent / "static" / "login.html")
+
+
+@app.get("/brand/flora-icis-logo.png", include_in_schema=False)
+def brand_logo():
+    return FileResponse(Path(__file__).parent / "static" / "brand" / "flora-icis-logo.png",
+                        headers={"cache-control": "public, max-age=86400"})
