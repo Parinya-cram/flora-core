@@ -5,6 +5,7 @@ network. The sync worker refreshes it from Canopy (`PUT /state`) and reports how
 sync step went (`PUT /sync-status`); "Sync now" only raises a flag the worker polls.
 """
 import json
+import logging
 import os
 import time
 import urllib.error
@@ -17,7 +18,7 @@ from fastapi.responses import JSONResponse
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 
-from .. import case_bindings, case_handover
+from .. import case_bindings, case_handover, stream_links
 from ..account_config_sync import CANOPY_SYNC_URL, SYNC_SECRET
 from ..database import connection
 from .auth_leaf import now_ms, require_permission, service_only
@@ -25,6 +26,7 @@ from .canopy_inbox import inbox_public
 
 router = APIRouter(prefix="/api/ward", tags=["ward"])
 LEAF_ID = os.getenv("FLORA_LEAF_ID", "").strip()
+log = logging.getLogger("flora.ward")
 AUTO_SYNC_SECONDS = int(os.getenv("FLORA_SYNC_INTERVAL_SECONDS", "10"))
 HABER_URL = os.getenv("FLORA_HABER_URL", "").rstrip("/")
 
@@ -194,6 +196,14 @@ def put_state(payload: dict[str, Any], _: dict = Depends(service_only), database
             canopy("POST", f"/api/sync/v1/handover/{handover_id}/bed-moved", {"leaf_id": LEAF_ID}, timeout=5)
         except HTTPException:
             pass  # applied here; Canopy hears it again on the next pass
+    # Gateway links for the live stream: created / completed from the ward exchange (stream_links.py).
+    try:
+        with database.transaction():
+            links = stream_links.ensure(database, payload, current)
+        if links:
+            log.info("gateway links: %s", ", ".join(links))
+    except Exception as error:  # noqa: BLE001 - never fails the ward exchange
+        log.warning("gateway links not updated: %s", error)
     return {"ok": True, "released": released}
 
 

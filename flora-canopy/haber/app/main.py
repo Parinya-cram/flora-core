@@ -411,7 +411,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="Flora Canopy Haber", lifespan=lifespan)
 basic_auth.install(app, "Canopy Haber", "HABER", [
     r"/health", r"/api/haber/v1/gateways/[^/]+/(checkin|alerts|activity|case-bindings)",  # gateways, token auth
-    r"/api/haber/v1/root-keys", r"/api/haber/v1/nodes/[^/]+/(desired|report)",  # flora-updater, token auth
+    r"/api/haber/v1/root-keys", r"/api/haber/v1/nodes/[^/]+/(desired|report|stream-token)",  # flora-updater, Leafs, token auth
     r"/api/haber/v1/ai-relay/.+",   # Canopy / Leaf AI calls, relay token in the path
     r"/install", r"/install/(leaf|gateway)\.sh", r"/install/windows(/[A-Za-z0-9._-]+)?", r"/install/files/[a-z]+/[A-Za-z0-9._-]+", r"/api/haber/v1/install/(claim|report)",   # new LAN machines, one-time code
 ])
@@ -483,6 +483,9 @@ def gateway_checkin(gateway_id: str, body: Checkin, request: Request):
         "images": CATALOG["images"],
         "release_id": release["release_id"] if release else None,
         "global_config": bundle.get("global_config", {}),
+        # Leafs that may open the live stream (stream-hub): their token hashes, registered through this appliance.
+        "leaf_tokens": [{"leaf_id": leaf_id, "token_hash": token_hash}
+                        for leaf_id, hashes in sorted((kv_get("leaf_stream_tokens") or {}).items()) for token_hash in hashes],
     }
 
 
@@ -617,6 +620,30 @@ def require_node(request: Request) -> None:
     supplied = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
     if not NODE_TOKEN or not hmac.compare_digest(supplied, NODE_TOKEN):
         raise HTTPException(401, "invalid node token")
+
+
+STREAM_TOKENS_PER_LEAF = 10
+
+
+class StreamToken(BaseModel):
+    token_hash: str
+
+
+@app.post("/api/haber/v1/nodes/{leaf_id}/stream-token")
+def register_stream_token(leaf_id: str, body: StreamToken, request: Request):
+    """A Leaf's token for a gateway's live stream (stream-hub), as a sha256 hex: the Leaf keeps the token, every gateway
+    of this hospital gets the hash on its next check-in (leaf_tokens) and accepts that Leaf from then on. A Leaf may
+    register one per gateway link."""
+    require_node(request)
+    token_hash = body.token_hash.strip().lower()
+    if len(token_hash) != 64 or any(c not in "0123456789abcdef" for c in token_hash):
+        raise HTTPException(422, "token_hash must be a sha256 hex digest")
+    tokens = kv_get("leaf_stream_tokens") or {}
+    hashes = [h for h in tokens.get(leaf_id) or [] if h != token_hash] + [token_hash]
+    tokens[leaf_id] = hashes[-STREAM_TOKENS_PER_LEAF:]   # one per gateway link; the oldest go first
+    kv_set("leaf_stream_tokens", tokens)
+    log.info("live-stream token registered for Leaf %s", leaf_id)
+    return {"leaf_id": leaf_id, "gateways": "applied on each gateway's next check-in"}
 
 
 @app.get("/api/haber/v1/root-keys")

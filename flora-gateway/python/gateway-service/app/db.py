@@ -135,3 +135,32 @@ def instance_row(row: dict[str, Any]) -> dict[str, Any]:
     if isinstance(row.get("options"), str):
         row["options"] = json.loads(row["options"])
     return row
+
+
+APPLIANCE_TOKEN = "appliance"   # created_by of Leaf tokens that come from the appliance (check-in leaf_tokens)
+
+
+def sync_leaf_tokens(tokens: list[dict[str, Any]]) -> dict[str, int]:
+    """Leaf live-stream tokens registered at the appliance: add new hashes, revoke the appliance's ones it no longer
+    lists. Tokens issued on this admin page are left alone."""
+    wanted = {(item["leaf_id"], item["token_hash"]) for item in tokens if item.get("leaf_id") and item.get("token_hash")}
+    added = revoked = 0
+    with pool.connection() as connection:
+        known = {(row["leaf_id"], row["token_hash"]): row for row in connection.execute(
+            "SELECT id, leaf_id, token_hash, revoked_at, created_by FROM gateway_leaf_token").fetchall()}
+        for leaf_id, token_hash in wanted:
+            row = known.get((leaf_id, token_hash))
+            if row is None:
+                connection.execute(
+                    """INSERT INTO gateway_leaf_token (leaf_id, token_hash, label, created_by) VALUES (%s,%s,%s,%s)
+                       ON CONFLICT (token_hash) DO NOTHING""",
+                    (leaf_id, token_hash, "registered through the appliance", APPLIANCE_TOKEN))
+                added += 1
+            elif row["revoked_at"] is not None and row["created_by"] == APPLIANCE_TOKEN:
+                connection.execute("UPDATE gateway_leaf_token SET revoked_at = NULL WHERE id=%s", (row["id"],))
+                added += 1
+        for key, row in known.items():
+            if row["created_by"] == APPLIANCE_TOKEN and row["revoked_at"] is None and key not in wanted:
+                connection.execute("UPDATE gateway_leaf_token SET revoked_at = now() WHERE id=%s", (row["id"],))
+                revoked += 1
+    return {"added": added, "revoked": revoked}

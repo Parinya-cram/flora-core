@@ -117,6 +117,8 @@ spec:
             - { name: FLORA_LEAF_SERVICE_SECRET, value: "admin" }
             - { name: FLORA_CANOPY_SYNC_URL, value: "http://sync-api.flora-canopy.svc.cluster.local:8000" }
             - { name: FLORA_HABER_URL, value: "http://haber.flora-appliance.svc.cluster.local:8000" }
+            # Appliance node token: AI relay, and registering this Leaf's live-stream tokens (stream_links.py).
+            - { name: HABER_NODE_TOKEN, value: "haber-node-demo-token" }
             - { name: HABER_ADMIN_USERNAME, value: "admin" }
             - { name: HABER_ADMIN_PASSWORD, value: "admin" }
             - { name: FLORA_SYNC_SHARED_SECRET, value: "admin" }

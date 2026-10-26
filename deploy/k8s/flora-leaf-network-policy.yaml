@@ -1,0 +1,37 @@
+# Leaf pods may reach the cluster, DNS and, outside it, only the hospital gateway (172.22.1.233):
+# 7410 = data-api (minute pull), 7407 = stream-hub (live seconds). Everything else (internet) is blocked.
+# The same restrict-egress policy exists in flora-canopy and flora-root (applied live; not in this file).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: restrict-egress
+  namespace: flora-leaf
+spec:
+  egress:
+  - to:
+    - namespaceSelector: {}
+  - to:
+    - ipBlock:
+        cidr: 10.96.0.0/12
+  - ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+    to:
+    - namespaceSelector: {}
+  - ports:
+    - port: 7410
+      protocol: TCP
+    to:
+    - ipBlock:
+        cidr: 172.22.1.233/32
+  - ports:
+    - port: 7407
+      protocol: TCP
+    to:
+    - ipBlock:
+        cidr: 172.22.1.233/32
+  podSelector: {}
+  policyTypes:
+  - Egress

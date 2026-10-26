@@ -430,6 +430,10 @@ async def haber_checkin() -> dict[str, Any]:
     db.store_parser_images(payload.get("images") or [], payload.get("device_types") or [], payload.get("release_id"))
     if payload.get("license"):
         db.store_license(payload["license"], payload.get("tenant_id"))
+    if isinstance(payload.get("leaf_tokens"), list):   # older appliances do not send it: keep what is there
+        changed = db.sync_leaf_tokens(payload["leaf_tokens"])
+        if changed["added"] or changed["revoked"]:
+            log.info("leaf stream tokens from the appliance: %s", changed)
     STATE["haber"].update(status="ok", error=None, last_sync=db.now_ms(), tenant_id=payload.get("tenant_id"),
                           release_id=payload.get("release_id"))
     return payload
