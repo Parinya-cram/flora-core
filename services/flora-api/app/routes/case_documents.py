@@ -1,4 +1,4 @@
-"""Documents attached to a case on Flora Leaf (0094): pages put together in the assembly workspace, kept with the case
+"""Documents attached to a case on Flora Leaf (0092): pages put together in the assembly workspace, kept with the case
 as one PDF (offline too) and sent to Canopy once by the sync worker. A document is removed with a reason, never
 deleted: the removal reaches Canopy as well (its details only; the file is not sent again).
 

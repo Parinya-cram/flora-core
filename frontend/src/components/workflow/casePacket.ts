@@ -1,9 +1,23 @@
-import type { CaseWorkflow } from "../../api/workflowApi";
+import { getFormEntries, getFormEntry, type CaseWorkflow, type FormEntry } from "../../api/workflowApi";
 import type { CaseHead } from "../../formdev/leaf/caseData";
 import { readStoredUsername } from "../../views/clinical-chart/storage";
+import { printableEntries, slotDate } from "./formSchedule";
 
 /** A4 in PDF points (portrait). */
 export const A4_PT: [number, number] = [595.28, 841.89];
+
+/** A scheduled form's completed entries in slot order (unscheduled ones last), each with its slot label. */
+export async function completedEntries(caseId: number, formId: string): Promise<Array<{ entry: FormEntry; label: string }>> {
+  const found = await getFormEntries(caseId, formId);
+  const labels = new Map(found.slots.map(slot => [slot.slot_ts, slot.label]));
+  const slotted = await Promise.all(found.slots.filter(slot => slot.status === "done" && slot.entry_id)
+    .map(slot => getFormEntry(caseId, formId, slot.entry_id!).then(result => result.entry)));
+  return printableEntries([...slotted.filter(Boolean), ...found.unscheduled]).map(entry => ({
+    entry,
+    label: entry.slot_ts != null ? labels.get(entry.slot_ts) ?? slotDate(entry.slot_ts)?.toLocaleString() ?? ""
+      : `Unscheduled · ${slotDate(entry.completedAt ?? entry.updatedAt ?? null)?.toLocaleString() ?? ""}`,
+  }));
+}
 
 /**
  * The case packet: one PDF in the workflow's `packet` order — the anesthesia report PDF (when one
@@ -64,6 +78,22 @@ export async function buildCasePacket(input: {
     }
     if (!caseWorkflow.forms[entry.form_id]?.definition) {
       skipped.push(entry.form_id);
+      continue;
+    }
+    const scheduled = caseWorkflow.forms[entry.form_id];
+    if (scheduled.schedule) {
+      // A scheduled form: every completed entry, its slot label in the title.
+      const entries = await completedEntries(input.caseId, entry.form_id).catch(() => null);
+      if (!entries?.length) { skipped.push(`${scheduled.definition.title || entry.form_id} (no completed entries)`); continue; }
+      for (const item of entries) {
+        await append(await buildFormPdf({
+          definition: { ...scheduled.definition, title: `${scheduled.definition.title || entry.form_id} — ${item.label}` },
+          value: item.entry.data || {},
+          recordId: `${input.caseId}-${entry.form_id}-${item.entry.id}`,
+          printedBy: readStoredUsername(),
+          language: input.language,
+        }));
+      }
       continue;
     }
     // A repeatable form prints every copy filled on the case, in order, after the form itself.

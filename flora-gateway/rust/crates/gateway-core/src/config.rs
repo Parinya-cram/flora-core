@@ -19,6 +19,7 @@ pub struct GatewayConfig {
     pub collector: CollectorConfig,
     pub server: ServerConfig,
     pub publisher: PublisherConfig,
+    pub stream_hub: StreamHubConfig,
 }
 
 impl Default for GatewayConfig {
@@ -33,6 +34,7 @@ impl Default for GatewayConfig {
             collector: CollectorConfig::default(),
             server: ServerConfig::default(),
             publisher: PublisherConfig::default(),
+            stream_hub: StreamHubConfig::default(),
         }
     }
 }
@@ -57,7 +59,8 @@ impl GatewayConfig {
         }
         if let Ok(value) = std::env::var("FLORA_GATEWAY_DATABASE_URL") {
             config.collector.database_url = value.clone();
-            config.server.database_url = value;
+            config.server.database_url = value.clone();
+            config.stream_hub.database_url = value;
         }
         config.validate()?;
         Ok(config)
@@ -395,6 +398,44 @@ pub struct PublishTarget {
     pub timeout_ms: u64,
     #[serde(default)]
     pub headers: BTreeMap<String, String>,
+}
+
+/// Live chunk stream to Leaves (docs/live-stream/PROTOCOL.md).
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(default)]
+pub struct StreamHubConfig {
+    /// WebSocket listener; the edge proxies `/stream/` here.
+    pub listen: String,
+    pub admin_port: u16,
+    pub database_url: String,
+    /// A one-second window closes this long after its end; later frames send a new `rev`.
+    pub settle_ms: i64,
+    /// Unacknowledged seconds per bound device before the hub pauses that device. High
+    /// enough that a Leaf replaying a quarter-hour backlog is limited by its batched writes,
+    /// not by round trips.
+    pub max_unacked: usize,
+    /// Seconds queued per bound device while paused; beyond this the hub drops them and
+    /// re-reads them from Kafka once the Leaf catches up.
+    pub max_buffer: usize,
+    /// Closed windows kept in memory per device (late `rev`s, binds that resume recently).
+    pub cache_secs: i64,
+    /// A device counts as online in `welcome` when it sent data this recently.
+    pub online_window_sec: i64,
+}
+
+impl Default for StreamHubConfig {
+    fn default() -> Self {
+        Self {
+            listen: "0.0.0.0:7407".into(),
+            admin_port: 5007,
+            database_url: CollectorConfig::default().database_url,
+            settle_ms: 300,
+            max_unacked: 300,
+            max_buffer: 600,
+            cache_secs: 180,
+            online_window_sec: 30,
+        }
+    }
 }
 
 fn default_baud() -> u32 { 9600 }

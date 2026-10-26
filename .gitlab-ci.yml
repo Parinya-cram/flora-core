@@ -20,6 +20,8 @@ compose-config:
   script:
     - docker compose -f compose.dev.yaml --profile canopy --profile multi-leaf config >/dev/null
     - docker compose -f flora-gateway/compose.yaml config >/dev/null
+    # The appliance hands new gateways copies of these; they must not drift from flora-gateway/.
+    - for f in db/0001-gateway.sql db/0002-device-measurements.sql edge/nginx.conf; do cmp flora-gateway/$f flora-canopy/haber/app/install/gateway/$(basename $f); done
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
     - if: $CI_COMMIT_BRANCH
@@ -137,3 +139,125 @@ deploy-dev:
     - ./scripts/server/deploy.sh
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# ---------------------------------------------------------------- deploy-k8s (pilot)
+# Builds the app images straight into the k8s node's containerd (namespace k8s.io) with
+# nerdctl, then rolls out the pilot cluster. Runs ONLY on the device-distribution branch,
+# on the runner that lives on the k8s node (tag flora-k8s). Does not touch the .151 deploy.
+# One flora-api image serves canopy-api / sync-api / leaf-api (same source, env differs).
+deploy-k8s:
+  stage: deploy
+  tags: [flora-k8s]
+  needs: []            # run on the on-node runner independently of the flora-dev validate/test stages
+  environment:
+    name: k8s-pilot
+    url: https://172.22.19.81:9443
+  resource_group: flora-k8s-cluster   # never two cluster deploys at once
+  variables:
+    TAG: $CI_COMMIT_SHORT_SHA
+  script:
+    - echo "build images into containerd (k8s.io), tag=$TAG"
+    - sudo nerdctl -n k8s.io build -t flora-canopy-canopy-api:$TAG services/flora-api
+    - sudo nerdctl -n k8s.io build -t flora-canopy-canopy-web:$TAG --build-arg FLORA_SURFACE=canopy -f Dockerfile.frontend.prod .
+    - sudo nerdctl -n k8s.io build -t flora-leaf-leaf-web:$TAG --build-arg FLORA_SURFACE=leaf -f Dockerfile.frontend.prod .
+    - sudo nerdctl -n k8s.io build -t flora-root-root-api:$TAG flora-root/api
+    - sudo nerdctl -n k8s.io build -t flora-canopy-haber:$TAG flora-canopy/haber
+    - sudo nerdctl -n k8s.io build -t flora-leaf-sync-worker:$TAG services/flora-sync-worker
+    # Leaf machines installed from the appliance run images only: their database and updater too.
+    - sudo nerdctl -n k8s.io build -t flora-db:$TAG -f Dockerfile.postgres.dev .
+    - sudo nerdctl -n k8s.io build -t flora-updater:$TAG flora-updater
+    # Gateway machines installed from the appliance: Flora's gateway images plus the third-party ones it runs
+    # (mirrored into the hospital registry so a gateway installs without internet).
+    - sudo nerdctl -n k8s.io build -t flora-gateway-rust:$TAG flora-gateway/rust
+    - sudo nerdctl -n k8s.io build -t flora-gateway-service:$TAG flora-gateway/python/gateway-service
+    - sudo nerdctl -n k8s.io build -t flora-gateway-parser:$TAG flora-gateway/python/device-medical-service
+    - for image in apache/kafka:3.9.1 postgres:17.6-alpine kong:3.9 nginx:1.27-alpine registry:3; do sudo nerdctl -n k8s.io pull -q docker.io/$(echo $image | grep -q / || echo library/)$image; done
+    - echo "roll out new images"
+    - kubectl apply -f deploy/k8s/flora-leaf-sync-worker.yaml
+    - kubectl -n flora-canopy set image deploy/canopy-api canopy-api=flora-canopy-canopy-api:$TAG
+    - kubectl -n flora-canopy set image deploy/sync-api  sync-api=flora-canopy-canopy-api:$TAG
+    - kubectl -n flora-leaf   set image deploy/leaf-api   leaf-api=flora-canopy-canopy-api:$TAG
+    - kubectl -n flora-canopy set image deploy/canopy-web canopy-web=flora-canopy-canopy-web:$TAG
+    - kubectl -n flora-leaf   set image deploy/leaf-web   leaf-web=flora-leaf-leaf-web:$TAG
+    - kubectl -n flora-root   set image deploy/root-api   root-api=flora-root-root-api:$TAG
+    - kubectl -n flora-appliance set image deploy/haber  haber=flora-canopy-haber:$TAG
+    - kubectl -n flora-leaf   set image deploy/leaf-sync-worker leaf-sync-worker=flora-leaf-sync-worker:$TAG
+    - kubectl -n flora-leaf   set image deploy/leaf-live  leaf-live=flora-canopy-canopy-api:$TAG || echo "no leaf-live deployment yet"
+    - kubectl -n flora-canopy rollout status deploy/canopy-api --timeout=300s
+    - kubectl -n flora-canopy rollout status deploy/sync-api  --timeout=300s
+    - kubectl -n flora-canopy rollout status deploy/canopy-web --timeout=300s
+    - kubectl -n flora-leaf   rollout status deploy/leaf-api   --timeout=300s
+    - kubectl -n flora-leaf   rollout status deploy/leaf-web   --timeout=300s
+    - kubectl -n flora-root   rollout status deploy/root-api   --timeout=300s
+    - kubectl -n flora-appliance rollout status deploy/haber --timeout=300s
+    - kubectl -n flora-leaf   rollout status deploy/leaf-sync-worker --timeout=300s
+    - echo "publish these images to root-registry + register canopy/leaf releases so Haber's mirror can pull them"
+    - python3 flora-root/scripts/publish_k8s_releases.py "$TAG" || echo "publish-releases step failed (non-fatal)"
+  rules:
+    - if: $SITE_TEST          # an on-demand install test never redeploys the pilot
+      when: never
+    - if: $CI_COMMIT_BRANCH == "device-distribution"
+
+# Gateway .233 follows this branch: the commit is pushed into its checkout over SSH (the gateway cannot reach
+# GitLab) and scripts/gateway/update-from-ci.sh rebuilds it there; compose recreates only the services that
+# changed, so running parsers stay up unless their image changed. Needs the CI file variable GATEWAY_233_SSH_KEY
+# (a key that .233 accepts from the runner's address only). Runs when the gateway changes, or with GATEWAY_DEPLOY=1.
+deploy-gateway-233:
+  stage: deploy
+  tags: [flora-k8s]
+  needs: []
+  resource_group: gateway-233   # never two updates at once
+  environment:
+    name: gateway-233
+    url: http://172.22.1.233:7400
+  variables:
+    GATEWAY_HOST: esm@172.22.1.233
+    GATEWAY_REPO: /home/esm/flora/flora-core
+  script:
+    - if [ -z "${GATEWAY_233_SSH_KEY:-}" ]; then echo "GATEWAY_233_SSH_KEY is not set, gateway .233 not updated"; exit 0; fi
+    # A key pasted into the CI form may lose its last newline or gain CRs; ssh needs neither.
+    - (tr -d '\r' < "$GATEWAY_233_SSH_KEY"; echo) > "$CI_PROJECT_DIR/.gw233_key" && chmod 600 "$CI_PROJECT_DIR/.gw233_key"
+    - export GIT_SSH_COMMAND="ssh -i $CI_PROJECT_DIR/.gw233_key -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$CI_PROJECT_DIR/.gw233_known"
+    - git push --force "ssh://$GATEWAY_HOST$GATEWAY_REPO" "HEAD:refs/heads/ci-incoming"
+    - $GIT_SSH_COMMAND "$GATEWAY_HOST" "cd $GATEWAY_REPO && git show ci-incoming:scripts/gateway/update-from-ci.sh | sh -s -- $CI_COMMIT_BRANCH"
+  after_script:
+    - rm -f "$CI_PROJECT_DIR/.gw233_key" "$CI_PROJECT_DIR/.gw233_known"
+  rules:
+    - if: $SITE_TEST
+      when: never
+    - if: $CI_COMMIT_BRANCH == "device-distribution" && $GATEWAY_DEPLOY
+    - if: $CI_COMMIT_BRANCH == "device-distribution"
+      changes: [flora-gateway/**/*, scripts/gateway/**/*]
+
+# On demand (API/manual with SITE_TEST=install|cleanup): install a whole hospital site on the pilot
+# cluster in sitetest-* namespaces with the real site installer, then remove it again.
+site-install-test:
+  stage: deploy
+  tags: [flora-k8s]
+  needs: []
+  resource_group: flora-k8s-cluster
+  script:
+    - sh scripts/install-test/site.sh
+  rules:
+    - if: $SITE_TEST
+
+# Windows installer "Flora iCIS Setup" (Leaf / Leaf + gateway, Electron): built on this runner without Windows
+# (cross-compiled serial-controller.exe + electron-builder under wine), then the Leaf release is republished
+# with it so hospital PCs download it from their appliance. Only when the desktop app or its parts change.
+windows-installer:
+  stage: deploy
+  tags: [flora-k8s]
+  needs: [deploy-k8s]
+  variables:
+    TAG: $CI_COMMIT_SHORT_SHA
+  script:
+    - sh scripts/windows/build-installer.sh "$TAG"
+    # The deploy job already published leaf 1.0.N without the installer; releases are immutable, so this is 1.0.N.1.
+    - RELEASE_VERSION="1.0.${CI_PIPELINE_IID}.1" python3 flora-root/scripts/publish_k8s_releases.py "$TAG" leaf
+  # No GitLab artifact: the installer (~450 MB, over GitLab's upload limit) travels in the release image.
+  rules:
+    - if: $SITE_TEST
+      when: never
+    - if: $CI_COMMIT_BRANCH == "device-distribution" && $BUILD_WINDOWS
+    - if: $CI_COMMIT_BRANCH == "device-distribution"
+      changes: [electron/**/*, frontend/**/*, package.json, flora-gateway/rust/**/*, scripts/windows/**/*]

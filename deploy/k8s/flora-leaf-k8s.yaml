@@ -1,0 +1,204 @@
+# Flora Leaf (per-OR surface) — reuses canopy api/db images (same source, env differs).
+# edge 7443 -> leaf-web:80
+apiVersion: v1
+kind: Namespace
+metadata: { name: flora-leaf }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: leaf-db-data, namespace: flora-leaf }
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources: { requests: { storage: 5Gi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: leaf-db, namespace: flora-leaf }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: leaf-db } }
+  template:
+    metadata: { labels: { app: leaf-db } }
+    spec:
+      containers:
+        - name: leaf-db
+          image: flora-canopy-canopy-db:latest   # same Dockerfile.postgres.dev as leaf-db
+          imagePullPolicy: Never
+          env:
+            - { name: POSTGRES_DB, value: "flora" }
+            - { name: POSTGRES_USER, value: "flora_admin" }
+            - { name: POSTGRES_PASSWORD, value: "admin" }
+            - { name: FLORA_DB_APP_PASSWORD, value: "admin" }
+            - { name: FLORA_DB_VIEW_PASSWORD, value: "admin" }
+            - { name: FLORA_DB_SYNC_PASSWORD, value: "admin" }
+            - { name: PGDATA, value: "/var/lib/postgresql/data/pgdata" }
+          ports: [ { containerPort: 5432 } ]
+          volumeMounts: [ { name: data, mountPath: /var/lib/postgresql/data } ]
+          readinessProbe:
+            exec: { command: ["pg_isready","-U","flora_admin","-d","flora"] }
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30
+      volumes:
+        - { name: data, persistentVolumeClaim: { claimName: leaf-db-data } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: leaf-db, namespace: flora-leaf }
+spec:
+  selector: { app: leaf-db }
+  ports: [ { port: 5432, targetPort: 5432 } ]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: flora-liveagent, namespace: flora-leaf }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: flora-liveagent } }
+  template:
+    metadata: { labels: { app: flora-liveagent } }
+    spec:
+      containers:
+        - name: flora-liveagent
+          image: flora-leaf-flora-liveagent:latest
+          imagePullPolicy: Never
+          env:
+            - { name: LIVEAGENT_PROFILE, value: "stable-anes" }
+            - { name: LIVEAGENT_SEED, value: "17" }
+            - { name: LIVEAGENT_MAX_WINDOW_MINUTES, value: "240" }
+          ports: [ { containerPort: 8000 } ]
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 30
+---
+apiVersion: v1
+kind: Service
+metadata: { name: flora-liveagent, namespace: flora-leaf }
+spec:
+  selector: { app: flora-liveagent }
+  ports: [ { port: 8000, targetPort: 8000 } ]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: leaf-api, namespace: flora-leaf }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: leaf-api } }
+  template:
+    metadata: { labels: { app: leaf-api } }
+    spec:
+      # Wait for leaf-db before starting: avoids the pool-timeout exit after a node reboot.
+      initContainers:
+        - name: wait-for-db
+          image: flora-canopy-canopy-db:latest
+          imagePullPolicy: Never
+          command: ["sh", "-c", "until pg_isready -h leaf-db -p 5432; do echo 'waiting for leaf-db'; sleep 2; done"]
+      containers:
+        - name: leaf-api
+          image: flora-canopy-canopy-api:latest   # same flora-api source, mode=leaf
+          imagePullPolicy: Never
+          command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]   # no --reload in k8s (watchfiles fd exhaustion)
+          env:
+            - { name: FLORA_DATABASE_URL, value: "postgresql://flora_app:admin@leaf-db:5432/flora" }
+            # The database owner: leaf-api applies Leaf migrations added after the database was created (live_schema.py).
+            - { name: FLORA_MIGRATION_DATABASE_URL, value: "postgresql://flora_admin:admin@leaf-db:5432/flora" }
+            - { name: FLORA_API_ENV, value: "development" }
+            - { name: FLORA_API_MODE, value: "leaf" }
+            - { name: FLORA_LEAF_WRITE_API, value: "true" }
+            - { name: FLORA_BOOTSTRAP_ADMIN_ENABLED, value: "true" }
+            - { name: FLORA_BOOTSTRAP_ADMIN_USERNAME, value: "admin" }
+            - { name: FLORA_BOOTSTRAP_ADMIN_PASSWORD, value: "admin" }
+            - { name: FLORA_BOOTSTRAP_ADMIN_NAME, value: "Administrator" }
+            - { name: FLORA_DEVICE_INGEST_ENABLED, value: "true" }
+            - { name: FLORA_LEAF_SERVICE_SECRET, value: "admin" }
+            - { name: FLORA_CANOPY_SYNC_URL, value: "http://sync-api.flora-canopy.svc.cluster.local:8000" }
+            - { name: FLORA_HABER_URL, value: "http://haber.flora-appliance.svc.cluster.local:8000" }
+            # Appliance node token: AI relay, and registering this Leaf's live-stream tokens (stream_links.py).
+            - { name: HABER_NODE_TOKEN, value: "haber-node-demo-token" }
+            - { name: HABER_ADMIN_USERNAME, value: "admin" }
+            - { name: HABER_ADMIN_PASSWORD, value: "admin" }
+            - { name: FLORA_SYNC_SHARED_SECRET, value: "admin" }
+            - { name: FLORA_LEAF_ID, value: "leaf-or-01" }
+            - { name: FLORA_HOSPITAL_ID, value: "hospital-01" }
+            - { name: FLORA_LEAF_NAME, value: "Operating Room 1" }
+            - { name: HIS_GATEWAY_BASE_URL, value: "http://127.0.0.1:9" }
+            - { name: FLORA_HIS_DEMO_MODE, value: "true" }
+          ports: [ { containerPort: 8000 } ]
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 30
+---
+apiVersion: v1
+kind: Service
+metadata: { name: leaf-api, namespace: flora-leaf }
+spec:
+  selector: { app: leaf-api }
+  ports: [ { port: 8000, targetPort: 8000 } ]
+---
+# Live stream (docs/live-stream/PROTOCOL.md): connects out to the gateway's stream-hub for every session's devices,
+# stores each second, and serves the screens (/api/live/ws through leaf-web).
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: leaf-live, namespace: flora-leaf }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: leaf-live } }
+  template:
+    metadata: { labels: { app: leaf-live } }
+    spec:
+      containers:
+        - name: leaf-live
+          image: flora-canopy-canopy-api:latest
+          imagePullPolicy: Never
+          command: ["uvicorn", "app.live.server:app", "--host", "0.0.0.0", "--port", "8000"]
+          env:
+            - { name: FLORA_DATABASE_URL, value: "postgresql://flora_app:admin@leaf-db:5432/flora" }
+            - { name: FLORA_MIGRATION_DATABASE_URL, value: "postgresql://flora_admin:admin@leaf-db:5432/flora" }
+            - { name: FLORA_API_MODE, value: "leaf" }
+            - { name: FLORA_LEAF_ID, value: "leaf-or-01" }
+            - { name: FLORA_HOSPITAL_ID, value: "hospital-01" }
+          ports: [ { containerPort: 8000 } ]
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata: { name: leaf-live, namespace: flora-leaf }
+spec:
+  selector: { app: leaf-live }
+  ports: [ { port: 8000, targetPort: 8000 } ]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: leaf-web, namespace: flora-leaf }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: leaf-web } }
+  template:
+    metadata: { labels: { app: leaf-web } }
+    spec:
+      containers:
+        - name: leaf-web
+          image: flora-leaf-leaf-web:latest
+          imagePullPolicy: Never
+          env:
+            - { name: API_UPSTREAM, value: "http://leaf-api:8000" }
+            - { name: NGINX_RESOLVER, value: "10.96.0.10" }   # cluster DNS (kube-dns)
+            - { name: LIVE_HOST, value: "leaf-live.flora-leaf.svc.cluster.local:8000" }
+          ports: [ { containerPort: 80 } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: leaf-web, namespace: flora-leaf }
+spec:
+  selector: { app: leaf-web }
+  ports: [ { port: 80, targetPort: 80 } ]

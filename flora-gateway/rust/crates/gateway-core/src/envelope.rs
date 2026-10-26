@@ -4,6 +4,7 @@
 //! - `gw.raw.<pod>`  ingress controller → parser   (`RawFrame`)
 //! - `gw.cmd.<pod>`  parser/service → controller   (`Command`, written to the device)
 //! - `gw.obs`        parser → collector/publisher   (`Observation`, keyed by device_id)
+//! - `gw.wave`       parser → stream-hub             (`WaveChunk`, keyed by device_id)
 //! - `gw.logs`       any component → collector      (`LogEvent`)
 
 use anyhow::{Context, Result};
@@ -14,6 +15,7 @@ use serde_json::{Map, Value};
 pub const OBS_TOPIC: &str = "gw.obs";
 pub const MEASUREMENT_TOPIC: &str = "gw.measurements";
 pub const LOG_TOPIC: &str = "gw.logs";
+pub const WAVE_TOPIC: &str = "gw.wave";
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -90,6 +92,19 @@ pub struct Observation {
     pub system_ts: i64,
     #[serde(default)]
     pub pod: Option<String>,
+}
+
+/// A run of waveform samples from one channel. `t0` is the gateway time (ms) of the
+/// first sample; `rate_hz` is samples per second.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WaveChunk {
+    pub device_id: String,
+    #[serde(default)]
+    pub pod: String,
+    pub channel: String,
+    pub rate_hz: f64,
+    pub t0: i64,
+    pub samples: Vec<i16>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -184,6 +199,15 @@ mod tests {
     fn topics_are_sanitized() {
         assert_eq!(raw_topic("serial./dev/ttyUSB0"), "gw.raw.serial._dev_ttyUSB0");
         assert_eq!(cmd_topic(&pod_key("socket", "or-monitor")), "gw.cmd.socket.or-monitor");
+    }
+
+    #[test]
+    fn wave_chunk_matches_the_python_envelope() {
+        let chunk: WaveChunk = serde_json::from_str(
+            r#"{"device_id":"m540-sim-1","pod":"socket.m540-relay","channel":"ecg","rate_hz":200,"t0":1000,"samples":[-3,0,512]}"#,
+        ).unwrap();
+        assert_eq!(chunk.samples, vec![-3, 0, 512]);
+        assert_eq!(chunk.rate_hz, 200.0);
     }
 
     #[test]

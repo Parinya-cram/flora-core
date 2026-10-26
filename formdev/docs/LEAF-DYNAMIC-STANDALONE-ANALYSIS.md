@@ -203,7 +203,7 @@ Recommended order: **0 → 1 → 2 → 3 (preop/checklist) → 4 → 3 (rest) �
 
 | Gap (§3) | Change | Code |
 |---|---|---|
-| Worker state in memory | `leaf_sync_case` (per case: digest Canopy took, when sent, when checked, last error) and `leaf_sync_state` (settings) in the Leaf DB; the worker asks the Leaf what to send (`GET /api/leaf-sync/cases`) and reports back (`PUT`). A restart resumes; nothing is re-sent that Canopy already has | `0091-leaf-sync-state.sql`, `routes/leaf_sync.py`, `sync_worker.synchronize` |
+| Worker state in memory | `leaf_sync_case` (per case: digest Canopy took, when sent, when checked, last error) and `leaf_sync_state` (settings) in the Leaf DB; the worker asks the Leaf what to send (`GET /api/leaf-sync/cases`) and reports back (`PUT`). A restart resumes; nothing is re-sent that Canopy already has | `0089-leaf-sync-state.sql`, `routes/leaf_sync.py`, `sync_worker.synchronize` |
 | 24 h after discharge | Open cases are re-checked in turn (oldest check first, `FLORA_SYNC_IDLE_PER_CYCLE`, default 10 per pass) however old; archived cases are sent once after archiving | `leaf_sync.plan` |
 | 200 / 500 list cap | The plan reads `cases` directly (not `/api/case/list`), at most `FLORA_SYNC_PLAN_LIMIT` (100) per pass, most urgent first | `leaf_sync.plan` |
 | All-or-nothing batch | A case that cannot be read is recorded (`last_error`) and skipped; messages go in batches of ≤100 / ~8 MB; what went through is recorded even when a later batch fails | `sync_worker.batches`, `synchronize` |
@@ -225,7 +225,7 @@ Tests: `tests/test_leaf_sync.py` (8, PostgreSQL); `scripts/test-leaf-writes.sh` 
 leaf sync 8).
 
 Deploy notes:
-- Run `0091-leaf-sync-state.sql` (and `0090` if not yet) on existing Leaf and Canopy databases.
+- Run `0089-leaf-sync-state.sql` (and `0088` if not yet) on existing Leaf and Canopy databases.
 - **Rebuild the sync worker image.** Its code is copied in at build time, not mounted.
 
 Still open:

@@ -16,7 +16,10 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import csv
+import io
 import json
+import re
 import logging
 import os
 import secrets
@@ -29,8 +32,8 @@ from typing import Any
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from fastapi import Body, Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
@@ -158,8 +161,10 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Flora Root", lifespan=lifespan)
 auth.install(app, pool, [
-    r"/health", r"/api/v1/keys", r"/api/v1/tenants/[^/]+/(bundle|heartbeat|releases)",  # Canopy, tenant key auth
+    r"/health", r"/api/v1/keys", r"/api/v1/tenants/[^/]+/(bundle|heartbeat|releases|device-library)",  # Canopy, tenant key auth
     r"/api/auth/status",                                                                # login page status panel
+    r"/api/v1/tenants/[^/]+/installs/(pending|[^/]+/report)",                           # appliance, tenant key auth
+    r"/api/v1/install/redeem", r"/install", r"/install/site\.sh", r"/install/files/site/site\.yaml", r"/install/windows/[A-Za-z0-9._-]+",  # new site server, one-time code
 ])
 app.include_router(auth.router)
 require_admin = auth.require_admin  # signed-in admin operator, or Root CI with x-root-key / Basic
@@ -395,6 +400,454 @@ def create_tenant(body: TenantIn):
     return {"tenant_id": body.tenant_id, "api_key": api_key, "bundle_id": bundle_id}
 
 
+# ------------------------------------------------------------------ installs
+# Root plans every machine of a hospital: the site server (Canopy + appliance) and each Leaf / gateway.
+# A one-time code (shown once, stored hashed) is typed on the new machine. The site code is redeemed at
+# Root for the hospital's credentials; Leaf / gateway codes are checked by the appliance on the LAN
+# against the signed pending list it pulls, so those machines never need the internet.
+
+INSTALL_KINDS = {"site", "leaf", "gateway"}
+NODE_ID = r"^[a-z0-9][a-z0-9-]{2,59}$"
+ROOT_PUBLIC_URL = os.getenv("ROOT_PUBLIC_URL", "").rstrip("/")
+
+
+class InstallIn(BaseModel):
+    kind: str = Field(pattern=r"^(site|leaf|gateway)$")
+    node_id: str | None = Field(None, pattern=NODE_ID)
+    label: str | None = Field(None, max_length=200)
+    ward: str | None = Field(None, max_length=200)
+    room: str | None = Field(None, max_length=200)
+    bed: str | None = Field(None, max_length=200)
+    valid_hours: int = Field(72, ge=1, le=720)
+
+
+def install_code() -> str:
+    raw = base64.b32encode(secrets.token_bytes(10)).decode()          # 80 bits, no ambiguous padding
+    return "-".join(raw[i:i + 4] for i in range(0, 16, 4))
+
+
+def install_doc(row: dict[str, Any]) -> dict[str, Any]:
+    status = row["status"]
+    if status == "pending" and row["expires_at"] < now_ms():
+        status = "expired"
+    return {key: row[key] for key in ("install_id", "tenant_id", "kind", "node_id", "label", "ward", "room", "bed",
+                                      "created_at", "created_by", "expires_at", "updated_at", "detail")} | {"status": status}
+
+
+ROOT_TLS_SELF_SIGNED = os.getenv("ROOT_TLS_SELF_SIGNED", "true").lower() == "true"
+
+
+def appliance_url(tenant_id: str) -> str:
+    """The hospital appliance as its LAN machines reach it (reported in its heartbeat)."""
+    with pool.connection() as connection:
+        row = connection.execute("SELECT usage FROM root_checkin WHERE tenant_id=%s", (tenant_id,)).fetchone()
+    return ((row or {}).get("usage") or {}).get("appliance_url") or "http://<appliance>:7204"
+
+
+def install_commands(kind: str, code: str, root_url: str, tenant_id: str) -> dict[str, str]:
+    if kind == "site":
+        insecure = ROOT_TLS_SELF_SIGNED and root_url.startswith("https:")
+        return {"run_on": "the hospital's main server, Linux (it needs internet to reach Root)",
+                "command": f"curl -fsSL{'k' if insecure else ''} {root_url}/install/site.sh | sudo sh -s -- --root {root_url}"
+                           f"{' --root-insecure' if insecure else ''} --code {code}",
+                "windows": f"{root_url}/install?os=windows"}
+    appliance = appliance_url(tenant_id)
+    return {"run_on": f"the new {kind} machine on the hospital LAN (no internet needed; it installs from the appliance)",
+            "command": f"curl -fsSL {appliance}/install/{kind}.sh | sudo sh -s -- --code {code}",
+            "windows": f"{appliance}/install/windows"}
+
+
+@app.post("/api/v1/tenants/{tenant_id}/installs", dependencies=[Depends(require_admin)], status_code=201)
+def create_install(tenant_id: str, body: InstallIn, request: Request):
+    if body.kind != "site" and not body.node_id:
+        raise HTTPException(422, f"a {body.kind} needs a node id (the id it registers with in Canopy)")
+    user = auth.current_user(request)
+    code, current = install_code(), now_ms()
+    install_id = "ins-" + secrets.token_hex(6)
+    with pool.connection() as connection:
+        if not connection.execute("SELECT 1 FROM root_tenant WHERE tenant_id=%s", (tenant_id,)).fetchone():
+            raise HTTPException(404, "unknown tenant")
+        if body.node_id and connection.execute(
+                """SELECT 1 FROM root_install WHERE tenant_id=%s AND node_id=%s AND status IN ('pending','claimed','installed')
+                     AND (status <> 'pending' OR expires_at > %s)""", (tenant_id, body.node_id, current)).fetchone():
+            raise HTTPException(409, f"{body.node_id} is already planned or installed for this hospital")
+        connection.execute(
+            """INSERT INTO root_install (install_id, tenant_id, kind, node_id, label, ward, room, bed, code_hash, created_at,
+                   created_by, expires_at, updated_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (install_id, tenant_id, body.kind, body.node_id, body.label, body.ward, body.room, body.bed, key_hash(code),
+             current, user.get("username"), current + body.valid_hours * 3_600_000, current))
+    auth.audit(user.get("username"), "install.create", tenant_id, auth.client_ip(request),
+               {"install_id": install_id, "kind": body.kind, "node_id": body.node_id})
+    root_url = ROOT_PUBLIC_URL or str(request.base_url).rstrip("/")
+    # The code is shown once; Root keeps only its hash.
+    return {"install_id": install_id, "code": code, **install_commands(body.kind, code, root_url, tenant_id)}
+
+
+@app.get("/api/v1/tenants/{tenant_id}/installs")
+def list_installs(tenant_id: str):
+    with pool.connection() as connection:
+        rows = connection.execute("SELECT * FROM root_install WHERE tenant_id=%s ORDER BY created_at DESC", (tenant_id,)).fetchall()
+    return {"rows": [install_doc(row) for row in rows]}
+
+
+@app.post("/api/v1/installs/{install_id}/revoke", dependencies=[Depends(require_admin)])
+def revoke_install(install_id: str, request: Request):
+    with pool.connection() as connection:
+        row = connection.execute(
+            "UPDATE root_install SET status='revoked', updated_at=%s WHERE install_id=%s AND status IN ('pending','claimed') RETURNING tenant_id",
+            (now_ms(), install_id)).fetchone()
+    if not row:
+        raise HTTPException(409, "only a pending or claimed install can be revoked")
+    auth.audit(auth.current_user(request).get("username"), "install.revoke", row["tenant_id"], auth.client_ip(request),
+               {"install_id": install_id})
+    return {"ok": True}
+
+
+# ------------------------------------------------------------------ device library (device settings for gateways)
+
+PROFILE_FIELDS = ("code", "label", "category", "protocol", "controller", "parser", "image", "default_options",
+                  "connection_defaults", "models", "notes", "revision", "status", "updated_at", "updated_by")
+
+
+class DeviceProfileIn(BaseModel):
+    label: str
+    category: str | None = None
+    protocol: str | None = None
+    controller: str
+    parser: str
+    image: str = "parser"
+    default_options: dict[str, Any] = {}
+    connection_defaults: dict[str, Any] = {}
+    models: list[str] = []
+    notes: str | None = None
+
+
+def seed_device_library(connection) -> None:
+    """First use: the library starts as the newest gateway release's catalog (device-types.json at build time)."""
+    if connection.execute("SELECT 1 FROM root_device_profile LIMIT 1").fetchone():
+        return
+    release = connection.execute(
+        "SELECT device_types FROM root_release WHERE component='gateway' AND withdrawn_at IS NULL "
+        "AND jsonb_array_length(device_types) > 0 ORDER BY created_at DESC LIMIT 1").fetchone()
+    for item in (release["device_types"] if release else []):
+        if not item.get("code") or not item.get("parser"):
+            continue
+        connection.execute(
+            """INSERT INTO root_device_profile (code, label, category, protocol, controller, parser, image, default_options,
+                   connection_defaults, updated_at, updated_by) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'release')
+               ON CONFLICT (code) DO NOTHING""",
+            (item["code"], item.get("label") or item["code"], item.get("category"), item.get("protocol"),
+             item.get("controller") or "socket", item["parser"], item.get("image") or "parser",
+             Jsonb(item.get("default_options") or {}), Jsonb(item.get("connection_defaults") or {}), now_ms()))
+
+
+def device_profiles(active_only: bool = False) -> list[dict[str, Any]]:
+    with pool.connection() as connection:
+        seed_device_library(connection)
+        rows = connection.execute("SELECT * FROM root_device_profile" + (" WHERE status='active'" if active_only else "")
+                                  + " ORDER BY category NULLS LAST, label").fetchall()
+    return [{key: row[key] for key in PROFILE_FIELDS} for row in rows]
+
+
+@app.get("/api/v1/device-library")
+def list_device_library():
+    return {"rows": device_profiles()}
+
+
+PROFILE_CODE = re.compile(r"[a-z0-9][a-z0-9_.-]{1,63}")
+CONTROLLERS = ("socket", "serial", "webhook", "feeder")
+
+
+def upsert_profile(connection, code: str, body: DeviceProfileIn, user: str) -> dict[str, Any]:
+    if not PROFILE_CODE.fullmatch(code):
+        raise ValueError("code: lowercase letters, digits, - _ . (2-64)")
+    if body.controller not in CONTROLLERS:
+        raise ValueError(f"controller must be one of {', '.join(CONTROLLERS)}")
+    return connection.execute(
+            """INSERT INTO root_device_profile (code, label, category, protocol, controller, parser, image, default_options,
+                   connection_defaults, models, notes, updated_at, updated_by) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+               ON CONFLICT (code) DO UPDATE SET label=excluded.label, category=excluded.category, protocol=excluded.protocol,
+                 controller=excluded.controller, parser=excluded.parser, image=excluded.image,
+                 default_options=excluded.default_options, connection_defaults=excluded.connection_defaults,
+                 models=excluded.models, notes=excluded.notes, revision=root_device_profile.revision + 1,
+                 status='active', updated_at=excluded.updated_at, updated_by=excluded.updated_by
+               RETURNING *""",
+            (code, body.label, body.category, body.protocol, body.controller, body.parser, body.image,
+             Jsonb(body.default_options), Jsonb(body.connection_defaults), body.models, body.notes, now_ms(), user)).fetchone()
+
+
+@app.put("/api/v1/device-library/{code}", dependencies=[Depends(require_admin)])
+def save_device_profile(code: str, body: DeviceProfileIn, request: Request):
+    user = (getattr(request.state, "user", None) or {}).get("username") or "root-ci"
+    try:
+        with pool.connection() as connection:
+            row = upsert_profile(connection, code, body, user)
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
+    auth.audit(user, "device_profile.save", code, auth.client_ip(request), {"revision": row["revision"]})
+    return {key: row[key] for key in PROFILE_FIELDS}
+
+
+CSV_COLUMNS = ("code", "label", "category", "protocol", "controller", "parser", "image", "default_options",
+               "connection_defaults", "models", "notes")
+
+
+@app.get("/api/v1/device-library.csv")
+def export_device_library():
+    """The library as CSV — also the template for an import (JSON columns as JSON text, models separated by ;)."""
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(CSV_COLUMNS)
+    for p in device_profiles(active_only=True):
+        writer.writerow([json.dumps(p[c], ensure_ascii=False) if c in ("default_options", "connection_defaults")
+                         else ";".join(p[c]) if c == "models" else p[c] or "" for c in CSV_COLUMNS])
+    return Response(out.getvalue(), media_type="text/csv; charset=utf-8",
+                    headers={"content-disposition": 'attachment; filename="device-library.csv"'})
+
+
+@app.post("/api/v1/device-library/import", dependencies=[Depends(require_admin)])
+async def import_device_library(request: Request, dry_run: bool = False):
+    """CSV (header row = CSV_COLUMNS; code, label, controller, parser required) or a JSON list of profiles.
+    All rows are checked first; nothing is saved when any row is wrong. Existing codes are updated (revision + 1)."""
+    raw = (await request.body()).decode("utf-8-sig")
+    if request.headers.get("content-type", "").startswith("application/json"):
+        items = json.loads(raw)
+    else:
+        items = []
+        for row in csv.DictReader(io.StringIO(raw)):
+            row = {k.strip().lower(): (v or "").strip() for k, v in row.items() if k}
+            items.append({**row, "models": [m.strip() for m in row.get("models", "").replace(",", ";").split(";") if m.strip()],
+                          **{c: json.loads(row[c]) if row.get(c) else {} for c in ("default_options", "connection_defaults")}})
+    parsed, errors = [], []
+    for number, item in enumerate(items, start=1):
+        try:
+            code = str(item.get("code") or "").strip()
+            body = DeviceProfileIn(**{k: v for k, v in item.items() if k in DeviceProfileIn.model_fields and v not in ("", None)})
+            if not PROFILE_CODE.fullmatch(code):
+                raise ValueError(f"code {code!r}: lowercase letters, digits, - _ . (2-64)")
+            if body.controller not in CONTROLLERS:
+                raise ValueError(f"controller must be one of {', '.join(CONTROLLERS)}")
+            parsed.append((code, body))
+        except Exception as error:   # noqa: BLE001 — report every bad row, by number
+            errors.append({"row": number, "code": item.get("code"), "error": str(error).splitlines()[0][:300]})
+    if errors:
+        raise HTTPException(400, {"errors": errors, "rows": len(items)})
+    with pool.connection() as connection:
+        existing = {r["code"] for r in connection.execute("SELECT code FROM root_device_profile").fetchall()}
+        result = {"rows": len(parsed), "created": [c for c, _ in parsed if c not in existing],
+                  "updated": [c for c, _ in parsed if c in existing], "dry_run": dry_run}
+        if dry_run:
+            return result
+        user = (getattr(request.state, "user", None) or {}).get("username") or "root-ci"
+        with connection.transaction():
+            for code, body in parsed:
+                upsert_profile(connection, code, body, user)
+    auth.audit(user, "device_profile.import", None, auth.client_ip(request),
+               {"created": len(result["created"]), "updated": len(result["updated"])})
+    return result
+
+
+@app.post("/api/v1/device-library/{code}/{action}", dependencies=[Depends(require_admin)])
+def set_device_profile_status(code: str, action: str, request: Request):
+    if action not in ("withdraw", "restore"):
+        raise HTTPException(404, "unknown action")
+    status = "withdrawn" if action == "withdraw" else "active"
+    user = (getattr(request.state, "user", None) or {}).get("username") or "root-ci"
+    with pool.connection() as connection:
+        row = connection.execute(
+            "UPDATE root_device_profile SET status=%s, revision=revision+1, updated_at=%s, updated_by=%s WHERE code=%s RETURNING code",
+            (status, now_ms(), user, code)).fetchone()
+    if not row:
+        raise HTTPException(404, "unknown device profile")
+    auth.audit(user, f"device_profile.{action}", code, auth.client_ip(request), {})
+    return {"code": code, "status": status}
+
+
+@app.get("/api/v1/tenants/{tenant_id}/device-library")
+def tenant_device_library(tenant_id: str, request: Request):
+    """The library for one hospital, signed: its appliance gives these settings to gateways on check-in.
+    Withdrawn profiles are listed so gateways drop them."""
+    require_tenant(tenant_id, request)
+    rows = device_profiles()
+    return sign({"tenant_id": tenant_id, "signed_at": now_ms(),
+                 "revision": sum(r["revision"] for r in rows),
+                 "profiles": [{key: r[key] for key in PROFILE_FIELDS if key not in ("updated_by",)} for r in rows]})
+
+
+@app.get("/api/v1/tenants/{tenant_id}/installs/pending")
+def pending_installs(tenant_id: str, request: Request):
+    """The appliance's copy of this hospital's open Leaf / gateway installs (hashes only), signed by Root so
+    a code it accepts offline is one Root issued."""
+    require_tenant(tenant_id, request)
+    with pool.connection() as connection:
+        rows = connection.execute(
+            """SELECT * FROM root_install WHERE tenant_id=%s AND kind <> 'site' AND status IN ('pending','claimed')
+                 AND expires_at > %s ORDER BY created_at""", (tenant_id, now_ms())).fetchall()
+    return sign({"tenant_id": tenant_id, "signed_at": now_ms(),
+                 "installs": [{key: row[key] for key in ("install_id", "kind", "node_id", "label", "ward", "room", "bed",
+                                                         "code_hash", "expires_at")} for row in rows]})
+
+
+class InstallReport(BaseModel):
+    status: str = Field(pattern=r"^(claimed|installed|failed)$")
+    detail: dict[str, Any] = {}
+
+
+@app.post("/api/v1/tenants/{tenant_id}/installs/{install_id}/report")
+def report_install(tenant_id: str, install_id: str, body: InstallReport, request: Request):
+    """The appliance reports a Leaf / gateway install it ran (claimed when the code was used, then installed / failed)."""
+    require_tenant(tenant_id, request)
+    # A failed attempt keeps the install open (claimed) so the same machine can retry with the same code;
+    # the error is kept for the operator. Only "installed" closes it.
+    status = "claimed" if body.status == "failed" else body.status
+    detail = body.detail | ({"last_error": body.detail.get("error"), "failed_at": now_ms()} if body.status == "failed" else {"last_error": None, "error": None})
+    with pool.connection() as connection:
+        row = connection.execute(
+            """UPDATE root_install SET status=%s, detail=detail || %s, updated_at=%s
+               WHERE install_id=%s AND tenant_id=%s AND status IN ('pending','claimed') RETURNING install_id""",
+            (status, Jsonb(detail), now_ms(), install_id, tenant_id)).fetchone()
+    if not row:
+        raise HTTPException(409, "install is not open")
+    return {"ok": True}
+
+
+@app.get("/install/site.sh")
+def site_installer(request: Request):
+    """The hospital site installer (Canopy + appliance); the code it needs comes from Root > Topology."""
+    root_url = ROOT_PUBLIC_URL or str(request.base_url).rstrip("/")
+    text = (Path(__file__).parent / "static" / "install" / "site.sh").read_text().replace("__ROOT_URL__", root_url)
+    return PlainTextResponse(text, media_type="text/x-shellscript")
+
+
+@app.get("/install/files/site/site.yaml")
+def site_manifest():
+    return PlainTextResponse((Path(__file__).parent / "static" / "install" / "site.yaml").read_text())
+
+
+
+# ------------------------------------------------------------------ install page (pick the operating system)
+# A new hospital has no appliance yet, so its main server takes the installer from Root: Windows gets the same
+# Flora iCIS Setup the appliances serve (the "windows" image of the newest Leaf release), Linux gets site.sh.
+
+WINDOWS_FILE = "Flora-iCIS-Setup.exe"
+MANIFEST_ACCEPT = ", ".join(["application/vnd.oci.image.index.v1+json", "application/vnd.docker.distribution.manifest.list.v2+json",
+                             "application/vnd.oci.image.manifest.v1+json", "application/vnd.docker.distribution.manifest.v2+json"])
+INSTALLER_CACHE = Path(os.getenv("ROOT_INSTALLER_CACHE", "/tmp/flora-installers"))
+
+
+def latest_windows_release() -> dict[str, Any] | None:
+    with pool.connection() as connection:
+        rows = connection.execute(
+            "SELECT * FROM root_release WHERE component='leaf' AND withdrawn_at IS NULL AND services ? 'windows' ORDER BY created_at DESC LIMIT 1").fetchall()
+    return release_doc(rows[0]) if rows else None
+
+
+def windows_installer_file(release: dict[str, Any]) -> Path:
+    import io
+    import tarfile
+    image = release["services"]["windows"]
+    INSTALLER_CACHE.mkdir(parents=True, exist_ok=True)
+    target = INSTALLER_CACHE / f"{image['digest'].split(':')[-1]}.exe"
+    if target.exists():
+        return target
+    base = f"{REGISTRY_INTERNAL}/v2/{image['repository']}"
+    def get(url: str, accept: str | None = None) -> bytes:
+        request = urllib.request.Request(url, headers={"Accept": accept} if accept else {})
+        with urllib.request.urlopen(request, timeout=300) as response:  # noqa: S310 (our registry)
+            return response.read()
+    manifest = json.loads(get(f"{base}/manifests/{image['digest']}", MANIFEST_ACCEPT))
+    if "manifests" in manifest:
+        manifest = json.loads(get(f"{base}/manifests/{manifest['manifests'][0]['digest']}", MANIFEST_ACCEPT))
+    for layer in reversed(manifest["layers"]):
+        with tarfile.open(fileobj=io.BytesIO(get(f"{base}/blobs/{layer['digest']}")), mode="r:*") as archive:
+            member = next((m for m in archive.getmembers() if m.name.lstrip("./") == WINDOWS_FILE), None)
+            if member:
+                tmp = target.with_suffix(".tmp"); tmp.write_bytes(archive.extractfile(member).read()); tmp.replace(target)
+                return target
+    raise HTTPException(500, "the installer image holds no installer")
+
+
+@app.get("/install")
+def install_page(request: Request, os_name: str | None = Query(None, alias="os")):
+    from html import escape as esc
+    root_url = ROOT_PUBLIC_URL or str(request.base_url).rstrip("/")
+    chosen = os_name or ("windows" if "windows" in request.headers.get("user-agent", "").lower() else "linux")
+    release = latest_windows_release()
+    tabs = "".join(f'<a href="/install?os={key}" class="{"on" if key == chosen else ""}">{label}</a>' for key, label in (("windows", "Windows"), ("linux", "Linux")))
+    insecure = ROOT_TLS_SELF_SIGNED and root_url.startswith("https:")
+    if chosen == "windows":
+        body = (f'<div class="card"><h2>1 · ดาวน์โหลด</h2><p><a class="btn" href="/install/windows/{WINDOWS_FILE}">Download Flora iCIS Setup ({esc(release["version"])})</a></p></div>'
+                if release else '<div class="card"><p class="warn">ยังไม่มีไฟล์ติดตั้ง Windows ใน release ล่าสุด</p></div>')
+        body += f"""<div class="card"><h2>2 · ติดตั้ง</h2><ol>
+<li>ดับเบิลคลิก <b>Flora iCIS Setup</b> ติดตั้งให้เสร็จ</li>
+<li>เปิดโปรแกรม เลือก <b>Canopy + Appliance</b> (และ Leaf / Gateway ถ้าจะลงในเครื่องเดียวกัน)</li>
+<li>ใส่ที่อยู่ Root <code>{esc(root_url)}</code> และรหัสจาก Root › Topology › โรงพยาบาล › <b>Install site server</b></li></ol></div>"""
+    else:
+        body = f"""<div class="card"><h2>เครื่อง server หลักของโรงพยาบาล (Canopy + Appliance)</h2>
+<p>Ubuntu ที่ออกอินเทอร์เน็ตไป Root ได้ · แทน XXXX ด้วยรหัสจาก Root › Topology › โรงพยาบาล › Install site server</p>
+<pre>curl -fsSL{'k' if insecure else ''} {esc(root_url)}/install/site.sh | sudo sh -s -- --root {esc(root_url)}{' --root-insecure' if insecure else ''} --code XXXX-XXXX-XXXX-XXXX</pre>
+<p>เครื่อง Leaf / Gateway ติดตั้งจาก Appliance ของโรงพยาบาลหลังจากนั้น: <code>http://&lt;appliance&gt;:7204/install</code></p></div>"""
+    css = """body{font:15px/1.6 'Segoe UI',system-ui,sans-serif;max-width:780px;margin:36px auto;padding:0 20px;color:#1d2621;background:#f6f7f4}
+h1{font-size:24px;margin:0 0 4px} .sub{color:#65706a;margin:0 0 20px} .tabs{display:flex;gap:8px;margin:0 0 16px}
+.tabs a{padding:9px 18px;border-radius:10px;border:1px solid #d8ddd8;text-decoration:none;color:#1d2621;font-weight:600;background:#fff}
+.tabs a.on{background:#2f6f4f;color:#fff;border-color:#2f6f4f} .card{background:#fff;border:1px solid #e2e6e1;border-radius:14px;padding:18px 22px;margin-bottom:14px}
+.btn{display:inline-block;background:#2f6f4f;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:600}
+.warn{color:#a46a12} code,pre{background:#eef2ee;border-radius:6px} code{padding:2px 6px} pre{padding:10px 12px;white-space:pre-wrap;word-break:break-all;user-select:all}
+li{margin:6px 0} h2{font-size:16px;margin:0 0 8px}"""
+    return HTMLResponse(f"""<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Flora iCIS · ติดตั้งโรงพยาบาลใหม่</title><style>{css}
+  /* FLORA iCIS wordmark (same as the Leaf/Canopy apps): FLORA in the page's text colour, iCIS cyan → blue + pink dot. */
+  .wm {{ display:inline-flex !important; align-items:baseline; font-weight:900; letter-spacing:.03em; line-height:1; white-space:nowrap }}
+  .wm, .wm span {{ font-size:inherit !important }}
+  .wm .fl {{ display:inline !important; color:var(--ink, var(--text, #1d2621)) !important }}
+  .wm .ic {{ display:inline !important; margin-left:.24em; background:linear-gradient(90deg,#1bb8d4,#2f6fe8); -webkit-background-clip:text; background-clip:text; color:transparent !important }}
+  .wm .i {{ display:inline !important; position:relative }}
+  .wm .dot {{ display:block !important; position:absolute; left:50%; top:.04em; width:.19em; height:.19em; transform:translateX(-50%); border-radius:50%; background:#ef4a82 }}
+  .wm-part {{ display:inline-block !important; margin-left:8px; font-size:11px !important; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:var(--muted) !important }}
+</style></head><body>
+<div style="font-size:24px;margin-bottom:10px"><span class="wm" role="img" aria-label="Flora iCIS"><span class="fl">FLORA</span><span class="ic"><span class="i">ı<span class="dot"></span></span>CIS</span></span><span class="wm-part">Root</span></div><h1>ติดตั้งโรงพยาบาลใหม่</h1><p class="sub">Flora iCIS Root · เลือกระบบปฏิบัติการของเครื่อง server หลัก</p>
+<div class="tabs">{tabs}</div>{body}</body></html>""")
+
+
+@app.get(f"/install/windows/{WINDOWS_FILE}")
+def install_windows_file():
+    release = latest_windows_release()
+    if release is None:
+        raise HTTPException(404, "no Leaf release carries the Windows installer yet")
+    return FileResponse(windows_installer_file(release), filename=f"Flora-iCIS-Setup-{release['version']}.exe",
+                        media_type="application/vnd.microsoft.portable-executable")
+
+
+class RedeemIn(BaseModel):
+    code: str = Field(min_length=10, max_length=40)
+
+
+@app.post("/api/v1/install/redeem")
+def redeem_site(body: RedeemIn, request: Request):
+    """A new site server trades its one-time code for the hospital's appliance credentials (the tenant key is
+    rotated, so the key only ever lives on that server) plus what it needs to verify and pull from Root."""
+    code = body.code.strip().upper()
+    current = now_ms()
+    with pool.connection() as connection:
+        with connection.transaction():
+            row = connection.execute(
+                """SELECT * FROM root_install WHERE code_hash=%s AND kind='site' AND status='pending' AND expires_at > %s
+                   FOR UPDATE""", (key_hash(code), current)).fetchone()
+            if not row:
+                raise HTTPException(403, "invalid, used or expired install code")
+            api_key = secrets.token_urlsafe(24)
+            tenant = connection.execute(
+                "UPDATE root_tenant SET api_key_hash=%s, updated_at=%s WHERE tenant_id=%s RETURNING tenant_id, name",
+                (key_hash(api_key), current, row["tenant_id"])).fetchone()
+            connection.execute("UPDATE root_install SET status='claimed', updated_at=%s, detail=detail || %s WHERE install_id=%s",
+                               (current, Jsonb({"redeemed_from": auth.client_ip(request)}), row["install_id"]))
+            key = connection.execute("SELECT key_id, public_raw FROM root_signing_key WHERE active ORDER BY created_at DESC LIMIT 1").fetchone()
+    auth.audit(None, "install.redeem", row["tenant_id"], auth.client_ip(request), {"install_id": row["install_id"]})
+    return {"install_id": row["install_id"], "tenant_id": tenant["tenant_id"], "name": tenant["name"], "tenant_key": api_key,
+            "root_url": ROOT_PUBLIC_URL or str(request.base_url).rstrip("/"), "registry": REGISTRY_URL,
+            "signing_key": {"key_id": key["key_id"], "public_raw": key["public_raw"]}}
+
+
 @app.put("/api/v1/tenants/{tenant_id}/license", dependencies=[Depends(require_admin)])
 def replace_license(tenant_id: str, body: LicenseIn):
     with pool.connection() as connection, connection.transaction():
@@ -439,8 +892,17 @@ def overview():
         releases = connection.execute(
             "SELECT release_id, component, version, channel, services, jsonb_array_length(device_types) AS device_types, "
             "notes, created_at, withdrawn_at FROM root_release ORDER BY created_at DESC LIMIT 30").fetchall()
+        # Device-type codes an admin can license to a tenant = the catalog the current gateway
+        # release ships (its parsers). Falls back to the demo set before any gateway release exists.
+        gateway_release = connection.execute(
+            "SELECT device_types FROM root_release WHERE component='gateway' AND withdrawn_at IS NULL "
+            "ORDER BY created_at DESC LIMIT 1").fetchone()
+    catalog = (gateway_release["device_types"] if gateway_release and gateway_release["device_types"]
+               else [{"code": code} for code in DEMO_DEVICE_TYPES])
+    gateway_device_types = [{"code": item["code"], "label": item.get("label", item["code"])}
+                            for item in catalog if item.get("code")]
     return {"server_ts": now_ms(), "tenants": tenants, "global_config": config, "signing_keys": keys,
-            "registry": REGISTRY_URL, "releases": releases}
+            "registry": REGISTRY_URL, "releases": releases, "gateway_device_types": gateway_device_types}
 
 
 # ------------------------------------------------------------------ device type catalog

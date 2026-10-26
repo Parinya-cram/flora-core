@@ -58,6 +58,27 @@ framing = "udp_relay"
 auto_ack = false
 max_frame_bytes = 6096
 
+# Dräger P2500, MEDIBUS.X over LAN (device type draeger-p2500-lan). Flora connects out to
+# the device's MEDIBUS.X LAN port and is the MEDIBUS master; the medibus parser sends the
+# ICC/ID handshake and polls, exactly as on RS-232. One pod per device.
+# The P2500's own interface runs 19200 baud, 8 data bits, no parity, 1 stop bit; with a
+# serial-to-LAN converter, set those on the converter's serial side (TCP has no line settings).
+# Check the link first with scripts/p2500_receiver.py --connect <ip>:<port>.
+# If the device is set up to connect to the gateway instead, drop remote_host and set
+# `port` to the gateway port the device dials (then publish it in compose.yaml).
+[[socket.pods]]
+id = "p2500"
+enabled = false # Enable after setting remote_host and port from the device's LAN settings.
+transport = "tcp"
+remote_host = "192.0.2.30" # REQUIRED: the P2500's IP address.
+port = 0 # REQUIRED: the P2500's MEDIBUS.X TCP port.
+framing = "raw"
+auto_ack = false
+connect_timeout_ms = 3000
+read_timeout_ms = 15000
+reconnect_ms = 3000
+max_frame_bytes = 16384
+
 # Dräger Vista 120 S: the monitors connect to this port as their central station (CMS).
 # Several monitors may share it; each device instance picks its monitor by source_ip.
 [[socket.pods]]

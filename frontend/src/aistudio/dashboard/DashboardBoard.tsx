@@ -14,6 +14,10 @@ import { danger, inlineInput, input, label, panel, primary, secondary, small } f
 import { GRID_PRESETS, MAX_GRID, SIZE_PRESETS, cellAt, fits, freeSpot, outside, resizeTo, type Rect } from "./layout";
 import { WIDGETS, catalogItem } from "./catalog";
 import { WidgetBody } from "./widgets";
+import { BoardLeafContext } from "./dataSource";
+import { useLeafPoll } from "./leafHooks";
+import { getLeaves, type LeafNode } from "../../api/fleetApi";
+import KioskLinks from "./KioskLinks";
 
 type Props = {
   lang: Lang;
@@ -28,8 +32,8 @@ type Preview = Rect & { ok: boolean };
 const GAP = 10;
 const ROW_HEIGHTS: Array<[number, string, string]> = [[160, "เล็ก", "Small"], [220, "กลาง", "Medium"], [300, "ใหญ่", "Large"], [400, "ใหญ่มาก", "X-large"]];
 const newId = () => `w${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-const blank = (): DashboardInput => ({ title: "", cols: 3, rows: 3, row_height: 220, widgets: [] });
-const inputOf = (dashboard: Dashboard): DashboardInput => ({ title: dashboard.title, cols: dashboard.cols, rows: dashboard.rows, row_height: dashboard.row_height, widgets: dashboard.widgets });
+const blank = (): DashboardInput => ({ title: "", cols: 3, rows: 3, row_height: 220, widgets: [], settings: {} });
+const inputOf = (dashboard: Dashboard): DashboardInput => ({ title: dashboard.title, cols: dashboard.cols, rows: dashboard.rows, row_height: dashboard.row_height, widgets: dashboard.widgets, settings: dashboard.settings ?? {} });
 
 export default function DashboardBoard({ lang, dashboard, snippets, onSaved, onDeleted }: Props) {
   const t = (th: string, en: string) => tr(lang, th, en);
@@ -37,6 +41,10 @@ export default function DashboardBoard({ lang, dashboard, snippets, onSaved, onD
   const [draft, setDraft] = useState<DashboardInput>(() => (dashboard ? inputOf(dashboard) : blank()));
   const [dirty, setDirty] = useState(!dashboard);
   const [editing, setEditing] = useState(!dashboard);
+  const [kiosk, setKiosk] = useState(false);
+  // The Leaf the board follows: saved with the board by its owner; others may look at another one.
+  const [viewLeaf, setViewLeaf] = useState<string | null>(null);
+  const [leafOptions, setLeafOptions] = useState<LeafNode[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [resizing, setResizing] = useState<string | null>(null);
@@ -52,6 +60,14 @@ export default function DashboardBoard({ lang, dashboard, snippets, onSaved, onD
   const grid = { cols: draft.cols, rows: draft.rows };
   const selectedWidget = draft.widgets.find(widget => widget.id === selected) ?? null;
   const shieldFrames = Boolean(drag || resizing); // iframes swallow drag/pointer events
+
+  const leafId = mine ? draft.settings?.leafId || null : viewLeaf ?? dashboard?.settings?.leafId ?? null;
+  const boardLeaf = useLeafPoll(leafId, refreshKey);
+  useEffect(() => { void getLeaves().then(setLeafOptions).catch(() => setLeafOptions([])); }, []);
+  const chooseLeaf = (value: string) => {
+    if (mine) { setDraft(current => ({ ...current, settings: { ...current.settings, leafId: value || undefined } })); setDirty(true); }
+    else setViewLeaf(value);
+  };
 
   useEffect(() => {
     if (!autoRefresh) return;
@@ -206,10 +222,17 @@ export default function DashboardBoard({ lang, dashboard, snippets, onSaved, onD
         </select>
         <button type="button" className={small} onClick={fullscreen}>⛶ {t("เต็มจอ", "Full screen")}</button>
       </> : null}
+      <select className={inlineInput} value={leafId ?? ""} onChange={event => chooseLeaf(event.target.value)} aria-label={t("Leaf ของบอร์ด", "Board Leaf")}
+        title={t("บอร์ดแสดงเคสปัจจุบันของ Leaf นี้ และเคสถัดไปในตาราง", "The board shows this Leaf's current case, and the next case in the schedule")}>
+        <option value="">{t("ไม่ผูกกับ Leaf", "No Leaf")}</option>
+        {leafId && !leafOptions.some(leaf => leaf.leaf_id === leafId) ? <option value={leafId}>{leafId}</option> : null}
+        {leafOptions.map(leaf => <option key={leaf.leaf_id} value={leaf.leaf_id}>{leaf.canopy_display_name || leaf.display_name}{leaf.room_name ? ` · ${leaf.room_name}` : ""}</option>)}
+      </select>
       {mine ? <button type="button" className={editing ? primary : secondary} onClick={() => { setEditing(value => !value); setSelected(null); }}>{editing ? t("ดูผล", "View") : t("แก้ไข", "Edit")}</button> : null}
       {mine && (dirty || editing) ? <button type="button" className={primary} disabled={busy || !dirty} onClick={() => void save()}>{t("บันทึก", "Save")}</button> : null}
       {mine && dashboard ? <button type="button" className={small} disabled={busy} onClick={() => (dashboard.shared ? void toggleShare() : setConfirm("share"))}>{dashboard.shared ? t("เลิกแชร์", "Unshare") : t("แชร์", "Share")}</button> : null}
       {dashboard && !dashboard.mine ? <button type="button" className={small} onClick={() => void copy()}>{t("คัดลอกเป็นของฉัน", "Copy to mine")}</button> : null}
+      {mine && dashboard ? <button type="button" className={small} onClick={() => setKiosk(value => !value)} title={t("ลิงก์ถาวรสำหรับจอแสดงผล ไม่ต้องเข้าสู่ระบบ", "Permanent link for a wall display, no sign-in")}>🖥 {t("ลิงก์ Kiosk", "Kiosk link")}</button> : null}
       {mine && dashboard ? <button type="button" className={small} onClick={() => setConfirm("delete")}>🗑</button> : null}
     </div>
 
@@ -223,6 +246,8 @@ export default function DashboardBoard({ lang, dashboard, snippets, onSaved, onD
         <button type="button" className={small} onClick={() => setConfirm(null)}>{t("ยกเลิก", "Cancel")}</button>
       </div>
     </div> : null}
+
+    {kiosk && mine && dashboard ? <KioskLinks lang={lang} dashboardId={dashboard.id} onClose={() => setKiosk(false)} /> : null}
 
     {message ? <div className={`rounded-xl border px-3 py-2 text-sm ${message.tone === "error" ? "border-rose-500/40 bg-rose-500/10 text-rose-600 dark:text-rose-300" : "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"}`}>
       {message.text}<button type="button" className="ml-2 text-xs underline" onClick={() => setMessage(null)}>{t("ปิด", "dismiss")}</button>
@@ -243,6 +268,7 @@ export default function DashboardBoard({ lang, dashboard, snippets, onSaved, onD
         </div>)}
       </aside> : null}
 
+      <BoardLeafContext.Provider value={boardLeaf}>
       <div ref={shell} className="min-w-0 overflow-auto rounded-2xl bg-[var(--app-bg)] p-1" onClick={() => setSelected(null)}>
         <div ref={board} onDragOver={onDragOver} onDrop={onDrop} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setPreview(null); }}
           className="relative grid" style={{ gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))`, gridAutoRows: `${draft.row_height}px`, gap: GAP, minWidth: grid.cols * 140 }}>
@@ -275,6 +301,7 @@ export default function DashboardBoard({ lang, dashboard, snippets, onSaved, onD
         </div>
         {!draft.widgets.length && !editing ? <div className="p-10 text-center text-sm text-[var(--app-muted)]">{t("ยังไม่มีวิดเจ็ต — กดแก้ไขเพื่อเพิ่ม", "No widgets yet. Choose Edit to add some.")}</div> : null}
       </div>
+      </BoardLeafContext.Provider>
 
       {editing ? <aside className={`${panel} max-h-[calc(100vh-160px)] space-y-3 overflow-y-auto p-3 xl:sticky xl:top-2`} onClick={event => event.stopPropagation()}>
         {selectedWidget ? <WidgetInspector lang={lang} widget={selectedWidget} widgets={draft.widgets} grid={grid} snippets={snippets}
@@ -358,6 +385,12 @@ function WidgetInspector({ lang, widget, widgets, grid, snippets, onPatch, onCon
     {widget.type === "active_cases" ? <label className="flex items-center gap-2 text-xs text-[var(--app-text)]">
       <input type="checkbox" checked={Boolean(widget.config.showHn)} onChange={event => onConfig({ showHn: event.target.checked })} />
       {t("แสดง HN (ระวังเมื่อแสดงบนจอสาธารณะ)", "Show HN (take care on public screens)")}</label> : null}
+    {widget.type === "case_timer" ? <div className="space-y-2">
+      <label className="flex items-center gap-2 text-xs text-[var(--app-text)]">
+        <input type="checkbox" checked={Boolean(widget.config.showPatient)} onChange={event => onConfig({ showPatient: event.target.checked })} />
+        {t("แสดงชื่อผู้ป่วยและ HN (ระวังเมื่อแสดงบนจอสาธารณะ)", "Show patient name and HN (take care on public screens)")}</label>
+      <p className="text-[11px] text-[var(--app-muted)]">{t("ใช้ Leaf ที่เลือกในแถบด้านบนของบอร์ด", "Uses the Leaf chosen in the board's toolbar.")}</p>
+    </div> : null}
     {["system_status", "gateway_alerts", "case_counts", "clock"].includes(widget.type) ? <p className="text-[11px] text-[var(--app-muted)]">{t("อัปเดตอัตโนมัติ ข้อมูลตามสิทธิ์ของผู้ชม", "Updates by itself, using the viewer's own access.")}</p> : null}
 
     <button type="button" className={danger} onClick={onRemove}>{t("ลบวิดเจ็ต", "Remove widget")}</button>

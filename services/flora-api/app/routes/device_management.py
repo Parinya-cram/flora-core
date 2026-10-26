@@ -491,24 +491,29 @@ def register_gateway(payload: GatewayCreateInput, user: dict[str, Any] = Depends
 
 # ------------------------------------------------------------------ device types
 
-def _release_catalog() -> tuple[list[dict[str, Any]], list[str], str | None]:
-    """Types every gateway receives from the approved Root release (via Haber), and the parsers available."""
+def _release_catalog() -> tuple[list[dict[str, Any]], list[str], list[str], str | None]:
+    """Types every gateway receives from the approved Root release (via Haber), the parsers available,
+    and the device-type codes this hospital has adopted ('downloaded') for use."""
     overview, error = _haber_overview()
     catalog = (overview or {}).get("catalog") or {}
     types = (overview or {}).get("gateway_catalog") or catalog.get("device_types") or []
+    adopted = (overview or {}).get("adopted") or []
     parsers = sorted({parser for image in catalog.get("images") or [] for parser in image.get("parsers") or []}
                      | {item.get("parser") for item in types if item.get("parser")})
     return [{key: item.get(key) for key in ("code", "label", "category", "protocol", "controller", "parser",
                                              "manufacturer", "model", "description", "default_options",
-                                             "connection_defaults", "version")} for item in types], parsers, error
+                                             "connection_defaults", "version")} for item in types], parsers, adopted, error
 
 
 @fleet_router.get("/device-types")
 def list_device_types(database: Connection = Depends(connection)) -> dict[str, Any]:
-    release, parsers, error = _release_catalog()
+    release, parsers, adopted, error = _release_catalog()
     usage = {row["device_type"]: row["n"] for row in database.execute(
         "SELECT device_type, count(*) AS n FROM canopy_gateway_device GROUP BY device_type").fetchall()}
-    return {"release_types": [{**item, "in_use": usage.get(item["code"], 0)} for item in release],
+    # Show only device types the hospital downloaded (adopted), plus any already in use on a gateway.
+    adopted_set = set(adopted)
+    shown = [item for item in release if item["code"] in adopted_set or usage.get(item["code"], 0) > 0]
+    return {"release_types": [{**item, "in_use": usage.get(item["code"], 0)} for item in shown],
             "hospital_types": [{**row, "in_use": usage.get(row["code"], 0)} for row in device_types.list_types(database)],
             "parsers": parsers, "controllers": list(device_types.CONTROLLERS), "haber_error": error}
 
@@ -533,7 +538,7 @@ class DeviceTypeCreate(DeviceTypeInput):
 
 def _checked_type(payload: DeviceTypeInput) -> dict[str, Any]:
     values = _clean(payload)
-    release, parsers, _ = _release_catalog()
+    release, parsers, _adopted, _ = _release_catalog()
     if parsers and values["parser"] not in parsers:
         raise HTTPException(422, f"parser '{values['parser']}' is not in the gateway parser image ({', '.join(parsers)})")
     try:

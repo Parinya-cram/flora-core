@@ -1,0 +1,35 @@
+/* Keep the hero copy aligned with the site's main content edge.
+   Text width is constrained independently so it never crowds the subject. */
+.hero .hero-content{
+  width:min(1180px,calc(100% - 40px));
+  max-width:none;
+  margin-left:auto;
+  margin-right:auto;
+}
+.hero .hero-content>*{max-width:730px}
+.hero .hero-content h1{max-width:900px}
+@media(max-width:560px){.hero .hero-content{width:min(100% - 28px,1180px)}}
+
+/* The connected-care photo is intentionally detailed; add a directional veil
+   so headline contrast stays strong without hiding the product story. */
+.visual-band:after{
+  background:
+    linear-gradient(90deg,rgba(3,28,22,.94) 0%,rgba(3,28,22,.78) 34%,rgba(3,28,22,.30) 62%,rgba(3,28,22,.08) 100%),
+    linear-gradient(0deg,rgba(3,28,22,.82) 0%,rgba(3,28,22,.08) 72%);
+}
+.visual-band .wrap{padding-top:70px}
+.visual-band .eyebrow,.visual-band h2{text-shadow:0 3px 20px rgba(0,0,0,.65)}
+.visual-band h2{max-width:680px}
+.visual-band .chip{
+  background:rgba(3,28,22,.62);
+  border-color:rgba(255,255,255,.45);
+  box-shadow:0 8px 24px rgba(0,0,0,.16);
+  backdrop-filter:blur(8px);
+}
+@media(max-width:700px){.visual-band:after{background:linear-gradient(0deg,rgba(3,28,22,.94) 0%,rgba(3,28,22,.62) 68%,rgba(3,28,22,.16) 100%)}}
+
+.why-flora .section-head{grid-template-columns:minmax(0,1.9fr) minmax(300px,1fr);align-items:stretch}
+.why-flora .section-head>div,.why-flora .section-head>p{height:100%;min-height:230px}
+.why-flora .section-head>p{display:flex;align-items:center}
+.why-flora .section-head h2{font-size:clamp(2.25rem,3.45vw,3.25rem);white-space:nowrap}
+@media(max-width:1000px){.why-flora .section-head{grid-template-columns:1fr}.why-flora .section-head h2{white-space:normal}.why-flora .section-head>div,.why-flora .section-head>p{height:auto;min-height:0}}

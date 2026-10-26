@@ -223,6 +223,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === "undefined") return;
     const html = window.document.documentElement as HTMLElement & { style: CSSStyleDeclaration };
     html.style.zoom = fontScale === DEFAULT_FONT_SCALE ? "" : String(fontScale);
+    // 100vh is zoomed too; full-height shells divide by this to stay inside the window.
+    html.style.setProperty("--app-zoom", String(fontScale));
     try {
       window.localStorage.setItem(getThemeStorageKey("fontscale", themeUsername), String(fontScale));
     } catch {

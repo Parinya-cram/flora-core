@@ -350,15 +350,8 @@ def audit(
     )
 
 
-def current_user(request: Request, database: Connection = Depends(connection)) -> dict[str, Any]:
-    supplied_service_secret = request.headers.get("x-flora-service-secret", "").strip()
-    if SERVICE_SECRET and supplied_service_secret and hmac.compare_digest(SERVICE_SECRET, supplied_service_secret):
-        return {
-            "id": None, "username": "flora-sync", "name": "Flora Sync", "role": "integration",
-            "must_change_password": 0, "_role_codes": ["integration"],
-            "_permissions": ["case.read", "integration.ingest"],
-        }
-    token = token_from(request)
+def user_for_token(database: Connection, token: str) -> dict[str, Any]:
+    """The signed-in user of a session token, with roles and permissions; refreshes the session."""
     current = now_ms()
     if not token:
         raise HTTPException(status_code=401, detail="sign in required")
@@ -383,10 +376,22 @@ def current_user(request: Request, database: Connection = Depends(connection)) -
         "UPDATE auth_session SET updated_at=%s, last_seen_at=%s, expires_at=%s WHERE id=%s",
         (current, current, current + SESSION_TTL_MS, row["session_id"]),
     )
+    return attach_entitlements(database, row)
+
+
+def current_user(request: Request, database: Connection = Depends(connection)) -> dict[str, Any]:
+    supplied_service_secret = request.headers.get("x-flora-service-secret", "").strip()
+    if SERVICE_SECRET and supplied_service_secret and hmac.compare_digest(SERVICE_SECRET, supplied_service_secret):
+        return {
+            "id": None, "username": "flora-sync", "name": "Flora Sync", "role": "integration",
+            "must_change_password": 0, "_role_codes": ["integration"],
+            "_permissions": ["case.read", "integration.ingest"],
+        }
+    row = user_for_token(database, token_from(request))
     if request.method != "GET" and request.headers.get("x-flora-change-set"):
         # The chart change log (case_change_log) records who made the change.
         database.execute("SELECT set_config('flora.actor', %s, false)", (row["username"],))
-    return attach_entitlements(database, row)
+    return row
 
 
 def admin_user(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:

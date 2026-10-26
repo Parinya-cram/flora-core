@@ -2,7 +2,7 @@ import { BACKEND_BASE } from "./backendBase";
 import { readStoredAuthToken } from "./authApi";
 import { wardHeaders } from "./wardSelection";
 
-/** A document attached to a case (0094): pages put together in the assembly workspace, kept with the case as one PDF. */
+/** A document attached to a case (0092): pages put together in the assembly workspace, kept with the case as one PDF. */
 export type CaseDocument = {
   id: number; case_id: number; title: string; pages: number; bytes: number; sha256: string; created_at: number; created_by: string | null;
   removed_at: number | null; removed_by: string | null; removed_reason: string | null; synced_at: number | null; sync_error: string | null;

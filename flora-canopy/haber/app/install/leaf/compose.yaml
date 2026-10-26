@@ -1,0 +1,152 @@
+# Flora iCIS Leaf on a hospital machine, installed from the appliance (leaf.sh). Images only: every
+# FLORA_IMAGE_* comes from .release/<project>.env, which leaf.sh writes from the release the hospital
+# approved and flora-updater rewrites on every later approval. Settings and secrets are in .env,
+# generated on this machine. One project per Leaf, so a machine can host several.
+
+services:
+  leaf-db:
+    image: ${FLORA_IMAGE_DB}
+    environment:
+      POSTGRES_DB: flora
+      POSTGRES_USER: flora_admin
+      POSTGRES_PASSWORD: ${LEAF_DB_ADMIN_PASSWORD}
+      FLORA_DB_APP_PASSWORD: ${LEAF_DB_APP_PASSWORD}
+      FLORA_DB_VIEW_PASSWORD: ${LEAF_DB_VIEW_PASSWORD}
+      FLORA_DB_SYNC_PASSWORD: ${LEAF_DB_SYNC_PASSWORD}
+    volumes:
+      - leaf_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flora_admin -d flora"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+    restart: unless-stopped
+
+  leaf-api:
+    image: ${FLORA_IMAGE_API}
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    env_file:
+      - path: ./certs/trust.env
+        required: false
+    environment:
+      FLORA_DATABASE_URL: postgresql://flora_app:${LEAF_DB_APP_PASSWORD}@leaf-db:5432/flora
+      FLORA_MIGRATION_DATABASE_URL: postgresql://flora_admin:${LEAF_DB_ADMIN_PASSWORD}@leaf-db:5432/flora
+      FLORA_API_ENV: production
+      FLORA_API_MODE: leaf
+      FLORA_LEAF_WRITE_API: "true"
+      FLORA_BOOTSTRAP_ADMIN_ENABLED: "true"
+      FLORA_BOOTSTRAP_ADMIN_USERNAME: admin
+      FLORA_BOOTSTRAP_ADMIN_PASSWORD: ${LEAF_ADMIN_PASSWORD}
+      FLORA_BOOTSTRAP_ADMIN_MUST_CHANGE_PASSWORD: "true"
+      FLORA_BOOTSTRAP_ADMIN_NAME: Administrator
+      FLORA_DEVICE_INGEST_ENABLED: "true"
+      FLORA_LEAF_SERVICE_SECRET: ${FLORA_LEAF_SERVICE_SECRET}
+      FLORA_CANOPY_SYNC_URL: ${CANOPY_SYNC_URL}
+      FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET}
+      FLORA_HABER_URL: ${HABER_URL}
+      HABER_NODE_TOKEN: ${HABER_NODE_TOKEN}      # AI calls go out through the appliance relay
+      FLORA_LEAF_ID: ${FLORA_LEAF_ID}
+      FLORA_HOSPITAL_ID: ${FLORA_HOSPITAL_ID}
+      FLORA_LEAF_NAME: ${FLORA_LEAF_NAME}
+      VECTOR_READ_URL: ${LEAF_DEVICE_READ_URL:-http://127.0.0.1:9}
+      HIS_GATEWAY_BASE_URL: http://127.0.0.1:9
+      FLORA_HIS_DEMO_MODE: "false"
+    ports:
+      - "127.0.0.1:${LEAF_API_PORT}:8000"      # desktop app (loopback only)
+    volumes:
+      - ./certs:/etc/flora/certs:ro
+    depends_on:
+      leaf-db: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  # The Leaf UI and its HTTPS entry point in one: the built app, /api and /health proxied to leaf-api.
+  leaf-web:
+    image: ${FLORA_IMAGE_WEB}
+    environment:
+      API_UPSTREAM: http://leaf-api:8000
+      LIVE_UPSTREAM: http://leaf-live:8000
+    ports:
+      - "${LEAF_HTTPS_PORT}:443"
+    volumes:
+      - ./https.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./certs/server.crt:/etc/nginx/certs/server.crt:ro
+      - ./certs/server.key:/etc/nginx/certs/server.key:ro
+    depends_on:
+      leaf-api: {condition: service_healthy}
+    restart: unless-stopped
+
+
+  # Live stream (docs/live-stream/PROTOCOL.md): connects out to each gateway's stream-hub, stores every second of
+  # the devices bound to a session, then serves it to the screens. Runs whether or not a screen is open.
+  leaf-live:
+    image: ${FLORA_IMAGE_API}
+    command: ["uvicorn", "app.live.server:app", "--host", "0.0.0.0", "--port", "8000"]
+    env_file:
+      - path: ./certs/trust.env
+        required: false
+    environment:
+      FLORA_DATABASE_URL: postgresql://flora_app:${LEAF_DB_APP_PASSWORD}@leaf-db:5432/flora
+      FLORA_MIGRATION_DATABASE_URL: postgresql://flora_admin:${LEAF_DB_ADMIN_PASSWORD}@leaf-db:5432/flora
+      FLORA_API_MODE: leaf
+      FLORA_LEAF_ID: ${FLORA_LEAF_ID}
+      FLORA_HOSPITAL_ID: ${FLORA_HOSPITAL_ID}
+    volumes:
+      - ./certs:/etc/flora/certs:ro
+    depends_on:
+      leaf-api: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+
+  leaf-sync:
+    image: ${FLORA_IMAGE_SYNC}
+    env_file:
+      - path: ./certs/trust.env
+        required: false
+    environment:
+      FLORA_LEAF_API_URL: http://leaf-api:8000
+      FLORA_CANOPY_SYNC_URL: ${CANOPY_SYNC_URL}
+      FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET}
+      FLORA_LEAF_SERVICE_SECRET: ${FLORA_LEAF_SERVICE_SECRET}
+      FLORA_LEAF_ID: ${FLORA_LEAF_ID}
+      FLORA_HOSPITAL_ID: ${FLORA_HOSPITAL_ID}
+      FLORA_LEAF_NAME: ${FLORA_LEAF_NAME}
+      FLORA_SYNC_INTERVAL_SECONDS: "10"
+    volumes:
+      - ./certs:/etc/flora/certs:ro
+    depends_on:
+      leaf-api: {condition: service_healthy}
+    restart: unless-stopped
+
+  # Keeps this Leaf on the release the hospital approves (never while a case is open).
+  updater:
+    image: ${FLORA_IMAGE_UPDATER}
+    env_file:
+      - path: ./certs/trust.env
+        required: false
+    environment:
+      FLORA_COMPONENT: leaf
+      FLORA_NODE_ID: ${FLORA_LEAF_ID}
+      HABER_URL: ${HABER_URL}
+      HABER_NODE_TOKEN: ${HABER_NODE_TOKEN}
+      FLORA_ROOT_PUBLIC_KEY: ${FLORA_ROOT_PUBLIC_KEY:-}
+      FLORA_UPDATER_GATE_URL: http://leaf-api:8000/api/case/status
+      FLORA_UPDATER_GATE_HEADER: "x-flora-service-secret: ${FLORA_LEAF_SERVICE_SECRET}"
+    volumes:
+      - ./certs:/etc/flora/certs:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ..:/host
+      - updater_state:/state
+    restart: unless-stopped
+
+volumes:
+  leaf_db_data:
+  updater_state:

@@ -59,5 +59,8 @@ backup/
 # PowerPoint/Office temp lock files
 ~$*
 
+# stray PowerPoint files dropped in the repo root
+/*.pptx
 # Step report of scripts/test-form-flow.sh
 e2e-form-flow.json
+build-win/

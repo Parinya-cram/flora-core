@@ -37,6 +37,8 @@ export type FloraDesktopApi = {
     version: string;
   };
   getBackendBaseUrl?: () => string;
+  /** The installed Leaf's leaf-live (live screens); empty when the app runs no Leaf. */
+  getLiveBaseUrl?: () => string;
   setZoomLevel: (level: number) => void;
   getZoomLevel: () => number;
   getBootstrapStatus?: () => Promise<BootstrapStatus>;

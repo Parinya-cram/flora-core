@@ -13,7 +13,8 @@
 #
 # Migrations are NOT applied automatically: infrastructure/postgres/*.sql runs
 # only when the postgres volume is first created.  A new file there is reported
-# and must be applied deliberately (see reset-db.sh).
+# and must be applied deliberately (scripts/apply-migrations.sh keeps the data;
+# reset-db.sh starts over).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -56,9 +57,13 @@ if grep -q '^infrastructure/postgres/' <<<"$changed"; then
   echo
   echo "!! new or changed database migration:"
   grep '^infrastructure/postgres/' <<<"$changed" | sed 's/^/     /'
-  echo "!! these run only on a fresh volume.  Back up, then:"
+  echo "!! these run only on a fresh volume.  Back up, then apply them to the"
+  echo "!! running database (keeps the data; scripts from 0004 on are re-runnable):"
+  first=$(grep -oE '^infrastructure/postgres/[0-9]{4}' <<<"$changed" | grep -oE '[0-9]{4}$' | sort | head -1)
   echo "     ./scripts/server/backup-db.sh"
-  echo "     ./scripts/server/reset-db.sh"
+  echo "     ./scripts/apply-migrations.sh --from ${first:-NNNN} --dry-run"
+  echo "     ./scripts/apply-migrations.sh --from ${first:-NNNN}"
+  echo "!! (or start over from an empty database: ./scripts/server/reset-db.sh)"
 fi
 
 echo

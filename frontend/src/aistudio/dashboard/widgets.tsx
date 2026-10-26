@@ -1,15 +1,18 @@
-/** Dashboard widget renderers. Predefined widgets read existing Canopy endpoints with the viewer's own access. */
+/** Dashboard widget renderers. Predefined widgets read existing Canopy endpoints with the viewer's own access
+ * (or, on a kiosk display, the kiosk endpoints with the dashboard owner's access; see dataSource.tsx). */
 import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
-import { renderData, type KeptArtifact, type Period, type Widget } from "../../api/aiStudioApi";
-import { getActiveFleetCases, getLeaves, type FleetCase, type LeafNode } from "../../api/fleetApi";
-import { getGatewayAlerts, type GatewayAlert } from "../../api/gatewayAlertsApi";
+import type { Artifact, Period, Widget } from "../../api/aiStudioApi";
+import type { FleetCase, LeafNode } from "../../api/fleetApi";
+import type { GatewayAlert } from "../../api/gatewayAlertsApi";
 import type { StudioSpec } from "../../api/reportStudioApi";
 import { tr, type Lang } from "../../reportstudio/model";
 import ArtifactFrame from "../ArtifactFrame";
 import Markdown from "../Markdown";
 import { buildSrcDoc, readTheme } from "../runtime";
+import { useDashboardData } from "./dataSource";
+import { CaseStrip, CaseTimer } from "./leafCase";
 
-type BodyProps = { widget: Widget; lang: Lang; snippets: KeptArtifact[]; boardPeriod: Period; refreshKey: number };
+type BodyProps = { widget: Widget; lang: Lang; snippets: Array<Artifact & { id: string }>; boardPeriod: Period; refreshKey: number };
 
 /** Re-load every `interval` ms and whenever the board refreshes. */
 function usePoll<T>(load: () => Promise<T>, refreshKey: number, interval = 30_000) {
@@ -51,6 +54,7 @@ export function WidgetBody(props: BodyProps) {
     case "gateway_alerts": return <GatewayAlerts {...props} />;
     case "case_counts": return <CaseCounts {...props} />;
     case "clock": return <Clock lang={lang} />;
+    case "case_timer": return <CaseTimer lang={lang} config={widget.config} />;
   }
 }
 
@@ -64,8 +68,9 @@ const dot: Record<string, string> = { online: "bg-emerald-500", delayed: "bg-amb
 
 function SystemStatus({ lang, refreshKey }: BodyProps) {
   const t = (th: string, en: string) => tr(lang, th, en);
-  const leaves = usePoll(getLeaves, refreshKey);
-  const alerts = usePoll(() => getGatewayAlerts("open"), refreshKey);
+  const source = useDashboardData();
+  const leaves = usePoll(source.leaves, refreshKey);
+  const alerts = usePoll(source.openAlerts, refreshKey);
   const rows = leaves.data ?? [];
   const count = (status: LeafNode["connection_status"]) => rows.filter(row => row.connection_status === status).length;
   const problems = rows.filter(row => row.connection_status !== "online");
@@ -99,7 +104,8 @@ function elapsed(start?: number | null) {
 
 function ActiveCases({ widget, lang, refreshKey }: BodyProps) {
   const t = (th: string, en: string) => tr(lang, th, en);
-  const cases = usePoll(getActiveFleetCases, refreshKey);
+  const source = useDashboardData();
+  const cases = usePoll(source.activeCases, refreshKey);
   const rows: FleetCase[] = cases.data ?? [];
   return <div className="flex h-full flex-col overflow-hidden p-3">
     <div className="flex items-baseline gap-2"><span className="text-3xl font-bold tabular-nums text-[var(--app-text)]">{cases.data ? rows.length : "…"}</span><span className="text-xs text-[var(--app-muted)]">{t("เคสที่กำลังดำเนินอยู่", "active cases")}</span></div>
@@ -118,7 +124,8 @@ const SEVERITY: Record<string, string> = { critical: "bg-rose-500", warning: "bg
 
 function GatewayAlerts({ lang, refreshKey }: BodyProps) {
   const t = (th: string, en: string) => tr(lang, th, en);
-  const alerts = usePoll(() => getGatewayAlerts("open"), refreshKey);
+  const source = useDashboardData();
+  const alerts = usePoll(source.openAlerts, refreshKey);
   const rows: GatewayAlert[] = alerts.data?.rows ?? [];
   return <div className="flex h-full flex-col overflow-hidden p-3">
     <div className="text-xs text-[var(--app-muted)]">{t("แจ้งเตือนที่เปิดอยู่", "Open alerts")}: <b className="text-[var(--app-text)]">{alerts.data?.counts.open ?? "…"}</b></div>
@@ -142,10 +149,11 @@ function countSpec(from: string, to: string): StudioSpec {
 
 function CaseCounts({ lang, refreshKey }: BodyProps) {
   const t = (th: string, en: string) => tr(lang, th, en);
+  const source = useDashboardData();
   const counts = usePoll(() => {
     const today = new Date(), week = new Date(), month = new Date(today.getFullYear(), today.getMonth(), 1);
     week.setDate(today.getDate() - 6);
-    return renderData({ today: countSpec(iso(today), iso(today)), week: countSpec(iso(week), iso(today)), month: countSpec(iso(month), iso(today)) }, {});
+    return source.caseCounts({ today: countSpec(iso(today), iso(today)), week: countSpec(iso(week), iso(today)), month: countSpec(iso(month), iso(today)) });
   }, refreshKey, 120_000);
   const cell = (name: string, label: string) => {
     const row = counts.data?.data[name]?.rows[0];
@@ -168,6 +176,7 @@ function Clock({ lang }: { lang: Lang }) {
     <div>
       <div className="text-4xl font-bold tabular-nums text-[var(--app-text)]">{now.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</div>
       <div className="mt-1 text-sm text-[var(--app-muted)]">{now.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</div>
+      <CaseStrip lang={lang} />
     </div>
   </div>;
 }

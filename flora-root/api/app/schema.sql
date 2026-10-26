@@ -198,3 +198,46 @@ CREATE TABLE IF NOT EXISTS device_protocol_lane (
   note               text,
   source_id          text REFERENCES device_type_source(source_id)
 );
+
+-- Installs planned at Root, one row per machine: a hospital site (Canopy + appliance), a Leaf or a gateway.
+-- Only Root operators create them. The one-time code is shown once and stored as a hash; the hospital's
+-- appliance pulls the pending list (signed) so Leafs and gateways on the LAN install without internet.
+CREATE TABLE IF NOT EXISTS root_install (
+  install_id    text PRIMARY KEY,
+  tenant_id     text NOT NULL REFERENCES root_tenant(tenant_id) ON DELETE CASCADE,
+  kind          text NOT NULL CHECK (kind IN ('site', 'leaf', 'gateway')),
+  node_id       text,                       -- leaf_id / gateway_id the machine will register as
+  label         text,
+  ward          text,
+  room          text,
+  bed           text,
+  code_hash     text NOT NULL UNIQUE,
+  status        text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'claimed', 'installed', 'failed', 'revoked')),
+  detail        jsonb NOT NULL DEFAULT '{}',
+  created_at    bigint NOT NULL,
+  created_by    text,
+  expires_at    bigint NOT NULL,
+  updated_at    bigint NOT NULL
+);
+CREATE INDEX IF NOT EXISTS root_install_tenant_idx ON root_install (tenant_id, created_at DESC);
+
+-- Device library: the vendor-maintained settings for each device type (parser, controller, default options,
+-- connection defaults). Signed per hospital; the appliance hands it to gateways on check-in, so a settings
+-- change reaches gateways without a new gateway release. Each edit bumps the profile's revision.
+CREATE TABLE IF NOT EXISTS root_device_profile (
+  code                 text PRIMARY KEY,
+  label                text NOT NULL,
+  category             text,
+  protocol             text,
+  controller           text NOT NULL,
+  parser               text NOT NULL,
+  image                text NOT NULL DEFAULT 'parser',     -- service key of the gateway release that runs it
+  default_options      jsonb NOT NULL DEFAULT '{}'::jsonb,
+  connection_defaults  jsonb NOT NULL DEFAULT '{}'::jsonb,
+  models               text[] NOT NULL DEFAULT '{}',        -- device_type ids (catalog models) this profile serves
+  notes                text,
+  revision             integer NOT NULL DEFAULT 1,
+  status               text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'withdrawn')),
+  updated_at           bigint NOT NULL,
+  updated_by           text
+);

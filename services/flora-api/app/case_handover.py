@@ -7,6 +7,7 @@ clinical concepts by `clinical_concept(domain, local_id)`, I/O segments by their
 Audit tables are not copied; the import writes one `handover.import` audit row.
 """
 import json
+import uuid
 from typing import Any
 
 from psycopg import Connection
@@ -19,9 +20,23 @@ CASE_TABLES = (
     "case_diagnosis", "case_procedure", "case_staff", "case_detail", "vital_minutes",
     "case_event_note", "case_timeline_value", "case_timeline_mask", "case_io_run", "case_io_event",
     "case_billing_order", "case_billing_order_item", "case_score_result",
+    "case_form_record", "case_form_entry",  # workflow forms (single record / scheduled entries)
+    "case_shift_handover", "case_med_order", "case_med_admin", "case_med_approval",  # ICU handover, MAR
 )
+# uuid ids kept across Leafs (a new one only when handed back to a Leaf that still holds the row).
+KEEP_IDS = ("case_form_entry", "case_shift_handover", "case_med_order", "case_med_admin", "case_med_approval")
+# Columns pointing at rows imported earlier in CASE_TABLES: (table, column) -> (parent table, required).
+# A required parent that was not imported drops the row; an optional one becomes NULL.
+PARENTS = {("case_med_admin", "order_id"): ("case_med_order", True),
+           ("case_med_admin", "io_event_id"): ("case_io_event", False),
+           ("case_med_admin", "io_run_id"): ("case_io_run", False),
+           ("case_med_approval", "order_id"): ("case_med_order", True),
+           ("case_med_approval", "admin_id"): ("case_med_admin", False)}
+# Export order of tables without a serial id.
+ORDER_BY = {"case_form_record": "form_id"}
 CASE_COLUMNS_SKIP = {"id", "status", "case_code", "archive_time", "handover_from_leaf_id", "handover_from_case_id",
-                     "handover_global_case_id", "handover_to_leaf_id", "handover_at", "canopy_admission_id"}
+                     "handover_global_case_id", "handover_to_leaf_id", "handover_at", "canopy_admission_id",
+                     "bed_label"}  # the bed is the receiving Leaf's; stream_* and device bindings stay behind
 
 
 def _rows(database: Connection, sql: str, params: tuple) -> list[dict[str, Any]]:
@@ -34,15 +49,12 @@ def export_case(database: Connection, case_id: int) -> dict[str, Any] | None:
     if not case:
         return None
     # A table missing on an older Leaf (not migrated yet) is exported as empty.
-    tables = {table: _rows(database, f"SELECT * FROM {table} WHERE case_id=%s ORDER BY id", (case_id,))
+    tables = {table: _rows(database, f"SELECT * FROM {table} WHERE case_id=%s ORDER BY {ORDER_BY.get(table, 'id')}", (case_id,))
               if _columns(database, table) else [] for table in CASE_TABLES}
     tables["case_io_segment"] = _rows(
         database, "SELECT s.* FROM case_io_segment s JOIN case_io_run r ON r.id=s.run_id WHERE r.case_id=%s ORDER BY s.id",
         (case_id,))
-    # Workflow (Form Studio) forms: keyed by (case_id, form_id), no id column, so copied on their own.
-    tables["case_form_record"] = _rows(database, "SELECT * FROM case_form_record WHERE case_id=%s ORDER BY form_id", (case_id,)) \
-        if _columns(database, "case_form_record") else []
-    item_ids = sorted({row["item_id"] for key in ("case_io_run", "case_io_event") for row in tables[key] if row.get("item_id")})
+    item_ids = sorted({row["item_id"] for key in ("case_io_run", "case_io_event", "case_med_order") for row in tables[key] if row.get("item_id")})
     concept_ids = sorted({row["concept_id"] for key in ("case_diagnosis", "case_procedure")
                           for row in tables[key] if row.get("concept_id")})
     items = {str(row["id"]): row["code"] for row in _rows(
@@ -67,19 +79,24 @@ def _value(value: Any, data_type: str) -> Any:
     return value
 
 
-def _insert(database: Connection, table: str, columns: dict[str, str], row: dict[str, Any]) -> int:
-    names = [name for name in row if name != "id" and name in columns]
+def _insert(database: Connection, table: str, columns: dict[str, str], row: dict[str, Any], keep_id: bool = False) -> Any:
+    """Insert a row; a serial `id` is assigned anew unless keep_id (uuid ids). Tables without `id` return None."""
+    names = [name for name in row if (keep_id or name != "id") and name in columns]
     placeholders = ", ".join(["%s"] * len(names))
-    result = database.execute(
-        f"INSERT INTO {table} ({', '.join(names)}) VALUES ({placeholders}) RETURNING id",
+    has_id = "id" in columns
+    cursor = database.execute(
+        f"INSERT INTO {table} ({', '.join(names)}) VALUES ({placeholders})" + (" RETURNING id" if has_id else ""),
         tuple(_value(row[name], columns[name]) for name in names),
-    ).fetchone()
-    return result["id"]
+    )
+    return cursor.fetchone()["id"] if has_id else None
 
 
 def import_case(database: Connection, export: dict[str, Any], *, from_leaf_id: str, global_case_id: str,
-                actor: str, now: int) -> dict[str, Any]:
-    """Insert the exported case as this Leaf's active case. Caller holds the start-case lock."""
+                actor: str, now: int, bed_label: str | None = None, keep_admission: bool = False) -> dict[str, Any]:
+    """Insert the exported case as this Leaf's active case. Caller holds the start-case lock.
+
+    A Transfer (case_transfer.py) keeps the case's Canopy admission, so the booking, forms and ward-desk
+    requests follow the case; it lands on `bed_label` of this Leaf."""
     if int(export.get("version") or 0) != EXPORT_VERSION:
         raise ValueError(f"unsupported export version {export.get('version')}")
     source = export["case"]
@@ -91,6 +108,10 @@ def import_case(database: Connection, export: dict[str, Any], *, from_leaf_id: s
     row.update(case_code=code, status="active", discharge_time=None, updated_at=now,
                handover_from_leaf_id=from_leaf_id, handover_from_case_id=source["id"],
                handover_global_case_id=global_case_id, handover_at=now)
+    if bed_label and "bed_label" in case_columns:
+        row["bed_label"] = bed_label
+    if keep_admission and source.get("canopy_admission_id") and "canopy_admission_id" in case_columns:
+        row["canopy_admission_id"] = source["canopy_admission_id"]
     case_id = _insert(database, "cases", case_columns, row)
 
     items = {code: item_id for code, item_id in (
@@ -102,12 +123,14 @@ def import_case(database: Connection, export: dict[str, Any], *, from_leaf_id: s
                                  (domain, local_id)).fetchone()
         concepts[old_id] = found["id"] if found else None
     counts, skipped, run_ids, billing_ids = {}, [], {}, {}
+    imported: dict[str, dict[Any, Any]] = {}  # table -> old id -> new id
     tables = export["tables"]
     for table in CASE_TABLES:
         columns = _columns(database, table)
-        if not columns:
+        if not columns or table == "case_form_record":  # imported below, with its sync state reset
             continue
         for item in tables.get(table) or []:
+            source_id = item.get("id")
             item = {**item, "case_id": case_id}
             if "item_id" in item and item["item_id"] is not None:
                 mapped = items.get(export["items"].get(str(item["item_id"])))
@@ -119,9 +142,28 @@ def import_case(database: Connection, export: dict[str, Any], *, from_leaf_id: s
                 if item.get("order_id") not in billing_ids:
                     continue
                 item["order_id"] = billing_ids[item["order_id"]]
+            if table == "case_billing_order" and item.get("kind") == "daily" and item.get("status") == "submitted":
+                item["handover_billed"] = True  # closed days stay billed under the previous case (billing.project_orders)
+            orphan = False
+            for (child, column), (parent, required) in PARENTS.items():
+                if child != table or item.get(column) is None:
+                    continue
+                item[column] = imported.get(parent, {}).get(item[column])
+                orphan = orphan or (required and item[column] is None)
+            if orphan:
+                continue
+            if table == "case_med_approval":
+                item["approver_staff_id"] = None  # staff_directory ids are each Leaf's own; approver_code stays
             if "concept_id" in item and item["concept_id"] is not None:
                 item["concept_id"] = concepts.get(str(item["concept_id"]))
-            new_id = _insert(database, table, columns, item)
+            keep_id = table in KEEP_IDS
+            if keep_id and database.execute(f"SELECT 1 FROM {table} WHERE id=%s", (item["id"],)).fetchone():
+                item["id"] = str(uuid.uuid4())  # handed back to a Leaf that still holds the original rows
+            if table == "case_billing_order" and item.get("order_uuid") and database.execute(
+                    "SELECT 1 FROM case_billing_order WHERE order_uuid=%s", (item["order_uuid"],)).fetchone():
+                item["order_uuid"] = str(uuid.uuid4())
+            new_id = _insert(database, table, columns, item, keep_id=keep_id)
+            imported.setdefault(table, {})[source_id] = new_id
             if table == "case_io_run":
                 run_ids[item["id"]] = new_id
             if table == "case_billing_order":
@@ -147,6 +189,7 @@ def import_case(database: Connection, export: dict[str, Any], *, from_leaf_id: s
         """INSERT INTO case_clinical_audit (case_id, action, before_json, after_json, actor_username, actor_role, created_at)
            VALUES (%s, 'handover.import', NULL, %s, %s, 'integration', %s)""",
         (case_id, json.dumps({"from_leaf_id": from_leaf_id, "from_case_id": source["id"],
-                              "global_case_id": global_case_id, "rows": counts, "skipped": skipped}), actor, now),
+                              "global_case_id": global_case_id, "rows": counts, "skipped": skipped,
+                              "transfer": keep_admission, "bed_label": bed_label}), actor, now),
     )
     return {"case_id": case_id, "case_code": code, "rows": counts, "skipped": skipped}

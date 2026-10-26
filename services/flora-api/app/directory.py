@@ -307,7 +307,7 @@ def apply_record(database: Connection, incoming: dict[str, Any], *, from_canopy:
                  existing["id"]),
             ).fetchone()
         user_id = row["id"]
-        if "sign_pin_hash" in incoming:  # nodes before signing PINs (0092) do not send it: keep ours
+        if "sign_pin_hash" in incoming:  # nodes before signing PINs (0090) do not send it: keep ours
             database.execute("UPDATE auth_user SET sign_pin_salt=%s,sign_pin_hash=%s WHERE id=%s",
                              (incoming.get("sign_pin_salt"), incoming.get("sign_pin_hash"), user_id))
         if from_canopy and is_leaf():

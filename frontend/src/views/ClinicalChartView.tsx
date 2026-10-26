@@ -1,16 +1,20 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { ContinuingMedsBanner } from "./PatientJourneyView";
 import { createPortal } from "react-dom";
 import {
   archiveCase,
+  cancelDischarge,
   dischargeCase,
   getCaseOrSession,
   moveOutCase,
+  type TransferBillingMode,
   recoverInRoom,
   getSuggestedCaseEndTime,
   updateCaseStartTime,
   type CaseStatus,
   type SuggestedCaseEnd,
 } from "../api/caseApi";
+import { getCanopyDestinations } from "../api/wardApi";
 import ClinicalTimelineAxis from "../components/clinical-timeline/ClinicalTimelineAxis";
 import ScoreDialog from "../components/scores/ScoreDialog";
 import { SCORE_ROW_PREFIX, useCaseScores } from "../hooks/useCaseScores";
@@ -22,6 +26,9 @@ import type { ClinicalTimelineRow, ClinicalTimelineValues } from "../components/
 import VitalSignsTrendChart, { type VitalGroup } from "../components/vitals/VitalSignsTrendChart";
 import { useClinicalTimelineAxis } from "../hooks/useClinicalTimelineAxis";
 import { useVitalMinutes } from "../hooks/useVitalMinutes";
+import { useLiveCase } from "../hooks/useLiveCase";
+import LiveStrip from "../components/live/LiveStrip";
+import { CaseDevicesDialog } from "../components/case/CaseDevicesPanel";
 import { useWorkstationSettings } from "../hooks/useWorkstationSettings";
 import { formatConfiguredDateTime, type DateTimePreferences } from "../utils/dateTime";
 import {
@@ -132,7 +139,9 @@ import timeCardIcon from "../assets/cards/card-time.png";
 import diagnosisCardIcon from "../assets/cards/card-diagnosis.png";
 import procedureCardIcon from "../assets/cards/card-procedure.png";
 
-import { clampEditionTimelineScale, getEditionInfo, isTimelineParamAllowed } from "../edition/config";
+import { clampEditionTimelineScale, editionTimelineScaleOptions, getEditionInfo, getSurfaceInfo, isTimelineParamAllowed } from "../edition/config";
+import { getCaseWorkflow } from "../api/workflowApi";
+import { LONG_STAY_MS, resolveChartWindow, stayDayLabel, stayDayStarts, type ChartWindowChoice } from "./clinical-chart/dayWindow";
 import {
   CHART_PREFERENCES_CHANGED_EVENT,
   chartVisibilityStorageKey,
@@ -845,19 +854,52 @@ function medDripGroupTone(category: unknown): string {
   return "other";
 }
 
+/** Where a discharged patient goes:
+ * - Transfer: another Leaf in this Leaf's ward (a recovery bed, …); that Leaf sees the patient under Receive transfer.
+ * - Other ward: recorded on the case only (no Leaf of another ward is offered).
+ * - Discharge: the stay ends here (home, other hospital, …). */
+type DischargeDestination = { key: string; label: string; group: "Workstation" | "Ward" | "Other"; leaf?: string };
+const OTHER_DESTINATIONS = ["Home", "Other hospital", "Other"];
+const OFFLINE_WARDS = ["ICU", "IPD ward"];
+
+function dischargeDestinations(locations: Awaited<ReturnType<typeof getCanopyDestinations>> | null): DischargeDestination[] {
+  const parent = new Map((locations?.locations ?? []).map(location => [location.id, location]));
+  const wardOf = (bedId: number | null | undefined) => {
+    let node = bedId != null ? parent.get(bedId) : undefined;
+    while (node && node.kind !== "care_unit") node = node.parent_id != null ? parent.get(node.parent_id) : undefined;
+    return node?.id ?? null;
+  };
+  const ownWard = wardOf(locations?.current_bed_id);
+  const names = new Map((locations?.leaves ?? []).map(leaf => [leaf.leaf_id, leaf.name]));
+  const leaves = ownWard == null ? [] : (locations?.assignments ?? [])
+    .filter(row => row.leaf_id !== locations?.leaf_id && wardOf(row.bed_location_id) === ownWard)
+    .map(row => {
+      const bed = parent.get(row.bed_location_id);
+      const name = row.leaf_name || names.get(row.leaf_id) || row.leaf_id;
+      return { key: `leaf:${row.leaf_id}`, label: bed ? `${name} · ${bed.name}` : name, group: "Workstation" as const, leaf: row.leaf_id };
+    });
+  const wards = locations
+    ? locations.locations.filter(location => location.kind === "care_unit" && location.id !== ownWard)
+        .map(location => ({ key: `ward:${location.id}`, label: location.name, group: "Ward" as const }))
+    : OFFLINE_WARDS.map(name => ({ key: `ward:${name}`, label: name, group: "Ward" as const }));
+  return [...leaves, ...wards, ...OTHER_DESTINATIONS.map(name => ({ key: `other:${name}`, label: name, group: "Other" as const }))];
+}
+
 export default function ClinicalChartView({
   caseStatus,
   sessionUser,
   onNavigate,
   onCaseDischargeTimeUpdated,
   onCaseArchived,
+  onCaseReopened,
   onStartNextCase,
 }: {
   caseStatus: CaseStatus;
   sessionUser: AuthUser | null;
-  onNavigate?: (view: "patient" | "diagnosis" | "io") => void;
+  onNavigate?: (view: "patient" | "diagnosis" | "io" | "journey") => void;
   onCaseDischargeTimeUpdated?: (caseId: number, dischargeTime: number) => void;
   onCaseArchived?: (caseId: number) => void;
+  onCaseReopened?: (caseId: number) => void;
   onStartNextCase?: () => void;
 }) {
   const workstation = useWorkstationSettings();
@@ -902,22 +944,51 @@ export default function ClinicalChartView({
   const [dripSmartContrast, setDripSmartContrast] = useState(
     () => readLocalSmartContrast(scopeUsername) ?? accountSmartContrast ?? true,
   );
-  const [scaleDraft, setScaleDraft] = useState(String(axisStepMin));
-  const minimumScale = Math.min(...availableAxisSteps);
-  const maximumScale = Math.max(...availableAxisSteps);
+  const scaleOptions = useMemo(() => editionTimelineScaleOptions(availableAxisSteps), [availableAxisSteps]);
   const changeScale = (value: number) => {
-    const next = clampEditionTimelineScale(value, availableAxisSteps);
-    setAxisStepMin(next);
-    setScaleDraft(String(next));
+    setAxisStepMin(clampEditionTimelineScale(value, availableAxisSteps));
   };
-  const commitScaleDraft = () => {
-    if (!scaleDraft.trim() || !Number.isFinite(Number(scaleDraft))) {
-      setScaleDraft(String(axisStepMin));
-      return;
-    }
-    changeScale(Number(scaleDraft));
-  };
-  useEffect(() => setScaleDraft(String(axisStepMin)), [axisStepMin]);
+  // Long stays: Day N / last 24 h window so the chart never loads 30 days of minutes at once.
+  const [chartWindowChoice, setChartWindowChoice] = useState<ChartWindowChoice>("auto");
+  const [caseDayStart, setCaseDayStart] = useState<string | null>(null);
+  const [windowClockTs, setWindowClockTs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setWindowClockTs(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    setChartWindowChoice("auto");
+    setCaseDayStart(null);
+    if (caseId == null) return;
+    let alive = true;
+    void getCaseWorkflow(caseId)
+      .then(result => { if (alive) setCaseDayStart(result.workflow?.day_start ?? null); })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, [caseId]);
+  const caseStartTs = caseStatus.status !== "IDLE" ? caseStatus.start_time : null;
+  const stayEndTs = caseStatus.status === "IDLE"
+    ? null
+    : caseStatus.status === "ACTIVE" ? windowClockTs : caseStatus.discharge_time ?? windowClockTs;
+  const stayDays = useMemo(
+    () => (caseStartTs != null && stayEndTs != null ? stayDayStarts(caseStartTs, stayEndTs, caseDayStart) : []),
+    [caseDayStart, stayEndTs, caseStartTs],
+  );
+  const isLongStay = caseStartTs != null && stayEndTs != null && stayEndTs - caseStartTs > LONG_STAY_MS;
+  const chartWindow = useMemo(
+    () => (caseStartTs != null && stayEndTs != null
+      ? resolveChartWindow({
+        choice: chartWindowChoice,
+        caseStartTs,
+        endTs: stayEndTs,
+        nowTs: windowClockTs,
+        active: caseStatus.status === "ACTIVE",
+        stepMin: axisStepMin,
+        dayStart: caseDayStart,
+      })
+      : null),
+    [axisStepMin, caseDayStart, stayEndTs, caseStartTs, caseStatus.status, chartWindowChoice, windowClockTs],
+  );
   const [preferredVisibleRowIds, setPreferredVisibleRowIds] = useState<
     string[] | null
   >(() => readVisibleRowsForUser(scopeUsername));
@@ -976,7 +1047,20 @@ export default function ClinicalChartView({
       return next;
     });
   };
-  const { axis, loading: axisLoading, serverOffsetMs, lastSyncedAt } = useClinicalTimelineAxis(caseId, caseStatus.status, axisStepMin, futureColumnCount);
+  const ioWindowFrom = chartWindow?.from != null ? chartWindow.from - axisStepMin * 60_000 : null;
+  const ioWindowTo = chartWindow?.to != null ? chartWindow.to + axisStepMin * 60_000 : null;
+  const { axis, loading: axisLoading, serverOffsetMs, lastSyncedAt } = useClinicalTimelineAxis(
+    caseId,
+    caseStatus.status,
+    axisStepMin,
+    futureColumnCount,
+    { from: chartWindow?.from, to: chartWindow?.to, anchor: chartWindow?.anchor, live: chartWindow?.live ?? true },
+  );
+  // Live 1-s stream from leaf-live (Leaf, active case only); no ring buffer needed here.
+  const liveEnabled = getSurfaceInfo().code === "leaf" && caseStatus.status === "ACTIVE";
+  const live = useLiveCase(liveEnabled ? caseId : null, { bufferMs: 0 });
+  const [caseDevicesOpen, setCaseDevicesOpen] = useState(false);
+  const [bindingsVersion, setBindingsVersion] = useState(0);
   const {
     values: liveValues,
     provenance: storedCellProvenance,
@@ -985,7 +1069,12 @@ export default function ClinicalChartView({
     masked: serverMaskedValues,
     masks: serverMasks,
     reload: reloadVitals,
-  } = useVitalMinutes(caseId, caseStatus.status, axis);
+  } = useVitalMinutes(caseId, caseStatus.status, axis, liveEnabled ? live.currentMinute : null, {
+    caseStartTs,
+    // one value per column from the server for coarse steps; short cases at 60/120 min keep every minute
+    bucketed: axisStepMin > 120 || (axisStepMin >= 60 && isLongStay),
+    poll: chartWindow?.live ?? true,
+  });
   // Invalid device data. Changes show at once (overlay) and settle when the server answers.
   const [maskOverlay, setMaskOverlay] = useState<{ added: Array<Pick<TimelineMask, "param_key" | "from_ts" | "to_ts"> & { key: string }>; removed: number[] }>({ added: [], removed: [] });
   // Undo covers every chart change (vitals, invalid marks, events, fluids/medications): the server
@@ -1232,10 +1321,17 @@ export default function ClinicalChartView({
   const [orPrompt, setOrPrompt] = useState<{ kind: "patient_out" | "start_recovery"; ts: number } | null>(null);
   const [orPromptBusy, setOrPromptBusy] = useState(false);
   const [orPromptError, setOrPromptError] = useState("");
-  /** In an OR room (also while recovering there) the case moves out instead of being discharged. */
-  const movingOut = orStage === "or" || orStage === "or_recovery";
+  // Transfer to Recovery: one combined bill for OR + Recovery, or two separate bills.
+  const [transferBilling, setTransferBilling] = useState<TransferBillingMode>("combined");
   const [destination, setDestination] = useState("");
   const [destinationNote, setDestinationNote] = useState("");
+  const [destinationChoices, setDestinationChoices] = useState<DischargeDestination[]>(() => dischargeDestinations(null));
+  const chosenDestination = destinationChoices.find(item => item.key === destination);
+  /** A Leaf picked as destination: the transfer (from an OR room, the Transfer to Recovery). */
+  const transferring = !!chosenDestination?.leaf;
+  const [reopenAsk, setReopenAsk] = useState(false);
+  const [reopenBusy, setReopenBusy] = useState(false);
+  const [reopenError, setReopenError] = useState("");
   useEffect(() => {
     if (caseId == null) return;
     let alive = true;
@@ -1552,7 +1648,6 @@ export default function ClinicalChartView({
         availableAxisSteps,
       );
       setAxisStepMin(next);
-      setScaleDraft(String(next));
       setFutureColumnCount(normalizeFutureColumns(detail?.futureColumns ?? readLocalFutureColumns(scopeUsername) ?? accountFutureColumns));
       setDripGroupColors(normalizeDripGroupColors(detail?.dripGroupColors ?? readLocalDripGroupColors(scopeUsername) ?? accountDripGroupColors));
       setDripSmartContrast(detail?.smartContrast ?? readLocalSmartContrast(scopeUsername) ?? accountSmartContrast ?? true);
@@ -1764,9 +1859,11 @@ export default function ClinicalChartView({
 
     async function loadIoData() {
       try {
-        const fromTs = caseInfo.start_time;
-        const toTs =
-          caseInfo.status === "DISCHARGED" && caseInfo.discharge_time
+        // Long stays: only the visible window (+ one column of margin); running drips overlap it.
+        const fromTs = ioWindowFrom != null ? Math.max(caseInfo.start_time, ioWindowFrom) : caseInfo.start_time;
+        const toTs = ioWindowTo != null
+          ? ioWindowTo
+          : caseInfo.status === "DISCHARGED" && caseInfo.discharge_time
             ? caseInfo.discharge_time
             : Date.now() + 24 * 60 * 60 * 1000;
         const [runs, events] = await Promise.all([
@@ -1799,7 +1896,7 @@ export default function ClinicalChartView({
       clearInterval(timer);
       window.removeEventListener("flora:case-io-changed", onIoChanged);
     };
-  }, [caseId, caseStatus]);
+  }, [caseId, caseStatus, ioWindowFrom, ioWindowTo]);
 
   useEffect(() => {
     if (caseId == null || caseStatus.status === "IDLE") {
@@ -3959,6 +4056,8 @@ export default function ClinicalChartView({
         changes,
         "Manual correction in clinical chart",
       );
+      // A removed or reverted value is still in the loaded timeline: refetch so it goes at once.
+      if (changes.some(change => change.action === "delete")) void reloadVitals();
     } catch (err) {
       console.error("[ClinicalChartView] timeline save failed", err);
       for (const change of changes) {
@@ -5119,6 +5218,8 @@ export default function ClinicalChartView({
     if (caseStatus.status !== "ACTIVE") return;
     setDestination("");
     setDestinationNote("");
+    void getCanopyDestinations().then(locations => setDestinationChoices(dischargeDestinations(locations)))
+      .catch(() => setDestinationChoices(dischargeDestinations(null)));
     const current = Date.now();
     setDischargeDateDraft(formatDDMMYYYY(current));
     setDischargeTimeDraft(formatHHMM(current));
@@ -5145,16 +5246,17 @@ export default function ClinicalChartView({
       setDischargeError("Discharge time cannot be in the future.");
       return;
     }
-    if (orStage === "recovery" && !destination) {
+    if (orStage && !chosenDestination) {
       setDischargeError("Choose where the patient goes.");
       return;
     }
     setDischargeSaving(true);
     setDischargeError("");
     try {
-      const result = (movingOut
-        ? await moveOutCase(caseStatus.case_id, dischargeTime).then(value => ({ discharge_time: value.moved_out_at }))
-        : await dischargeCase(caseStatus.case_id, dischargeTime, destination ? { destination, note: destinationNote } : undefined)) as {
+      const result = (await dischargeCase(caseStatus.case_id, dischargeTime, chosenDestination ? {
+        destination: chosenDestination.label, note: destinationNote.trim(),
+        ...(chosenDestination.leaf ? { transferToLeafId: chosenDestination.leaf, billingMode: transferBilling } : {}),
+      } : undefined)) as {
         discharge_time?: number;
       };
       const confirmedTime = Number(result.discharge_time);
@@ -5170,6 +5272,25 @@ export default function ClinicalChartView({
     }
   };
 
+  const reopenCase = async () => {
+    if (caseStatus.status !== "DISCHARGED") return;
+    setReopenBusy(true);
+    setReopenError("");
+    try {
+      const result = await cancelDischarge(caseStatus.case_id);
+      window.dispatchEvent(new CustomEvent("flora:case-io-changed", { detail: { caseId: caseStatus.case_id } }));
+      setReopenAsk(false);
+      if (result.skipped_devices.length) {
+        window.alert(`Case reopened. Not bound again (in use by another case): ${result.skipped_devices.map(item => item.device_id).join(", ")}`);
+      }
+      onCaseReopened?.(caseStatus.case_id);
+    } catch (error) {
+      setReopenError(error instanceof Error ? error.message : "Could not cancel the discharge.");
+    } finally {
+      setReopenBusy(false);
+    }
+  };
+
   const runOrPrompt = async (choice: "move_out" | "recover_here") => {
     if (!orPrompt || caseStatus.status !== "ACTIVE") return;
     setOrPromptBusy(true);
@@ -5180,7 +5301,7 @@ export default function ClinicalChartView({
         setOrStage("or_recovery");
       } else {
         // Patient Out was just recorded by the nurse; Start Recovery still needs Patient Out on the timeline.
-        const result = await moveOutCase(caseStatus.case_id, orPrompt.ts, orPrompt.kind === "start_recovery");
+        const result = await moveOutCase(caseStatus.case_id, orPrompt.ts, orPrompt.kind === "start_recovery", transferBilling);
         window.dispatchEvent(new CustomEvent("flora:case-io-changed", { detail: { caseId: caseStatus.case_id } }));
         onCaseDischargeTimeUpdated?.(caseStatus.case_id, result.moved_out_at);
       }
@@ -5577,29 +5698,47 @@ export default function ClinicalChartView({
             </div>
           ))}
         </div>
+        {caseStatus.status === "ACTIVE" ? <div className="mt-2"><ContinuingMedsBanner caseStatus={caseStatus} onOpenJourney={() => onNavigate?.("journey")} /></div> : null}
       </div>
 
         <div className="case-kronos__toolbar rounded-xl border px-3 py-2">
           <div className="case-kronos__controls">
           <label className="case-kronos__eyebrow" htmlFor="case-timeline-scale">MINUTE SCALE</label>
-          <div className="case-kronos__stepper">
-            <button type="button" aria-label="Decrease minute scale" disabled={axisStepMin <= minimumScale} onClick={() => changeScale(axisStepMin - 1)}>−</button>
-            <input
-              id="case-timeline-scale"
-              type="number"
-              min={minimumScale}
-              max={maximumScale}
-              step="1"
-              value={scaleDraft}
-              onChange={event => setScaleDraft(event.target.value)}
-              onBlur={commitScaleDraft}
-              onKeyDown={event => {
-                if (event.key === "Enter") event.currentTarget.blur();
-                if (event.key === "Escape") { setScaleDraft(String(axisStepMin)); event.currentTarget.blur(); }
-              }}
-            />
-            <button type="button" aria-label="Increase minute scale" disabled={axisStepMin >= maximumScale} onClick={() => changeScale(axisStepMin + 1)}>+</button>
-          </div>
+          <select
+            id="case-timeline-scale"
+            className="case-kronos__scale-select"
+            value={axisStepMin}
+            onChange={event => changeScale(Number(event.target.value))}
+          >
+            {scaleOptions.map(step => (
+              <option key={step} value={step}>
+                {step < 60 ? `${step} min` : step % 1440 === 0 ? `${step / 1440} day` : `${step / 60} h`}
+              </option>
+            ))}
+          </select>
+          {stayDays.length > 1 || isLongStay ? (
+            <>
+              <label className="case-kronos__eyebrow" htmlFor="case-timeline-day">DAY</label>
+              <select
+                id="case-timeline-day"
+                className="case-kronos__scale-select"
+                value={String(chartWindow?.choice ?? "all")}
+                onChange={event => {
+                  const raw = event.target.value;
+                  setChartWindowChoice(raw === "all" || raw === "last24" ? raw : Number(raw));
+                  setFollowLatest(raw === "all" || raw === "last24" || Number(raw) === stayDays.length);
+                }}
+              >
+                <option value="all">All ({stayDays.length} d)</option>
+                <option value="last24">Last 24 h</option>
+                {stayDays.map((dayTs, index) => (
+                  <option key={dayTs} value={index + 1}>
+                    {stayDayLabel(index + 1, dayTs)}{index === stayDays.length - 1 && caseStatus.status === "ACTIVE" ? " (today)" : ""}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : null}
           <span className="case-kronos__sync" role="status" aria-live="polite">
             {rawTimelineLoading ? "Updating…" : lastSyncedAt ? "Synced" : "Connecting…"}
           </span>
@@ -5614,7 +5753,7 @@ export default function ClinicalChartView({
           </button>
           {maskError ? <span className="text-xs text-red-600 dark:text-red-400" role="alert">{maskError}</span> : null}
           {!followLatest && caseStatus.status === "ACTIVE" ? (
-            <button type="button" className="case-kronos__latest" onClick={() => setFollowLatest(true)}>Back to now</button>
+            <button type="button" className="case-kronos__latest" onClick={() => { setFollowLatest(true); if (chartWindow && !chartWindow.live) setChartWindowChoice("auto"); }}>Back to now</button>
           ) : null}
           </div>
 
@@ -5647,13 +5786,35 @@ export default function ClinicalChartView({
                 <path d="M3.5 17V9.5m0 4h17V17h-17Zm3-3.5V8h5a3 3 0 0 1 3 3v2.5M3.5 17v2m17-2v2" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="m15.5 7 1.7 1.7 3.3-3.4" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              {movingOut ? "Move out" : "Discharge"}
+              Discharge
             </button>
           ) : caseStatus.status === "DISCHARGED" ? (
             <>
               <span className="inline-flex min-h-9 items-center rounded-lg border border-emerald-500/45 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">
                 Discharged
               </span>
+              {reopenAsk ? (
+                <span className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-amber-500/60 bg-amber-500/10 px-2 py-1 text-xs font-semibold text-amber-700 dark:text-amber-200">
+                  Reopen this case?
+                  <button type="button" disabled={reopenBusy} onClick={() => void reopenCase()} className="rounded-md border border-amber-600 bg-amber-600 px-2 py-0.5 font-bold text-white hover:bg-amber-700">
+                    {reopenBusy ? "Reopening…" : "Yes, cancel discharge"}
+                  </button>
+                  <button type="button" disabled={reopenBusy} onClick={() => { setReopenAsk(false); setReopenError(""); }} className="rounded-md border border-[var(--app-border)] px-2 py-0.5">No</button>
+                  {reopenError ? <span className="text-red-600 dark:text-red-300">{reopenError}</span> : null}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setReopenAsk(true)}
+                  className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-[var(--app-border)] bg-[var(--app-control-bg)] px-3 py-1.5 text-xs font-semibold text-[var(--app-text)] hover:border-amber-500 hover:bg-amber-500/10"
+                  aria-label="Cancel the discharge or transfer and make this case active again"
+                >
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                    <path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Cancel discharge
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onStartNextCase}
@@ -5693,6 +5854,26 @@ export default function ClinicalChartView({
 
           </div>
         </div>
+
+        {liveEnabled && caseId != null ? (
+          <LiveStrip
+            caseId={caseId}
+            connection={live.connection}
+            health={live.health}
+            numerics={live.numerics}
+            deviceStatus={live.deviceStatus}
+            bindingsVersion={bindingsVersion}
+            onOpenDevices={() => setCaseDevicesOpen(true)}
+          />
+        ) : null}
+        {liveEnabled && caseId != null && caseDevicesOpen ? (
+          <CaseDevicesDialog
+            caseId={caseId}
+            caseLabel={[caseStatus.bed_label, caseStatus.hn ? `HN ${caseStatus.hn}` : null].filter(Boolean).join(" · ")}
+            onClose={() => setCaseDevicesOpen(false)}
+            onSaved={() => setBindingsVersion(value => value + 1)}
+          />
+        ) : null}
 
         {quickIoError ? (
           <div className="case-workspace__error w-full text-xs text-red-600 dark:text-red-400">
@@ -6049,20 +6230,21 @@ export default function ClinicalChartView({
                 <header className="case-modal__header">
                   <div>
                     <div className="case-modal__eyebrow">OR room · {formatHHMM(orPrompt.ts)}</div>
-                    <h2 id="or-prompt-title" className="case-modal__title">{orPrompt.kind === "patient_out" ? "Move the patient out of this room?" : "Where does the patient recover?"}</h2>
+                    <h2 id="or-prompt-title" className="case-modal__title">{orPrompt.kind === "patient_out" ? "Transfer the patient to Recovery?" : "Where does the patient recover?"}</h2>
                     <p className="case-modal__context">{orPrompt.kind === "patient_out"
-                      ? "Patient Out is recorded. Moving out closes the case on this workstation (not a discharge): it continues on the recovery bed and this room is free."
-                      : "Start Recovery is recorded. Move to the recovery room (the case continues on the recovery bed), or recover in this OR room for now."}</p>
+                      ? "Patient Out is recorded. Transfer closes this OR case (Anesthesia record, running infusions stop at this time) and the recovery bed starts a new Post-Anesthesia case for the same AN. This room is free."
+                      : "Start Recovery is recorded. Transfer to the recovery room (closes this Anesthesia case; Recovery starts a new Post-Anesthesia case), or recover in this OR room for now."}</p>
                   </div>
                   <button type="button" className="case-modal__close" onClick={() => setOrPrompt(null)} disabled={orPromptBusy} aria-label="Close">×</button>
                 </header>
                 <div className="case-modal__body space-y-3">
                   {orPromptError ? <p className="case-modal__error">{orPromptError}</p> : null}
+                  <TransferBillingChoice value={transferBilling} onChange={setTransferBilling} disabled={orPromptBusy} />
                   <footer className="case-modal__actions flex-wrap">
                     <button type="button" className="case-modal__button" disabled={orPromptBusy} onClick={() => setOrPrompt(null)}>Just record the event</button>
                     {orPrompt.kind === "start_recovery" ? <button type="button" className="case-modal__button" disabled={orPromptBusy} onClick={() => void runOrPrompt("recover_here")}>Recover in this room</button> : null}
                     <button type="button" className="case-modal__button border-red-600 bg-red-600 text-white hover:bg-red-700" disabled={orPromptBusy} onClick={() => void runOrPrompt("move_out")}>
-                      {orPromptBusy ? "Working…" : orPrompt.kind === "patient_out" ? "Move out" : "Move to recovery room"}
+                      {orPromptBusy ? "Working…" : "Transfer to Recovery"}
                     </button>
                   </footer>
                 </div>
@@ -6093,9 +6275,9 @@ export default function ClinicalChartView({
                     </span>
                     <div>
                       <div className="case-modal__eyebrow">Case lifecycle</div>
-                      <h2 id="case-discharge-title" className="case-modal__title">{movingOut ? "Move out of the OR room" : "Discharge patient"}</h2>
-                      <p className="case-modal__context">{movingOut
-                        ? "The patient leaves this room for recovery. The case is not discharged: it continues on the recovery bed, and this room is free for the next patient."
+                      <h2 id="case-discharge-title" className="case-modal__title">Discharge patient</h2>
+                      <p className="case-modal__context">{transferring
+                        ? `Closes this case at the transfer time. ${chosenDestination?.label ?? "The workstation"} sees the patient under Receive transfer and starts a new case for the same AN, with this case in Patient Journey.`
                         : "End live clinical recording for this case."}</p>
                     </div>
                   </div>
@@ -6147,7 +6329,7 @@ export default function ClinicalChartView({
                         <div className="text-sm font-bold text-[var(--app-text)]">Active infusions</div>
                         <div className="mt-0.5 text-xs text-[var(--app-muted)]">
                           {activeDripsAtDischarge.length > 0
-                            ? movingOut ? "These infusions keep running and continue on the recovery bed." : "These infusions will be stopped at the discharge time."
+                            ? transferring ? "Stopped on this chart at the transfer time; Recovery sees them as continuing in Patient Journey." : "These infusions will be stopped at the discharge time."
                             : "No active infusion needs to be stopped."}
                         </div>
                       </div>
@@ -6164,26 +6346,39 @@ export default function ClinicalChartView({
                     ) : null}
                   </div>
 
-                  {orStage === "recovery" ? <div className="rounded-lg border border-[var(--app-border)] bg-[var(--app-control-bg)] p-3">
-                    <div className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--app-muted)]">Out of the OR ward to</div>
-                    <div className="grid grid-cols-[10rem_minmax(0,1fr)] gap-3 max-[520px]:grid-cols-1">
-                      <label className="case-modal__field">Destination
+                  <div className="rounded-lg border border-[var(--app-border)] bg-[var(--app-control-bg)] p-3">
+                    <div className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--app-muted)]">Destination{orStage ? "" : " (optional)"}</div>
+                    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3 max-[520px]:grid-cols-1">
+                      <label className="case-modal__field">Goes to
                         <select value={destination} onChange={event => { setDestination(event.target.value); setDischargeError(""); }}>
-                          <option value="">Choose…</option>{["ICU", "IPD ward", "Home", "Other hospital", "Other"].map(item => <option key={item}>{item}</option>)}
+                          <option value="">Choose…</option>
+                          {(["Workstation", "Ward", "Other"] as const).map(group => {
+                            const items = destinationChoices.filter(item => item.group === group);
+                            return items.length ? (
+                              <optgroup key={group} label={group === "Workstation" ? "Transfer to a Leaf in this ward" : group === "Ward" ? "Goes to another ward" : "Discharge (case finished)"}>
+                                {items.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+                              </optgroup>
+                            ) : null;
+                          })}
                         </select>
                       </label>
-                      <label className="case-modal__field">Ward / bed
+                      <label className="case-modal__field">Bed / note
                         <input value={destinationNote} onChange={event => setDestinationNote(event.target.value)} maxLength={200} />
                       </label>
                     </div>
-                  </div> : null}
+                    <p className="mt-2 text-xs text-[var(--app-muted)]">{transferring
+                      ? "Transfer: this case closes and the chosen Leaf starts a new case for the same AN (Receive transfer)."
+                      : "Recorded on the case. It can be cancelled later until the case is archived."}</p>
+                  </div>
+
+                  {transferring ? <TransferBillingChoice value={transferBilling} onChange={setTransferBilling} disabled={dischargeSaving} /> : null}
 
                   <RequiredFormsNotice caseId={caseStatus.case_id} />
                   {dischargeError ? <p className="case-modal__error">{dischargeError}</p> : null}
                   <footer className="case-modal__actions">
                     <button type="button" className="case-modal__button" disabled={dischargeSaving} onClick={() => setDischargeModalOpen(false)}>Cancel</button>
                     <button type="submit" disabled={dischargeSaving} className="case-modal__button border-red-600 bg-red-600 text-white hover:bg-red-700">
-                      {dischargeSaving ? (movingOut ? "Moving out…" : "Discharging…") : movingOut ? "Confirm move out" : "Confirm discharge"}
+                      {dischargeSaving ? (transferring ? "Transferring…" : "Discharging…") : transferring ? "Confirm transfer" : "Confirm discharge"}
                     </button>
                   </footer>
                 </div>
@@ -8159,5 +8354,29 @@ export default function ClinicalChartView({
         : null}
 
     </div>
+  );
+}
+
+/** Billing of an OR → Recovery transfer: the two cases (Anesthesia + Post-Anesthesia) as one bill or two. */
+function TransferBillingChoice({ value, onChange, disabled }: { value: TransferBillingMode; onChange: (value: TransferBillingMode) => void; disabled?: boolean }) {
+  const options: { value: TransferBillingMode; label: string; hint: string }[] = [
+    { value: "combined", label: "Combined bill", hint: "OR + Recovery on one bill" },
+    { value: "separate", label: "Separate bills", hint: "OR and Recovery billed apart" },
+  ];
+  return (
+    <fieldset className="rounded-lg border border-[var(--app-border)] bg-[var(--app-control-bg)] p-3" disabled={disabled}>
+      <legend className="px-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--app-muted)]">Billing</legend>
+      <div className="grid grid-cols-2 gap-2 max-[420px]:grid-cols-1">
+        {options.map(option => (
+          <label key={option.value} className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 ${value === option.value ? "border-[var(--app-accent)] bg-[var(--app-panel-bg)]" : "border-[var(--app-border)]"}`}>
+            <input type="radio" name="transfer-billing" className="mt-0.5" checked={value === option.value} onChange={() => onChange(option.value)} />
+            <span>
+              <span className="block text-sm font-bold text-[var(--app-text)]">{option.label}</span>
+              <span className="block text-xs text-[var(--app-muted)]">{option.hint}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }

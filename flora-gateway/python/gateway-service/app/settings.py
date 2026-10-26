@@ -5,6 +5,7 @@ KAFKA_BROKERS = os.getenv("FLORA_KAFKA_BROKERS", "kafka:9092")
 GATEWAY_ID = os.getenv("FLORA_GATEWAY_ID", "gateway-dev")
 CONFIG_PATH = os.getenv("FLORA_GATEWAY_CONFIG", "/config/gateway.toml")
 SEED_PATH = os.getenv("FLORA_GATEWAY_SEED", "/config/instances.json")
+KONG_CONFIG_PATH = os.getenv("FLORA_GATEWAY_KONG_CONFIG", "/kong/kong.yaml")
 ADMIN_KEY = os.getenv("GATEWAY_ADMIN_KEY", "").strip()
 # First admin account, created only when gateway_user is empty. Change it on the Account tab.
 ADMIN_USERNAME = os.getenv("GATEWAY_ADMIN_USERNAME", "admin")
@@ -24,6 +25,12 @@ DATA_SERVER_URL = os.getenv("GATEWAY_DATA_SERVER_URL", "http://server:8080")
 DOCKER_NETWORK = os.getenv("GATEWAY_DOCKER_NETWORK", "flora-gateway_default")
 COMPOSE_PROJECT = os.getenv("GATEWAY_COMPOSE_PROJECT", "flora-gateway")
 PARSER_IMAGE = os.getenv("GATEWAY_PARSER_IMAGE", "flora-gateway-parser:dev")
+# Stored observations/measurements older than this are deleted (0 keeps everything). Leaf and Canopy hold the
+# clinical record; the gateway only needs a buffer for replay, the live view and troubleshooting.
+DATA_RETENTION_DAYS = int(os.getenv("GATEWAY_DATA_RETENTION_DAYS", "30"))
+# Docker log rotation for the parser containers this service starts (compose services set their own).
+PARSER_LOG_MAX_SIZE = os.getenv("GATEWAY_PARSER_LOG_MAX_SIZE", "10m")
+PARSER_LOG_MAX_FILE = os.getenv("GATEWAY_PARSER_LOG_MAX_FILE", "3")
 
 # Controller name → admin URL inside the gateway network.
 CONTROLLERS = {
@@ -33,6 +40,7 @@ CONTROLLERS = {
     "socket-controller": os.getenv("SOCKET_ADMIN_URL", "http://socket-controller:5004"),
     "collector": os.getenv("COLLECTOR_ADMIN_URL", "http://collector:5005"),
     "publisher": os.getenv("PUBLISHER_ADMIN_URL", "http://publisher:5006"),
+    "stream-hub": os.getenv("STREAM_HUB_ADMIN_URL", "http://stream-hub:5007"),
 }
 # Ingress controllers that can be stopped when a station does not use them, keyed to their pod prefix.
 INGRESS = {"serial-controller": "serial", "feeder-controller": "feeder", "webhook-controller": "webhook",

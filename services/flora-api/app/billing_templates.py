@@ -2,8 +2,12 @@
 
 Format `flora-billing-template/1`:
   {format, id, name, description,
-   groups: [{key, name, items: [{code, qty?, preselect?}]}],   # order = display order on the Leaf
+   groups: [{key, name, items: [{code, qty?, preselect?, standing?}]}],   # order = display order on the Leaf
    allow_other_items: bool}                                      # Leaf may add items from the whole master
+
+`standing: true` (ICU daily billing, app/billing_periods.py): the item is added once per billing day
+with `qty` (default 1). When a template marks no item standing, every active master item whose
+charge_basis is per_day / per_device_day is standing.
 
 Items are billing_item codes (master data owned by Canopy). A workflow names one template in
 `definition.billing.template_id`; any number of workflows may share it. Leafs receive the
@@ -40,6 +44,8 @@ def normalize(definition: dict[str, Any]) -> dict[str, Any]:
                     entry["qty"] = qty  # reported by validate
             if item.get("preselect"):
                 entry["preselect"] = True
+            if item.get("standing"):
+                entry["standing"] = True
             items.append(entry)
         groups.append({"key": str(group.get("key") or f"g{index + 1}").strip().lower(),
                        "name": str(group.get("name") or "").strip(), "items": items})

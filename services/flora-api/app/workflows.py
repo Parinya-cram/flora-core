@@ -17,6 +17,7 @@ from typing import Any
 from psycopg import Connection
 
 from .case_forms import MAX_INSTANCES
+from . import form_schedule
 
 LOG = logging.getLogger("flora.workflows")
 FORMAT = "flora-workflow/1"
@@ -78,8 +79,18 @@ def normalize(definition: dict[str, Any]) -> dict[str, Any]:
             entry["repeatable"] = item["repeatable"]
             if item.get("max_instances") is not None:
                 entry["max_instances"] = item["max_instances"]
+        # Scheduled form (ICU rounds, docs/ICU-ROUNDS.md): filled once per slot; None = one record per case.
+        schedule = form_schedule.normalize_schedule(item.get("schedule"))
+        if schedule is not None:
+            entry["schedule"] = schedule
         forms.append(entry)
+    days: dict[str, Any] = {}
+    if definition.get("day_start") is not None:
+        days["day_start"] = definition.get("day_start")
+    if definition.get("shifts") is not None:
+        days["shifts"] = definition.get("shifts")
     return {
+        **days,
         "format": definition.get("format") or FORMAT,
         "id": definition.get("id"),
         "name": str(definition.get("name") or ""),
@@ -92,8 +103,11 @@ def normalize(definition: dict[str, Any]) -> dict[str, Any]:
         "forms": forms,
         "packet": list(definition.get("packet") or []),
         # Itemize (billing) template shown on the Leaf Billing screen; shared by any number of workflows.
+        # mode 'daily': ICU billing per billing day (app/billing_periods.py); absent = one order per case.
         "billing": {"template_id": (str((definition.get("billing") or {}).get("template_id") or "").strip() or None)
-                    if isinstance(definition.get("billing"), dict) else None},
+                    if isinstance(definition.get("billing"), dict) else None,
+                    **({"mode": definition["billing"]["mode"]}
+                       if isinstance(definition.get("billing"), dict) and definition["billing"].get("mode") not in (None, "") else {})},
         # Clinical scores (app/scoring.py) the Leaf computes for cases of this workflow.
         "scores": [str(item).strip() for item in definition.get("scores") or [] if str(item or "").strip()]
                   if isinstance(definition.get("scores"), list) else [],
@@ -157,6 +171,7 @@ def validate(database: Connection, definition: Any) -> list[dict[str, str]]:
                 issues.append({"path": f"$.anesthesia_record.{key}[{index}]", "message": f"unknown section '{section}'"})
     if record["enabled"] and not record["sections"]:
         issues.append({"path": "$.anesthesia_record.sections", "message": "an enabled anesthesia record needs sections"})
+    issues.extend(form_schedule.day_settings_issues(workflow.get("day_start"), workflow.get("shifts")))
     known = published_versions(database)
     listed: set[str] = set()
     for index, item in enumerate(workflow["forms"]):
@@ -187,6 +202,7 @@ def validate(database: Connection, definition: Any) -> list[dict[str, str]]:
                 issues.append({"path": f"{path}.max_instances", "message": f"max_instances is a whole number from 2 to {MAX_INSTANCES}"})
         if len(item.get("hint") or "") > MAX_HINT:
             issues.append({"path": f"{path}.hint", "message": f"the note for Leaf is at most {MAX_HINT} characters"})
+        issues.extend(form_schedule.schedule_issues(item.get("schedule"), f"{path}.schedule"))
         if form_id not in known:
             issues.append({"path": f"{path}.form_id", "message": f"form '{form_id}' does not exist in Form Studio"})
         elif not isinstance(version, int) or isinstance(version, bool) or version not in known[form_id]["versions"]:
@@ -208,6 +224,8 @@ def validate(database: Connection, definition: Any) -> list[dict[str, str]]:
             issues.append({"path": f"{path}.kind", "message": "kind must be anesthesia_report or form"})
     if reports > 1:
         issues.append({"path": "$.packet", "message": "at most one anesthesia_report"})
+    if workflow["billing"].get("mode", "case") not in ("case", "daily"):
+        issues.append({"path": "$.billing.mode", "message": "mode must be case or daily"})
     template_id = workflow["billing"]["template_id"]
     if template_id:
         from . import billing_templates
@@ -282,8 +300,9 @@ def _leaf_delivery(database: Connection, unit_key: str | None) -> dict[str, Any]
 
 def record_id_for(global_case_id: str, form_id: str) -> str:
     """`<global_case_id>-<form_id>`; Form Studio record ids allow only letters, digits and '-'
-    (8-64 chars), so '_' becomes '-' and an over-long id falls back to a UUIDv5 of the same."""
-    candidate = f"{global_case_id}-{form_id.replace('_', '-')}"
+    (8-64 chars), so '_' (and the ':' of `<form_id>:<entry_id>` for scheduled-form entries) becomes '-'
+    and an over-long id falls back to a UUIDv5 of the same."""
+    candidate = f"{global_case_id}-{re.sub(r'[^A-Za-z0-9-]', '-', form_id)}"
     if len(candidate) <= 64:
         return candidate
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"flora:workflow-form:{global_case_id}:{form_id}"))
@@ -292,7 +311,7 @@ def record_id_for(global_case_id: str, form_id: str) -> str:
 def ingest_workflow_forms(connection: Connection, items: list[dict[str, Any]], leaf_id: str) -> int:
     """Upsert the bedside workflow forms of stored case snapshots into Form Studio records.
 
-    items: [{global_case_id, hn, workflow_forms}]. Best effort: a form that Form Studio rejects
+    items: [{global_case_id, hn, workflow_forms, workflow_entries?}]. Best effort: a form that Form Studio rejects
     (unknown version, invalid data) is logged and skipped; nothing here fails the ingest."""
     if not items or connection.execute("SELECT to_regclass('formdev_record') AS t").fetchone()["t"] is None:
         return 0
@@ -304,11 +323,19 @@ def ingest_workflow_forms(connection: Connection, items: list[dict[str, Any]], l
     user = f"leaf:{leaf_id}"[:120]
     written = 0
     for item in items:
-        for form_id, form in (item.get("workflow_forms") or {}).items():
+        # Single-record forms, then scheduled-form entries (one Form Studio record per entry, docs/ICU-ROUNDS.md).
+        pending = [(str(form_id), str(form_id), form) for form_id, form in (item.get("workflow_forms") or {}).items()]
+        for entry in item.get("workflow_entries") or []:
+            if (isinstance(entry, dict) and entry.get("id") and entry.get("form_id")
+                    and not (entry.get("status") == "skipped" and not entry.get("data"))):  # nothing to keep
+                pending.append((f"{entry['form_id']}:{entry['id']}", str(entry["form_id"]),
+                                {"data": entry.get("data"), "status": entry.get("status"),
+                                 "updatedAt": entry.get("updatedAt"), "form_version": entry.get("formVersion")}))
+        for record_key, form_id, form in pending:
             try:
                 if not isinstance(form, dict) or not FORM_ID.match(str(form_id)):
                     continue
-                record_id = record_id_for(str(item["global_case_id"]), form_id)
+                record_id = record_id_for(str(item["global_case_id"]), record_key)
                 data = form.get("data") if isinstance(form.get("data"), dict) else {}
                 status = "submitted" if form.get("status") == "completed" else "draft"
                 updated_at = int(form.get("updatedAt") or now_ms())

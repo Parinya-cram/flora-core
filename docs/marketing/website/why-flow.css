@@ -1,0 +1,74 @@
+.why-flora {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(92px, 10vw, 150px) 0;
+  background: #f4faf9;
+}
+
+.why-flora::before {
+  content: "";
+  position: absolute;
+  width: 520px;
+  height: 520px;
+  right: -180px;
+  top: -210px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 175, 169, .13), transparent 68%);
+  pointer-events: none;
+}
+
+.why-story { position: relative; }
+
+.why-lead {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(320px, .72fr);
+  column-gap: clamp(60px, 9vw, 150px);
+  align-items: end;
+  margin-bottom: clamp(64px, 8vw, 105px);
+}
+
+.why-lead .kicker { grid-column: 1 / -1; margin-bottom: 22px; color: #008d89; }
+.why-lead h2 { margin: 0; max-width: 880px; font-size: clamp(2.65rem, 3.75vw, 4.25rem); line-height: 1.08; letter-spacing: -.04em; color: #183247; }
+.why-lead h2 em { font-style: normal; color: #00a39e; }
+.why-lead > p { margin: 0 0 8px; font-size: clamp(1rem, 1.25vw, 1.18rem); line-height: 1.8; color: #607582; }
+
+.continuity-flow { position: relative; border-top: 1px solid #bfd8d8; }
+.flow-rail { position: absolute; left: 39px; top: 0; bottom: 0; width: 1px; background: #bfd8d8; }
+.flow-rail i { position: absolute; inset: 0; width: 1px; background: linear-gradient(#00a39e 0 34%, #f0b23e 34% 66%, #078ccb 66%); transform-origin: top; animation: flora-flow 3.8s ease-in-out infinite; }
+.continuity-flow article { position: relative; display: grid; grid-template-columns: 80px minmax(0, 1fr) minmax(170px, auto); gap: clamp(25px, 4vw, 65px); align-items: center; min-height: 210px; padding: 34px 0; border-bottom: 1px solid #bfd8d8; }
+.flow-index { position: relative; z-index: 1; width: 80px; height: 80px; display: grid; place-items: center; border: 1px solid #9ecaca; border-radius: 50%; background: #f4faf9; color: #007f7d; font: 600 .82rem/1 'IBM Plex Mono', monospace; }
+.flow-place { display: block; margin-bottom: 8px; color: #008d89; font: 600 .72rem/1.3 'IBM Plex Mono', monospace; letter-spacing: .12em; text-transform: uppercase; }
+.flow-copy h3 { margin: 0 0 9px; color: #183247; font-size: clamp(1.55rem, 2.4vw, 2.35rem); line-height: 1.18; }
+.flow-copy p { max-width: 780px; margin: 0; color: #607582; font-size: 1rem; line-height: 1.75; }
+.continuity-flow article > strong { justify-self: end; display: inline-flex; align-items: center; gap: 10px; color: #315665; font-size: .86rem; white-space: nowrap; }
+.signal { width: 11px; height: 11px; border-radius: 50%; background: #00a39e; box-shadow: 0 0 0 7px rgba(0,163,158,.12); }
+.signal--local { background: #f0b23e; box-shadow: 0 0 0 7px rgba(240,178,62,.14); }
+.signal--sync { background: #078ccb; box-shadow: 0 0 0 7px rgba(7,140,203,.12); }
+
+.why-outcome { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 50px; background: #183247; color: #fff; }
+.why-outcome > span { display: flex; align-items: center; gap: 17px; min-height: 96px; padding: 22px 30px; border-right: 1px solid rgba(255,255,255,.14); }
+.why-outcome > span:last-child { border-right: 0; }
+.why-outcome b { color: #62ddd4; font: 600 .72rem/1 'IBM Plex Mono', monospace; }
+
+@keyframes flora-flow { 0%,100% { opacity: .45; transform: scaleY(.12); } 50% { opacity: 1; transform: scaleY(1); } }
+
+@media (prefers-reduced-motion: reduce) { .flow-rail i { animation: none; } }
+
+@media (max-width: 900px) {
+  .why-lead { grid-template-columns: 1fr; gap: 25px; }
+  .why-lead .kicker { grid-column: 1; }
+  .continuity-flow article { grid-template-columns: 64px 1fr; min-height: 0; }
+  .flow-rail { left: 31px; }
+  .flow-index { width: 64px; height: 64px; }
+  .continuity-flow article > strong { grid-column: 2; justify-self: start; }
+  .why-outcome { grid-template-columns: 1fr; }
+  .why-outcome > span { border-right: 0; border-bottom: 1px solid rgba(255,255,255,.14); }
+}
+
+@media (max-width: 560px) {
+  .why-flora { padding: 78px 0; }
+  .why-lead h2 { font-size: clamp(2.3rem, 10.5vw, 3.35rem); }
+  .continuity-flow article { grid-template-columns: 48px 1fr; gap: 18px; padding: 30px 0; }
+  .flow-rail { left: 23px; }
+  .flow-index { width: 48px; height: 48px; font-size: .68rem; }
+}

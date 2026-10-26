@@ -21,9 +21,17 @@ x-rust: &rust
     kafka: {condition: service_healthy}
   restart: unless-stopped
 
+# Docker log rotation for every service, so logs cannot fill the disk.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   # ---------------------------------------------------------------- broker + store
   kafka:
+    logging: *logging
     image: apache/kafka:3.9.1
     environment:
       KAFKA_NODE_ID: 1
@@ -41,6 +49,8 @@ services:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_NUM_PARTITIONS: 1
       KAFKA_LOG_RETENTION_HOURS: 72
+      # Keep topics on the kafka_data volume (the image default /tmp/kafka-logs is lost on recreate).
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
       KAFKA_HEAP_OPTS: -Xmx512m -Xms256m
     ports:
       - "127.0.0.1:${FLORA_GATEWAY_KAFKA_PORT:-7414}:9094"
@@ -55,6 +65,7 @@ services:
     restart: unless-stopped
 
   gateway-db:
+    logging: *logging
     image: postgres:17.6-alpine
     environment:
       POSTGRES_DB: flora_gateway
@@ -75,6 +86,7 @@ services:
 
   # ---------------------------------------------------------------- ingress layer (Rust)
   serial-controller:
+    logging: *logging
     <<: *rust
     command: ["serial-controller"]
     environment:
@@ -88,12 +100,14 @@ services:
     # Real hardware on Linux: map the device, e.g.  devices: ["/dev/ttyUSB0:/dev/ttyUSB0"]
 
   feeder-controller:
+    logging: *logging
     <<: *rust
     command: ["feeder-controller"]
     ports:
       - "127.0.0.1:7402:5002"
 
   webhook-controller:
+    logging: *logging
     <<: *rust
     command: ["webhook-controller"]
     ports:
@@ -101,6 +115,7 @@ services:
       - "${FLORA_GATEWAY_WEBHOOK_PORT:-7423}:9003"
 
   socket-controller:
+    logging: *logging
     <<: *rust
     command: ["socket-controller"]
     ports:
@@ -109,10 +124,13 @@ services:
       - "${FLORA_GATEWAY_HL7_ICU_PORT:-7422}:9002"
       # Dräger Vista 120 S monitors connect here as to their central station (CMS).
       - "${FLORA_GATEWAY_VISTA_PORT:-9500}:9500"
+      # Dräger IACS (M540 / C700) frames from tools/iacs-relay (udp_relay framing).
+      - "${FLORA_GATEWAY_IACS_RELAY_PORT:-2051}:2051"
 
   # ---------------------------------------------------------------- process layer (Python)
   # Built here, started per device instance by gateway-service.
   parser-image:
+    logging: *logging
     build:
       context: ./python/device-medical-service
     image: ${FLORA_IMAGE_PARSER:-flora-gateway-parser:dev}
@@ -121,6 +139,7 @@ services:
 
   # ---------------------------------------------------------------- egress layer (Rust)
   collector:
+    logging: *logging
     <<: *rust
     command: ["collector"]
     ports:
@@ -130,6 +149,7 @@ services:
       gateway-db: {condition: service_healthy}
 
   server:
+    logging: *logging
     <<: *rust
     command: ["server"]
     depends_on:
@@ -141,12 +161,27 @@ services:
       retries: 10
 
   publisher:
+    logging: *logging
     <<: *rust
     command: ["publisher"]
     ports:
       - "127.0.0.1:7406:5006"
 
+  # Live one-second chunks to Leaves over WebSocket (docs/live-stream/PROTOCOL.md);
+  # Leaves reach it through the edge at /stream/v1.
+  stream-hub:
+    <<: *rust
+    # Opt-in (--profile live) until a signed release ships the stream-hub binary.
+    profiles: ["live"]
+    command: ["stream-hub"]
+    ports:
+      - "127.0.0.1:${FLORA_GATEWAY_STREAM_PORT:-7407}:7407"
+    depends_on:
+      kafka: {condition: service_healthy}
+      gateway-db: {condition: service_healthy}
+
   kong:
+    logging: *logging
     image: kong:3.9
     environment:
       KONG_DATABASE: "off"
@@ -174,6 +209,7 @@ services:
 
   # ---------------------------------------------------------------- control plane
   gateway-service:
+    logging: *logging
     build:
       context: ./python/gateway-service
     image: ${FLORA_IMAGE_SERVICE:-flora-gateway-service:dev}
@@ -195,6 +231,7 @@ services:
       GATEWAY_DATA_API_URL: ${GATEWAY_DATA_API_URL:-http://host.docker.internal:7410/data-api}
       HABER_GATEWAY_TOKEN: ${HABER_GATEWAY_TOKEN:-haber-gateway-demo-token}
       GATEWAY_LICENSE_REQUIRED: ${GATEWAY_LICENSE_REQUIRED:-true}
+      GATEWAY_DATA_RETENTION_DAYS: ${GATEWAY_DATA_RETENTION_DAYS:-30}
       GATEWAY_SYNC_INTERVAL_SEC: ${GATEWAY_SYNC_INTERVAL_SEC:-20}
       GATEWAY_ADMIN_KEY: ${GATEWAY_ADMIN_KEY:-}
       GATEWAY_ADMIN_USERNAME: ${GATEWAY_ADMIN_USERNAME:-admin}
@@ -205,11 +242,15 @@ services:
     volumes:
       - ./certs:/etc/flora/certs:ro
       - ./config:/config
+      # Kong routes: the admin page offers the Leafs that have a data-api route.
+      - ./kong:/kong:ro
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
-      - "127.0.0.1:${FLORA_GATEWAY_ADMIN_PORT:-7400}:8000"
+      - "${FLORA_GATEWAY_ADMIN_BIND:-127.0.0.1}:${FLORA_GATEWAY_ADMIN_PORT:-7400}:8000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      # Canopy edge by the name on its certificate (FLORA_CANOPY_IP in .env).
+      - "canopy.flora.local:${FLORA_CANOPY_IP:-127.0.0.1}"
     depends_on:
       gateway-db: {condition: service_healthy}
       kafka: {condition: service_healthy}
@@ -218,12 +259,14 @@ services:
 
   # ---------------------------------------------------------------- demo devices
   simulator:
+    logging: *logging
     build:
       context: ./python/device-simulator
     image: flora-gateway-simulator:dev
     profiles: ["demo"]
     environment:
       SIM_INTERVAL_SEC: ${SIM_INTERVAL_SEC:-5}
+      SIM_M540_MONITORS: ${SIM_M540_MONITORS:-3}
     ports:
       - "127.0.0.1:${FLORA_GATEWAY_SIMULATOR_PORT:-7420}:8000"
     depends_on:
@@ -235,6 +278,7 @@ services:
 
   # Keeps this project on the release approved in Haber (see ../flora-updater).
   updater:
+    logging: *logging
     build:
       context: ../flora-updater
     image: ${FLORA_IMAGE_UPDATER:-flora-updater:dev}
@@ -258,11 +302,14 @@ services:
       - updater_state:/state
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      # Canopy edge by the name on its certificate (FLORA_CANOPY_IP in .env).
+      - "canopy.flora.local:${FLORA_CANOPY_IP:-127.0.0.1}"
     restart: unless-stopped
 
   # HTTPS entry point: 443 in production (GATEWAY_HTTPS_PORT on a dev machine). Certificate and key
   # from TLS_CERT_FILE / TLS_KEY_FILE (scripts/tls/make-cert.sh issues a self-signed one).
   edge:
+    logging: *logging
     image: nginx:1.27-alpine
     ports:
       - "${GATEWAY_HTTPS_PORT:-443}:443"

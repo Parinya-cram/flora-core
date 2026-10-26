@@ -1,10 +1,12 @@
 """Leaf: the OR-ward journey of a case started from an OR-schedule booking.
 
-- In the OR room (or_stage 'or'): **Move out** closes the case here without discharging the patient
-  (reason moved_out; drips keep running). The room is free for the next patient; Canopy holds the case
-  until a recovery bed's Leaf moves the patient in.
-- In recovery (or_stage 'recovery'): **Move in** takes the case over from the OR room's Leaf (same chart,
-  start time kept) and **Discharge** ends the OR-ward stay with a destination.
+- In the OR room (or_stage 'or'): **Transfer to Recovery** closes the case here (reason transferred): its
+  chart ends and prints as the Anesthesia Report; running infusions stop on this chart at the transfer time
+  (the recovery chart shows them under Patient Journey). The room is free for the next patient.
+- In recovery: **Receive transfer** starts a new case for the same booking (or_stage 'recovery', the
+  Post-Anesthesia chart) and **Discharge** ends the OR-ward stay with a destination.
+- billing_mode chosen at transfer: Canopy shows the OR and Recovery billing orders as one bill ('combined')
+  or as two ('separate').
 Both can also be requested from the Canopy ward desk; the request arrives with the admission exchange.
 """
 from __future__ import annotations
@@ -15,7 +17,7 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, HTTPException
 from psycopg import Connection
 
-from .. import case_handover
+from .. import case_bindings, case_handover
 from ..database import connection
 from .auth_leaf import now_ms, require_permission
 from .cases_read import floor_minute
@@ -41,34 +43,45 @@ def or_session(case_id: int, _: dict = Depends(require_permission("case.read")),
 
 
 def move_out_case(database: Connection, case_id: int, actor: dict[str, Any], at: int | None = None,
-                  record_event: bool = True) -> dict[str, Any]:
-    """Patient out of the OR room: Patient Out on the timeline, the case closes here (moved_out)."""
-    from .cases_lifecycle import editable_case
+                  record_event: bool = True, billing_mode: str | None = None, note: str | None = None) -> dict[str, Any]:
+    """Transfer to Recovery: Patient Out on the timeline and the OR case closes here (transferred)."""
+    from .cases_lifecycle import editable_case, stop_drips
     from .clinical_write import write_event
+    if billing_mode not in (None, "combined", "separate"):
+        raise HTTPException(400, "billing_mode is combined or separate")
     end = floor_minute(at) if at else now_ms()
     with database.transaction():
         case = editable_case(database, case_id)
         if case["status"] != "active":
             raise HTTPException(409, "the case is not active")
         if case.get("or_stage") not in ("or", "or_recovery"):
-            raise HTTPException(409, "only a case in an OR room moves out; discharge it instead")
+            raise HTTPException(409, "only a case in an OR room is transferred to recovery; discharge it instead")
         if end < case["start_time"]:
-            raise HTTPException(400, "move-out time is before the case started")
+            raise HTTPException(400, "transfer time is before the case started")
         if record_event:  # False when the nurse just recorded Patient Out on the chart
             write_event(database, case_id, {"title": "Patient Out", "event_ts": end, "event_type": "event",
-                                            "detail": "Moved out of the OR room (to recovery)"}, actor)
-        # Not a discharge: infusions keep running and continue on the recovery bed's Leaf.
+                                            "detail": "Transfer to recovery"}, actor)
+        # The Anesthesia Report ends here: infusions stop on this chart at the transfer time and are
+        # restarted on the recovery chart (its Patient Journey lists what was running).
+        stopped = stop_drips(database, case_id, end, actor)
         database.execute(
-            """UPDATE cases SET status='discharged', discharge_time=%s, discharge_reason='moved_out', updated_at=%s WHERE id=%s""",
-            (end, now_ms(), case_id))
-    return {"ok": True, "case_id": case_id, "moved_out_at": end}
+            """UPDATE cases SET status='discharged', discharge_time=%s, discharge_reason='transferred',
+                 discharge_destination='recovery', discharge_note=%s, updated_at=%s WHERE id=%s""",
+            (end, (note or "").strip()[:500] or None, now_ms(), case_id))
+        if billing_mode:
+            database.execute(
+                """UPDATE cases SET admission_metadata = coalesce(admission_metadata::text, '{}')::jsonb
+                     || jsonb_build_object('transfer_billing_mode', %s::text) WHERE id=%s""", (billing_mode, case_id))
+        case_bindings.release(database, case_id, "discharged")
+    return {"ok": True, "case_id": case_id, "moved_out_at": end, "stopped_drips": stopped}
 
 
 @router.post("/{case_id}/move-out")
 def move_out(case_id: int, payload: dict = Body(default={}), actor: dict = Depends(require_permission("case.discharge")),
              database: Connection = Depends(connection)) -> dict:
     at = payload.get("at")
-    return move_out_case(database, case_id, actor, int(at) if at else None, payload.get("record_event", True) is not False)
+    return move_out_case(database, case_id, actor, int(at) if at else None, payload.get("record_event", True) is not False,
+                         payload.get("billing_mode"), payload.get("note"))
 
 
 @router.post("/{case_id}/recover-here")
@@ -89,47 +102,18 @@ def recover_here(case_id: int, payload: dict = Body(default={}), actor: dict = D
 
 
 def recovery_move_in(database: Connection, admission_id: str, actor: dict[str, Any], at: int | None = None) -> dict[str, Any]:
-    """Patient in to this recovery bed: take the case over from the OR room's Leaf through Canopy."""
-    from .clinical_write import write_event
-    from .ward import canopy
+    """Receive the transfer on this recovery bed: a new case (the Post-Anesthesia chart) starts for the
+    booking. The OR room's case stays closed on its own Leaf (the Anesthesia Report)."""
+    from .cases_lifecycle import StartCase, start_case
     inbox = database.execute("SELECT * FROM canopy_admission_inbox WHERE id::text=%s", (admission_id,)).fetchone()
     session = ((inbox or {}).get("header") or {}).get("or_session") or {}
-    if inbox is None or inbox["status"] != "pending" or session.get("stage") != "recovery" or not session.get("global_case_id"):
+    if inbox is None or inbox["status"] != "pending" or session.get("stage") != "recovery":
         raise HTTPException(409, "this patient is not waiting for this recovery bed")
-    if database.execute("SELECT 1 FROM cases WHERE status='active' LIMIT 1").fetchone():
-        raise HTTPException(409, "discharge the active case on this Leaf first")
-    claim = canopy("POST", "/api/sync/v1/handover/claim", {
-        "leaf_id": os.getenv("FLORA_LEAF_ID", ""), "global_case_id": session["global_case_id"], "move_devices": False,
-        "actor": actor["username"], "admission_id": admission_id})
-    current = now_ms()
-    try:
-        with database.transaction():
-            database.execute("SELECT pg_advisory_xact_lock(6893, 1)")
-            if database.execute("SELECT 1 FROM cases WHERE status='active' LIMIT 1").fetchone():
-                raise HTTPException(409, "discharge the active case on this Leaf first")
-            result = case_handover.import_case(database, claim["export"], from_leaf_id=claim["from_leaf_id"],
-                                               global_case_id=session["global_case_id"], actor=actor["username"], now=current)
-            case_id = result["case_id"]
-            # The same case continues: still linked to its booking (pre-op forms keep syncing), now in recovery.
-            database.execute(
-                """UPDATE cases SET canopy_admission_id=%s, or_stage='recovery', discharge_time=NULL, discharge_reason=NULL
-                   WHERE id=%s""", (inbox["id"], case_id))
-            write_event(database, case_id, {"title": "Start Recovery", "event_ts": floor_minute(at) if at else current,
-                                            "event_type": "event", "detail": " · ".join(filter(None, [session.get("room_name"), session.get("bed_name")])) or None},
-                        actor)
-            database.execute(
-                "UPDATE canopy_admission_inbox SET status='claimed', case_id=%s, claim_acknowledged=true, updated_at=%s WHERE id=%s",
-                (case_id, current, inbox["id"]))
-    except Exception as error:
-        try:
-            canopy("POST", f"/api/sync/v1/handover/{claim['handover_id']}/cancel", {"reason": str(error)[:300]})
-        except HTTPException:
-            pass
-        if isinstance(error, HTTPException):
-            raise
-        raise HTTPException(500, f"import failed, move-in cancelled: {error}") from None
-    canopy("POST", f"/api/sync/v1/handover/{claim['handover_id']}/imported", {"to_case_id": result["case_id"]})
-    return {"ok": True, "case_id": result["case_id"], "handover_id": claim["handover_id"]}
+    response = start_case(StartCase(start_time=int(at or now_ms()), admission_source="prepared",
+                                    canopy_admission_id=admission_id, overlap_policy="exclude"), actor, database)
+    if not (isinstance(response, dict) and response.get("ok")):
+        raise HTTPException(409, "the recovery case could not start")
+    return {"ok": True, "case_id": response["case_id"]}
 
 
 @router.post("/or-recovery/{admission_id}/move-in")

@@ -1,4 +1,4 @@
-"""The hospital's name and logo (0092, app/hospital_profile.py): set in Canopy, delivered with the ward exchange and
+"""The hospital's name and logo (0090, app/hospital_profile.py): set in Canopy, delivered with the ward exchange and
 kept on the Leaf, against a disposable PostgreSQL database (scripts/test-leaf-writes.sh)."""
 import os
 import unittest

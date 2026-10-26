@@ -15,7 +15,7 @@ C = {
         "lede": "FLORA iCIS เชื่อมข้อมูลตั้งแต่เครื่องมือแพทย์ข้างเตียง ผ่านพื้นที่ทำงานของห้องผ่าตัดและ ICU ไปถึงศูนย์กลางข้อมูลของโรงพยาบาล โดยไม่ต้องรื้อระบบเดิม",
         "tiers_title": "หนึ่งแพลตฟอร์ม สี่ส่วนที่เติบโตร่วมกัน",
         "tiers": [
-            ("Tendril", "ข้างเครื่องมือแพทย์", "รับค่าจากเครื่องติดตามผู้ป่วย เครื่องดมยา เครื่องช่วยหายใจ ปั๊ม"),
+            ("Seed", "ข้างเครื่องมือแพทย์", "รับค่าจากเครื่องติดตามผู้ป่วย เครื่องดมยา เครื่องช่วยหายใจ ปั๊ม"),
             ("Leaf", "ข้างเตียง", "บันทึกวิสัญญีและ ICU ฐานข้อมูลในเครื่อง ทำงานต่อได้แม้ออฟไลน์"),
             ("Canopy", "ในโรงพยาบาล", "รวมทุกห้องทุกเตียง รายงาน และเชื่อม HIS/EMR"),
             ("Root", "คลาวด์", "ไลเซนส์และอัปเดตที่ลงลายเซ็น ไม่มีข้อมูลผู้ป่วย"),
@@ -52,7 +52,7 @@ C = {
         "poc_title": "เริ่มจาก POC หนึ่งห้อง",
         "poc": [
             ("สำรวจ", "รุ่นเครื่องและ HIS ที่ใช้อยู่"),
-            ("ติดตั้ง", "Tendril และ Leaf กับเครื่องจริง"),
+            ("ติดตั้ง", "Seed และ Leaf กับเครื่องจริง"),
             ("ใช้งาน", "เคสจริง แล้วสรุปผลร่วมกัน"),
         ],
         "company_th": "บริษัท อี.เอส.เอ็ม. โซลูชั่น จำกัด",
@@ -65,7 +65,7 @@ C = {
         "lede": "FLORA iCIS connects bedside medical devices, the OR and ICU workspace, and the hospital's central data hub, without replacing the systems you already run.",
         "tiers_title": "One platform, four parts that grow together",
         "tiers": [
-            ("Tendril", "At the device", "Reads monitors, anesthesia machines, ventilators and pumps"),
+            ("Seed", "At the device", "Reads monitors, anesthesia machines, ventilators and pumps"),
             ("Leaf", "At the bedside", "Anesthesia and ICU charting with a local database; works offline"),
             ("Canopy", "In the hospital", "Every room and bed, reports and the HIS/EMR link"),
             ("Root", "Cloud", "Signed licences and updates; no patient data"),
@@ -102,7 +102,7 @@ C = {
         "poc_title": "Start with a one-room POC",
         "poc": [
             ("Survey", "your devices and HIS"),
-            ("Install", "Tendril and Leaf on real devices"),
+            ("Install", "Seed and Leaf on real devices"),
             ("Run", "real cases, then review together"),
         ],
         "company_th": "Innovation as a Service",
@@ -143,7 +143,7 @@ def sheet(lang, c):
 
   <h2>{e(c['tiers_title'])}</h2>
   <div class="tiers">{tiers}</div>
-  <p class="flow">{'เครื่องมือแพทย์ → Tendril → Leaf → Canopy ⇢ Root' if lang == 'th' else 'Devices → Tendril → Leaf → Canopy ⇢ Root'}</p>
+  <p class="flow">{'เครื่องมือแพทย์ → Seed → Leaf → Canopy ⇢ Root' if lang == 'th' else 'Devices → Seed → Leaf → Canopy ⇢ Root'}</p>
 
   <div class="pillars">{pillars}</div>
 

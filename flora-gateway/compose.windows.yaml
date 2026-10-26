@@ -1,0 +1,295 @@
+# =============================================================================================
+# Flora Gateway on Windows 10 / 11 (Docker Desktop + WSL2) — REAL COM ports only.             # gateway บน Windows 10/11: ใช้พอร์ต COM จริงเท่านั้น
+# Docker Desktop cannot pass Windows COM ports into Linux containers, so serial-controller    # Docker Desktop ส่งพอร์ต COM ของ Windows เข้า container ไม่ได้
+# runs NATIVELY on Windows (windows\start-gateway.ps1) and opens COM1, COM2 ... directly;     # จึงรัน serial-controller บน Windows โดยตรง (เปิด COM1, COM2 เอง)
+# everything else runs here. No virtual serial ports, no TCP serial bridge, no simulator.    # ส่วนอื่นรันในไฟล์นี้ ไม่มีพอร์ตเสมือน ไม่มี bridge ไม่มีเครื่องจำลอง
+# Run in PowerShell from flora-gateway\ :                                                     # วิธีรันใน PowerShell (อยู่ในโฟลเดอร์ flora-gateway)
+#   .\windows\start-gateway.ps1                                                               # สคริปต์นี้ตรวจพอร์ตจริง → start compose → start serial-controller
+# compose.yaml (dev/demo) and compose.production.yaml (Linux) are kept unchanged.            # ไฟล์ compose อื่นไม่ได้แก้
+# =============================================================================================
+
+name: flora-gateway                                     # ชื่อ project (volume/ฐานข้อมูลชื่อเดียวกับบน Linux)
+
+x-rust: &rust                                           # แม่แบบร่วมของ service Rust ที่รันใน Docker
+  build:                                                # วิธี build image ของ Rust
+    context: ./rust                                     # โฟลเดอร์ซอร์สโค้ด Rust
+  image: ${FLORA_IMAGE_RUST:-flora-gateway-rust:dev}    # ชื่อ image (updater เปลี่ยนเป็นของ release ได้)
+  environment: &rust-env                                # ตัวแปรร่วม
+    FLORA_GATEWAY_CONFIG: /config/${FLORA_GATEWAY_CONFIG_FILE:-gateway.windows.toml}   # config ของ Windows (COM1/COM2)
+    FLORA_GATEWAY_ID: ${FLORA_GATEWAY_ID:-gateway-hospital-01-a}                        # รหัส gateway
+    FLORA_KAFKA_BROKERS: kafka:9092                                                     # Kafka ภายใน Docker
+    FLORA_GATEWAY_DATABASE_URL: postgresql://flora_gateway:${FLORA_GATEWAY_DB_PASSWORD:-flora-gateway-local-only}@gateway-db:5432/flora_gateway  # ฐานข้อมูล
+    RUST_LOG: ${RUST_LOG:-info}                         # ระดับ log
+  volumes:                                              # ไฟล์ที่ mount
+    - ./config:/config:ro                               # โฟลเดอร์ config (อ่านอย่างเดียว)
+  depends_on:                                           # ต้องรอก่อน start
+    kafka: {condition: service_healthy}                 # รอ Kafka พร้อม
+  restart: unless-stopped                               # ล่มแล้วเริ่มใหม่เอง
+
+x-logging: &logging                                     # หมุนเวียน log ของ Docker: กันดิสก์เต็มจาก log ที่โตไม่หยุด
+  driver: json-file                                     # รูปแบบ log มาตรฐานของ Docker
+  options:                                              # จำกัดขนาด
+    max-size: "10m"                                     # ไฟล์ละไม่เกิน 10 MB
+    max-file: "3"                                       # เก็บ 3 ไฟล์ต่อ service (สูงสุด ~30 MB)
+
+services:                                               # รายการ service
+  # ------------------------------------------------------------------------------------------ # ส่วนเก็บข้อมูลกลาง
+  kafka:                                                # ท่อส่งข้อความกลาง
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
+    image: apache/kafka:3.9.1                           # image ของ Kafka
+    environment:                                        # ค่าตั้ง Kafka (เครื่องเดียว)
+      KAFKA_NODE_ID: 1                                  # หมายเลข node
+      KAFKA_PROCESS_ROLES: broker,controller            # broker และ controller ในตัวเดียว
+      KAFKA_LISTENERS: INTERNAL://:9092,EXTERNAL://:9094,CONTROLLER://:9093           # พอร์ตที่ฟัง
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:${FLORA_GATEWAY_KAFKA_PORT:-7414}  # EXTERNAL = ที่ serial-controller บน Windows ใช้ (127.0.0.1:7414)
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT  # plaintext ภายในเครื่อง
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL        # listener ภายใน
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER       # listener ของ controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093  # quorum เครื่องเดียว
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1         # replicate 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1 # replicate 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1            # ISR ขั้นต่ำ 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0         # ไม่หน่วงตอนเข้ากลุ่ม
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"           # สร้าง topic อัตโนมัติ
+      KAFKA_NUM_PARTITIONS: 1                           # 1 partition ต่อ topic
+      KAFKA_LOG_RETENTION_HOURS: 72                     # เก็บข้อความ 72 ชั่วโมง
+      KAFKA_LOG_DIRS: /var/lib/kafka/data               # เก็บข้อมูล Kafka ใน volume kafka_data (ไม่หายเมื่อสร้าง container ใหม่)
+      KAFKA_HEAP_OPTS: -Xmx512m -Xms256m                # จำกัดหน่วยความจำ
+    ports:                                              # พอร์ตบน Windows
+      - "127.0.0.1:${FLORA_GATEWAY_KAFKA_PORT:-7414}:9094"   # ให้ serial-controller บน Windows ต่อเข้ามา (เฉพาะเครื่องนี้)
+    volumes:                                            # ที่เก็บข้อมูล
+      - kafka_data:/var/lib/kafka/data                  # ข้อมูล Kafka
+    healthcheck:                                        # ตรวจความพร้อม
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]  # ถาม broker
+      interval: 10s                                     # ทุก 10 วินาที
+      timeout: 10s                                      # รอไม่เกิน 10 วินาที
+      retries: 20                                       # ล้มเหลว 20 ครั้ง = unhealthy
+      start_period: 20s                                 # ช่วงเริ่มต้นที่ไม่นับ
+    restart: unless-stopped                             # ล่มแล้วเริ่มใหม่เอง
+
+  gateway-db:                                           # ฐานข้อมูล PostgreSQL
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
+    image: postgres:17.6-alpine                         # image ของ PostgreSQL
+    environment:                                        # ค่าตั้งฐานข้อมูล
+      POSTGRES_DB: flora_gateway                        # ชื่อฐานข้อมูล
+      POSTGRES_USER: flora_gateway                      # ผู้ใช้
+      POSTGRES_PASSWORD: ${FLORA_GATEWAY_DB_PASSWORD:-flora-gateway-local-only}  # รหัสผ่าน (ตั้งใน .env)
+    ports:                                              # พอร์ตบน Windows
+      - "127.0.0.1:${FLORA_GATEWAY_DB_PORT:-7412}:5432" # PostgreSQL (เฉพาะเครื่องนี้)
+    volumes:                                            # ที่เก็บข้อมูลและสคริปต์เริ่มต้น
+      - gateway_db_data:/var/lib/postgresql/data        # ข้อมูลถาวร
+      - ./db/0001-gateway.sql:/docker-entrypoint-initdb.d/0001-gateway.sql:ro                          # ตารางหลัก
+      - ./db/0002-device-measurements.sql:/docker-entrypoint-initdb.d/0002-device-measurements.sql:ro  # ตารางค่าดั้งเดิม
+    healthcheck:                                        # ตรวจความพร้อม
+      test: ["CMD-SHELL", "pg_isready -U flora_gateway -d flora_gateway"]   # คำสั่งตรวจ
+      interval: 5s                                      # ทุก 5 วินาที
+      timeout: 3s                                       # รอไม่เกิน 3 วินาที
+      retries: 20                                       # ล้มเหลว 20 ครั้ง = unhealthy
+    restart: unless-stopped                             # ล่มแล้วเริ่มใหม่เอง
+
+  # ------------------------------------------------------------------------------------------ # ด่านตรวจพอร์ตจริง (รูปแบบ Windows)
+  port-guard:                                           # serial pod ทุกตัวต้องเป็น COMn ของ Windows (ไม่มี /dev, ttyV, com0com CNCA/CNCB)
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
+    image: alpine:3.20                                  # image ขนาดเล็ก
+    volumes:                                            # ไฟล์ที่ตรวจ
+      - ./config:/config:ro                             # โฟลเดอร์ config
+    environment:                                        # ไฟล์ที่จะตรวจ
+      CONFIG_FILE: /config/${FLORA_GATEWAY_CONFIG_FILE:-gateway.windows.toml}   # config ของ Windows
+    command:                                            # สคริปต์ตรวจ (ไม่ผ่าน = gateway-service ไม่ start)
+      - /bin/sh                                         # shell ของ alpine
+      - -c                                              # รันข้อความด้านล่าง
+      - |                                               # เริ่มสคริปต์
+        set -e                                          # หยุดเมื่อผิดพลาด
+        test -f "$$CONFIG_FILE" || { echo "port-guard: $$CONFIG_FILE not found"; exit 1; }   # ต้องมีไฟล์ config
+        found=0                                         # นับจำนวนพอร์ต
+        for p in $$(grep -oE 'path *= *"[^"]+"' "$$CONFIG_FILE" | sed -E 's/.*"(.*)"/\1/'); do   # วนทุก path ของ serial pod
+          echo "$$p" | grep -qiE '^COM[0-9]+$$' || { echo "port-guard: $$p is not a Windows COM port (real ports only: COM1, COM2, ...)"; exit 1; }   # ต้องเป็น COMn
+          echo "port-guard: $$p ok (Windows checks it is a physical port before starting serial-controller)"   # ผ่าน
+          found=$$((found+1))                           # นับ
+        done                                            # จบการวน
+        echo "port-guard: $$found real COM port(s) — ok"   # สรุปผล
+    restart: "no"                                       # รันครั้งเดียว
+
+  # ------------------------------------------------------------------------------------------ # ชั้นรับข้อมูล (Rust) — serial-controller รันบน Windows ไม่อยู่ในไฟล์นี้
+  feeder-controller:                                    # ดึงข้อมูลจาก HTTP API ของเครื่อง
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
+    <<: *rust                                           # แม่แบบ Rust
+    command: ["feeder-controller"]                      # โปรแกรมที่รัน
+    ports:                                              # พอร์ตบน Windows
+      - "127.0.0.1:7402:5002"                           # สถานะ (เฉพาะเครื่องนี้)
+
+  webhook-controller:                                   # รับ HTTP POST จากเครื่อง
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
+    <<: *rust                                           # แม่แบบ Rust
+    command: ["webhook-controller"]                     # โปรแกรมที่รัน
+    ports:                                              # พอร์ตบน Windows
+      - "127.0.0.1:7403:5003"                           # สถานะ (เฉพาะเครื่องนี้)
+      - "${FLORA_GATEWAY_WEBHOOK_PORT:-7423}:9003"      # พอร์ต LAN ที่เครื่องส่ง HTTP มา
+
+  socket-controller:                                    # รับ LAN TCP (HL7, Vista, M540 relay)
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
+    <<: *rust                                           # แม่แบบ Rust
+    command: ["socket-controller"]                      # โปรแกรมที่รัน
+    ports:                                              # พอร์ต LAN จริงบน Windows
+      - "127.0.0.1:7404:5004"                           # สถานะ (เฉพาะเครื่องนี้)
+      - "${FLORA_GATEWAY_HL7_OR_PORT:-7421}:9001"       # HL7 MLLP → socket.or-monitor
+      - "${FLORA_GATEWAY_HL7_ICU_PORT:-7422}:9002"      # Vista 120 S (raw) → socket.icu-monitor
+      - "${FLORA_GATEWAY_VISTA_PORT:-9500}:9500"        # Vista CMS link → socket.vista
+      - "${FLORA_GATEWAY_IACS_RELAY_PORT:-2051}:2051"   # M540/C700 ผ่าน iacs-relay → socket.m540-relay
+
+  # ------------------------------------------------------------------------------------------ # ชั้นแปลงข้อมูล (Python)
+  parser-image:                                         # build image ของ parser
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
+    build:                                              # วิธี build
+      context: ./python/device-medical-service          # ซอร์สโค้ด parser
+    image: ${FLORA_IMAGE_PARSER:-flora-gateway-parser:dev}   # ชื่อ image
+    command: ["true"]                                   # build แล้วจบ
+    restart: "no"                                       # รันครั้งเดียว
+
+  # ------------------------------------------------------------------------------------------ # ชั้นเก็บและให้บริการข้อมูล
+  collector:                                            # บันทึกค่าลงฐานข้อมูล
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
+    <<: *rust                                           # แม่แบบ Rust
+    command: ["collector"]                              # โปรแกรมที่รัน
+    ports:                                              # พอร์ตบน Windows
+      - "127.0.0.1:7405:5005"                           # สถานะ (เฉพาะเครื่องนี้)
+    depends_on:                                         # ต้องรอ
+      kafka: {condition: service_healthy}               # Kafka พร้อม
+      gateway-db: {condition: service_healthy}          # ฐานข้อมูลพร้อม
+
+  server:                                               # API อ่านค่า
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
+    <<: *rust                                           # แม่แบบ Rust
+    command: ["server"]                                 # โปรแกรมที่รัน
+    depends_on:                                         # ต้องรอ
+      gateway-db: {condition: service_healthy}          # ฐานข้อมูลพร้อม
+    healthcheck:                                        # ตรวจความพร้อม
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]   # เรียก /health
+      interval: 10s                                     # ทุก 10 วินาที
+      timeout: 3s                                       # รอไม่เกิน 3 วินาที
+      retries: 10                                       # ล้มเหลว 10 ครั้ง = unhealthy
+
+  publisher:                                            # ส่งค่าออกไปปลายทาง (ถ้าตั้งไว้)
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
+    <<: *rust                                           # แม่แบบ Rust
+    command: ["publisher"]                              # โปรแกรมที่รัน
+    ports:                                              # พอร์ตบน Windows
+      - "127.0.0.1:7406:5006"                           # สถานะ (เฉพาะเครื่องนี้)
+
+  kong:                                                 # data-api ให้ Leaf
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
+    image: kong:3.9                                     # image ของ Kong
+    environment:                                        # ค่าตั้ง Kong
+      KONG_DATABASE: "off"                              # ไม่ใช้ฐานข้อมูล
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yaml          # route ของแต่ละ Leaf
+      KONG_PROXY_LISTEN: 0.0.0.0:8000                   # ฟังภายใน container
+      KONG_ADMIN_LISTEN: 127.0.0.1:8001                 # admin เฉพาะภายใน
+      KONG_PROXY_ACCESS_LOG: /dev/stdout                # log คำขอ
+      KONG_PROXY_ERROR_LOG: /dev/stderr                 # log ข้อผิดพลาด
+      KONG_DNS_VALID_TTL: "5"                           # resolve server ใหม่ทุก 5 วินาที
+    volumes:                                            # ไฟล์ที่ mount
+      - ./kong:/kong:ro                                 # route ของ Kong
+    ports:                                              # พอร์ตบน Windows
+      - "${FLORA_GATEWAY_DATA_API_BIND:-0.0.0.0}:${FLORA_GATEWAY_DATA_API_PORT:-7410}:8000"   # data-api บน LAN
+    depends_on:                                         # ต้องรอ
+      server: {condition: service_healthy}              # server พร้อม
+    healthcheck:                                        # ตรวจความพร้อม
+      test: ["CMD", "kong", "health"]                   # คำสั่งตรวจ
+      interval: 10s                                     # ทุก 10 วินาที
+      timeout: 5s                                       # รอไม่เกิน 5 วินาที
+      retries: 10                                       # ล้มเหลว 10 ครั้ง = unhealthy
+    restart: unless-stopped                             # ล่มแล้วเริ่มใหม่เอง
+
+  # ------------------------------------------------------------------------------------------ # ส่วนควบคุมและหน้า admin
+  gateway-service:                                      # หน้า admin, parser, check-in Canopy, ไลเซนส์
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
+    build:                                              # วิธี build
+      context: ./python/gateway-service                 # ซอร์สโค้ด
+    image: ${FLORA_IMAGE_SERVICE:-flora-gateway-service:dev}   # ชื่อ image
+    env_file:                                           # ไฟล์ตัวแปรเพิ่ม
+      - path: ./certs/trust.env                         # CA ของ Canopy (ถ้ามี)
+        required: false                                 # ไม่มีก็ได้
+    environment:                                        # ตัวแปร
+      FLORA_GATEWAY_ID: ${FLORA_GATEWAY_ID:-gateway-hospital-01-a}   # รหัส gateway
+      FLORA_GATEWAY_DATABASE_URL: postgresql://flora_gateway:${FLORA_GATEWAY_DB_PASSWORD:-flora-gateway-local-only}@gateway-db:5432/flora_gateway  # ฐานข้อมูล
+      FLORA_KAFKA_BROKERS: kafka:9092                   # Kafka ภายใน
+      FLORA_GATEWAY_CONFIG: /config/${FLORA_GATEWAY_CONFIG_FILE:-gateway.windows.toml}   # config ของ Windows
+      FLORA_GATEWAY_SEED: /config/${FLORA_GATEWAY_SEED_FILE:-instances.site.json}        # seed ว่าง
+      SERIAL_ADMIN_URL: ${SERIAL_ADMIN_URL:-http://host.docker.internal:7501}            # serial-controller ที่รันบน Windows
+      SOCKET_ADMIN_URL: ${SOCKET_ADMIN_URL:-http://socket-controller:5004}               # socket-controller ใน Docker
+      HABER_URL: ${HABER_URL:-https://host.docker.internal:9443}                         # ที่อยู่ Haber (Canopy)
+      GATEWAY_DATA_API_URL: ${GATEWAY_DATA_API_URL:-http://host.docker.internal:7410/data-api}   # data-api ที่แจ้ง Leaf
+      HABER_GATEWAY_TOKEN: ${HABER_GATEWAY_TOKEN:-haber-gateway-demo-token}              # token ของ gateway
+      GATEWAY_LICENSE_REQUIRED: ${GATEWAY_LICENSE_REQUIRED:-true}                        # ต้องมีไลเซนส์
+      GATEWAY_DATA_RETENTION_DAYS: ${GATEWAY_DATA_RETENTION_DAYS:-30}               # เก็บค่าวัดกี่วัน (0 = ไม่ลบ)
+      GATEWAY_SYNC_INTERVAL_SEC: ${GATEWAY_SYNC_INTERVAL_SEC:-20}                        # check-in ทุก 20 วินาที
+      GATEWAY_ADMIN_KEY: ${GATEWAY_ADMIN_KEY:-}         # key สำหรับสคริปต์ (ถ้าตั้ง)
+      GATEWAY_ADMIN_USERNAME: ${GATEWAY_ADMIN_USERNAME:-admin}   # ผู้ใช้ admin เริ่มต้น
+      GATEWAY_ADMIN_PASSWORD: ${GATEWAY_ADMIN_PASSWORD:-admin}   # รหัส admin เริ่มต้น (เปลี่ยนทันที)
+      GATEWAY_DOCKER_NETWORK: flora-gateway_default     # network ของ parser container
+      GATEWAY_COMPOSE_PROJECT: flora-gateway            # ชื่อ project
+      GATEWAY_PARSER_IMAGE: ${FLORA_IMAGE_PARSER:-flora-gateway-parser:dev}   # image ของ parser
+    volumes:                                            # ไฟล์ที่ mount
+      - ./certs:/etc/flora/certs:ro                     # cert
+      - ./config:/config                                # config (เขียนค่าสายของ pod ตาม device type; serial-controller ต้อง restart เอง)
+      - ./kong:/kong:ro                                 # route ของ Kong
+      - /var/run/docker.sock:/var/run/docker.sock       # สร้าง/หยุด parser
+    ports:                                              # พอร์ตบน Windows
+      - "${FLORA_GATEWAY_ADMIN_BIND:-127.0.0.1}:${FLORA_GATEWAY_ADMIN_PORT:-7400}:8000"   # หน้า admin
+    extra_hosts:                                        # ชื่อเครื่องเพิ่มเติม
+      - "host.docker.internal:host-gateway"             # เครื่อง Windows (serial-controller อยู่ที่นี่)
+      - "canopy.flora.local:${FLORA_CANOPY_IP:-127.0.0.1}"   # ชื่อตาม cert ของ Canopy
+    depends_on:                                         # ต้องรอ
+      gateway-db: {condition: service_healthy}          # ฐานข้อมูลพร้อม
+      kafka: {condition: service_healthy}               # Kafka พร้อม
+      parser-image: {condition: service_completed_successfully}   # build parser เสร็จ
+      port-guard: {condition: service_completed_successfully}     # ด่านตรวจผ่าน (พอร์ตต้องเป็น COMn จริง)
+    restart: unless-stopped                             # ล่มแล้วเริ่มใหม่เอง
+
+  updater:                                              # อัปเดตตาม release ที่อนุมัติ
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
+    build:                                              # วิธี build
+      context: ../flora-updater                         # ซอร์สโค้ด updater
+    image: ${FLORA_IMAGE_UPDATER:-flora-updater:dev}    # ชื่อ image
+    env_file:                                           # ไฟล์ตัวแปรเพิ่ม
+      - path: ./certs/trust.env                         # CA ของ Canopy (ถ้ามี)
+        required: false                                 # ไม่มีก็ได้
+    environment:                                        # ตัวแปร
+      FLORA_COMPONENT: gateway                          # ดูแล gateway
+      FLORA_NODE_ID: ${FLORA_GATEWAY_ID:-gateway-hospital-01-a}   # รหัส node
+      HABER_URL: ${HABER_URL:-https://host.docker.internal:9443}  # ที่อยู่ Haber
+      HABER_NODE_TOKEN: ${HABER_NODE_TOKEN:-haber-node-demo-token} # token ของ node
+      FLORA_ROOT_PUBLIC_KEY: ${FLORA_ROOT_PUBLIC_KEY:-} # กุญแจตรวจ release
+      FLORA_UPDATER_WINDOW: ${FLORA_UPDATER_WINDOW:-}   # ช่วงเวลาอัปเดต
+    volumes:                                            # ไฟล์ที่ mount
+      - ./certs:/etc/flora/certs:ro                     # cert
+      - /var/run/docker.sock:/var/run/docker.sock       # สั่ง Docker Desktop
+      - ..:/host                                        # โฟลเดอร์โปรเจกต์
+      - updater_state:/state                            # สถานะ
+    extra_hosts:                                        # ชื่อเครื่องเพิ่มเติม
+      - "host.docker.internal:host-gateway"             # เครื่อง Windows
+      - "canopy.flora.local:${FLORA_CANOPY_IP:-127.0.0.1}"   # ชื่อตาม cert ของ Canopy
+    restart: unless-stopped                             # ล่มแล้วเริ่มใหม่เอง
+
+  edge:                                                 # ทางเข้า HTTPS
+    logging: *logging                                   # หมุนเวียน log (10 MB x 3)
+    image: nginx:1.27-alpine                            # image ของ nginx
+    ports:                                              # พอร์ตบน Windows
+      - "${GATEWAY_HTTPS_PORT:-443}:443"                # HTTPS
+    volumes:                                            # ไฟล์ที่ mount
+      - ./edge/nginx.conf:/etc/nginx/conf.d/default.conf:ro   # ค่าตั้ง nginx
+      - ${TLS_CERT_FILE:-./certs/server.crt}:/etc/nginx/certs/server.crt:ro   # cert
+      - ${TLS_KEY_FILE:-./certs/server.key}:/etc/nginx/certs/server.key:ro    # key
+    depends_on:                                         # ต้องรอ
+      - gateway-service                                 # gateway-service
+    healthcheck:                                        # ตรวจความพร้อม
+      test: ["CMD-SHELL", "wget -q --no-check-certificate -O /dev/null https://127.0.0.1/health || exit 1"]   # เรียก /health
+      interval: 10s                                     # ทุก 10 วินาที
+      timeout: 3s                                       # รอไม่เกิน 3 วินาที
+      retries: 10                                       # ล้มเหลว 10 ครั้ง = unhealthy
+    restart: unless-stopped                             # ล่มแล้วเริ่มใหม่เอง
+
+volumes:                                                # volume ถาวร
+  updater_state:                                        # สถานะ updater
+  kafka_data:                                           # ข้อมูล Kafka
+  gateway_db_data:                                      # ข้อมูลฐานข้อมูล

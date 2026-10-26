@@ -72,8 +72,8 @@ li::marker { color: var(--teal); }
   <p class="lede">FLORA iCIS เชื่อมข้อมูลตั้งแต่เครื่องมือแพทย์ข้างเตียง ผ่านพื้นที่ทำงานของห้องผ่าตัดและ ICU ไปถึงศูนย์กลางข้อมูลของโรงพยาบาล โดยไม่ต้องรื้อระบบเดิม</p>
 
   <h2>หนึ่งแพลตฟอร์ม สี่ส่วนที่เติบโตร่วมกัน</h2>
-  <div class="tiers"><div class="tier"><span class="where">ข้างเครื่องมือแพทย์</span><b>Tendril</b><p>รับค่าจากเครื่องติดตามผู้ป่วย เครื่องดมยา เครื่องช่วยหายใจ ปั๊ม</p></div><div class="tier"><span class="where">ข้างเตียง</span><b>Leaf</b><p>บันทึกวิสัญญีและ ICU ฐานข้อมูลในเครื่อง ทำงานต่อได้แม้ออฟไลน์</p></div><div class="tier"><span class="where">ในโรงพยาบาล</span><b>Canopy</b><p>รวมทุกห้องทุกเตียง รายงาน และเชื่อม HIS/EMR</p></div><div class="tier"><span class="where">คลาวด์</span><b>Root</b><p>ไลเซนส์และอัปเดตที่ลงลายเซ็น ไม่มีข้อมูลผู้ป่วย</p></div></div>
-  <p class="flow">เครื่องมือแพทย์ → Tendril → Leaf → Canopy ⇢ Root</p>
+  <div class="tiers"><div class="tier"><span class="where">ข้างเครื่องมือแพทย์</span><b>Seed</b><p>รับค่าจากเครื่องติดตามผู้ป่วย เครื่องดมยา เครื่องช่วยหายใจ ปั๊ม</p></div><div class="tier"><span class="where">ข้างเตียง</span><b>Leaf</b><p>บันทึกวิสัญญีและ ICU ฐานข้อมูลในเครื่อง ทำงานต่อได้แม้ออฟไลน์</p></div><div class="tier"><span class="where">ในโรงพยาบาล</span><b>Canopy</b><p>รวมทุกห้องทุกเตียง รายงาน และเชื่อม HIS/EMR</p></div><div class="tier"><span class="where">คลาวด์</span><b>Root</b><p>ไลเซนส์และอัปเดตที่ลงลายเซ็น ไม่มีข้อมูลผู้ป่วย</p></div></div>
+  <p class="flow">เครื่องมือแพทย์ → Seed → Leaf → Canopy ⇢ Root</p>
 
   <div class="pillars"><div class="pillar"><span class="num">01</span><h3>Integration as a Service</h3><p>เชื่อมเครื่องมือแพทย์หลายยี่ห้อ พร้อมเฝ้าดูการเชื่อมต่อตลอดเคส รู้ว่าข้อมูลขาดก่อนทีมต้องค้นหาเอง</p></div><div class="pillar"><span class="num">02</span><h3>Customization</h3><p>Form Builder และ Report Builder ให้ทีมปรับแบบฟอร์มและรายงานภาษาไทยได้เอง ไม่ต้องรอผู้ขาย</p></div><div class="pillar"><span class="num">03</span><h3>The Agent</h3><p>ถามเป็นภาษาคน ได้รายงานที่ตรวจสอบได้ ใช้สิทธิ์เดียวกับผู้ใช้ และทีมยืนยันก่อนบันทึกทุกครั้ง</p></div></div>
 
@@ -86,7 +86,7 @@ li::marker { color: var(--teal); }
 
   <div class="bottom">
     <div><h3>ข้อมูลอยู่ในโรงพยาบาล</h3><div class="secs"><div class="sec"><b>On-premise</b><span>Canopy และ Leaf ติดตั้งในโรงพยาบาล</span></div><div class="sec"><b>สิทธิ์และ Audit</b><span>RBAC และบันทึกทุกการแก้ไข</span></div><div class="sec"><b>อัปเดตที่อนุมัติเอง</b><span>ทุกรุ่นลงลายเซ็น Ed25519</span></div><div class="sec"><b>มาตรฐาน</b><span>HL7 v2 · ICD-10 · SNOMED CT · LOINC</span></div></div></div>
-    <div><h3>เริ่มจาก POC หนึ่งห้อง</h3><ol class="poc"><li><span class="step">1</span><b>สำรวจ</b> รุ่นเครื่องและ HIS ที่ใช้อยู่</li><li><span class="step">2</span><b>ติดตั้ง</b> Tendril และ Leaf กับเครื่องจริง</li><li><span class="step">3</span><b>ใช้งาน</b> เคสจริง แล้วสรุปผลร่วมกัน</li></ol></div>
+    <div><h3>เริ่มจาก POC หนึ่งห้อง</h3><ol class="poc"><li><span class="step">1</span><b>สำรวจ</b> รุ่นเครื่องและ HIS ที่ใช้อยู่</li><li><span class="step">2</span><b>ติดตั้ง</b> Seed และ Leaf กับเครื่องจริง</li><li><span class="step">3</span><b>ใช้งาน</b> เคสจริง แล้วสรุปผลร่วมกัน</li></ol></div>
   </div>
 
   <footer class="band">
@@ -111,8 +111,8 @@ li::marker { color: var(--teal); }
   <p class="lede">FLORA iCIS connects bedside medical devices, the OR and ICU workspace, and the hospital&#x27;s central data hub, without replacing the systems you already run.</p>
 
   <h2>One platform, four parts that grow together</h2>
-  <div class="tiers"><div class="tier"><span class="where">At the device</span><b>Tendril</b><p>Reads monitors, anesthesia machines, ventilators and pumps</p></div><div class="tier"><span class="where">At the bedside</span><b>Leaf</b><p>Anesthesia and ICU charting with a local database; works offline</p></div><div class="tier"><span class="where">In the hospital</span><b>Canopy</b><p>Every room and bed, reports and the HIS/EMR link</p></div><div class="tier"><span class="where">Cloud</span><b>Root</b><p>Signed licences and updates; no patient data</p></div></div>
-  <p class="flow">Devices → Tendril → Leaf → Canopy ⇢ Root</p>
+  <div class="tiers"><div class="tier"><span class="where">At the device</span><b>Seed</b><p>Reads monitors, anesthesia machines, ventilators and pumps</p></div><div class="tier"><span class="where">At the bedside</span><b>Leaf</b><p>Anesthesia and ICU charting with a local database; works offline</p></div><div class="tier"><span class="where">In the hospital</span><b>Canopy</b><p>Every room and bed, reports and the HIS/EMR link</p></div><div class="tier"><span class="where">Cloud</span><b>Root</b><p>Signed licences and updates; no patient data</p></div></div>
+  <p class="flow">Devices → Seed → Leaf → Canopy ⇢ Root</p>
 
   <div class="pillars"><div class="pillar"><span class="num">01</span><h3>Integration as a Service</h3><p>Multi-brand device capture, watched throughout the case, so a data gap is caught before staff go looking for it.</p></div><div class="pillar"><span class="num">02</span><h3>Customization</h3><p>Form Builder and Report Builder let your team change Thai and English forms and reports without a vendor request.</p></div><div class="pillar"><span class="num">03</span><h3>The Agent</h3><p>Ask in plain language, get a report you can check. It runs under the user&#x27;s own permissions, and staff confirm before saving.</p></div></div>
 
@@ -125,7 +125,7 @@ li::marker { color: var(--teal); }
 
   <div class="bottom">
     <div><h3>Your data stays in your hospital</h3><div class="secs"><div class="sec"><b>On-premise</b><span>Canopy and Leaf run on hospital hardware</span></div><div class="sec"><b>Access &amp; audit</b><span>Role-based access, every edit logged</span></div><div class="sec"><b>Approved updates</b><span>Every release signed with Ed25519</span></div><div class="sec"><b>Standards</b><span>HL7 v2 · ICD-10 · SNOMED CT · LOINC</span></div></div></div>
-    <div><h3>Start with a one-room POC</h3><ol class="poc"><li><span class="step">1</span><b>Survey</b> your devices and HIS</li><li><span class="step">2</span><b>Install</b> Tendril and Leaf on real devices</li><li><span class="step">3</span><b>Run</b> real cases, then review together</li></ol></div>
+    <div><h3>Start with a one-room POC</h3><ol class="poc"><li><span class="step">1</span><b>Survey</b> your devices and HIS</li><li><span class="step">2</span><b>Install</b> Seed and Leaf on real devices</li><li><span class="step">3</span><b>Run</b> real cases, then review together</li></ol></div>
   </div>
 
   <footer class="band">

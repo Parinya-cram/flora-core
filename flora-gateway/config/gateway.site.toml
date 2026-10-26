@@ -1,0 +1,77 @@
+gateway_id = "gateway-hospital-01-a"
+
+[kafka]
+brokers = "kafka:9092"
+
+[serial]
+admin_port = 5001
+
+[[serial.pods]]
+id = "COM1"
+# Physical COM1, mapped into serial-controller by compose.override.yaml (Docker Engine).
+# Line settings for the Dräger MEDIBUS.X; for the temp/CVP module use baud 9600,
+# parity "none" and drop rts/dtr.
+path = "/dev/ttyS0"
+baud = 19200
+data_bits = 8
+parity = "even"
+
+[[serial.pods]]
+id = "COM2"
+# Physical COM2 (/dev/ttyS1, 0x2F8), mapped in compose.override.yaml. Set the line
+# settings to the device on this port (MEDIBUS.X: 19200 8E1 with rts/dtr = true).
+path = "/dev/ttyS1"
+baud = 19200
+parity = "even"
+data_bits = 8
+
+[feeder]
+admin_port = 5002
+
+[[feeder.pods]]
+id = "icu-ventilator"
+url = "http://simulator:8000/devices/icu-ventilator"
+interval_ms = 5000
+
+[webhook]
+admin_port = 5003
+pods = [
+    { id = "or-anesthesia", port = 9003 },
+]
+
+[socket]
+admin_port = 5004
+
+[[socket.pods]]
+id = "or-monitor"
+port = 9001
+framing = "mllp"
+auto_ack = true
+
+[[socket.pods]]
+id = "icu-monitor"
+port = 9002
+framing = "raw"
+auto_ack = false
+transport = "tcp"
+
+[[socket.pods]]
+id = "m540-relay"
+port = 2051
+framing = "udp_relay"
+auto_ack = false
+max_frame_bytes = 6096
+
+[collector]
+admin_port = 5005
+batch_size = 500
+flush_ms = 500
+
+[server]
+listen = "0.0.0.0:8080"
+
+[publisher]
+admin_port = 5006
+targets = [
+    { id = "demo-receiver", url = "http://simulator:8000/receiver", flush_ms = 2000 },
+]

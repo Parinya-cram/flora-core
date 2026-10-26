@@ -16,6 +16,10 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
+import html as _html
+import io
+import tarfile
 import hmac
 import json
 import logging
@@ -27,11 +31,10 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-import psycopg
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from . import basic_auth
@@ -50,12 +53,31 @@ REGISTRY_URL = os.getenv("HABER_REGISTRY_URL", "http://haber-registry:5000")
 REGISTRY_PUBLIC = os.getenv("HABER_REGISTRY_PUBLIC", "localhost:7205")
 ROOT_REGISTRY_URL = os.getenv("FLORA_ROOT_REGISTRY_URL", "").rstrip("/")  # empty = the one Root advertises
 COMPONENTS = ("canopy", "leaf", "gateway")
-CANOPY_DB_URL = os.getenv("CANOPY_DATABASE_URL", "")
 # Canopy keeps every gateway's configuration and can hand one back (clone / restore).
 CANOPY_SYNC_URL = os.getenv("FLORA_CANOPY_SYNC_URL", "").rstrip("/")
 SYNC_SECRET = os.getenv("FLORA_SYNC_SHARED_SECRET", "")
+# Canopy sync URL as a Leaf on the hospital LAN reaches it (handed to new Leafs at install).
+CANOPY_SYNC_PUBLIC = os.getenv("FLORA_CANOPY_SYNC_PUBLIC_URL", "").rstrip("/")
+# This appliance as Leafs / gateways on the LAN reach it (shown in Root's install commands).
+APPLIANCE_PUBLIC = os.getenv("FLORA_APPLIANCE_PUBLIC_URL", "").rstrip("/")
+# AI hosts Canopy / Leaf may reach through this appliance (they have no internet of their own).
+AI_HOSTS = os.getenv("HABER_AI_HOSTS", "ai.esm-solution.com,api.anthropic.com,api.openai.com,openrouter.ai")
 SYNC_INTERVAL = int(os.getenv("HABER_ROOT_SYNC_SEC", "20"))
 DB_PATH = os.getenv("HABER_DB_PATH", "/data/haber.db")
+# Config that an admin can change at runtime from the Settings UI. The env value above is the
+# bootstrap default; a value saved in the UI (kv key "setting:<name>") overrides it live — no
+# restart, because the loops read these module globals each iteration. {name: (global, caster)}.
+SETTINGS_KEYS = {
+    "root_url": ("ROOT_URL", str), "root_registry_url": ("ROOT_REGISTRY_URL", str),
+    "registry_public": ("REGISTRY_PUBLIC", str), "canopy_sync_url": ("CANOPY_SYNC_URL", str),
+    "canopy_sync_public": ("CANOPY_SYNC_PUBLIC", str), "ai_hosts": ("AI_HOSTS", str),
+    "tenant_id": ("TENANT_ID", str), "tenant_key": ("TENANT_KEY", str),
+    "sync_interval": ("SYNC_INTERVAL", int),
+}
+SECRET_KEYS = {"tenant_key"}  # never returned by the API, only writable
+# Snapshot the env-derived defaults now, before any override is applied, so clearing a
+# setting in the UI can restore the default live (not only after a restart).
+ENV_DEFAULTS = {global_name: globals()[global_name] for global_name, _ in SETTINGS_KEYS.values()}
 CATALOG = json.loads((Path(__file__).parent / "catalog.json").read_text())
 STATE: dict[str, Any] = {"root": {"status": "never", "error": None, "last_sync": None},
                          "mirror": {"status": "idle", "error": None, "last_run": None}}
@@ -115,10 +137,45 @@ def kv_set(key: str, value: Any) -> None:
                            (key, json.dumps(value)))
 
 
+def kv_del(key: str) -> None:
+    with db() as connection:
+        connection.execute("DELETE FROM kv WHERE key=?", (key,))
+
+
+def apply_settings_overrides() -> None:
+    """Load any admin-saved settings from kv and override the matching module globals, so the
+    loops pick them up without a restart. Env remains the default when nothing is saved."""
+    for name, (global_name, caster) in SETTINGS_KEYS.items():
+        stored = kv_get("setting:" + name)
+        if stored in (None, ""):
+            globals()[global_name] = ENV_DEFAULTS[global_name]   # no override: restore env default live
+            continue
+        try:
+            value = caster(stored)
+            if isinstance(value, str):
+                value = value.rstrip("/") if global_name.endswith("URL") else value
+            globals()[global_name] = value
+        except (TypeError, ValueError):
+            log.warning("ignoring bad setting %s=%r", name, stored)
+
+
+def current_settings() -> dict[str, Any]:
+    """Effective config for the Settings UI. Secrets report only whether they are set."""
+    out: dict[str, Any] = {}
+    for name, (global_name, _caster) in SETTINGS_KEYS.items():
+        overridden = kv_get("setting:" + name) not in (None, "")
+        if name in SECRET_KEYS:
+            out[name] = {"set": bool(globals().get(global_name)), "overridden": overridden, "secret": True}
+        else:
+            out[name] = {"value": globals().get(global_name), "overridden": overridden}
+    return out
+
+
 # ------------------------------------------------------------------ Root sync
 
 def verify(envelope: dict[str, Any], keys: dict[str, str]) -> dict[str, Any]:
-    public = keys.get(envelope.get("key_id", ""))
+    # A pinned Root key (FLORA_ROOT_PUBLIC_KEY, set by the site installer) is trusted whatever its key id.
+    public = keys.get(envelope.get("key_id", "")) or keys.get("pinned")
     if not public:
         raise ValueError(f"unknown signing key {envelope.get('key_id')}")
     try:
@@ -154,6 +211,19 @@ async def sync_root() -> None:
             releases = response.json()
             verify(releases, keys)
             kv_set("releases", releases)
+        response = await client.get(f"{ROOT_URL}/api/v1/tenants/{TENANT_ID}/device-library", headers=headers)
+        if response.status_code != 404:  # older Root without the device library
+            response.raise_for_status()
+            library = response.json()
+            verify(library, keys)
+            kv_set("device_library", library)
+        response = await client.get(f"{ROOT_URL}/api/v1/tenants/{TENANT_ID}/installs/pending", headers=headers)
+        if response.status_code != 404:  # older Root without installs
+            response.raise_for_status()
+            planned = response.json()
+            verify(planned, keys)
+            kv_set("installs", planned)
+        await flush_install_reports(client, headers)
         STATE["root"].update(status="ok", error=None, last_sync=now_ms(), verified=True)
         await client.post(f"{ROOT_URL}/api/v1/tenants/{TENANT_ID}/heartbeat", headers=headers, json={
             "canopy_version": "1.2.2", "bundle_id": bundle["bundle_id"], "usage": usage()})
@@ -166,6 +236,10 @@ async def root_loop() -> None:
         except Exception as error:
             STATE["root"].update(status="offline", error=str(error))
             log.warning("root sync failed: %s", error)
+        try:
+            await place_new_leaves()   # LAN work: runs even while Root is unreachable
+        except Exception as error:
+            log.warning("leaf placement failed: %s", error)
         await asyncio.sleep(SYNC_INTERVAL)
 
 
@@ -178,7 +252,7 @@ def verified(name: str) -> dict[str, Any] | None:
     if not envelope:
         return None
     try:
-        return verify(envelope, kv_get("root_keys") or {})
+        return verify(envelope, ({"pinned": PINNED_KEY} if PINNED_KEY else {}) | (kv_get("root_keys") or {}))
     except ValueError:
         return None
 
@@ -216,6 +290,11 @@ async def mirror_releases() -> None:
     done = {key for key, row in mirror_rows().items() if row["status"] == "ready"}
     pending = [release for release in manifest["releases"] if release["release_id"] not in done]
     if not pending:
+        STATE["mirror"].update(error=None)   # everything mirrored; clear any stale error from a withdrawn release
+        return
+    if not REGISTRY_URL:   # no registry here (Windows site): machines take images straight from Root's registry
+        for release in pending:
+            set_mirror(release, "ready")
         return
     mirror = Mirror(ROOT_REGISTRY_URL or manifest["registry"], REGISTRY_URL)
     STATE["mirror"].update(status="running", error=None)
@@ -270,17 +349,18 @@ def nodes() -> list[dict[str, Any]]:
 # ------------------------------------------------------------------ usage
 
 def canopy_leaves() -> list[dict[str, Any]]:
-    if not CANOPY_DB_URL:
+    """The hospital's Leaf nodes, read from Canopy over HTTP (sync-api) rather than canopy-db
+    directly, so Haber needs no database credentials and can run as its own stack."""
+    if not CANOPY_SYNC_URL or not SYNC_SECRET:
         return []
     try:
-        with psycopg.connect(CANOPY_DB_URL, connect_timeout=3) as connection:
-            rows = connection.execute(
-                "SELECT leaf_id, coalesce(canopy_display_name, display_name) AS name, hospital_id, "
-                "extract(epoch FROM last_seen_at)*1000 AS last_seen FROM sync_leaf_node ORDER BY leaf_id").fetchall()
-    except Exception as error:
+        response = httpx.get(f"{CANOPY_SYNC_URL}/api/sync/v1/leaves",
+                             headers={"authorization": f"Bearer {SYNC_SECRET}"}, timeout=3)
+        response.raise_for_status()
+        return response.json().get("leaves", [])
+    except Exception as error:  # Canopy down must not break Haber's overview
         log.warning("cannot read Canopy leaves: %s", error)
         return []
-    return [{"leaf_id": r[0], "name": r[1], "hospital_id": r[2], "last_seen": int(r[3] or 0)} for r in rows]
 
 
 def gateways() -> list[dict[str, Any]]:
@@ -293,8 +373,24 @@ def usage() -> dict[str, Any]:
     leaves = canopy_leaves()
     known = gateways()
     devices = sum(len([d for d in gateway["devices"] if d.get("enabled", True)]) for gateway in known)
+    # Per-gateway device detail so Root's fleet console can drill a hospital down to
+    # gateway -> device -> parser (version/status), not just counts.
+    gateway_detail = [{
+        "gateway_id": gateway.get("gateway_id"),
+        "site": (gateway.get("site") or {}).get("display_name") or gateway.get("gateway_id"),
+        "version": gateway.get("version"),
+        "last_seen": gateway.get("last_seen"),
+        "devices": [{key: d.get(key) for key in ("device_id", "device_type", "label", "leaf_id", "pod", "station",
+                                                 "location", "serial_number", "asset_tag", "parser_status", "live")}
+                    | {"enabled": d.get("enabled", True)}
+                    for d in (gateway.get("devices") or [])],
+    } for gateway in known]
     return {"leaves": len(leaves), "gateways": len(known), "gateway_devices": devices,
+            "appliance_url": APPLIANCE_PUBLIC or f"http://{REGISTRY_PUBLIC.split(':')[0]}:7204",
             "leaf_ids": [leaf["leaf_id"] for leaf in leaves],
+            "leaf_detail": [{key: leaf.get(key) for key in ("leaf_id", "name", "ward_key", "ward", "room", "bed", "last_seen")}
+                            for leaf in leaves],
+            "gateway_detail": gateway_detail,
             "nodes": [{key: node[key] for key in ("node_id", "component", "release_id", "state", "last_seen")}
                       for node in nodes()]}
 
@@ -305,6 +401,7 @@ def usage() -> dict[str, Any]:
 async def lifespan(_: FastAPI):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     init_db()
+    apply_settings_overrides()  # admin-saved settings win over env defaults
     tasks = [asyncio.create_task(root_loop()), asyncio.create_task(mirror_loop())]
     yield
     for task in tasks:
@@ -313,8 +410,10 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Flora Canopy Haber", lifespan=lifespan)
 basic_auth.install(app, "Canopy Haber", "HABER", [
-    r"/health", r"/api/haber/v1/gateways/[^/]+/(checkin|alerts|activity)",  # gateways, token auth
-    r"/api/haber/v1/root-keys", r"/api/haber/v1/nodes/[^/]+/(desired|report)",  # flora-updater, token auth
+    r"/health", r"/api/haber/v1/gateways/[^/]+/(checkin|alerts|activity|case-bindings)",  # gateways, token auth
+    r"/api/haber/v1/root-keys", r"/api/haber/v1/nodes/[^/]+/(desired|report|stream-token)",  # flora-updater, Leafs, token auth
+    r"/api/haber/v1/ai-relay/.+",   # Canopy / Leaf AI calls, relay token in the path
+    r"/install", r"/install/(leaf|gateway)\.sh", r"/install/windows(/[A-Za-z0-9._-]+)?", r"/install/files/[a-z]+/[A-Za-z0-9._-]+", r"/api/haber/v1/install/(claim|report)",   # new LAN machines, one-time code
 ])
 
 
@@ -384,17 +483,42 @@ def gateway_checkin(gateway_id: str, body: Checkin, request: Request):
         "images": CATALOG["images"],
         "release_id": release["release_id"] if release else None,
         "global_config": bundle.get("global_config", {}),
+        # Leafs that may open the live stream (stream-hub): their token hashes, registered through this appliance.
+        "leaf_tokens": [{"leaf_id": leaf_id, "token_hash": token_hash}
+                        for leaf_id, hashes in sorted((kv_get("leaf_stream_tokens") or {}).items()) for token_hash in hashes],
     }
 
 
 def gateway_catalog() -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
-    """Device types gateways receive from Root: the approved gateway release's, else the built-in catalog."""
+    """Device types gateways receive: the approved gateway release's catalog (else the built-in one), with
+    Root's device library on top — its settings win, new profiles are added and withdrawn ones are dropped."""
     release = approved_release("gateway")
     if release and release["device_types"]:
         # Parser images come from the approved gateway release, pinned by digest in haber-registry.
-        return [{**item, "image": image_ref(release["services"][item["image"]]), "version": release["version"]}
-                for item in release["device_types"]], release
-    return CATALOG["device_types"], None
+        catalog = [{**item, "image": image_ref(release["services"][item["image"]]), "version": release["version"]}
+                   for item in release["device_types"]]
+    else:
+        release, catalog = None, list(CATALOG["device_types"])
+    library = verified("device_library")
+    if not library:
+        return catalog, release
+    images = {item["code"]: item["image"] for item in catalog}
+    default_image = (image_ref(release["services"]["parser"]) if release and "parser" in release["services"]
+                     else CATALOG["images"][0]["image"])
+    by_code = {item["code"]: item for item in catalog}
+    for profile in library["profiles"]:
+        if profile["status"] != "active":
+            by_code.pop(profile["code"], None)
+            continue
+        service = profile.get("image") or "parser"
+        image = (image_ref(release["services"][service]) if release and service in release["services"]
+                 else images.get(profile["code"], default_image))
+        by_code[profile["code"]] = {key: profile.get(key) for key in (
+            "code", "label", "category", "protocol", "controller", "parser", "default_options", "connection_defaults")} | {
+            "protocol": profile.get("protocol") or "custom", "category": profile.get("category") or "device",
+            "default_options": profile.get("default_options") or {}, "connection_defaults": profile.get("connection_defaults") or {},
+            "image": image, "version": f"lib-{profile['revision']}", "origin": "library"}
+    return list(by_code.values()), release
 
 
 def forward_to_canopy(gateway_id: str, body: Checkin, license_grant: dict[str, Any]) -> dict[str, Any]:
@@ -467,10 +591,59 @@ def gateway_activity(gateway_id: str, body: GatewayActivity, request: Request):
     return response.json()
 
 
+class GatewayCaseBindings(BaseModel):
+    gateway_id: str
+    bindings: list[dict[str, Any]] = []
+
+
+@app.post("/api/haber/v1/gateways/{gateway_id}/case-bindings")
+def gateway_case_bindings(gateway_id: str, body: GatewayCaseBindings, request: Request):
+    """Relays the stream-hub's case UUID <-> device bindings to Canopy. Canopy's answer lists the
+    binding ids it stored; the gateway resends anything not listed."""
+    supplied = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    if not GATEWAY_TOKEN or not hmac.compare_digest(supplied, GATEWAY_TOKEN):
+        raise HTTPException(401, "invalid gateway token")
+    if not CANOPY_SYNC_URL or not SYNC_SECRET:
+        raise HTTPException(503, "Canopy sync is not configured; bindings stay queued on the gateway")
+    try:
+        response = httpx.post(f"{CANOPY_SYNC_URL}/api/sync/v1/gateways/{gateway_id}/case-bindings",
+                              headers={"authorization": f"Bearer {SYNC_SECRET}"}, timeout=10,
+                              json={"bindings": body.bindings})
+        response.raise_for_status()
+    except Exception as error:
+        log.warning("canopy case-binding relay failed for %s: %s", gateway_id, error)
+        raise HTTPException(502, f"Canopy unreachable: {error}") from None
+    return response.json()
+
+
 def require_node(request: Request) -> None:
     supplied = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
     if not NODE_TOKEN or not hmac.compare_digest(supplied, NODE_TOKEN):
         raise HTTPException(401, "invalid node token")
+
+
+STREAM_TOKENS_PER_LEAF = 10
+
+
+class StreamToken(BaseModel):
+    token_hash: str
+
+
+@app.post("/api/haber/v1/nodes/{leaf_id}/stream-token")
+def register_stream_token(leaf_id: str, body: StreamToken, request: Request):
+    """A Leaf's token for a gateway's live stream (stream-hub), as a sha256 hex: the Leaf keeps the token, every gateway
+    of this hospital gets the hash on its next check-in (leaf_tokens) and accepts that Leaf from then on. A Leaf may
+    register one per gateway link."""
+    require_node(request)
+    token_hash = body.token_hash.strip().lower()
+    if len(token_hash) != 64 or any(c not in "0123456789abcdef" for c in token_hash):
+        raise HTTPException(422, "token_hash must be a sha256 hex digest")
+    tokens = kv_get("leaf_stream_tokens") or {}
+    hashes = [h for h in tokens.get(leaf_id) or [] if h != token_hash] + [token_hash]
+    tokens[leaf_id] = hashes[-STREAM_TOKENS_PER_LEAF:]   # one per gateway link; the oldest go first
+    kv_set("leaf_stream_tokens", tokens)
+    log.info("live-stream token registered for Leaf %s", leaf_id)
+    return {"leaf_id": leaf_id, "gateways": "applied on each gateway's next check-in"}
 
 
 @app.get("/api/haber/v1/root-keys")
@@ -563,9 +736,80 @@ async def force_root_sync():
     return overview()
 
 
+class SettingsIn(BaseModel):
+    root_url: str | None = None
+    root_registry_url: str | None = None
+    registry_public: str | None = None
+    canopy_sync_url: str | None = None
+    canopy_sync_public: str | None = None   # Canopy sync URL handed to new Leafs on the LAN
+    ai_hosts: str | None = None             # comma-separated AI hosts the relay may reach
+    tenant_id: str | None = None
+    tenant_key: str | None = None   # write-only; blank keeps the current value
+    sync_interval: int | str | None = None   # blank string resets to the env default (like the URL fields)
+
+
+@app.get("/api/haber/v1/settings")
+def get_settings():
+    """Effective Haber config for the admin UI (env default, overridable here instead of redeploying)."""
+    return {"settings": current_settings()}
+
+
+@app.put("/api/haber/v1/settings")
+def put_settings(body: SettingsIn, request: Request):
+    user = basic_auth.username_of(request)
+    changed = []
+    for name in SETTINGS_KEYS:
+        value = getattr(body, name)
+        if value is None:
+            continue
+        if isinstance(value, str):
+            value = value.strip()
+            if value == "":
+                if name in SECRET_KEYS:
+                    continue            # blank secret = keep current
+                kv_del("setting:" + name)  # blank = reset to the env default
+                changed.append(name)
+                continue
+        kv_set("setting:" + name, value)
+        changed.append(name)
+    apply_settings_overrides()
+    log.info("%s updated settings: %s", user, ", ".join(changed) or "(none)")
+    return {"changed": changed, "settings": current_settings()}
+
+
+# ---- adopted device types: which licensed device types this hospital has "downloaded" for Canopy/Leaf use
+def adopted_types() -> list[str]:
+    return kv_get("adopted_types") or []
+
+
+@app.get("/api/haber/v1/adopted")
+def get_adopted():
+    return {"codes": adopted_types()}
+
+
+@app.post("/api/haber/v1/adopted/{code}")
+def adopt_type(code: str, request: Request):
+    user = basic_auth.username_of(request)
+    codes = adopted_types()
+    if code not in codes:
+        codes.append(code)
+        kv_set("adopted_types", codes)
+        log.info("%s adopted device type %s", user, code)
+    return {"codes": codes}
+
+
+@app.delete("/api/haber/v1/adopted/{code}")
+def unadopt_type(code: str, request: Request):
+    user = basic_auth.username_of(request)
+    codes = [c for c in adopted_types() if c != code]
+    kv_set("adopted_types", codes)
+    log.info("%s removed device type %s", user, code)
+    return {"codes": codes}
+
+
 @app.get("/api/haber/v1/device-types")
 def device_types():
-    return {"rows": CATALOG["device_types"]}
+    return {"rows": gateway_catalog()[0]}
 
 
 @app.get("/api/haber/v1/images")
@@ -589,6 +833,8 @@ def overview():
         "gateway_catalog": gateway_catalog()[0],
         "releases": release_overview(),
         "nodes": nodes(),
+        "adopted": adopted_types(),
+        "installs": install_overview(),
     }
 
 
@@ -605,6 +851,330 @@ def release_overview() -> dict[str, Any]:
                   "mirror": mirrors.get(release["release_id"], {"status": "pending"})}
                  for release in (manifest["releases"] if manifest else [])],
     }
+
+
+# ------------------------------------------------------------------ installs (planned at Root)
+# Root plans each Leaf / gateway and gives the operator a one-time code. Haber keeps Root's signed list of
+# open installs (code hashes only), so a machine on the hospital LAN installs from here even while the
+# internet is down: it trades the code for its node settings, Haber remembers the claim, places a new Leaf
+# on its bed in Canopy once that Leaf first syncs, and reports every step back to Root.
+
+INSTALL_KINDS = {"leaf", "gateway"}
+
+
+def install_plans() -> list[dict[str, Any]]:
+    planned = verified("installs")
+    return (planned or {}).get("installs") or []
+
+
+def install_states() -> dict[str, dict[str, Any]]:
+    return kv_get("install_state") or {}
+
+
+def save_install_state(install_id: str, **changes: Any) -> dict[str, Any]:
+    states = install_states()
+    state = {**states.get(install_id, {}), **changes, "updated_at": now_ms()}
+    if "status" in changes:
+        state["reported"] = False      # Root hears about every status change
+    states[install_id] = state
+    kv_set("install_state", states)
+    return state
+
+
+def plan_for_code(code: str, kind: str | None = None) -> dict[str, Any] | None:
+    digest = hashlib.sha256(code.strip().upper().encode()).hexdigest()
+    for plan in install_plans():
+        if hmac.compare_digest(plan["code_hash"], digest) and (kind is None or plan["kind"] == kind) and plan["expires_at"] > now_ms():
+            return plan
+    return None
+
+
+async def flush_install_reports(client: httpx.AsyncClient, headers: dict[str, str]) -> None:
+    for install_id, state in install_states().items():
+        if state.get("reported") or state.get("status") not in {"claimed", "installed", "failed"}:
+            continue
+        detail = {key: state.get(key) for key in ("hostname", "ip", "placed", "placement_error", "error") if state.get(key) is not None}
+        status = "failed" if state.get("last_result") == "failed" and state.get("status") == "claimed" else state["status"]
+        response = await client.post(f"{ROOT_URL}/api/v1/tenants/{TENANT_ID}/installs/{install_id}/report", headers=headers,
+                                     json={"status": status, "detail": detail})
+        if response.status_code in (200, 409):   # 409: Root already closed it (revoked / done)
+            _mark_reported(install_id)
+
+
+def _mark_reported(install_id: str) -> None:
+    states = install_states()
+    if install_id in states:
+        states[install_id]["reported"] = True
+        kv_set("install_state", states)
+
+
+async def place_new_leaves() -> None:
+    """Put a newly installed Leaf on the bed Root planned, once Canopy knows the Leaf (after its first sync)."""
+    if not CANOPY_SYNC_URL or not SYNC_SECRET:
+        return
+    plans = {plan["install_id"]: plan for plan in install_plans()} | (kv_get("install_plan_copy") or {})
+    waiting = [(install_id, plans[install_id]) for install_id, state in install_states().items()
+               if install_id in plans and plans[install_id]["kind"] == "leaf" and state.get("status") in {"claimed", "installed"}
+               and not state.get("placed") and plans[install_id].get("bed")]
+    if not waiting:
+        return
+    known = {leaf["leaf_id"] for leaf in canopy_leaves()}
+    headers = {"authorization": f"Bearer {SYNC_SECRET}"}
+    async with httpx.AsyncClient(timeout=5) as client:
+        for install_id, plan in waiting:
+            if plan["node_id"] not in known:
+                continue                     # not synced yet; try again next cycle
+            response = await client.post(f"{CANOPY_SYNC_URL}/api/sync/v1/locations", headers=headers, json={"leaf_id": plan["node_id"]})
+            response.raise_for_status()
+            bed_id = find_bed(response.json().get("locations") or [], plan)
+            if bed_id is None:
+                save_install_state(install_id, placement_error=f"no bed '{plan.get('bed')}' in ward '{plan.get('ward')}' in Canopy — assign it in Canopy")
+                continue
+            response = await client.post(f"{CANOPY_SYNC_URL}/api/sync/v1/leaves/{plan['node_id']}/location", headers=headers,
+                                         json={"bed_location_id": bed_id})
+            response.raise_for_status()
+            save_install_state(install_id, placed=bed_id, placement_error=None, reported=False)
+            log.info("placed leaf %s on bed %s", plan["node_id"], bed_id)
+
+
+def find_bed(locations: list[dict[str, Any]], plan: dict[str, Any]) -> int | None:
+    """The bed named in the plan, under its room and ward when those are given (names compared case-insensitively)."""
+    same = lambda a, b: str(a or "").strip().casefold() == str(b or "").strip().casefold()
+    by_id = {row["id"]: row for row in locations}
+    def ancestors(row: dict[str, Any]) -> list[dict[str, Any]]:
+        chain, parent = [], by_id.get(row.get("parent_id"))
+        while parent:
+            chain.append(parent)
+            parent = by_id.get(parent.get("parent_id"))
+        return chain
+    for row in locations:
+        if row["kind"] != "bed" or not same(row["name"], plan.get("bed")):
+            continue
+        up = ancestors(row)
+        if plan.get("room") and not any(r["kind"] == "room" and same(r["name"], plan["room"]) for r in up):
+            continue
+        if plan.get("ward") and not any(r["kind"] == "care_unit" and same(r["name"], plan["ward"]) for r in up):
+            continue
+        return row["id"]
+    return None
+
+
+class InstallClaim(BaseModel):
+    code: str
+    kind: str
+    hostname: str | None = None
+
+
+@app.post("/api/haber/v1/install/claim")
+def install_claim(body: InstallClaim, request: Request):
+    """A new LAN machine trades its one-time code for its node settings. The same machine may claim again
+    (a retried install) until the code expires; another machine may not."""
+    if body.kind not in INSTALL_KINDS:
+        raise HTTPException(422, "kind is leaf or gateway")
+    plan = plan_for_code(body.code, body.kind)
+    if plan is None:
+        raise HTTPException(403, "invalid, used or expired install code (or this appliance has not synced it from Root yet)")
+    state = install_states().get(plan["install_id"], {})
+    if state.get("status") == "installed" or (state.get("hostname") and body.hostname and state["hostname"] != body.hostname):
+        raise HTTPException(409, f"this code was already used by {state.get('hostname') or 'another machine'}")
+    copies = kv_get("install_plan_copy") or {}
+    copies[plan["install_id"]] = plan            # keep the plan after Root closes it (placement still needs it)
+    kv_set("install_plan_copy", copies)
+    save_install_state(plan["install_id"], status="claimed", hostname=body.hostname,
+                       ip=request.client.host if request.client else None, claimed_at=now_ms())
+    haber_url = str(request.base_url).rstrip("/")
+    node = {"install_id": plan["install_id"], "kind": plan["kind"], "node_id": plan["node_id"], "label": plan.get("label"),
+            "ward": plan.get("ward"), "room": plan.get("room"), "bed": plan.get("bed"),
+            "haber_url": haber_url, "registry": REGISTRY_PUBLIC, "tenant_id": TENANT_ID}
+    if plan["kind"] == "leaf":
+        node |= {"node_token": NODE_TOKEN, "canopy_sync_url": CANOPY_SYNC_PUBLIC, "sync_secret": SYNC_SECRET}
+    else:
+        node |= {"gateway_token": GATEWAY_TOKEN, "node_token": NODE_TOKEN}
+    return node
+
+
+class InstallResult(BaseModel):
+    code: str
+    status: str
+    error: str | None = None
+
+
+@app.post("/api/haber/v1/install/report")
+def install_report(body: InstallResult):
+    if body.status not in {"installed", "failed"}:
+        raise HTTPException(422, "status is installed or failed")
+    digest = hashlib.sha256(body.code.strip().upper().encode()).hexdigest()
+    plans = list((kv_get("install_plan_copy") or {}).values()) + install_plans()
+    plan = next((p for p in plans if hmac.compare_digest(p["code_hash"], digest)), None)
+    if plan is None or install_states().get(plan["install_id"], {}).get("status") != "claimed":
+        raise HTTPException(409, "no claimed install for this code")
+    # failed: stays claimed so the same machine can fix the cause and run the installer again
+    save_install_state(plan["install_id"], status="installed" if body.status == "installed" else "claimed",
+                       error=body.error, last_result=body.status, finished_at=now_ms())
+    return {"ok": True}
+
+
+def install_overview() -> list[dict[str, Any]]:
+    plans = {plan["install_id"]: plan for plan in install_plans()} | (kv_get("install_plan_copy") or {})
+    states = install_states()
+    return [{key: plan.get(key) for key in ("install_id", "kind", "node_id", "label", "ward", "room", "bed", "expires_at")}
+            | {key: states.get(install_id, {}).get(key) for key in ("status", "hostname", "placed", "placement_error", "reported")}
+            for install_id, plan in plans.items()]
+
+
+@app.get("/install/{kind}.sh")
+def install_script(kind: str, request: Request):
+    if kind not in INSTALL_KINDS:
+        raise HTTPException(404, "no such installer")
+    script = f"{kind}.sh"          # full install from this appliance's registry (images only)
+    return PlainTextResponse((Path(__file__).parent / "install" / script).read_text()
+                             .replace("__HABER_URL__", str(request.base_url).rstrip("/")).replace("__KIND__", kind),
+                             media_type="text/x-shellscript")
+
+
+INSTALL_FILES = {"leaf": {"compose.yaml", "compose.desktop.yaml", "https.conf.template"},
+                 "gateway": {"compose.yaml", "compose.desktop.yaml", "gateway.toml", "instances.json", "kong.yaml", "nginx.conf",
+                             "0001-gateway.sql", "0002-device-measurements.sql"}}
+
+
+@app.get("/install/files/{kind}/{name}")
+def install_file(kind: str, name: str):
+    """The files an installer writes next to its compose project (no source code, images only)."""
+    if name not in INSTALL_FILES.get(kind, set()):
+        raise HTTPException(404, "no such file")
+    return PlainTextResponse((Path(__file__).parent / "install" / kind / name).read_text())
+
+
+esc = lambda value: _html.escape(str(value))
+
+# ------------------------------------------------------------------ Windows installer (Flora iCIS Setup.exe)
+# CI wraps the installer in a one-file image that rides along with the Leaf release (service "windows"), so it
+# is mirrored here with everything else and hospital PCs download it from this appliance, without internet.
+
+WINDOWS_FILE = "Flora-iCIS-Setup.exe"
+MANIFEST_TYPES = ", ".join(["application/vnd.oci.image.index.v1+json", "application/vnd.docker.distribution.manifest.list.v2+json",
+                            "application/vnd.oci.image.manifest.v1+json", "application/vnd.docker.distribution.manifest.v2+json"])
+
+
+def windows_release() -> dict[str, Any] | None:
+    """The approved Leaf release when it carries the installer, else the newest mirrored one that does."""
+    manifest = releases_manifest() or {}
+    ready = {rid for rid, row in mirror_rows().items() if row.get("status") == "ready"}
+    with_windows = [r for r in manifest.get("releases") or [] if r.get("component") == "leaf"
+                    and "windows" in (r.get("services") or {}) and r["release_id"] in ready]
+    approved = approved_release("leaf")
+    for release in with_windows:
+        if approved and release["release_id"] == approved.get("release_id"):
+            return release
+    return with_windows[0] if with_windows else None
+
+
+def windows_installer_path(release: dict[str, Any]) -> Path:
+    image = release["services"]["windows"]
+    cache = Path(DB_PATH).parent / "cache"; cache.mkdir(parents=True, exist_ok=True)
+    target = cache / f"{image['digest'].split(':')[-1]}.exe"
+    if target.exists():
+        return target
+    registry = REGISTRY_URL or ROOT_REGISTRY_URL or (releases_manifest() or {}).get("registry", "")
+    if "://" not in registry:
+        registry = f"http://{registry}"
+    base = f"{registry.rstrip('/')}/v2/{image['repository']}"
+    with httpx.Client(timeout=120) as client:
+        manifest = client.get(f"{base}/manifests/{image['digest']}", headers={"accept": MANIFEST_TYPES}).raise_for_status().json()
+        if "manifests" in manifest:   # an index: take the one platform image
+            entry = next((m for m in manifest["manifests"] if (m.get("platform") or {}).get("os") != "unknown"), manifest["manifests"][0])
+            manifest = client.get(f"{base}/manifests/{entry['digest']}", headers={"accept": MANIFEST_TYPES}).raise_for_status().json()
+        for layer in reversed(manifest["layers"]):
+            blob = client.get(f"{base}/blobs/{layer['digest']}", follow_redirects=True).raise_for_status().content
+            with tarfile.open(fileobj=io.BytesIO(blob), mode="r:*") as archive:
+                member = next((m for m in archive.getmembers() if m.name.lstrip("./") == WINDOWS_FILE), None)
+                if member:
+                    tmp = target.with_suffix(".tmp")
+                    tmp.write_bytes(archive.extractfile(member).read())
+                    tmp.replace(target)
+                    return target
+    raise HTTPException(500, "the installer image holds no installer")
+
+
+INSTALL_PAGE_CSS = """body{font:15px/1.6 'Segoe UI',system-ui,sans-serif;max-width:780px;margin:36px auto;padding:0 20px;color:#1d2621;background:#f6f7f4}
+h1{font-size:24px;margin:0 0 4px} .sub{color:#65706a;margin:0 0 20px}
+.tabs{display:flex;gap:8px;margin:0 0 16px} .tabs a{padding:9px 18px;border-radius:10px;border:1px solid #d8ddd8;text-decoration:none;color:#1d2621;font-weight:600;background:#fff}
+.tabs a.on{background:#2f6f4f;color:#fff;border-color:#2f6f4f} .card{background:#fff;border:1px solid #e2e6e1;border-radius:14px;padding:18px 22px;margin-bottom:14px}
+.btn{display:inline-block;background:#2f6f4f;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:600}
+.warn{color:#a46a12} code,pre{background:#eef2ee;border-radius:6px} code{padding:2px 6px} pre{padding:10px 12px;white-space:pre-wrap;word-break:break-all;user-select:all}
+li{margin:6px 0} h2{font-size:16px;margin:0 0 8px}"""
+
+
+@app.get("/install")
+@app.get("/install/windows")
+def install_page(request: Request, os_name: str | None = Query(None, alias="os")):
+    """Leaf / gateway machines of this hospital: pick the operating system, then download or copy."""
+    here = str(request.base_url).rstrip("/")
+    chosen = os_name or ("windows" if request.url.path.endswith("/windows") else "windows" if "windows" in request.headers.get("user-agent", "").lower() else "linux")
+    release = windows_release()
+    tabs = "".join(f'<a href="/install?os={key}" class="{"on" if key == chosen else ""}">{label}</a>' for key, label in (("windows", "Windows"), ("linux", "Linux")))
+    if chosen == "windows":
+        body = (f'<div class="card"><h2>1 · ดาวน์โหลด</h2><p><a class="btn" href="/install/windows/{WINDOWS_FILE}">Download Flora iCIS Setup ({esc(release["version"])})</a></p></div>'
+                if release else '<div class="card"><p class="warn">ยังไม่มีไฟล์ติดตั้ง Windows บน Appliance นี้ (รอ release ของ Leaf ที่มีไฟล์ Windows mirror มาก่อน)</p></div>')
+        body += f"""<div class="card"><h2>2 · ติดตั้ง</h2><ol>
+<li>ดับเบิลคลิก <b>Flora iCIS Setup</b> ติดตั้งให้เสร็จ (ถ้า Windows เตือน ให้กด More info → Run anyway)</li>
+<li>เปิดโปรแกรม เลือกสิ่งที่จะลงบนเครื่องนี้ (Canopy + Appliance / Leaf / Gateway — เลือกได้หลายอย่าง)</li>
+<li>ใส่ที่อยู่ Appliance <code>{esc(here.split('//')[-1])}</code> และรหัสติดตั้งจาก Root แล้วกด <b>ติดตั้ง</b></li></ol></div>"""
+    else:
+        body = f"""<div class="card"><h2>Leaf</h2><p>รันบนเครื่อง Leaf (ต้องมี Docker + docker compose) แทน XXXX ด้วยรหัสจาก Root › + Add Leaf</p>
+<pre>curl -fsSL {esc(here)}/install/leaf.sh | sudo sh -s -- --code XXXX-XXXX-XXXX-XXXX</pre></div>
+<div class="card"><h2>Gateway</h2><p>รันบนเครื่อง gateway แทน XXXX ด้วยรหัสจาก Root › + Add gateway</p>
+<pre>curl -fsSL {esc(here)}/install/gateway.sh | sudo sh -s -- --code XXXX-XXXX-XXXX-XXXX</pre></div>"""
+    return HTMLResponse(f"""<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Flora iCIS · ติดตั้ง</title><style>{INSTALL_PAGE_CSS}
+  /* FLORA iCIS wordmark (same as the Leaf/Canopy apps): FLORA in the page's text colour, iCIS cyan → blue + pink dot. */
+  .wm {{ display:inline-flex !important; align-items:baseline; font-weight:900; letter-spacing:.03em; line-height:1; white-space:nowrap }}
+  .wm, .wm span {{ font-size:inherit !important }}
+  .wm .fl {{ display:inline !important; color:var(--ink, var(--text, #1d2621)) !important }}
+  .wm .ic {{ display:inline !important; margin-left:.24em; background:linear-gradient(90deg,#1bb8d4,#2f6fe8); -webkit-background-clip:text; background-clip:text; color:transparent !important }}
+  .wm .i {{ display:inline !important; position:relative }}
+  .wm .dot {{ display:block !important; position:absolute; left:50%; top:.04em; width:.19em; height:.19em; transform:translateX(-50%); border-radius:50%; background:#ef4a82 }}
+  .wm-part {{ display:inline-block !important; margin-left:8px; font-size:11px !important; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:var(--muted) !important }}
+</style></head><body>
+<div style="font-size:24px;margin-bottom:10px;display:flex;align-items:center"><img src="data:image/png;base64,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" alt="" width="34" height="34" style="vertical-align:middle;margin-right:10px"><span class="wm" role="img" aria-label="Flora iCIS"><span class="fl">FLORA</span><span class="ic"><span class="i">ı<span class="dot"></span></span>CIS</span></span><span class="wm-part">Appliance</span></div><h1>ติดตั้ง Flora iCIS</h1><p class="sub">Appliance ของโรงพยาบาล {esc(TENANT_ID)} · เลือกระบบปฏิบัติการของเครื่องที่จะติดตั้ง</p>
+<div class="tabs">{tabs}</div>{body}</body></html>""")
+
+
+@app.get(f"/install/windows/{WINDOWS_FILE}")
+def windows_installer_file():
+    release = windows_release()
+    if release is None:
+        raise HTTPException(404, "no Leaf release with the Windows installer is mirrored here yet")
+    return FileResponse(windows_installer_path(release), filename=f"Flora-iCIS-Setup-{release['version']}.exe",
+                        media_type="application/vnd.microsoft.portable-executable")
+
+
+# ------------------------------------------------------------------ AI relay
+# Canopy and Leaf have no internet of their own; their AI calls come here and are forwarded to an
+# allow-listed AI host only (AI_HOSTS setting). The caller proves itself with a token the appliance gave it
+# (node token for Leafs, the admin secret canopy-api holds); the AI key travels in the request, as before.
+
+RELAY_HEADERS = {"content-type", "accept", "authorization", "x-api-key", "anthropic-version", "anthropic-beta", "user-agent"}
+
+
+@app.api_route("/api/haber/v1/ai-relay/{token}/{scheme}/{target:path}", methods=["GET", "POST"])
+async def ai_relay(token: str, scheme: str, target: str, request: Request):
+    allowed = [t for t in (NODE_TOKEN, os.getenv("HABER_ADMIN_PASSWORD", "")) if t]
+    if not any(hmac.compare_digest(token, t) for t in allowed):
+        raise HTTPException(401, "invalid relay token")
+    host = target.split("/", 1)[0].split(":", 1)[0].lower()
+    hosts = {h.strip().lower() for h in AI_HOSTS.split(",") if h.strip()}
+    if scheme not in {"https", "http"} or host not in hosts:
+        raise HTTPException(403, f"AI host {host} is not allowed by this appliance (Device Distribution > settings > AI hosts)")
+    url = f"{scheme}://{target}" + (f"?{request.url.query}" if request.url.query else "")
+    headers = {k: v for k, v in request.headers.items() if k.lower() in RELAY_HEADERS}
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(240.0, connect=15.0)) as client:
+            upstream = await client.request(request.method, url, content=await request.body(), headers=headers)
+    except httpx.HTTPError as error:
+        raise HTTPException(502, f"the appliance cannot reach {host} ({type(error).__name__})") from None
+    keep = {k: v for k, v in upstream.headers.items() if k.lower() in {"content-type", "server"}}
+    return Response(content=upstream.content, status_code=upstream.status_code, headers=keep)
 
 
 @app.get("/health")

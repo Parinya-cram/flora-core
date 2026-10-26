@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>Flora iCIS — ตั้งค่าเครื่อง</title>
+<style>
+  :root { --bg:#0f1418; --panel:#171e23; --line:#2a343b; --ink:#e7eef2; --muted:#94a3ad; --accent:#5fc49a; --bad:#ef7d7d; --warn:#e0b04a; }
+  * { box-sizing:border-box } body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.5 "Segoe UI", system-ui, sans-serif }
+  main { max-width:760px; margin:0 auto; padding:28px 24px 40px }
+  header { display:flex; gap:14px; align-items:center; margin-bottom:22px } header img { width:52px; height:52px }
+  h1 { font-size:22px; margin:0 } header p { margin:2px 0 0; color:var(--muted) }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-bottom:14px }
+  h2 { font-size:13px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:0 0 12px }
+  label { display:block; margin:10px 0 4px; font-weight:600 } .hint { color:var(--muted); font-size:12px; font-weight:400 }
+  input[type=text] { width:100%; padding:10px 12px; border-radius:9px; border:1px solid var(--line); background:#0d1215; color:var(--ink); font:inherit }
+  .roles { display:grid; grid-template-columns:repeat(3,1fr); gap:10px }
+  .role { border:1px solid var(--line); border-radius:12px; padding:12px; cursor:pointer } .role b { display:block }
+  .role span { color:var(--muted); font-size:12px } .role.on { border-color:var(--accent); background:rgba(95,196,154,.08) }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap }
+  button { font:inherit; font-weight:600; padding:11px 20px; border-radius:10px; border:0; background:var(--accent); color:#06231a; cursor:pointer }
+  button.ghost { background:none; color:var(--ink); border:1px solid var(--line) } button:disabled { opacity:.5; cursor:default }
+  .status { display:flex; gap:8px; align-items:center } .dot { width:9px; height:9px; border-radius:50%; background:var(--warn) }
+  .dot.ok { background:var(--accent) } .dot.bad { background:var(--bad) }
+  pre { background:#0b0f12; border:1px solid var(--line); border-radius:10px; padding:12px; max-height:240px; overflow:auto; font:12px/1.5 Consolas, monospace; white-space:pre-wrap; margin:0 }
+  .done { border-color:var(--accent) } .err { color:var(--bad) } [hidden] { display:none !important }
+  .kv { display:grid; grid-template-columns:150px 1fr; gap:4px 12px } .kv b { color:var(--muted); font-weight:500 }
+</style>
+</head>
+<body>
+<main>
+  <header><img src="../assets/floraicon.png" alt=""><div><h1>ตั้งค่าเครื่องนี้ · Flora iCIS</h1>
+    <p>ติดตั้งจาก Appliance ของโรงพยาบาลในเครือข่าย (ไม่ต้องใช้อินเทอร์เน็ต) · Set up this machine</p></div></header>
+
+  <section>
+    <h2>1 · ส่วนประกอบของเครื่อง</h2>
+    <div class="status"><span class="dot" id="dockerDot"></span><span id="dockerText">กำลังตรวจ…</span></div>
+    <p class="hint" id="dockerHelp" hidden>ติดตั้ง <b>Rancher Desktop</b> แล้วเลือก Container engine = <b>dockerd (moby)</b>, ปิด Kubernetes ได้, เปิดโปรแกรมทิ้งไว้ แล้วกด "ตรวจอีกครั้ง"
+      <br><a href="#" id="rdLink" style="color:var(--accent)">ดาวน์โหลด Rancher Desktop</a> · <a href="#" id="recheck" style="color:var(--accent)">ตรวจอีกครั้ง</a></p>
+  </section>
+
+  <section>
+    <h2>2 · ติดตั้งอะไรบนเครื่องนี้ (เลือกได้หลายอย่าง)</h2>
+    <div class="roles">
+      <div class="role" data-role="canopy"><b>Canopy + Appliance</b><span>ศูนย์กลางของโรงพยาบาล (ต้องเปิด Kubernetes ใน Rancher Desktop และออกเน็ตไป Root ได้)</span></div>
+      <div class="role on" data-role="leaf"><b>Leaf</b><span>เครื่องข้างเตียง / ห้องผ่าตัด</span></div>
+      <div class="role" data-role="gateway"><b>Gateway</b><span>ต่อเครื่องมือแพทย์ (พอร์ต COM / เครือข่าย)</span></div>
+    </div>
+    <div class="status" id="k8sRow" hidden style="margin-top:12px"><span class="dot" id="k8sDot"></span><span id="k8sText"></span></div>
+  </section>
+
+  <section>
+    <h2>3 · ที่อยู่ และรหัสติดตั้งจาก Root</h2>
+    <div id="siteBox" hidden>
+      <label>ที่อยู่ Root <span class="hint">เช่น https://172.22.19.81:8443</span></label>
+      <input type="text" id="root" placeholder="https://172.22.19.81:8443" autocomplete="off">
+      <label>รหัสติดตั้ง Canopy (site) <span class="hint">Root › Topology › โรงพยาบาล › Install site server</span></label>
+      <input type="text" id="siteCode" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off">
+    </div>
+    <div id="applianceBox">
+      <label>ที่อยู่ Appliance ของโรงพยาบาล <span class="hint">เช่น 172.22.19.81 หรือ 172.22.19.81:7204</span></label>
+      <input type="text" id="appliance" placeholder="172.22.19.81" autocomplete="off">
+    </div>
+    <p class="hint" id="sameMachine" hidden>Leaf / Gateway จะติดตั้งจาก Appliance ที่เพิ่งลงบนเครื่องนี้</p>
+    <div id="leafBox"><label>รหัสติดตั้ง Leaf <span class="hint">Root › + Add Leaf</span></label>
+      <input type="text" id="leafCode" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off"></div>
+    <div id="gwBox" hidden><label>รหัสติดตั้ง Gateway <span class="hint">Root › + Add gateway</span></label>
+      <input type="text" id="gwCode" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off"></div>
+    <div class="row" style="margin-top:16px"><button id="go">ติดตั้ง</button><span class="err" id="formErr"></span></div>
+  </section>
+
+  <section id="progress" hidden>
+    <h2>กำลังติดตั้ง</h2>
+    <pre id="log"></pre>
+  </section>
+
+  <section id="result" class="done" hidden>
+    <h2>ติดตั้งเสร็จแล้ว</h2>
+    <div class="kv" id="resultKv"></div>
+    <p class="hint">เก็บรหัสผ่านครั้งแรกไว้ ระบบจะให้เปลี่ยนตอนเข้าใช้ครั้งแรก · โปรแกรมจะเปิดเองทุกครั้งที่เปิดเครื่อง</p>
+    <button id="open">เปิด Flora iCIS</button>
+  </section>
+</main>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const picked = new Set(["leaf"]);
+  function refresh() {
+    document.querySelectorAll(".role").forEach((x) => x.classList.toggle("on", picked.has(x.dataset.role)));
+    $("siteBox").hidden = !picked.has("canopy");
+    $("applianceBox").hidden = picked.has("canopy") || (!picked.has("leaf") && !picked.has("gateway"));
+    $("sameMachine").hidden = !(picked.has("canopy") && (picked.has("leaf") || picked.has("gateway")));
+    $("leafBox").hidden = !picked.has("leaf"); $("gwBox").hidden = !picked.has("gateway");
+    $("k8sRow").hidden = !picked.has("canopy"); if (picked.has("canopy")) checkKubernetes();
+  }
+  async function checkKubernetes() {
+    $("k8sDot").className = "dot"; $("k8sText").textContent = "ตรวจ Kubernetes…";
+    const r = await window.floraSetup.checkKubernetes();
+    $("k8sDot").className = "dot " + (r.ok ? "ok" : "bad");
+    $("k8sText").textContent = r.ok ? "Kubernetes ใน Rancher Desktop พร้อม" : "เปิด Kubernetes ใน Rancher Desktop (Preferences › Kubernetes) แล้วเลือกใหม่";
+  }
+  document.querySelectorAll(".role").forEach((el) => el.addEventListener("click", () => {
+    const r = el.dataset.role; if (picked.has(r)) picked.delete(r); else picked.add(r); refresh();
+  }));
+  async function checkDocker() {
+    $("dockerDot").className = "dot"; $("dockerText").textContent = "กำลังตรวจ…";
+    const r = await window.floraSetup.checkDocker();
+    $("dockerDot").className = "dot " + (r.ok ? "ok" : "bad");
+    $("dockerText").textContent = r.native ? "ไม่ต้องติดตั้งเพิ่ม — ระบบอยู่ในโปรแกรมแล้ว" : r.ok ? `พร้อมใช้งาน (Docker ${r.server})` : "ยังไม่พบ Rancher Desktop / Docker ที่ทำงานอยู่";
+    $("dockerHelp").hidden = r.ok; $("go").disabled = !r.ok;
+    return r.ok;
+  }
+  $("recheck").addEventListener("click", (e) => { e.preventDefault(); checkDocker(); });
+  $("rdLink").addEventListener("click", (e) => { e.preventDefault(); window.floraSetup.openExternal("https://rancherdesktop.io/"); });
+  window.floraSetup.onLog((line) => { const log = $("log"); log.textContent += line + "\n"; log.scrollTop = log.scrollHeight; });
+  $("go").addEventListener("click", async () => {
+    $("formErr").textContent = "";
+    const form = { roles: [...picked], root: $("root").value.trim(), siteCode: $("siteCode").value.trim(), appliance: $("appliance").value.trim(),
+                   leafCode: $("leafCode").value.trim(), gatewayCode: $("gwCode").value.trim() };
+    if (!picked.size) return ($("formErr").textContent = "เลือกอย่างน้อยหนึ่งอย่าง");
+    if (picked.has("canopy") && (!form.root || !form.siteCode)) return ($("formErr").textContent = "ใส่ที่อยู่ Root และรหัสติดตั้ง Canopy");
+    if (!picked.has("canopy") && !form.appliance) return ($("formErr").textContent = "ใส่ที่อยู่ Appliance");
+    if (picked.has("leaf") && !form.leafCode) return ($("formErr").textContent = "ใส่รหัสติดตั้ง Leaf");
+    if (picked.has("gateway") && !form.gatewayCode) return ($("formErr").textContent = "ใส่รหัสติดตั้ง Gateway");
+    $("go").disabled = true; $("progress").hidden = false; $("log").textContent = "";
+    const r = await window.floraSetup.install(form);
+    if (!r.ok) { $("formErr").textContent = "ติดตั้งไม่สำเร็จ: " + r.error + " — แก้แล้วกดติดตั้งอีกครั้งได้ (รหัสเดิมใช้ซ้ำได้บนเครื่องนี้)"; $("go").disabled = false; return; }
+    const rows = [];
+    if (r.site) rows.push(["Canopy", r.site.canopyUrl], ["ผู้ใช้ Canopy ครั้งแรก", `admin / ${r.site.adminPassword}`], ["Appliance", `${r.site.applianceUrl}  (admin / ${r.site.haberAdminPassword})`]);
+    if (r.leaf) rows.push(["Leaf", `${r.leaf.label || r.leaf.nodeId} (${r.leaf.nodeId})`], ["ผู้ใช้ครั้งแรก", `admin / ${r.leaf.adminPassword}`]);
+    if (r.gateway) rows.push(["Gateway", r.gateway.nodeId], ["หน้า Gateway", `${r.gateway.adminUrl}  (admin / ${r.gateway.adminPassword})`]);
+    $("resultKv").innerHTML = rows.map(([k, v]) => `<b>${k}</b><span>${String(v).replace(/[<>&]/g, "")}</span>`).join("");
+    $("result").hidden = false; $("result").scrollIntoView({ behavior: "smooth" });
+  });
+  $("open").addEventListener("click", () => window.floraSetup.openApp());
+  refresh(); checkDocker();
+</script>
+</body>
+</html>

@@ -13,7 +13,126 @@ export type CaseStatus =
       discharge_time?: number;
       admission_source?: AdmissionSource;
       identity_status?: "verified" | "local" | "pending" | "reconciled";
+      /** Multi-case Leaf: bed this case occupies in the room (GET /api/case/active). */
+      bed_label?: string | null;
+      patient_name?: string | null;
+      case_uuid?: string | null;
     };
+
+/** A device bound to a case (GET/PUT /api/case/{id}/devices). */
+export type DeviceBindingMode = "exclusive" | "shared";
+export type DeviceBindingInput = { gateway_link_id: number; device_id: string; mode: DeviceBindingMode };
+export type CaseDeviceStream = { connected: boolean; last_seq?: number | null; lag_ms?: number | null };
+export type CaseDeviceBinding = DeviceBindingInput & {
+  id: string;
+  bound_at?: number | null;
+  released_at?: number | null;
+  gateway_state: "pending" | "bound" | "rejected";
+  gateway_detail?: string | null;
+  stream?: CaseDeviceStream | null;
+};
+
+/** One of the cases running on this Leaf at the same time (a recovery room has several beds). */
+export type ActiveCase = {
+  case_id: number;
+  case_uuid?: string | null;
+  hn: string;
+  patient_name?: string | null;
+  admission_number?: string | null;
+  bed_label?: string | null;
+  status: "ACTIVE";
+  start_time: number;
+  admission_source?: AdmissionSource;
+  identity_status?: "verified" | "local" | "pending" | "reconciled";
+  devices: CaseDeviceBinding[];
+};
+
+/** API error that keeps the server's error code (e.g. 409 device_in_use). */
+export class CaseApiError extends Error {
+  status: number;
+  code: string;
+  deviceId?: string;
+  caseId?: number;
+  constructor(status: number, data: Record<string, unknown>, fallback: string) {
+    const code = typeof data.error === "string" ? data.error : typeof data.detail === "string" ? data.detail : "";
+    super(code || fallback);
+    this.status = status;
+    this.code = code;
+    if (typeof data.device_id === "string" || typeof data.device_id === "number") this.deviceId = String(data.device_id);
+    const caseId = Number(data.case_id);
+    if (Number.isFinite(caseId) && caseId > 0) this.caseId = caseId;
+  }
+}
+
+/** Human-readable text for a device clash; null for other errors. */
+export function deviceInUseMessage(error: unknown, language = "en"): string | null {
+  if (!(error instanceof CaseApiError) || error.code !== "device_in_use") return null;
+  const device = error.deviceId || "?";
+  const other = error.caseId ? ` (case #${error.caseId})` : "";
+  return language === "th"
+    ? `อุปกรณ์ ${device} ถูกผูกแบบ exclusive กับเคสอื่นอยู่แล้ว${other} — เลือกอุปกรณ์อื่น ใช้โหมด shared หรือปล่อยอุปกรณ์จากเคสนั้นก่อน`
+    : `Device ${device} is already bound exclusively to another case${other}. Pick another device, use shared mode, or release it from that case first.`;
+}
+
+function normalizeBinding(raw: unknown): CaseDeviceBinding | null {
+  const row = raw as Partial<CaseDeviceBinding> | null;
+  if (!row || row.device_id == null) return null;
+  const state = String(row.gateway_state || "pending").toLowerCase();
+  return {
+    ...row,
+    id: String(row.id ?? `${row.gateway_link_id}:${row.device_id}`),
+    gateway_link_id: Number(row.gateway_link_id),
+    device_id: String(row.device_id),
+    mode: row.mode === "shared" ? "shared" : "exclusive",
+    gateway_state: state === "bound" || state === "rejected" ? state : "pending",
+  };
+}
+
+const normalizeBindings = (rows: unknown): CaseDeviceBinding[] =>
+  (Array.isArray(rows) ? rows : []).map(normalizeBinding).filter((row): row is CaseDeviceBinding => Boolean(row));
+
+/** Every active case on this Leaf; null when the Leaf API predates multi-case (404/405). */
+export async function getActiveCases(): Promise<ActiveCase[] | null> {
+  const res = await fetch(`${BASE}/active`);
+  if (res.status === 404 || res.status === 405) return null;
+  const data = (await res.json().catch(() => ({}))) as { cases?: unknown; error?: unknown };
+  if (!res.ok) throw new CaseApiError(res.status, data as Record<string, unknown>, `get active cases failed (${res.status})`);
+  const rows = Array.isArray(data.cases) ? data.cases : [];
+  const cases: ActiveCase[] = [];
+  for (const raw of rows) {
+    const row = raw as Partial<ActiveCase> & { devices?: unknown };
+    const caseId = Number(row.case_id);
+    if (!Number.isFinite(caseId) || caseId <= 0) continue;
+    cases.push({
+      ...row,
+      case_id: caseId,
+      hn: String(row.hn || ""),
+      status: "ACTIVE",
+      start_time: Number(row.start_time) || 0,
+      devices: normalizeBindings(row.devices),
+    });
+  }
+  return cases;
+}
+
+export async function getCaseDevices(caseId: number): Promise<CaseDeviceBinding[]> {
+  const res = await fetch(`${BASE}/${caseId}/devices`);
+  const data = (await res.json().catch(() => ({}))) as { devices?: unknown };
+  if (!res.ok) throw new CaseApiError(res.status, data as Record<string, unknown>, `get case devices failed (${res.status})`);
+  return normalizeBindings(data.devices);
+}
+
+/** Replaces the case's open bindings; 409 device_in_use on an exclusive clash. */
+export async function putCaseDevices(caseId: number, devices: DeviceBindingInput[]): Promise<CaseDeviceBinding[]> {
+  const res = await fetch(`${BASE}/${caseId}/devices`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ devices }),
+  });
+  const data = (await res.json().catch(() => ({}))) as { devices?: unknown };
+  if (!res.ok) throw new CaseApiError(res.status, data as Record<string, unknown>, `save case devices failed (${res.status})`);
+  return normalizeBindings(data.devices);
+}
 
 export type CaseListRow = {
   case_id: number;
@@ -59,6 +178,10 @@ export type StartCaseOptions = {
   canopyAdmissionId?: string;
   /** Workflow Studio workflow to start the case with (GET /api/case/workflows). */
   workflowId?: string;
+  /** Multi-case Leaf: bed label within the room (e.g. "R2"). */
+  bedLabel?: string;
+  /** Gateway devices bound to the new case. */
+  devices?: DeviceBindingInput[];
 };
 
 /** An admission prepared in Canopy that this Leaf may start. */
@@ -172,20 +295,21 @@ export async function startCase(
       ...(options?.surgicalPriority ? { surgical_priority: options.surgicalPriority } : {}),
       ...(options?.canopyAdmissionId ? { canopy_admission_id: options.canopyAdmissionId } : {}),
       ...(options?.workflowId ? { workflow_id: options.workflowId } : {}),
+      ...(options?.bedLabel?.trim() ? { bed_label: options.bedLabel.trim() } : {}),
+      ...(options?.devices?.length ? { devices: options.devices } : {}),
     }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const message =
-      data && typeof data.error === "string"
-        ? data.error
-        : `start case failed (${res.status})`;
-    throw new Error(message);
+    throw new CaseApiError(res.status, (data || {}) as Record<string, unknown>, `start case failed (${res.status})`);
   }
   return data;
 }
 
-export async function dischargeCase(case_id: number, discharge_time?: number, destination?: { destination?: string; note?: string }) {
+/** With transferToLeafId the patient is discharged to that Leaf (e.g. a recovery bed) and shows up there
+ * under Receive transfer; the server needs Canopy for that and refuses offline. */
+export async function dischargeCase(case_id: number, discharge_time?: number,
+  destination?: { destination?: string; note?: string; transferToLeafId?: string; billingMode?: TransferBillingMode }) {
   const res = await fetch(`${BASE}/discharge`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -194,6 +318,7 @@ export async function dischargeCase(case_id: number, discharge_time?: number, de
       ...(Number.isFinite(discharge_time) ? { discharge_time } : {}),
       ...(destination?.destination ? { destination: destination.destination } : {}),
       ...(destination?.note ? { destination_note: destination.note } : {}),
+      ...(destination?.transferToLeafId ? { transfer_to_leaf_id: destination.transferToLeafId, billing_mode: destination.billingMode } : {}),
     }),
   });
   const data = await res.json().catch(() => ({}));
@@ -201,10 +326,19 @@ export async function dischargeCase(case_id: number, discharge_time?: number, de
     const message =
       data && typeof data.error === "string"
         ? data.error
-        : `discharge failed (${res.status})`;
+        : data && typeof data.detail === "string" ? data.detail : `discharge failed (${res.status})`;
     throw new Error(message);
   }
   return data;
+}
+
+/** Undo a discharge or transfer (until archived). An OR-ward case needs Canopy, which refuses once the
+ * recovery bed received the patient. Infusions stopped by the discharge run on; devices are bound again. */
+export async function cancelDischarge(case_id: number) {
+  const res = await fetch(`${BASE}/${case_id}/cancel-discharge`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : `cancel discharge failed (${res.status})`);
+  return data as { ok: boolean; restarted_runs: number[]; rebound_devices: string[]; skipped_devices: { device_id: string; case_id: number }[] };
 }
 
 export async function archiveCase(case_id: number) {
@@ -349,15 +483,19 @@ export async function getCaseOrSession(case_id: number): Promise<CaseOrSession> 
   return res.json();
 }
 
-/** Patient out of the OR room (not a discharge): the case continues on a recovery bed's Leaf. */
-export async function moveOutCase(case_id: number, at?: number, recordEvent = true) {
+/** How the OR and Recovery cases of one transfer are billed: one combined bill or two separate bills. */
+export type TransferBillingMode = "combined" | "separate";
+
+/** Transfer to Recovery: closes this OR case (Anesthesia record; running infusions stop here at the
+ * transfer time) and the recovery bed starts a new Post-Anesthesia case for the same admission. */
+export async function moveOutCase(case_id: number, at?: number, recordEvent = true, billingMode?: TransferBillingMode, note?: string) {
   const res = await fetch(`${BASE}/${case_id}/move-out`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...(Number.isFinite(at) ? { at } : {}), record_event: recordEvent }),
+    body: JSON.stringify({ ...(Number.isFinite(at) ? { at } : {}), record_event: recordEvent, ...(billingMode ? { billing_mode: billingMode } : {}), ...(note ? { note } : {}) }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : `move out failed (${res.status})`);
-  return data as { ok: boolean; moved_out_at: number };
+  if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : typeof data.detail === "string" ? data.detail : `transfer failed (${res.status})`);
+  return data as { ok: boolean; moved_out_at: number; stopped_drips?: number };
 }
 
 /** Start Recovery in the OR room: the patient recovers here (Canopy shows Recovery); Move out stays possible. */
@@ -368,10 +506,37 @@ export async function recoverInRoom(case_id: number, at?: number) {
   return data as { ok: boolean };
 }
 
-/** Move a patient waiting for this recovery bed in (continues the case from the OR room). */
+/** Receive a patient transferred to this recovery bed: starts a new Post-Anesthesia case (same admission). */
 export async function moveInRecovery(admission_id: string) {
   const res = await fetch(`${BASE}/or-recovery/${encodeURIComponent(admission_id)}/move-in`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : `move in failed (${res.status})`);
+  if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : `receive transfer failed (${res.status})`);
   return data as { ok: boolean; case_id: number };
+}
+
+/** One earlier case of the same admission (AN) on another workstation, summarised by Canopy. */
+export type JourneyInfusion = {
+  code: string | null; name: string; kind: string | null; unit: string | null; route?: string | null; note?: string | null;
+  started_at: number | null; stopped_at: number | null; state: "running" | "continuing" | "stopped";
+  rate_value: number | null; rate_unit: string | null; dose_value: number | null; dose_unit: string | null;
+  from_stage?: string; from_leaf?: string;
+};
+export type JourneyDose = { code: string | null; name: string; unit: string | null; at: number | null; dose_value: number | null; dose_unit: string | null; volume_ml: number | null; note: string | null };
+export type JourneyCase = {
+  global_case_id: string; leaf_name: string | null; unit_name: string | null; stage: string;
+  case_code: string | null; status: string | null; or_stage: string | null; start_time: number | null; end_time: number | null;
+  discharge_reason: string | null; discharge_destination: string | null; workflow: string | null;
+  weight_kg: number | null; allergies: string[];
+  infusions: JourneyInfusion[]; doses: JourneyDose[];
+  events: { at: number | null; title: string | null; detail: string | null; type: string | null }[];
+  latest_vitals: { at: number | null; values: Record<string, unknown> | null } | null;
+};
+export type CaseJourney = { an: string | null; cases: JourneyCase[]; continuing?: JourneyInfusion[]; reason?: string };
+
+/** Patient Journey: the earlier cases of this admission (OR → Recovery → ICU) and the infusions still running. */
+export async function getCaseJourney(case_id: number): Promise<CaseJourney> {
+  const res = await fetch(`${BASE}/${case_id}/journey`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : typeof data.detail === "string" ? data.detail : `journey failed (${res.status})`);
+  return data as CaseJourney;
 }

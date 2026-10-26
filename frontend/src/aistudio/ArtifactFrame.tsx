@@ -1,6 +1,7 @@
 /** One AI Studio visual: runs its queries on current data, renders it in a locked-down iframe, and offers re-run, keep and share. */
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { renderData, runKept, type Artifact, type KeptArtifact, type Period, type RenderResult } from "../api/aiStudioApi";
+import { renderData, type Artifact, type KeptArtifact, type Period, type RenderResult } from "../api/aiStudioApi";
+import { useBoardLeaf, useDashboardData } from "./dashboard/dataSource";
 import { buildSrcDoc, readTheme } from "./runtime";
 import { tr, type Lang } from "../reportstudio/model";
 import { inlineInput, small } from "../reportstudio/styles";
@@ -30,19 +31,23 @@ export default function ArtifactFrame({ lang, artifact, keptId, actions, tall, c
   const [height, setHeight] = useState(tall ? 520 : 360);
   const [showCode, setShowCode] = useState(false);
   const specKey = JSON.stringify(artifact.data);
+  const { runSnippet } = useDashboardData();
+  // The board's Leaf context for the visual (FLORA.leaf / FLORA.case); rebuilt only when it changes.
+  const { context } = useBoardLeaf();
+  const contextKey = context ? JSON.stringify({ leaf: context.leaf, cases: context.cases, next: context.next }) : "";
 
   const run = useCallback(async (next: Period) => {
     setRunning(true);
     setError("");
     setScriptError("");
     try {
-      setResult(keptId ? await runKept(keptId, next) : await renderData(JSON.parse(specKey), next));
+      setResult(keptId ? await runSnippet(keptId, next) : await renderData(JSON.parse(specKey), next));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
       setRunning(false);
     }
-  }, [keptId, specKey]);
+  }, [keptId, runSnippet, specKey]);
 
   const boardKey = compact ? `${boardPeriod?.from ?? ""}|${boardPeriod?.to ?? ""}|${refreshKey ?? 0}` : "";
   useEffect(() => {
@@ -63,7 +68,8 @@ export default function ArtifactFrame({ lang, artifact, keptId, actions, tall, c
     return () => window.removeEventListener("message", onMessage);
   }, []);
 
-  const srcDoc = useMemo(() => (result ? buildSrcDoc(artifact.html, result.data, result.params, readTheme(), frameId, { fit: compact }) : ""), [artifact.html, result, frameId, compact]);
+  const srcDoc = useMemo(() => (result ? buildSrcDoc(artifact.html, result.data, result.params, readTheme(), frameId, { fit: compact, context: contextKey ? JSON.parse(contextKey) : {} }) : ""),
+    [artifact.html, result, frameId, compact, contextKey]);
   const dataErrors = result ? Object.entries(result.data).filter(([, value]) => value.error).map(([name, value]) => `${name}: ${value.error}`) : [];
 
   if (compact) {

@@ -5,10 +5,10 @@
 # flora_migration_log, so a later run skips it.
 #
 #   scripts/apply-migrations.sh --list                 # scripts in install order; [x] = recorded as applied here
-#   scripts/apply-migrations.sh --from 0090 --dry-run  # what would run
-#   scripts/apply-migrations.sh --from 0090            # 0090 and later
-#   scripts/apply-migrations.sh --only 0093            # one script
-#   scripts/apply-migrations.sh --only 0093 --force    # again, even if recorded
+#   scripts/apply-migrations.sh --from 0088 --dry-run  # what would run
+#   scripts/apply-migrations.sh --from 0088            # 0088 and later
+#   scripts/apply-migrations.sh --only 0091            # one script
+#   scripts/apply-migrations.sh --only 0091 --force    # again, even if recorded
 #
 #   PG_CONTAINER (default flora-core-postgres-1) and DB (default flora) choose the server and database.
 #

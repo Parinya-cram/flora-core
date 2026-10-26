@@ -5,6 +5,7 @@ directory sync. Features call `anthropic_client()` (Anthropic format) or read
 `load()` for an OpenAI-compatible endpoint. The key is never sent to browsers.
 """
 import json
+import os
 import time
 import urllib.error
 import urllib.request
@@ -52,13 +53,29 @@ def save(database: Connection, *, api_format: str, host: str, model: str, api_ke
     return load(database)
 
 
+# Canopy and Leaf have no internet of their own: only the hospital appliance (Haber) goes out. When it is
+# configured, every AI call goes through the appliance's AI relay, which forwards to allow-listed AI hosts only.
+APPLIANCE_URL = os.getenv("FLORA_HABER_URL", "").rstrip("/")
+APPLIANCE_TOKEN = os.getenv("HABER_NODE_TOKEN") or os.getenv("HABER_ADMIN_PASSWORD") or ""
+VIA_APPLIANCE = os.getenv("FLORA_AI_VIA_APPLIANCE", "true").lower() == "true" and bool(APPLIANCE_URL and APPLIANCE_TOKEN)
+
+
+def routed(url: str) -> str:
+    """The URL to call for an AI service URL: through the appliance relay when it is configured."""
+    if not VIA_APPLIANCE or not url.startswith(("http://", "https://")):
+        return url
+    scheme, rest = url.split("://", 1)
+    return f"{APPLIANCE_URL}/api/haber/v1/ai-relay/{APPLIANCE_TOKEN}/{scheme}/{rest}"
+
+
 def anthropic_client(config: dict[str, Any], timeout: float = 60.0):
     """Official Anthropic SDK client for the configured host (empty host = Anthropic API)."""
     import anthropic
 
     options: dict[str, Any] = {"api_key": config.get("api_key") or None, "timeout": timeout, "max_retries": 1}
-    if config.get("host"):
-        options["base_url"] = config["host"]
+    host = config.get("host") or ("https://api.anthropic.com" if VIA_APPLIANCE else "")
+    if host:
+        options["base_url"] = routed(host)
     return anthropic.Anthropic(**options)
 
 
@@ -75,7 +92,7 @@ def openai_bases(host: str) -> list[str]:
     """Where the OpenAI-compatible API may live: the host as typed (OpenRouter .../api/v1, Open WebUI .../api)
     first, then host + /v1 (Ollama, vLLM and LM Studio are usually entered without it)."""
     host = host.rstrip("/")
-    return [host] if host.endswith("/v1") else [host, f"{host}/v1"]
+    return [routed(base) for base in ([host] if host.endswith("/v1") else [host, f"{host}/v1"])]
 
 
 def _openai_models(config: dict[str, Any]) -> list[str]:

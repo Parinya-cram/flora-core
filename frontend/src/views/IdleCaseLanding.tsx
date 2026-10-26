@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createCaseDiagnosis, createCaseProcedure } from "../api/caseClinicalApi";
 import {
+  deviceInUseMessage,
   getCanopyAdmissions,
   getCaseStartOverlap,
   startCase,
   type AdmissionSource,
+  type DeviceBindingInput,
   type CanopyAdmissionRow,
   type StartCaseOverlapPolicy,
 } from "../api/caseApi";
@@ -29,6 +31,7 @@ import emergencyPathIcon from "../assets/admission-paths/emergency.png";
 import ClinicalDateInput from "../components/ClinicalDateInput";
 import ClinicalDateTimeInput from "../components/ClinicalDateTimeInput";
 import WorkflowPicker from "../components/workflow/WorkflowPicker";
+import { DeviceBindingPicker } from "../components/case/CaseDevicesPanel";
 import { defaultWorkflowId, useLeafWorkflows } from "../components/workflow/leafWorkflows";
 import { searchClinicalConcepts, type ClinicalConcept } from "../api/terminologyApi";
 import {
@@ -36,10 +39,16 @@ import {
   normalizePatientNameLanguage,
   type PatientNameLanguage,
 } from "../utils/patientName";
+import { takeBedSessionPreset } from "../components/ward/bedSession";
 
 type Props = {
   sessionUser: AuthUser | null;
-  onCaseStarted: () => Promise<void> | void;
+  onCaseStarted: (caseId?: number) => Promise<void> | void;
+};
+
+const BED_TEXT = {
+  en: { bed: "Bed", bedHint: "e.g. R1 — needed when this Leaf runs several beds", devices: "Bedside devices" },
+  th: { bed: "เตียง", bedHint: "เช่น R1 — ใช้เมื่อเครื่องนี้ดูแลหลายเตียง", devices: "อุปกรณ์ข้างเตียง" },
 };
 
 type AdmissionMode = "prepared" | "his" | "manual" | "emergency";
@@ -180,6 +189,27 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
   const workflows = useLeafWorkflows();
   /** The clinician's workflow pick, valid only for the admission it was made for. */
   const [workflowPick, setWorkflowPick] = useState<{ admissionId: string; id: string } | null>(null);
+  /** Multi-case Leaf: bed label and Gateway devices for the new case. */
+  // Started from a bed on the Ward page: that bed and its devices are already filled in.
+  const [preset] = useState(takeBedSessionPreset);
+  const [bedLabel, setBedLabel] = useState(preset?.bedLabel ?? "");
+  const [bindings, setBindings] = useState<DeviceBindingInput[]>(preset?.devices ?? []);
+  const B = BED_TEXT[language === "th" ? "th" : "en"];
+  const startError = (cause: unknown) => deviceInUseMessage(cause, language) || (cause instanceof Error ? cause.message : t("landing.startFailed"));
+  const bedAndDevices = (
+    <div className="space-y-2 rounded-xl bg-[var(--app-control-bg)] p-3">
+      <label className="block">
+        <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--app-muted)]">{B.bed}</span>
+        <input value={bedLabel} onChange={event => setBedLabel(event.target.value)} maxLength={32} placeholder="R1" disabled={busy}
+          className="mt-1 h-9 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-panel-bg)] px-2 text-sm text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]" />
+        <span className="mt-1 block text-[10px] text-[var(--app-muted)]">{B.bedHint}</span>
+      </label>
+      <div>
+        <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--app-muted)]">{B.devices}</div>
+        <DeviceBindingPicker value={bindings} onChange={setBindings} disabled={busy} compact />
+      </div>
+    </div>
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -402,6 +432,8 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
         surgicalPriority,
         canopyAdmissionId: canopyAdmission?.id,
         workflowId: workflowId || undefined,
+        bedLabel: bedLabel.trim() || undefined,
+        devices: bindings.length ? bindings : undefined,
       });
       const caseId = Number(started?.case_id);
       if (!Number.isFinite(caseId) || caseId <= 0) throw new Error(t("landing.startFailed"));
@@ -443,9 +475,9 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
         console.warn("[CASE] started with preparation sync warnings", [...preparationWarnings, ...failed]);
       }
       window.dispatchEvent(new CustomEvent("flora:case-started", { detail: { caseId, hn: started?.hn || lookup.row.hn } }));
-      await onCaseStarted();
+      await onCaseStarted(caseId);
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : t("landing.startFailed");
+      const message = startError(cause);
       if (canopyAdmission && isCanopyAdmissionGone(message)) {
         // Someone else started or withdrew it: return to the refreshed list.
         resetPatient();
@@ -463,13 +495,19 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
     setBusy(true);
     setError("");
     try {
-      const started = await startCase("", startTimestamp, { overlapPolicy: policy, admissionSource: "emergency", workflowId: defaultWorkflowId(workflows) || undefined });
+      const started = await startCase("", startTimestamp, {
+        overlapPolicy: policy,
+        admissionSource: "emergency",
+        workflowId: defaultWorkflowId(workflows) || undefined,
+        bedLabel: bedLabel.trim() || undefined,
+        devices: bindings.length ? bindings : undefined,
+      });
       const caseId = Number(started?.case_id);
       if (!Number.isFinite(caseId) || caseId <= 0) throw new Error(t("landing.startFailed"));
       window.dispatchEvent(new CustomEvent("flora:case-started", { detail: { caseId, hn: started?.hn, admissionSource: "emergency" } }));
-      await onCaseStarted();
+      await onCaseStarted(caseId);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t("landing.startFailed"));
+      setError(startError(cause));
     } finally {
       setBusy(false);
       setEmergencyOverlapChoice(false);
@@ -515,7 +553,7 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
 
   return (
     <main className="min-h-full bg-[var(--app-bg)] px-4 py-4 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-[1180px] space-y-4">
+      <div className="w-full space-y-4">
         {!patientReady ? (
           <div className="space-y-4">
             <section className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-4 sm:p-5">
@@ -532,7 +570,7 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
                   </div>
                   <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-control-bg)] px-4 py-3">
                     <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">{t("landing.roomBed")}</div>
-                    <div className="mt-1 flex min-w-0 items-baseline gap-2 text-lg font-bold text-[var(--app-text)]"><span className="truncate">{workstation?.roomName || "—"}</span><span className="text-[var(--app-muted)]">·</span><span className="truncate text-[var(--app-accent)]">{workstation?.bedName || "—"}</span></div>
+                    <div className="mt-1 flex min-w-0 items-baseline gap-2 text-lg font-bold text-[var(--app-text)]"><span className="truncate">{(preset && bedLabel.trim() === preset.bedLabel ? preset.roomName : null) || workstation?.roomName || "—"}</span><span className="text-[var(--app-muted)]">·</span><span className="truncate text-[var(--app-accent)]">{bedLabel.trim() || workstation?.bedName || "—"}</span></div>
                   </div>
                 </div>
                 <div className="shrink-0 lg:text-right">
@@ -612,6 +650,7 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
             </section> : null}
 
             {mode === "emergency" ? <section className="rounded-2xl border border-rose-400/40 bg-rose-500/8 p-5 sm:p-7">
+              <div className="mb-4 max-w-xl">{bedAndDevices}</div>
               {error ? <div className="mt-4 rounded-xl border border-rose-400/35 bg-rose-500/10 p-3 text-sm text-rose-400">{error}</div> : null}
               {emergencyOverlapChoice ? <div className="mt-4 grid gap-2 sm:grid-cols-2"><button type="button" onClick={() => void completeEmergency("exclude")} className="h-11 rounded-xl bg-rose-500 px-4 text-sm font-bold text-white">{t("landing.startAfterPrevious")}</button><button type="button" onClick={() => void completeEmergency("include")} className="h-11 rounded-xl border border-rose-400/40 px-4 text-sm font-bold text-rose-400">{t("landing.includeOverlap")}</button></div> : <button type="button" disabled={busy} onClick={() => void beginEmergency()} className="mt-5 h-12 rounded-xl bg-rose-500 px-6 text-sm font-bold text-white hover:bg-rose-400 disabled:opacity-50">{busy ? t("landing.starting") : t("admit.startEmergency")}</button>}
             </section> : null}
@@ -662,6 +701,7 @@ export default function IdleCaseLanding({ sessionUser, onCaseStarted }: Props) {
               <h2 className="text-base font-bold text-[var(--app-text)]">{t("landing.startSummary")}</h2>
               <div className="mt-4 space-y-3">
                 <div className="rounded-xl bg-[var(--app-control-bg)] p-3"><div className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--app-muted)]">{t("landing.location")}</div><div className="mt-1 text-sm font-semibold text-[var(--app-text)]">{t("landing.thisWorkstation")}</div></div>
+                {bedAndDevices}
                 <div className="rounded-xl bg-[var(--app-control-bg)] p-3"><div className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--app-muted)]">{t("landing.responsibleClinician")}</div><div className="mt-1 text-sm font-semibold text-[var(--app-text)]">{clinician}</div><div className="text-xs text-[var(--app-muted)]">{sessionUser?.role || "—"}</div></div>
                 <label className="block rounded-xl bg-[var(--app-control-bg)] p-3"><span className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--app-muted)]">{t("landing.startTime")}</span><ClinicalDateTimeInput value={startAt} onChange={setStartAt} dateFormat={workstation?.dateFormat || "DD/MM/YYYY"} timeFormat={workstation?.timeFormat || "24h"} /></label>
                 <WorkflowPicker rows={workflows} value={workflowId} admissionWorkflowId={admissionWorkflowId} disabled={busy} onChange={id => setWorkflowPick({ admissionId: canopyAdmission?.id || "", id })} />

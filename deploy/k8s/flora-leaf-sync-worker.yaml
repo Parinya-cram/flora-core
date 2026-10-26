@@ -1,0 +1,28 @@
+# The Leaf's sync worker: pushes local cases/exports to Canopy and pulls ward state,
+# the directory, admissions and the gateway device assignment back into the Leaf's
+# offline-first cache (leaf_ward_state etc.). Without it the Leaf never refreshes
+# from Canopy and the Ward page shows a frozen snapshot. One per Leaf.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: leaf-sync-worker
+  namespace: flora-leaf
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: leaf-sync-worker } }
+  template:
+    metadata: { labels: { app: leaf-sync-worker } }
+    spec:
+      containers:
+        - name: leaf-sync-worker
+          image: flora-leaf-sync-worker:latest
+          imagePullPolicy: Never
+          env:
+            - { name: FLORA_LEAF_API_URL, value: "http://leaf-api.flora-leaf.svc.cluster.local:8000" }
+            - { name: FLORA_CANOPY_SYNC_URL, value: "http://sync-api.flora-canopy.svc.cluster.local:8000" }
+            - { name: FLORA_SYNC_SHARED_SECRET, value: "admin" }
+            - { name: FLORA_LEAF_SERVICE_SECRET, value: "admin" }
+            - { name: FLORA_LEAF_ID, value: "leaf-or-01" }
+            - { name: FLORA_HOSPITAL_ID, value: "hospital-01" }
+            - { name: FLORA_LEAF_NAME, value: "Operating Room 1" }
+            - { name: FLORA_SYNC_INTERVAL_SECONDS, value: "10" }

@@ -11,6 +11,13 @@ export default defineConfig({
     // (leaf.flora.local, *.trycloudflare.com, etc.) instead of Vite's default allowlist.
     allowedHosts: true,
     proxy: {
+      // Live stream WebSocket (leaf-live). Must come before '/api' so the
+      // upgrade is proxied with ws:true.
+      '/api/live': {
+        target: process.env.VITE_LIVE_PROXY_TARGET || process.env.VITE_API_PROXY_TARGET || 'http://localhost:6893',
+        ws: true,
+        changeOrigin: true,
+      },
       '/api': process.env.VITE_API_PROXY_TARGET || 'http://localhost:6893',
       '/health': process.env.VITE_API_PROXY_TARGET || 'http://localhost:6893',
     },

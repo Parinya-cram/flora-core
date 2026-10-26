@@ -2,6 +2,8 @@ import logging
 from contextlib import asynccontextmanager
 import os
 
+import anyio
+
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -10,14 +12,18 @@ from psycopg import Connection
 from . import access_log
 from .bootstrap_admin import ensure_bootstrap_admin
 from .database import close_pool, connection, open_pool, pool
-from . import tenancy
+from . import activity_log, tenancy
 from .account_middleware import AccountMiddleware
 from .device_writer import device_writer
+from .live_schema import ensure_live_schema
 from .routes.cases_read import router as cases_read_router
 from .routes.auth_canopy import router as canopy_auth_router
+from .routes.activity_log import router as activity_log_router
+from .routes.ai_studio_kiosk import router as ai_studio_kiosk_router
 from .routes.auth_leaf import router as leaf_auth_router
 from .routes.cases_lifecycle import router as cases_lifecycle_router
 from .routes.leaf_sync import router as leaf_sync_router
+from .routes.case_devices import router as case_devices_router
 from .routes.clinical_write import router as clinical_write_router
 from .routes.catalog_write import router as catalog_write_router
 from .routes.io_write import router as io_write_router
@@ -26,6 +32,7 @@ from .routes.device_writer import router as device_writer_router
 from .routes.his import router as his_router
 from .routes.fleet_read import router as fleet_read_router
 from .routes.fleet_control import router as fleet_control_router
+from .routes.device_distribution import router as device_distribution_router
 from .routes.legacy_archive import router as legacy_archive_router
 from .routes.canopy_reports import router as canopy_reports_router
 from .routes.ai_studio import router as ai_studio_router
@@ -44,10 +51,14 @@ from .routes.scores_leaf import router as scores_leaf_router
 from .routes.staff_canopy import router as staff_canopy_router
 from .routes.or_schedule import router as or_schedule_router
 from .routes.or_leaf import router as or_leaf_router
+from .routes.case_journey import router as case_journey_router
+from .routes.central_leaf import router as central_leaf_router
 from .routes.staff_sync_leaf import router as staff_sync_leaf_router
 from .score_writer import score_writer
 from .routes.canopy_admissions import router as canopy_admissions_router
 from .routes.hl7_interface import admin_router as hl7_admin_router, webhook_router as hl7_webhook_router
+from .routes.outbound_admin import router as outbound_admin_router
+from .outbound import worker as outbound_worker
 from .routes.public_api import router as public_api_router
 from .routes.api_keys_admin import router as api_keys_admin_router
 from . import api_keys
@@ -69,6 +80,11 @@ from .routes.formdev_reading import router as formdev_reading_router
 from .routes.workflows import router as workflows_router
 from .routes.case_workflow import router as case_workflow_router
 from .routes.case_documents import router as case_documents_router
+from .routes.shift_handover_leaf import router as shift_handover_leaf_router
+from .routes.billing_periods_leaf import router as billing_periods_leaf_router
+from .routes.icu_kpi_leaf import router as icu_kpi_leaf_router
+from .routes.med_orders_leaf import router as med_orders_leaf_router
+from .routes.icu_kpi_canopy import router as icu_kpi_canopy_router
 from .routes import formdev_runtime
 from .formdev.errors import FormDevError
 
@@ -78,6 +94,7 @@ async def lifespan(_: FastAPI):
     open_pool()
     api_mode = os.getenv("FLORA_API_MODE", "leaf").strip().lower()
     if api_mode == "leaf":
+        ensure_live_schema()
         with pool.connection() as database:
             ensure_bootstrap_admin(database)
     elif api_mode == "canopy":
@@ -94,10 +111,12 @@ async def lifespan(_: FastAPI):
         score_writer.start()
     if api_mode == "canopy":
         formdev_runtime.start_background()
+        outbound_worker.start()
     yield
     if api_mode == "canopy":
         # Workers return unfinished jobs to the queue before the pools close.
         formdev_runtime.stop_background()
+        outbound_worker.stop()
     device_writer.stop()
     score_writer.stop()
     close_pool()
@@ -126,9 +145,16 @@ if API_MODE == "leaf" and os.getenv("FLORA_LEAF_WRITE_API", "false").lower() == 
     app.include_router(scores_leaf_router)
     app.include_router(staff_sync_leaf_router)  # before catalog_write's /staff/* routes
     app.include_router(or_leaf_router)
+    app.include_router(case_journey_router)
+    app.include_router(central_leaf_router)
     app.include_router(case_workflow_router)
     app.include_router(case_documents_router)
     app.include_router(leaf_sync_router)
+    app.include_router(shift_handover_leaf_router)
+    app.include_router(billing_periods_leaf_router)
+    app.include_router(icu_kpi_leaf_router)
+    app.include_router(med_orders_leaf_router)
+    app.include_router(case_devices_router)
     app.include_router(cases_lifecycle_router)
     app.include_router(clinical_write_router)
     app.include_router(catalog_write_router)
@@ -138,8 +164,11 @@ if API_MODE == "leaf" and os.getenv("FLORA_LEAF_WRITE_API", "false").lower() == 
     app.include_router(his_router)
     app.include_router(workstation_router)
     app.include_router(terminology_router)
+    app.include_router(device_distribution_router)  # Device Distribution console on the Leaf too (proxies to Haber)
 if API_MODE == "canopy":
     app.include_router(canopy_auth_router)
+    app.include_router(activity_log_router)
+    app.include_router(ai_studio_kiosk_router)
     app.include_router(canopy_preferences_router)
     app.include_router(canopy_users_router)
     app.include_router(build_ai_settings_router())
@@ -147,8 +176,10 @@ if API_MODE == "canopy":
     app.include_router(canopy_admissions_router)
     app.include_router(hl7_webhook_router)
     app.include_router(hl7_admin_router)
+    app.include_router(outbound_admin_router)
     app.include_router(public_api_router)
     app.include_router(api_keys_admin_router)
+    app.include_router(icu_kpi_canopy_router)
     app.include_router(fleet_read_router)
     app.include_router(gateway_alerts_fleet_router)
     app.include_router(device_fleet_router)
@@ -158,6 +189,7 @@ if API_MODE == "canopy":
     app.include_router(platform_router)
     app.include_router(twin_control_router)
     app.include_router(fleet_control_router)
+    app.include_router(device_distribution_router)
     app.include_router(legacy_archive_router)
     app.include_router(canopy_reports_router)
     app.include_router(ai_studio_router)
@@ -194,6 +226,8 @@ async def enforce_canopy_read_only(request: Request, call_next):
         formdev_write = formdev_write or request.url.path.startswith("/api/fleet/workflows")
         # AI Studio chats and kept visuals (permission checked by the routes).
         formdev_write = formdev_write or request.url.path.startswith("/api/ai-studio/")
+        # Device Distribution console: image rollout / registry settings / device adopt (admin, via Haber).
+        formdev_write = formdev_write or request.url.path.startswith("/api/fleet/distribution")
         # Platform console (account management; platform administrators only).
         formdev_write = formdev_write or request.url.path.startswith("/api/platform/")
         # Review of case forms (form.review / form.approve, checked by the route) and the hospital's name and logo.
@@ -205,6 +239,25 @@ async def enforce_canopy_read_only(request: Request, call_next):
                 content={"error": "Flora Canopy is read-only"},
             )
     return await call_next(request)
+
+
+@app.middleware("http")
+async def canopy_activity_log(request: Request, call_next):
+    """Administrator → Logs: every Canopy write, chart opened and report printed (see app/activity_log.py)."""
+    if API_MODE != "canopy" or not activity_log.should_log(request.method, request.url.path):
+        return await call_next(request)
+    started = time.monotonic()
+    status, error = 500, None
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        return response
+    except Exception as exc:
+        error = type(exc).__name__
+        raise
+    finally:
+        await anyio.to_thread.run_sync(activity_log.record_request, request, status, int((time.monotonic() - started) * 1000), error,
+                                       tenancy.current_account())
 
 
 @app.middleware("http")

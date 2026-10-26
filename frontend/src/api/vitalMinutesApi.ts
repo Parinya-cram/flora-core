@@ -72,11 +72,17 @@ export async function getEffectiveTimelineWithMasks(
   caseId: number,
   fromTs: number,
   toTs: number,
+  /** step ≥ 60 min: the server keeps the last value per key per column (anchor + k·step). */
+  bucket?: { stepMin: number; anchor: number },
 ): Promise<{ rows: VitalMinuteRow[]; masks: TimelineMask[] }> {
   const params = new URLSearchParams({
     from: String(fromTs),
     to: String(toTs),
   });
+  if (bucket && bucket.stepMin >= 60) {
+    params.set("step", String(bucket.stepMin));
+    params.set("anchor", String(bucket.anchor));
+  }
 
   const res = await fetch(
     `${BASE}/${caseId}/timeline/effective?${params.toString()}`,

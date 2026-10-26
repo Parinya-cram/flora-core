@@ -36,7 +36,11 @@ class DetailsInput(BaseModel):
     asa_status: str | None = Field(default=None, max_length=16)
     asa_emergency: bool = False
     surgical_priority: str | None = Field(default=None, max_length=80)
+    # Surgeon and anaesthetist: picked from the staff directory (name + staff code) or typed (name only).
     surgeon: str | None = Field(default=None, max_length=200)
+    surgeon_code: str | None = Field(default=None, max_length=64)
+    anaesthetist: str | None = Field(default=None, max_length=200)
+    anaesthetist_code: str | None = Field(default=None, max_length=64)
     # Workflow Studio: preset for the Leaf start dialog (a workflow assigned to the ward).
     workflow_id: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{1,63}$")
 
@@ -214,8 +218,13 @@ def cancel_admission(admission_id: str, _: dict = Depends(require_canopy_permiss
         row = _load(database, admission_id, scope, lock=True)
         if row["status"] != "pending":
             raise HTTPException(status_code=409, detail="only an admission that has not started can be cancelled")
-        database.execute("UPDATE canopy_admission SET status='cancelled',updated_at=%s WHERE id=%s",
-                         (directory.now_ms(), admission_id))
+        # An OR booking closes on the schedule too (it would otherwise stay "Appointed" with no actions).
+        database.execute(
+            """UPDATE canopy_admission SET status='cancelled',updated_at=%s,
+                 journey_state=CASE WHEN journey_state IN ('booked','assigned') THEN 'cancelled' ELSE journey_state END,
+                 target_leaf_id=CASE WHEN journey_state IN ('booked','assigned') THEN NULL ELSE target_leaf_id END
+               WHERE id=%s""",
+            (directory.now_ms(), admission_id))
     return {"row": _public(_load(database, admission_id, scope))}
 
 

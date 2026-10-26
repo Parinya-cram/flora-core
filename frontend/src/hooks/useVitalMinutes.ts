@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getEffectiveTimelineWithMasks, type TimelineMask, type TimelineProvenance, type VitalMinuteRow } from "../api/vitalMinutesApi";
 import type { ClinicalTimelineValues } from "../components/clinical-timeline/types";
+import { LIVE_MINUTE_CLOSED_EVENT, type LiveMinute } from "./useLiveCase";
+
+/** leaf-live rolls a closed minute into vital_minutes shortly after it closes; refetch after this delay. */
+const LIVE_ROLLUP_DELAY_MS = 2_500;
 
 type CaseStatus = "IDLE" | "ACTIVE" | "DISCHARGED" | "ARCHIVED";
 
@@ -97,7 +101,20 @@ export function useVitalMinutes(
   caseId: number | null,
   status: CaseStatus,
   axis: number[],
+  /** Values of the minute still streaming in (useLiveCase); shown until the stored minute arrives. */
+  liveMinute?: LiveMinute | null,
+  options: {
+    /** Case start (ms): the first column also shows the minutes before it, down to the case start. */
+    caseStartTs?: number | null;
+    /** Ask the server for one value per key per column (long stays / coarse steps, step ≥ 60). */
+    bucketed?: boolean;
+    /** Poll while active; false when the window (a past day) does not contain now. */
+    poll?: boolean;
+  } = {},
 ) {
+  const caseStartTs = options.caseStartTs ?? null;
+  const bucketed = options.bucketed ?? false;
+  const poll = options.poll ?? true;
   const [values, setValues] = useState<ClinicalTimelineValues>({});
   const [provenance, setProvenance] = useState<TimelineProvenance>({});
   const [loading, setLoading] = useState(false);
@@ -123,15 +140,21 @@ export function useVitalMinutes(
 
     const activeCaseId = caseId;
     const currentAxis = axis;
-    const fromTs = axis[0];
     const stepMs = axis.length > 1 ? Math.max(1, axis[1] - axis[0]) : 60_000;
+    // A column shows (previous column, column]; fetch the first column's minutes too, but never
+    // before the case start (keeps the whole-stay view as it was).
+    const fromTs = caseStartTs != null
+      ? Math.min(axis[0], Math.max(Math.floor(caseStartTs / 60_000) * 60_000, axis[0] - stepMs + 60_000))
+      : axis[0];
     const toTs = axis[axis.length - 1] + stepMs - 1;
+    const stepMin = Math.round(stepMs / 60_000);
+    const bucket = bucketed && stepMin >= 60 ? { stepMin, anchor: axis[0] } : undefined;
     let alive = true;
 
     async function fetchVitals(showLoading = false) {
       if (showLoading) setLoading(true);
       try {
-        const { rows, masks: nextMasks } = await getEffectiveTimelineWithMasks(activeCaseId, fromTs, toTs);
+        const { rows, masks: nextMasks } = await getEffectiveTimelineWithMasks(activeCaseId, fromTs, toTs, bucket);
         if (!alive) return;
         const nextValues = toClinicalTimelineValues(rows);
         const nextMasked = toMaskedValues(rows);
@@ -150,29 +173,59 @@ export function useVitalMinutes(
     fetchVitals(true);
     reloadRef.current = () => fetchVitals(false);
 
-    if (status === "ACTIVE") {
+    if (status === "ACTIVE" && poll) {
       const onStartTimeUpdated = (event: Event) => {
         const custom = event as CustomEvent<{ caseId?: number }>;
         const changedCaseId = Number(custom.detail?.caseId);
         if (!Number.isFinite(changedCaseId) || changedCaseId !== activeCaseId) return;
         void fetchVitals(true);
       };
+      // A minute closed in the live stream: fetch it now instead of waiting for the 15 s poll.
+      let liveTimer: ReturnType<typeof setTimeout> | null = null;
+      const onLiveMinuteClosed = (event: Event) => {
+        const custom = event as CustomEvent<{ caseId?: number; minute?: number }>;
+        if (Number(custom.detail?.caseId) !== activeCaseId) return;
+        const minute = Number(custom.detail?.minute);
+        if (Number.isFinite(minute) && (minute < fromTs || minute > toTs)) return;
+        if (liveTimer) clearTimeout(liveTimer);
+        liveTimer = setTimeout(() => void fetchVitals(false), LIVE_ROLLUP_DELAY_MS);
+      };
       const timer = setInterval(() => fetchVitals(false), 15_000);
       window.addEventListener("flora:case-start-time-updated", onStartTimeUpdated);
+      window.addEventListener(LIVE_MINUTE_CLOSED_EVENT, onLiveMinuteClosed);
       return () => {
         alive = false;
         clearInterval(timer);
+        if (liveTimer) clearTimeout(liveTimer);
         window.removeEventListener("flora:case-start-time-updated", onStartTimeUpdated);
+        window.removeEventListener(LIVE_MINUTE_CLOSED_EVENT, onLiveMinuteClosed);
       };
     }
 
     return () => {
       alive = false;
     };
-  }, [caseId, status, axis]);
+  }, [caseId, status, axis, caseStartTs, bucketed, poll]);
 
   /** Refetch now (after a mask change), resolving when the new data is in. */
   const reload = useCallback(() => reloadRef.current(), []);
 
-  return { values, provenance, loading, fetchedAxis, masked, masks, reload };
+  // Merge the streaming minute into the grid. Stored values always win; the live value
+  // only fills a cell the server has not rolled up yet, and only on an axis column.
+  const mergedValues = useMemo(() => {
+    if (!liveMinute || status !== "ACTIVE" || !axis.length) return values;
+    const ts = liveMinute.ts_minute;
+    if (!axis.includes(ts)) return values;
+    let next: ClinicalTimelineValues | null = null;
+    for (const [rawKey, value] of Object.entries(liveMinute.values)) {
+      if (value == null || value === "") continue;
+      const rowId = toRowId(rawKey);
+      if (values[rowId]?.[ts] != null) continue;
+      next = next ?? { ...values };
+      next[rowId] = { ...(next[rowId] || {}), [ts]: value };
+    }
+    return next ?? values;
+  }, [axis, liveMinute, status, values]);
+
+  return { values: mergedValues, provenance, loading, fetchedAxis, masked, masks, reload };
 }

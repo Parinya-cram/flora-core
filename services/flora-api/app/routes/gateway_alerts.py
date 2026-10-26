@@ -3,7 +3,12 @@
 Gateways queue alerts locally and send every change through Haber (sync mode,
 `POST /api/sync/v1/gateways/{id}/alerts`). The Canopy UI reads the merged log
 (`GET /api/fleet/gateway-alerts`).
+
+The stream-hub's case UUID <-> device bindings come the same way
+(`POST /api/sync/v1/gateways/{id}/case-bindings`, read with `GET /api/fleet/case-bindings`).
 """
+import uuid
+from datetime import datetime
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query
@@ -13,6 +18,7 @@ from pydantic import BaseModel, Field
 from .. import directory
 from ..database import connection
 from .auth_canopy import read_token
+from .fleet_read import IN_SCOPE, fleet_scope
 from .sync_ingest import require_sync_secret
 
 sync_router = APIRouter(prefix="/api/sync/v1", tags=["leaf-canopy-sync"])
@@ -87,3 +93,73 @@ def list_gateway_alerts(status: Literal["all", "open", "resolved"] = "all",
                   count(DISTINCT gateway_id) FILTER (WHERE resolved_at IS NULL) AS gateways_affected
            FROM canopy_gateway_alert""").fetchone()
     return {"rows": rows, "counts": counts}
+
+
+class CaseBinding(BaseModel):
+    id: int
+    session_id: uuid.UUID
+    leaf_id: str = Field(max_length=120)
+    case_uuid: uuid.UUID
+    device_id: str = Field(max_length=120)
+    mode: Literal["exclusive", "shared"]
+    bound_at: datetime
+    unbound_at: datetime | None = None
+    unbind_reason: str | None = Field(default=None, max_length=60)
+    last_acked_seq: int | None = None
+
+
+class CaseBindingBatch(BaseModel):
+    bindings: list[CaseBinding] = Field(default_factory=list, max_length=1000)
+
+
+@sync_router.post("/gateways/{gateway_id}/case-bindings", dependencies=[Depends(require_sync_secret)])
+def store_case_bindings(gateway_id: str, payload: CaseBindingBatch,
+                        database: Connection = Depends(connection)) -> dict[str, Any]:
+    """Upserts stream-hub bindings; a late resend of an open row never reopens a closed one."""
+    with database.transaction():
+        for row in payload.bindings:
+            database.execute(
+                """INSERT INTO canopy_gateway_case_binding (gateway_id, binding_id, session_id, leaf_id, case_uuid,
+                       device_id, mode, bound_at, unbound_at, unbind_reason, last_acked_seq, updated_at)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,now())
+                   ON CONFLICT (gateway_id, binding_id) DO UPDATE SET
+                     unbound_at=coalesce(canopy_gateway_case_binding.unbound_at, excluded.unbound_at),
+                     unbind_reason=coalesce(canopy_gateway_case_binding.unbind_reason, excluded.unbind_reason),
+                     last_acked_seq=GREATEST(canopy_gateway_case_binding.last_acked_seq, excluded.last_acked_seq),
+                     updated_at=now()""",
+                (gateway_id, row.id, row.session_id, row.leaf_id, row.case_uuid, row.device_id, row.mode,
+                 row.bound_at, row.unbound_at, row.unbind_reason, row.last_acked_seq))
+    return {"accepted": [row.id for row in payload.bindings]}
+
+
+@fleet_router.get("/case-bindings")
+def list_case_bindings(case_uuid: uuid.UUID | None = None, leaf_id: str | None = None,
+                       is_open: bool | None = Query(default=None, alias="open"),
+                       limit: int = Query(default=200, ge=1, le=1000),
+                       scope: list[str] | None = Depends(fleet_scope),
+                       database: Connection = Depends(connection)) -> dict[str, Any]:
+    """Device sessions from every gateway's stream-hub, newest first, with the synced case where known."""
+    conditions, params = [IN_SCOPE], [scope, scope]
+    if case_uuid:
+        conditions.append("b.case_uuid = %s")
+        params.append(case_uuid)
+    if leaf_id:
+        conditions.append("b.leaf_id = %s")
+        params.append(leaf_id)
+    if is_open is not None:
+        conditions.append("b.unbound_at IS NULL" if is_open else "b.unbound_at IS NOT NULL")
+    rows = database.execute(
+        f"""SELECT b.gateway_id, b.binding_id, b.session_id, b.leaf_id, b.case_uuid, b.device_id, b.mode,
+                   b.bound_at, b.unbound_at, b.unbind_reason, b.last_acked_seq, b.updated_at,
+                   coalesce(nullif(leaf.canopy_display_name,''), leaf.display_name) AS leaf_name,
+                   gd.label AS device_label, c.hn, c.status AS case_status,
+                   c.snapshot->'patient'->'row'->>'name' AS patient_name, c.snapshot->'case'->>'bed_label' AS bed_label
+            FROM canopy_gateway_case_binding b
+            LEFT JOIN sync_leaf_node leaf ON leaf.leaf_id = b.leaf_id
+            LEFT JOIN canopy_leaf_unit scope_unit ON scope_unit.leaf_id = b.leaf_id
+            LEFT JOIN canopy_gateway_device gd ON gd.gateway_id = b.gateway_id AND gd.device_id = b.device_id
+            LEFT JOIN sync_case_index c ON c.global_case_id = b.case_uuid
+            WHERE {' AND '.join(conditions)}
+            ORDER BY b.unbound_at IS NOT NULL, b.bound_at DESC LIMIT %s""",
+        (*params, limit)).fetchall()
+    return {"rows": rows}

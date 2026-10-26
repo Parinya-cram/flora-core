@@ -135,7 +135,7 @@ export default function EphisView() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-4 p-4">
+    <div className="w-full space-y-4 p-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold text-[var(--app-text)]">ePHIS Daily Cases</h1>

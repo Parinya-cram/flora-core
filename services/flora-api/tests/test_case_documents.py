@@ -1,4 +1,4 @@
-"""Documents attached to a case (0094): put together on the Leaf (the PDF is the request body, no base64), kept with
+"""Documents attached to a case (0092): put together on the Leaf (the PDF is the request body, no base64), kept with
 the case, sent to Canopy once (details first, the file only when Canopy has not got it) and again when removed (details
 only); against a disposable PostgreSQL database (scripts/test-leaf-writes.sh)."""
 import hashlib

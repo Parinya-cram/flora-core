@@ -1100,7 +1100,7 @@ export default function PatientView({ caseStatus }: Props) {
   };
 
   return (
-    <div className="app-theme-scope mx-auto max-w-7xl space-y-3 p-4">
+    <div className="app-theme-scope w-full space-y-3 p-4">
       <div className="sticky top-3 z-20">
         <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)]/95 px-3 py-2.5 shadow-sm backdrop-blur">
           <div className="flex flex-wrap items-center gap-3">

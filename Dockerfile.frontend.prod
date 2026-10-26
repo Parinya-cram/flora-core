@@ -19,6 +19,8 @@ RUN npm run build
 # ---- serve ----
 FROM nginx:1.27-alpine
 # nginx entrypoint runs envsubst on *.template, filling ${API_UPSTREAM} from the env.
+# /api/live/ resolves leaf-live per request: Docker's DNS by default; Kubernetes sets its cluster DNS and service name.
+ENV NGINX_RESOLVER=127.0.0.11 LIVE_HOST=leaf-live:8000
 COPY frontend/nginx.prod.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/frontend/dist /usr/share/nginx/html
 EXPOSE 80

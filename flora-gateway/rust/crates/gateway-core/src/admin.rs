@@ -51,6 +51,17 @@ pub fn set_connected(map: &StatusMap, pod: &str, connected: bool, error: Option<
     }
 }
 
+/// Sets one field of a pod's `detail` (e.g. the serial modem lines), keeping the others.
+pub fn set_detail(map: &StatusMap, pod: &str, field: &str, value: Value) {
+    let mut guard = map.write().expect("status lock");
+    let entry = guard.entry(pod.to_string()).or_default();
+    entry.pod = pod.to_string();
+    if !entry.detail.is_object() {
+        entry.detail = json!({});
+    }
+    entry.detail[field] = value;
+}
+
 #[derive(Clone)]
 struct AdminState {
     component: &'static str,

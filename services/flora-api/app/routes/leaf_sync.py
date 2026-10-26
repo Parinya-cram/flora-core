@@ -1,4 +1,4 @@
-"""The sync worker's memory on the Leaf (0091-leaf-sync-state.sql): which cases to send to Canopy now, and what Canopy
+"""The sync worker's memory on the Leaf (0089-leaf-sync-state.sql): which cases to send to Canopy now, and what Canopy
 took. Service calls only (X-FLORA-Service-Secret).
 
 Which cases a pass looks at (`plan`), most urgent first, at most `limit`:

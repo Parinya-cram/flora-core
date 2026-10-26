@@ -1,8 +1,10 @@
 # Dräger MEDIBUS.X
 
 - Parser name in config: `medibus`.
-- Device types: `draeger-medibus`.
-- Transport: Serial RS-232.
+- Device types: `draeger-medibus` (serial pod), `draeger-p2500-lan` (Dräger P2500, socket pod).
+- Transport: Serial RS-232, or MEDIBUS.X over LAN: a raw TCP socket pod with `remote_host`
+  set to the device, so Flora connects out and stays the MEDIBUS master. A TCP
+  `connected`/`disconnected` event restarts the ICC/ID handshake.
 
 `parser.py` owns framing, checksums, handshake, polling, replies, and decoding. `flora_mapping.json` holds Flora conversions. `device_parameters.json` holds the separate legacy source definitions.
 

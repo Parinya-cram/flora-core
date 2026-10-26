@@ -7,6 +7,7 @@ import ClinicalTimelineGrid, {
 import type { ClinicalTimelineRow, ClinicalTimelineValues } from "../components/clinical-timeline/types";
 import VitalSignsTrendChart from "../components/vitals/VitalSignsTrendChart";
 import HeaderCard from "../components/case/HeaderCard";
+import CaseDeviceSessions from "../components/canopy/CaseDeviceSessions";
 import CanopyCaseDetailPanel, { type CanopyCasePanel } from "./CanopyCaseDetailPanel";
 import CaseFormsReview from "../components/workflow/CaseFormsReview";
 import CaseDocumentsReview from "../components/workflow/CaseDocumentsReview";
@@ -323,7 +324,7 @@ export default function CanopyCaseChartView({ entry, data, onBack, onRefresh, re
     <div className="case-workspace case-workspace--top relative h-full min-h-0 bg-gray-50 p-2 dark:bg-gray-900">
       <div className="mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] px-3 py-2">
         <button type="button" onClick={onBack} className="rounded-lg border border-[var(--app-border)] bg-[var(--app-control-bg)] px-3 py-2 text-xs font-bold text-[var(--app-text)]">← Cases</button>
-        <div className="min-w-0 flex-1"><div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--app-accent)]">{isInnovian ? "ESM Flora Canopy · Innovian historical record" : "ESM Flora Canopy · synchronized Leaf chart"}</div><div className="truncate text-sm font-semibold text-[var(--app-text)]">{data.leaf_name} · {entry.case_code || entry.source_case_id}</div></div>
+        <div className="min-w-0 flex-1"><div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--app-accent)]">{isInnovian ? "Flora iCIS Canopy · Innovian historical record" : "Flora iCIS Canopy · synchronized Leaf chart"}</div><div className="truncate text-sm font-semibold text-[var(--app-text)]">{data.leaf_name} · {entry.case_code || entry.source_case_id}</div></div>
         <span className="rounded-full border border-sky-400/40 bg-sky-500/10 px-3 py-1.5 text-xs font-bold text-sky-600 dark:text-sky-300">View only</span>
         {isInnovian ? <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-bold text-amber-700 dark:text-amber-300">{text(source.status, "migrated")}</span> : null}
         <span className="text-xs text-[var(--app-muted)]">{isInnovian ? "Migrated" : "Synced"} {formatDateTime(data.last_synced_at)}</span>
@@ -341,6 +342,7 @@ export default function CanopyCaseChartView({ entry, data, onBack, onRefresh, re
       </div>
 
       {isInnovian ? <div className={`mb-2 flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border px-4 py-2 text-xs ${archiveDetailAvailable ? "border-amber-500/30 bg-amber-500/8 text-[var(--app-muted)]" : "border-amber-500/50 bg-amber-500/12 text-amber-800 dark:text-amber-200"}`}><strong className="text-[var(--app-text)]">{archiveDetailAvailable ? "Migrated from Innovian" : "Innovian case index only"}</strong><span>Source case {text(source.case_id, entry.source_case_id)}</span><span>{text(source.mapping_profile, "Mapping version unavailable")}</span>{archiveDetailAvailable ? <span>{number(coverage.minutes_loaded)} / {number(coverage.minutes_total)} chart minutes loaded</span> : <span>Detailed vitals, forms, staff and clinical entries have not been migrated for this case yet.</span>}{coverage.truncated ? <span className="font-bold text-amber-700 dark:text-amber-300">Long case truncated by archive safety limit</span> : null}</div> : null}
+      {!isInnovian && entry.global_case_id ? <CaseDeviceSessions caseUuid={entry.global_case_id} /> : null}
 
       {activePanel === "chart" && archiveDetailAvailable ? <>
 

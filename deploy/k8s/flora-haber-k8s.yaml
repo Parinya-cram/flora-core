@@ -1,0 +1,114 @@
+# Flora Haber appliance — device control plane + hospital image mirror.
+# Own namespace flora-appliance (the egress-facing tier; NetworkPolicy isolation = later).
+# Standard ports via hostPort:  7204 -> haber   7205 -> haber-registry  (same on every machine, only IP differs)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: flora-appliance
+---
+# ---------- haber-registry (registry:3) ----------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: haber-registry-data
+  namespace: flora-appliance
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources: { requests: { storage: 10Gi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: haber-registry
+  namespace: flora-appliance
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: haber-registry } }
+  template:
+    metadata: { labels: { app: haber-registry } }
+    spec:
+      containers:
+        - name: registry
+          image: registry:3
+          imagePullPolicy: Never
+          env:
+            - { name: REGISTRY_STORAGE_DELETE_ENABLED, value: "true" }
+            - { name: OTEL_TRACES_EXPORTER, value: "none" }
+          ports:
+            - { containerPort: 5000, hostPort: 7205 }   # nodes pull at <nodeIP>:7205
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/registry }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: haber-registry-data }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: haber-registry
+  namespace: flora-appliance
+spec:
+  selector: { app: haber-registry }
+  ports: [ { port: 5000, targetPort: 5000 } ]
+---
+# ---------- haber (control plane) ----------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: haber-data
+  namespace: flora-appliance
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources: { requests: { storage: 2Gi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: haber
+  namespace: flora-appliance
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: haber } }
+  template:
+    metadata: { labels: { app: haber } }
+    spec:
+      containers:
+        - name: haber
+          image: flora-canopy-haber:latest
+          imagePullPolicy: Never
+          env:
+            - { name: FLORA_TENANT_ID, value: "hospital-01" }
+            - { name: FLORA_ROOT_URL, value: "http://root-api.flora-root.svc.cluster.local:8000" }  # Root not deployed yet -> root-sync just errors in log
+            - { name: FLORA_ROOT_TENANT_KEY, value: "root-tenant-demo-key" }
+            - { name: FLORA_ROOT_PUBLIC_KEY, value: "" }
+            - { name: HABER_GATEWAY_TOKEN, value: "haber-gateway-demo-token" }
+            - { name: HABER_NODE_TOKEN, value: "haber-node-demo-token" }
+            - { name: HABER_ADMIN_USERNAME, value: "admin" }
+            - { name: HABER_ADMIN_PASSWORD, value: "admin" }
+            - { name: FLORA_CANOPY_SYNC_URL, value: "http://sync-api.flora-canopy.svc.cluster.local:8000" }
+            - { name: FLORA_SYNC_SHARED_SECRET, value: "admin" }
+            - { name: HABER_REGISTRY_URL, value: "http://haber-registry:5000" }
+            - { name: HABER_REGISTRY_PUBLIC, value: "172.22.19.81:7205" }
+            - { name: FLORA_APPLIANCE_PUBLIC_URL, value: "http://172.22.19.81:7204" }   # as LAN machines reach this appliance
+            - { name: HABER_ROOT_SYNC_SEC, value: "15" }
+            - { name: HABER_DB_PATH, value: "/data/haber.db" }
+          ports:
+            - { containerPort: 8000, hostPort: 7204 }   # Haber admin/API at <nodeIP>:7204
+          volumeMounts:
+            - { name: data, mountPath: /data }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: haber-data }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: haber
+  namespace: flora-appliance
+spec:
+  selector: { app: haber }
+  ports: [ { port: 8000, targetPort: 8000 } ]

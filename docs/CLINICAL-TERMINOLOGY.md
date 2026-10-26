@@ -61,3 +61,20 @@ The mapper adds exact RxNorm ingredient and ATC mappings for medications, review
 ## Configuration ownership
 
 Config → Clinical Codes owns terminology and standard mappings. Config → Chart layout separately controls which active observation parameters appear in the live chart and table, including labels, groups and order. The live chart shows a read-only legend; configuration controls are never mixed into the clinical workspace. The case screen reads this registry from PostgreSQL; its built-in list is only an offline fallback. Medication groups and the operational group/default-unit fields remain with Clinical Codes. Saving a medication, fluid, blood-product or output concept creates or updates its `io_item_master` row, so the live I/O workflow consumes the same master. The former separate Fluid & Med configuration menu is intentionally removed.
+
+## Thai Medicines Terminology (TMT)
+
+Migration `0100-med-orders-mar.sql` adds `TMT` and `TMLT` (Thai Medical Laboratory Terminology) to the `clinical_concept_coding.system_key` CHECK. `terminology_release.system_key` has no CHECK. TMT is distributed by THIS as concept tables per level: SUBS, VTM, GP, GPU, TP and TPU. Medication orders normally code at **GPU** (generic product + unit of use) or **TPU** (trade product + unit of use).
+
+Combine the levels you need into one CSV or TSV with the columns `tmtid, fsn, level` (optionally `fsn_th`) and import it as a release:
+
+```powershell
+python scripts/import-terminology.py tmt --database-url $env:FLORA_DATABASE_URL --source terminology-packages/tmt_gpu_tpu.csv --version 20260901
+python scripts/import-terminology.py tmt-map --database-url $env:FLORA_DATABASE_URL --source terminology-packages/item_tmt.csv
+```
+
+- `tmt` loads `terminology_entry` rows with domain `medication` and the level in `metadata.level`.
+- `tmt-map` reads a CSV with the columns `item_code, tmtid`. It links catalogue drugs (`io_item_master.code`, `kind='med'`, which must already have a `concept_id`) by adding `TMT` codings.
+- A TMT entry can also be linked to a medication concept from Config → Clinical Codes.
+
+The medication order search (`GET /api/case/med-catalog?q=`) matches the drug name, the item code, or any coding (TMT, SNOMED CT, ...). It also offers active TMT entries that are not yet in the catalogue, for a free-text order coded with TMT only. An order keeps a `codings` snapshot (`[{system, code, display}]`: TMT, SNOMED_CT, HIS) taken at order time. Do not commit TMT source files.

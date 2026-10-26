@@ -191,7 +191,7 @@ Found while testing: on the Forms page AN / DOB / age / weight / height / blood 
 blank when the saved draft loaded after the patient record (a race that a newer draft exposes, e.g. after attaching a
 workflow). A draft that does not hold these fields no longer clears them (`FormView.tsx` `applyServerDraft`).
 
-Migration `infrastructure/postgres/0090-case-form-exchange.sql` (both databases; existing ones: run it with psql, it is
+Migration `infrastructure/postgres/0088-case-form-exchange.sql` (both databases; existing ones: run it with psql, it is
 idempotent). Tests: `services/flora-api/tests/test_case_forms.py` (12, PostgreSQL, via `scripts/test-leaf-writes.sh`),
 `tests/test_case_forms_merge.py` (5).
 
@@ -220,8 +220,8 @@ report's own gaps (DOB, printed by, signature lines, hard-coded hospital logo).
 ## 12. Second round: review, signatures, printing, repeatable forms (2026-10-16)
 
 Decisions: review is **Reviewed → Approved**; a signature is **drawn, confirmed with the signer's PIN, then locked**;
-the hospital's name and logo are **set in Canopy and sent to every Leaf**. Migrations `0092-form-review-signing-hospital.sql`
-and `0093-repeatable-case-forms.sql` (apply to an existing database with `scripts/apply-migrations.sh`, below).
+the hospital's name and logo are **set in Canopy and sent to every Leaf**. Migrations `0090-form-review-signing-hospital.sql`
+and `0091-repeatable-case-forms.sql` (apply to an existing database with `scripts/apply-migrations.sh`, below).
 
 | Area | Change | Code |
 |---|---|---|
@@ -231,10 +231,10 @@ and `0093-repeatable-case-forms.sql` (apply to an existing database with `script
 | Case packet | Every sheet is A4: a page of another size (A5, Letter) is scaled onto A4, keeping its orientation; forms are filled from the case as on Reports; "Case packet n/N" at the foot of every sheet (each part keeps its own page numbers). Copies of a repeatable form print after the form. | `casePacket.ts` |
 | Hospital name and logo | Canopy → System → **Hospital**: Thai and English name, PNG/JPEG logo (scaled down, ≤ 400 kB as data URL; `config.manage`). Sent with the ward exchange; the worker stores it on the Leaf when it changes, so it prints offline. Used by: the Leaf anesthesia report header (browser and Electron PDF; without a Thai font the PDF prints the English name); Form Studio logo fields set to **Use the hospital's logo** (`src: "hospital"`); the band token `{hospital}`. With none set, everything prints as before. | `hospital_profile.py`; `GET/PUT /api/fleet/hospital-profile`; `GET/PUT /api/workstation/hospital-profile`; `sync_ward`, `sync_worker.synchronize_ward`; `HospitalProfileTab.tsx`, `core/hospital.ts`, `ReportView.tsx`, `electron/reportPdf.cjs`; validators + fixtures |
 | Leaf report gaps | Footer of every page: "CONFIDENTIAL · Printed date time · who", and DOB next to HN / AN. Summary page: signature lines for the anesthesiologist and the nurse anesthetist (names from the case staff, a dotted blank otherwise) with "Date / time" to fill by hand. Same in the Electron PDF. | `ReportView.tsx`, `pdfModel.ts` (`reportSigners`), `electron/reportPdf.cjs` |
-| Repeatable forms | Workflow Studio: **Repeatable** (data-entry forms only) and "at most N copies" (2-99). On the Leaf each copy is a tab, "Title (1)", "Title (2)"…, with **+ Add another** after the last copy once it has been started. A copy is keyed `<form_id>~2`, `~3`… everywhere a case form is stored or exchanged; it is its own Form Studio record of the same form (id ending `-C2`…). Required: every started copy must be completed. Attaching a workflow that lists the form once keeps filled copies reachable. Canopy review shows "(2)". | `case_forms.INSTANCE_KEY`, `workflow_entry`, `record_id`; `workflows.validate`; `routes/case_workflow.py`; `caseWorkflow.ts`, `FormView.tsx`, `WorkflowStudioView.tsx`; `0093` |
+| Repeatable forms | Workflow Studio: **Repeatable** (data-entry forms only) and "at most N copies" (2-99). On the Leaf each copy is a tab, "Title (1)", "Title (2)"…, with **+ Add another** after the last copy once it has been started. A copy is keyed `<form_id>~2`, `~3`… everywhere a case form is stored or exchanged; it is its own Form Studio record of the same form (id ending `-C2`…). Required: every started copy must be completed. Attaching a workflow that lists the form once keeps filled copies reachable. Canopy review shows "(2)". | `case_forms.INSTANCE_KEY`, `workflow_entry`, `record_id`; `workflows.validate`; `routes/case_workflow.py`; `caseWorkflow.ts`, `FormView.tsx`, `WorkflowStudioView.tsx`; `0091` |
 | Phase 0 leftovers | A closed case's snapshot carries its **whole** record (vitals, events up to 5000, I/O, scores) up to `FLORA_SYNC_FINAL_HISTORY_DAYS` (31) back; an open case still carries the latest 24 h. `window.complete` says whether the snapshot starts at the case start. Canopy refuses a Leaf whose sync protocol is older than `FLORA_SYNC_MIN_PROTOCOL` (default 1: everyone) with **426** and the reason, kept in `sync_leaf_node.metadata.protocol_refused`; the worker shows it on the Ward page instead of a bare HTTP error. | `sync_worker.build_snapshot`, `check_refused`; `sync_ingest.require_protocol` (batch, ward, case forms) |
 | Concept layer (skeleton) | `app/concepts.py` is the Canopy twin of `concepts.ts` + `caseData.ts caseValues`: same dictionary, same values and sources, plus `DRAFT_KEYS` (where today's record draft keeps each concept). `formdev/scripts/build_concept_fixtures.py` writes `formdev/spec/fixtures/concepts.json`; both sides' tests check they agree. Consumers moved without visible change: billing reads the technique concept; the public API adds `concepts` to `GET /cases/{id}` and `/cases/{id}/forms` (patient identifiers masked like every other field). | `app/concepts.py`, `billing.py`, `routes/public_api.py`, `phi_mask.py` |
-| CI and migrations | CI job **test-db** runs the database suites on a throwaway PostgreSQL built from `Dockerfile.postgres.dev`, with its own network and API image, all removed afterwards (`scripts/ci-test-db.sh`); **test-worker** runs the worker's own tests. `scripts/apply-migrations.sh --from 0090` applies new scripts to an existing database in install order and records them in `flora_migration_log` (`--list`, `--dry-run`, `--only`, `--force`). | `.gitlab-ci.yml`, `scripts/ci-test-db.sh`, `scripts/apply-migrations.sh` |
+| CI and migrations | CI job **test-db** runs the database suites on a throwaway PostgreSQL built from `Dockerfile.postgres.dev`, with its own network and API image, all removed afterwards (`scripts/ci-test-db.sh`); **test-worker** runs the worker's own tests. `scripts/apply-migrations.sh --from 0088` applies new scripts to an existing database in install order and records them in `flora_migration_log` (`--list`, `--dry-run`, `--only`, `--force`). | `.gitlab-ci.yml`, `scripts/ci-test-db.sh`, `scripts/apply-migrations.sh` |
 
 **Tests:** DB suites 43 (on a throwaway server, as CI runs them) · end-to-end flow 18 steps · Form Studio Python 484 ·
 frontend vitest 795 · worker 2 · tsc, eslint, production build clean.
@@ -245,7 +245,7 @@ frontend vitest 795 · worker 2 · tsc, eslint, production build clean.
 - Not checked live: PIN signing and review buttons. They need a second signed-in user on the Leaf, so they are covered by `test_case_forms.py` and the end-to-end test only.
 - The test data, the hospital profile and the temporary Canopy account were removed afterwards.
 
-**Not applied on the dev server:** 0090-0093. Back it up, then run `scripts/apply-migrations.sh --from 0090` there.
+**Not applied on the dev server:** 0088-0091. Back it up, then run `scripts/apply-migrations.sh --from 0088` there.
 
 **Still open:**
 - Lookups and roles on the Leaf.

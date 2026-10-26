@@ -13,6 +13,23 @@ server {
     try_files $uri $uri/ /index.html;
   }
 
+  # Leaf live stream WebSocket (docs/live-stream/PROTOCOL.md) → leaf-live. Resolved per
+  # request (Docker DNS), so a stack without leaf-live (Canopy, or a Leaf without the
+  # "live" profile) still starts; there /api/live/ answers 502.
+  location /api/live/ {
+    resolver ${NGINX_RESOLVER} valid=10s ipv6=off;
+    set $leaf_live ${LIVE_HOST};
+    proxy_pass http://$leaf_live;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 1h;
+    proxy_send_timeout 1h;
+  }
+
   # API + health go to this tier's API (replaces the Vite dev proxy)
   location /api/ {
     proxy_pass ${API_UPSTREAM};

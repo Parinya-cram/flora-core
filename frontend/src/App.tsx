@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import TopBar from "./layout/TopBar";
 import AppSidebar, { type AppView } from "./layout/AppSidebar";
 import MainArea from "./layout/MainArea";
-import { getCaseStatus } from "./api/caseApi";
-import type { CaseStatus } from "./api/caseApi";
+import { getActiveCases, getCaseStatus } from "./api/caseApi";
+import type { ActiveCase, CaseStatus } from "./api/caseApi";
 import LoginPage from "./auth/LoginPage";
 import PlatformConsoleView from "./views/PlatformConsoleView";
 import { useAuth } from "./auth/useAuth";
@@ -16,6 +16,53 @@ import { loadHospitalProfile } from "./api/hospitalProfileApi";
 import DateTimePickerAssist from "./components/common/DateTimePickerAssist";
 
 const NAV_COLLAPSED_KEY = "flora.ui.navigationCollapsed";
+/** Leaf with several active cases (recovery room): which one this workstation has open. */
+const SELECTED_CASE_KEY = "flora.leaf.selectedCaseId";
+const ACTIVE_CASES_REFRESH_MS = 10_000;
+
+function readSelectedCaseId(): number | null {
+  try {
+    const value = Number(window.localStorage.getItem(SELECTED_CASE_KEY));
+    return Number.isFinite(value) && value > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSelectedCaseId(caseId: number | null) {
+  try {
+    if (caseId == null) window.localStorage.removeItem(SELECTED_CASE_KEY);
+    else window.localStorage.setItem(SELECTED_CASE_KEY, String(caseId));
+  } catch {
+    // storage blocked: selection just isn't remembered
+  }
+}
+
+function activeCaseStatus(item: ActiveCase, previous?: CaseStatus): CaseStatus {
+  // /api/case/active may carry fewer fields than /status; keep what the open case already knows.
+  const base = previous && previous.status !== "IDLE" && previous.case_id === item.case_id ? previous : null;
+  return {
+    ...(base || {}),
+    status: "ACTIVE",
+    case_id: item.case_id,
+    hn: item.hn || base?.hn || "",
+    start_time: item.start_time || base?.start_time || 0,
+    admission_number: item.admission_number ?? base?.admission_number ?? null,
+    admission_source: item.admission_source ?? base?.admission_source,
+    identity_status: item.identity_status ?? base?.identity_status,
+    bed_label: item.bed_label ?? null,
+    patient_name: item.patient_name ?? base?.patient_name ?? null,
+    case_uuid: item.case_uuid ?? base?.case_uuid ?? null,
+  };
+}
+
+function sameActiveCases(left: ActiveCase[], right: ActiveCase[]) {
+  return left.length === right.length && left.every((item, index) => {
+    const other = right[index];
+    return other && other.case_id === item.case_id && other.hn === item.hn && other.bed_label === item.bed_label &&
+      other.patient_name === item.patient_name && other.start_time === item.start_time && other.devices.length === item.devices.length;
+  });
+}
 
 function readStoredBool(key: string, fallback: boolean) {
   if (typeof window === "undefined") return fallback;
@@ -35,6 +82,7 @@ export default function App() {
   const isPlatformAdmin = isCanopy && user?.role === "platform_admin";
   const ward = useCanopyWard(user, isCanopy && isAuthenticated && !isPlatformAdmin);
   const [caseStatus, setCaseStatus] = useState<CaseStatus>({ status: "IDLE" });
+  const [activeCases, setActiveCases] = useState<ActiveCase[]>([]);
   const [isNavigationOpen, setIsNavigationOpen] = useState(false);
   const [isNavigationCollapsed, setIsNavigationCollapsed] = useState(() => readStoredBool(NAV_COLLAPSED_KEY, false));
   const [activeView, setActiveView] = useState<AppView>(surface.code === "canopy" ? "dashboard" : "ward");
@@ -50,14 +98,56 @@ export default function App() {
     database: "Waiting",
   });
 
-  const refreshCase = useCallback(async () => {
+  /** Reloads the Leaf's active cases; null when the API predates multi-case. */
+  const loadActiveCases = useCallback(async (): Promise<ActiveCase[] | null> => {
+    const list = await getActiveCases();
+    if (list) setActiveCases(previous => (sameActiveCases(previous, list) ? previous : list));
+    return list;
+  }, []);
+
+  /**
+   * Picks the open case. `prefer` is a case id to open (e.g. just started), "stored" reopens the
+   * remembered selection (falling back to the newest active case).
+   */
+  const refreshCase = useCallback(async (prefer: number | "stored" = "stored") => {
     try {
-      const next = await getCaseStatus();
-      setCaseStatus(next);
+      const list = await loadActiveCases();
+      if (list === null) {
+        // Single-case Leaf API: the newest active case is the case.
+        const next = await getCaseStatus();
+        setActiveCases(next.status === "ACTIVE" ? [{ case_id: next.case_id, hn: next.hn, admission_number: next.admission_number, status: "ACTIVE", start_time: next.start_time, devices: [] }] : []);
+        setCaseStatus(next);
+        return;
+      }
+      const wanted = prefer === "stored" ? readSelectedCaseId() : prefer;
+      const pick = list.find(item => item.case_id === wanted)
+        ?? (prefer === "stored" ? [...list].sort((a, b) => b.start_time - a.start_time)[0] : undefined);
+      if (pick) {
+        writeSelectedCaseId(pick.case_id);
+        setCaseStatus(previous => activeCaseStatus(pick, previous));
+        return;
+      }
+      if (typeof prefer === "number") {
+        // Not in the active list (e.g. list lagging): fall back to the single-case status.
+        const next = await getCaseStatus();
+        setCaseStatus(next);
+        if (next.status !== "IDLE") writeSelectedCaseId(next.case_id);
+        return;
+      }
+      setCaseStatus({ status: "IDLE" });
     } catch (err) {
       console.error("Fetch failed", err);
     }
-  }, []);
+  }, [loadActiveCases]);
+
+  /** Opens one of the active cases (TopBar switcher, Ward page). */
+  const selectCase = useCallback((caseId: number) => {
+    const item = activeCases.find(row => row.case_id === caseId);
+    writeSelectedCaseId(caseId);
+    if (item) setCaseStatus(previous => activeCaseStatus(item, previous));
+    else void refreshCase(caseId);
+    setActiveView(view => (view === "ward" || view === "history" || view === "account" || view === "master" ? "case" : view));
+  }, [activeCases, refreshCase]);
 
   const openCaseFromHistory = useCallback(
     (nextCase: Exclude<CaseStatus, { status: "IDLE" }>) => {
@@ -141,17 +231,41 @@ export default function App() {
   }, []);
 
   const applyCaseArchived = useCallback((caseId: number) => {
+    const remaining = activeCases.filter(item => item.case_id !== caseId);
+    setActiveCases(remaining);
+    // Another bed is still running: open it; otherwise the Leaf is ready for the next case.
+    const next = [...remaining].sort((a, b) => b.start_time - a.start_time)[0];
     setCaseStatus(prev => {
       if (prev.status === "IDLE" || prev.case_id !== caseId) return prev;
-      return { status: "IDLE" };
+      return next ? activeCaseStatus(next) : { status: "IDLE" };
     });
+    writeSelectedCaseId(next ? next.case_id : null);
     setActiveView("case");
-  }, []);
+  }, [activeCases]);
 
+  /** "New case" mode: the start landing, while other cases keep running. */
   const startNextCase = useCallback(() => {
     setCaseStatus({ status: "IDLE" });
     setActiveView("case");
   }, []);
+
+  // Keep the case switcher current (cases started from the Ward page, Canopy move-in, discharges).
+  useEffect(() => {
+    if (surface.code !== "leaf" || !user?.username || user.mustChangePassword) return;
+    const timer = window.setInterval(() => {
+      void loadActiveCases().then(list => {
+        if (!list) return;
+        // Refresh bed / patient labels of the open case.
+        setCaseStatus(prev => {
+          if (prev.status !== "ACTIVE") return prev;
+          const item = list.find(row => row.case_id === prev.case_id);
+          if (!item || (item.bed_label ?? null) === (prev.bed_label ?? null) && (item.patient_name ?? null) === (prev.patient_name ?? null)) return prev;
+          return activeCaseStatus(item, prev);
+        });
+      }).catch(() => {});
+    }, ACTIVE_CASES_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [loadActiveCases, surface.code, user?.mustChangePassword, user?.username]);
 
   useEffect(() => {
     const onCaseStartTimeUpdated = (event: Event) => {
@@ -382,11 +496,14 @@ export default function App() {
   if (isPlatformAdmin && user) return <PlatformConsoleView user={user} onLogout={logout} />;
 
   return (
-    <div className="app-shell app-theme-scope h-screen font-sans flex flex-col">
+    <div className="app-shell app-theme-scope h-[calc(100dvh/var(--app-zoom,1))] font-sans flex flex-col">
       <TopBar
         setActiveView={setActiveView}
         sessionUser={user}
         caseStatus={caseStatus}
+        activeCases={surface.code === "leaf" ? activeCases : []}
+        onSelectCase={selectCase}
+        onNewCase={startNextCase}
         ward={isCanopy ? ward : null}
         onLogout={logout}
         onShutdown={handleShutdown}
@@ -396,7 +513,7 @@ export default function App() {
         }}
       />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <AppSidebar
           activeView={activeView}
           setActiveView={setActiveView}
@@ -409,20 +526,24 @@ export default function App() {
           onLogout={logout}
         />
 
-        <div className="app-main flex-1 overflow-auto">
+        <div className={`app-main flex-1 overflow-auto${isCanopy ? "" : " app-main--leaf"}`}>
           {/* Canopy views wait for a validated ward and remount when it changes so every view refetches in scope. */}
           {isCanopy && !ward.ready ? null : <MainArea
             key={isCanopy ? `ward:${ward.selected}` : "leaf"}
             caseStatus={caseStatus}
+            activeCases={activeCases}
+            onSelectCase={selectCase}
+            onNewCase={startNextCase}
             activeView={activeView}
             sessionUser={user}
             onCaseDischargeTimeUpdated={applyDischargeTimeUpdate}
             onCaseArchived={applyCaseArchived}
+            onCaseReopened={caseId => { void refreshCase(caseId); setActiveView("case"); }}
             onStartNextCase={startNextCase}
             onOpenCase={openCaseFromHistory}
             onNavigate={view => setActiveView(view)}
-            onCaseStarted={async () => {
-              await refreshCase();
+            onCaseStarted={async (caseId?: number) => {
+              await refreshCase(typeof caseId === "number" && caseId > 0 ? caseId : "stored");
               setActiveView("case");
             }}
           />}

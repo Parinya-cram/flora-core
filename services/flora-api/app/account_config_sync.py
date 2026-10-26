@@ -290,6 +290,50 @@ def _claim_admission(admission_id: str) -> str:
         return "unavailable"
 
 
+def _post_canopy(path: str, body: dict) -> tuple[str, dict]:
+    """("ok", response) | ("refused", {"detail"}) on 409 | ("unavailable", {})."""
+    request = urllib.request.Request(
+        f"{CANOPY_SYNC_URL}{path}", data=json.dumps(body).encode("utf-8"),
+        headers={"Authorization": f"Bearer {SYNC_SECRET}", "Accept": "application/json",
+                 "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=SYNC_TIMEOUT_SECONDS * 2) as response:
+            return ("ok", json.loads(response.read() or b"{}")) if response.status == 200 else ("unavailable", {})
+    except urllib.error.HTTPError as error:
+        if error.code == 409:
+            try:
+                return "refused", json.loads(error.read() or b"{}")
+            except ValueError:
+                return "refused", {}
+        return "unavailable", {}
+    except (OSError, ValueError, urllib.error.URLError):
+        return "unavailable", {}
+
+
+def _canopy_call(path: str, body: dict) -> tuple[str, dict]:
+    if not CANOPY_SYNC_URL or not SYNC_SECRET or not LEAF_ID:
+        return "unavailable", {}
+    future = SYNC_EXECUTOR.submit(_post_canopy, path, {"leaf_id": LEAF_ID, **body})
+    try:
+        return future.result(timeout=SYNC_TIMEOUT_SECONDS * 2 + 0.5)
+    except concurrent.futures.TimeoutError:
+        future.cancel()
+        return "unavailable", {}
+
+
+def reopen_canopy_admission(admission_id: str) -> tuple[str, str]:
+    """Undo the discharge / transfer of an admission on Canopy: ("ok" | "refused" | "unavailable", detail)."""
+    result, body = _canopy_call(f"/api/sync/v1/admissions/{urllib.parse.quote(admission_id, safe='')}/reopen", {})
+    return result, str(body.get("detail") or "")
+
+
+def transfer_canopy_case(transfer: dict) -> tuple[str, dict]:
+    """Discharge to another Leaf through Canopy: ("ok", {"admission_id"}) | ("refused", {"detail"}) | ("unavailable", {})."""
+    return _canopy_call("/api/sync/v1/transfers", transfer)
+
+
 def claim_canopy_admission(admission_id: str) -> str:
     """Reserve a Canopy admission for this Leaf: "ok" | "taken" | "unavailable" (start offline)."""
     if not CANOPY_SYNC_URL or not SYNC_SECRET or not LEAF_ID:

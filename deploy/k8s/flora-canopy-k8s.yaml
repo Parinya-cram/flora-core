@@ -1,0 +1,189 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: flora-canopy
+---
+# ---------- canopy-db (PostgreSQL, built image self-inits roles flora_app/view/sync) ----------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: canopy-db-data
+  namespace: flora-canopy
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: canopy-db
+  namespace: flora-canopy
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: canopy-db } }
+  template:
+    metadata: { labels: { app: canopy-db } }
+    spec:
+      containers:
+        - name: canopy-db
+          image: flora-canopy-canopy-db:latest
+          imagePullPolicy: Never
+          env:
+            - { name: POSTGRES_DB, value: "flora" }
+            - { name: POSTGRES_USER, value: "flora_admin" }
+            - { name: POSTGRES_PASSWORD, value: "admin" }
+            - { name: FLORA_DB_APP_PASSWORD, value: "admin" }
+            - { name: FLORA_DB_VIEW_PASSWORD, value: "admin" }
+            - { name: FLORA_DB_SYNC_PASSWORD, value: "admin" }
+            - { name: PGDATA, value: "/var/lib/postgresql/data/pgdata" }
+          ports: [ { containerPort: 5432 } ]
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+          readinessProbe:
+            exec: { command: ["pg_isready","-U","flora_admin","-d","flora"] }
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: canopy-db-data }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: canopy-db
+  namespace: flora-canopy
+spec:
+  selector: { app: canopy-db }
+  ports: [ { port: 5432, targetPort: 5432 } ]
+---
+# ---------- canopy-api ----------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: canopy-api
+  namespace: flora-canopy
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: canopy-api } }
+  template:
+    metadata: { labels: { app: canopy-api } }
+    spec:
+      # Wait for the DB to accept connections before starting the API: on a node
+      # reboot the DB pod comes up slower than the API, and the API exits on a
+      # pool timeout instead of retrying. The DB image ships pg_isready.
+      initContainers:
+        - name: wait-for-db
+          image: flora-canopy-canopy-db:latest
+          imagePullPolicy: Never
+          command: ["sh", "-c", "until pg_isready -h canopy-db -p 5432; do echo 'waiting for canopy-db'; sleep 2; done"]
+      containers:
+        - name: canopy-api
+          image: flora-canopy-canopy-api:latest
+          imagePullPolicy: Never
+          command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]   # no --reload in k8s (watchfiles fd exhaustion)
+          env:
+            - { name: FLORA_DATABASE_URL, value: "postgresql://flora_view:admin@canopy-db:5432/flora" }
+            - { name: FLORA_API_ENV, value: "development" }
+            - { name: FLORA_API_MODE, value: "canopy" }
+            - { name: FLORA_CANOPY_SESSION_SECRET, value: "admin" }
+            - { name: FLORA_BOOTSTRAP_ADMIN_ENABLED, value: "true" }
+            - { name: FLORA_BOOTSTRAP_ADMIN_USERNAME, value: "admin" }
+            - { name: FLORA_BOOTSTRAP_ADMIN_PASSWORD, value: "admin" }
+            - { name: FLORA_BOOTSTRAP_ADMIN_NAME, value: "Administrator" }
+            - { name: FLORA_HABER_URL, value: "http://haber.flora-appliance.svc.cluster.local:8000" }
+            - { name: HABER_ADMIN_USERNAME, value: "admin" }
+            - { name: HABER_ADMIN_PASSWORD, value: "admin" }
+          ports: [ { containerPort: 8000 } ]
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: canopy-api
+  namespace: flora-canopy
+spec:
+  selector: { app: canopy-api }
+  ports: [ { port: 8000, targetPort: 8000 } ]
+---
+# ---------- sync-api (same image, mode=sync) ----------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sync-api
+  namespace: flora-canopy
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: sync-api } }
+  template:
+    metadata: { labels: { app: sync-api } }
+    spec:
+      initContainers:
+        - name: wait-for-db
+          image: flora-canopy-canopy-db:latest
+          imagePullPolicy: Never
+          command: ["sh", "-c", "until pg_isready -h canopy-db -p 5432; do echo 'waiting for canopy-db'; sleep 2; done"]
+      containers:
+        - name: sync-api
+          image: flora-canopy-canopy-api:latest
+          imagePullPolicy: Never
+          command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]   # no --reload in k8s
+          env:
+            - { name: FLORA_DATABASE_URL, value: "postgresql://flora_sync:admin@canopy-db:5432/flora" }
+            - { name: FLORA_API_ENV, value: "development" }
+            - { name: FLORA_API_MODE, value: "sync" }
+            - { name: FLORA_SYNC_SHARED_SECRET, value: "admin" }
+          ports: [ { containerPort: 8000 } ]
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sync-api
+  namespace: flora-canopy
+spec:
+  selector: { app: sync-api }
+  ports: [ { port: 8000, targetPort: 8000 } ]
+---
+# ---------- canopy-web (frontend + nginx proxy) ----------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: canopy-web
+  namespace: flora-canopy
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: canopy-web } }
+  template:
+    metadata: { labels: { app: canopy-web } }
+    spec:
+      containers:
+        - name: canopy-web
+          image: flora-canopy-canopy-web:latest
+          imagePullPolicy: Never
+          env:
+            - { name: API_UPSTREAM, value: "http://canopy-api:8000" }
+          ports: [ { containerPort: 80 } ]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: canopy-web
+  namespace: flora-canopy
+spec:
+  selector: { app: canopy-web }
+  ports:
+    - { port: 80, targetPort: 80 }

@@ -5,3 +5,7 @@ services:
   leaf-api:
     volumes:
       - ../services/flora-api/app:/app/app:ro
+  # No reload: restart leaf-live to pick up edits.
+  leaf-live:
+    volumes:
+      - ../services/flora-api/app:/app/app:ro

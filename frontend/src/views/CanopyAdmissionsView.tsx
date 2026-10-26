@@ -14,6 +14,7 @@ import {
 import { lookupHl7Patient, type AdmissionSourceFields } from "../api/hl7InterfaceApi";
 import type { AuthUser } from "../auth/useAuth";
 import ConfirmDialog from "../components/common/ConfirmDialog";
+import StaffNameField from "../components/staff/StaffNameField";
 import CanopyAdmissionFormEditor from "./CanopyAdmissionFormEditor";
 import { AdmissionCaseBadge, AdmissionStatusBadge } from "./CanopyAdmissionStatusBadge";
 import { ageAt, ageTextAt, formatAge, normalizeBirthdate, todayIso } from "../utils/patientAge";
@@ -54,6 +55,9 @@ type Draft = {
   asaEmergency: boolean;
   priority: string;
   surgeon: string;
+  surgeonCode: string;
+  anaesthetist: string;
+  anaesthetistCode: string;
   scheduledAt: string;
   note: string;
 };
@@ -72,7 +76,7 @@ function toLocalInput(ms: number | null | undefined): string {
 function emptyDraft(unitKey: string): Draft {
   return {
     unitKey, targetLeafId: "", hn: "", an: "", name: "", sex: "", dob: "", ageText: "", weight: "", height: "",
-    diagnosis: "", operation: "", technique: "", asa: "", asaEmergency: false, priority: "elective", surgeon: "",
+    diagnosis: "", operation: "", technique: "", asa: "", asaEmergency: false, priority: "elective", surgeon: "", surgeonCode: "", anaesthetist: "", anaesthetistCode: "",
     scheduledAt: "", note: "",
   };
 }
@@ -96,6 +100,9 @@ function draftFromAdmission(row: Admission): Draft {
     asaEmergency: Boolean(row.admission?.asa_emergency),
     priority: row.admission?.surgical_priority || "",
     surgeon: row.admission?.surgeon || "",
+    surgeonCode: row.admission?.surgeon_code || "",
+    anaesthetist: row.admission?.anaesthetist || "",
+    anaesthetistCode: row.admission?.anaesthetist_code || "",
     scheduledAt: toLocalInput(row.scheduledAt),
     note: row.note || "",
   };
@@ -131,6 +138,9 @@ function inputFromDraft(draft: Draft): AdmissionInput {
       asa_emergency: draft.asaEmergency,
       surgical_priority: optional(draft.priority),
       surgeon: optional(draft.surgeon),
+      surgeon_code: optional(draft.surgeonCode),
+      anaesthetist: optional(draft.anaesthetist),
+      anaesthetist_code: optional(draft.anaesthetistCode),
     },
     scheduled_at: Number.isFinite(scheduled) && scheduled > 0 ? scheduled : null,
     note: optional(draft.note),
@@ -191,7 +201,7 @@ type AdmitFormProps = {
   onSaved: (row: Admission) => void;
 };
 
-function AdmitPatientForm({ wards, editing, onClose, onSaved }: AdmitFormProps) {
+export function AdmitPatientForm({ wards, editing, onClose, onSaved }: AdmitFormProps) {
   const [draft, setDraft] = useState<Draft>(() => editing ? draftFromAdmission(editing) : emptyDraft(wards.length === 1 ? wards[0].key : ""));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -348,9 +358,16 @@ function AdmitPatientForm({ wards, editing, onClose, onSaved }: AdmitFormProps) 
               <ChoiceRow label="Surgical priority" options={PRIORITIES.map(value => ({ value, label: value[0].toUpperCase() + value.slice(1) }))} value={draft.priority} onChange={value => set("priority", value)} />
             </div>
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Surgeon"><input className={fieldClass} value={draft.surgeon} onChange={event => set("surgeon", event.target.value)} /></Field>
-              <Field label="Note for the bedside team"><input className={fieldClass} value={draft.note} onChange={event => set("note", event.target.value)} /></Field>
+              <Field label="Doctor / surgeon">
+                <StaffNameField kind="surgeon" className={fieldClass} name={draft.surgeon} code={draft.surgeonCode}
+                  onChange={value => setDraft(current => ({ ...current, surgeon: value.name, surgeonCode: value.code }))} />
+              </Field>
+              <Field label="Anaesthetist">
+                <StaffNameField kind="anaesthesia" className={fieldClass} name={draft.anaesthetist} code={draft.anaesthetistCode}
+                  onChange={value => setDraft(current => ({ ...current, anaesthetist: value.name, anaesthetistCode: value.code }))} />
+              </Field>
             </div>
+            <Field label="Note for the bedside team"><input className={fieldClass} value={draft.note} onChange={event => set("note", event.target.value)} /></Field>
           </section>
         </div>
 
@@ -366,7 +383,7 @@ function AdmitPatientForm({ wards, editing, onClose, onSaved }: AdmitFormProps) 
   );
 }
 
-function AdmissionCard({ row, canManage, onEdit, onCancel, onOpenForm }: {
+export function AdmissionCard({ row, canManage, onEdit, onCancel, onOpenForm }: {
   row: Admission;
   canManage: boolean;
   onEdit: () => void;
@@ -402,6 +419,11 @@ function AdmissionCard({ row, canManage, onEdit, onCancel, onOpenForm }: {
         </div>
       </dl>
       {plan || asa ? <p className="text-sm text-[var(--app-text)]">{plan}{plan && asa ? " · " : ""}{asa ? <span className="font-semibold">{asa}</span> : null}</p> : null}
+      {row.admission?.surgeon || row.admission?.anaesthetist ? <p className="text-xs text-[var(--app-muted)]">
+        {row.admission.surgeon ? <>Surgeon <b className="text-[var(--app-text)]">{row.admission.surgeon}</b></> : null}
+        {row.admission.surgeon && row.admission.anaesthetist ? " · " : null}
+        {row.admission.anaesthetist ? <>Anaes <b className="text-[var(--app-text)]">{row.admission.anaesthetist}</b></> : null}
+      </p> : null}
       {row.note ? <p className="rounded-xl border border-dashed border-[var(--app-border)] px-3 py-2 text-sm text-[var(--app-muted)]">{row.note}</p> : null}
       <div className="text-xs text-[var(--app-muted)]">
         {row.formFieldCount > 0 ? `${row.formFieldCount} form field${row.formFieldCount === 1 ? "" : "s"} filled` : "No form fields filled yet"}
@@ -501,8 +523,8 @@ export default function CanopyAdmissionsView({ sessionUser }: Props) {
   }, [load]);
 
   return (
-    <main className="min-h-full bg-[var(--app-bg)] px-4 py-4 text-[var(--app-text)] sm:px-6">
-      <div className="mx-auto max-w-[1280px] space-y-4">
+    <main className="min-h-full bg-[var(--app-bg)] p-3 text-[var(--app-text)] sm:p-5">
+      <div className="w-full space-y-4">
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
             <div className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">Ward admissions</div>

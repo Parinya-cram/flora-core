@@ -24,8 +24,10 @@ import canopyInfrastructureIcon from "../assets/menu/canopy-menu-infrastructure.
 import canopyMonitoringIcon from "../assets/menu/canopy-menu-monitoring.png";
 import canopyFormDevIcon from "../assets/menu/canopy-menu-formdev.png";
 import { canAuthorStudio, canUseAiStudio } from "../auth/studioAccess";
+import { useHospitalProfile } from "../hooks/useHospitalProfile";
+import { hospitalDisplayName } from "../formdev/core/hospital";
 
-export type AppView = "ward" | "case" | "form" | "diagnosis" | "staff" | "io" | "patient" | "report" | "master" | "account" | "dashboard" | "admissions" | "monitoring" | "fleet" | "infrastructure" | "topology" | "gateway-alerts" | "devices" | "twin" | "formdev" | "workflows" | "report-studio" | "ai-studio" | "history" | "billing" | "staff-directory" | "or-schedule";
+export type AppView = "ward" | "case" | "form" | "diagnosis" | "staff" | "io" | "patient" | "report" | "master" | "account" | "dashboard" | "admissions" | "monitoring" | "fleet" | "infrastructure" | "topology" | "gateway-alerts" | "devices" | "distribution" | "twin" | "formdev" | "workflows" | "report-studio" | "ai-studio" | "history" | "billing" | "staff-directory" | "or-schedule" | "waveform" | "journey" | "activity" | "medication" | "shift-handover" | "icu-kpi";
 
 type Props = {
   activeView: AppView;
@@ -40,8 +42,10 @@ type Props = {
   wardName?: string | null;
 };
 
-type NavIconName = "ward" | "chart" | "io" | "clinical" | "form" | "staff" | "patient" | "report" | "config" | "archive" | "start" | "fleet" | "dashboard" | "canopy-dashboard" | "canopy-monitoring" | "canopy-charts" | "canopy-reports" | "canopy-config" | "canopy-infrastructure" | "canopy-formdev";
-type NavItem = { view: AppView; label: string; icon: NavIconName };
+type NavIconName = "journey" | "ward" | "chart" | "io" | "clinical" | "form" | "staff" | "patient" | "report" | "config" | "archive" | "start" | "fleet" | "dashboard" | "canopy-dashboard" | "canopy-monitoring" | "canopy-charts" | "canopy-reports" | "canopy-config" | "canopy-infrastructure" | "canopy-formdev";
+/** Canopy menu sections, by who mostly uses them (a heading only: access still follows permissions). */
+type NavSection = "User In-charge" | "User Admin" | "Clinical Admin" | "Administrator";
+type NavItem = { view: AppView; label: string; icon: NavIconName; section?: NavSection };
 type CanopyCasePanelId = "chart" | "io" | "diagnosis" | "forms" | "staff" | "patient" | "report";
 
 const CANOPY_PANEL_KEY = "flora.canopy.activeCasePanel";
@@ -93,6 +97,7 @@ function NavIcon({ name }: { name: NavIconName }) {
       : name === "clinical" ? <><path d="M9 3h6l1 2h3v16H5V5h3l1-2Z"/><path d="M9 12h6M12 9v6"/></>
       : name === "form" ? <><path d="M6 3h9l3 3v15H6Z"/><path d="M15 3v4h4M9 11h6M9 15h6M9 19h4"/></>
       : name === "staff" ? <><circle cx="9" cy="8" r="3"/><path d="M3.5 20c.4-4 2.2-6 5.5-6s5.1 2 5.5 6"/><circle cx="17" cy="9" r="2.2"/><path d="M15.5 15c3.2-.8 5.1.8 5.5 4"/></>
+      : name === "journey" ? <><circle cx="5" cy="6" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 6h8a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h8"/></>
       : name === "patient" ? <><circle cx="12" cy="8" r="3.2"/><path d="M5 21c.5-5 2.8-7.5 7-7.5s6.5 2.5 7 7.5"/></>
       : name === "report" ? <><path d="M5 3h11l3 3v15H5Z"/><path d="M16 3v4h4M8 17v-3M12 17v-6M16 17V9"/></>
       : name === "config" ? <><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></>
@@ -107,6 +112,13 @@ function GearIcon() {
   return <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M10.3 3.6a1.7 1.7 0 0 1 3.4 0l.2 1.1a7 7 0 0 1 1.7 1l1.1-.4a1.7 1.7 0 0 1 2 .8l.2.3a1.7 1.7 0 0 1-.4 2.2l-.9.7a7 7 0 0 1 0 2l.9.7a1.7 1.7 0 0 1 .4 2.2l-.2.3a1.7 1.7 0 0 1-2 .8l-1.1-.4a7 7 0 0 1-1.7 1l-.2 1.1a1.7 1.7 0 0 1-3.4 0l-.2-1.1a7 7 0 0 1-1.7-1l-1.1.4a1.7 1.7 0 0 1-2-.8l-.2-.3a1.7 1.7 0 0 1 .4-2.2l.9-.7a7 7 0 0 1 0-2l-.9-.7a1.7 1.7 0 0 1-.4-2.2l.2-.3a1.7 1.7 0 0 1 2-.8l1.1.4a7 7 0 0 1 1.7-1Z" />
     <circle cx="12" cy="12" r="2.6" />
+  </svg>;
+}
+
+function DistributionIcon() {
+  return <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 3 4 7l8 4 8-4-8-4Z" />
+    <path d="M4 12l8 4 8-4M4 17l8 4 8-4" />
   </svg>;
 }
 
@@ -137,7 +149,7 @@ function SystemMenu({ collapsed, canSettings, activeView, sessionUser, navigate,
   const menuStyle = anchor ? (collapsed
     ? { left: anchor.right + 8, bottom: window.innerHeight - anchor.bottom }
     : { left: anchor.left, bottom: window.innerHeight - anchor.top + 8, width: Math.max(anchor.width, 256) }) : undefined;
-  const settingsActive = activeView === "master" || activeView === "account";
+  const settingsActive = activeView === "master" || activeView === "account" || activeView === "distribution";
 
   useEffect(() => {
     if (!open) return;
@@ -157,18 +169,21 @@ function SystemMenu({ collapsed, canSettings, activeView, sessionUser, navigate,
     setOpen(false);
     action();
   };
+  const hospitalName = hospitalDisplayName(useHospitalProfile(), workstation.hospitalName);
   const location = surface.code === "leaf"
     ? [workstation.careUnitName, workstation.roomName, workstation.bedName].filter(Boolean).join(" · ")
-    : workstation.hospitalName;
+    : "";
   const itemClass = "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-xs font-semibold hover:bg-[var(--app-control-bg)]";
 
-  return <div ref={rootRef} className="relative border-t border-[var(--app-border)] p-2">
+  return <div ref={rootRef} className="relative shrink-0 border-t border-[var(--app-border)] p-2">
     {open ? createPortal(<div ref={menuRef} role="menu" aria-label={t("system.menu")} style={menuStyle} className="fixed z-[1200] w-64 rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-2 shadow-2xl">
       <div className="mb-1 border-b border-[var(--app-border)] px-3 pb-2 pt-1">
         <div className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--app-muted)]">{surface.code === "leaf" ? t("system.workstation") : surface.productName}</div>
-        {location ? <div className="truncate text-xs font-semibold">{location}</div> : null}
+        {hospitalName ? <div className="break-words text-xs font-semibold leading-snug">{hospitalName}</div> : null}
+        {location ? <div className="break-words text-[11px] font-semibold text-[var(--app-muted)]">{location}</div> : null}
         <div className="truncate text-[11px] text-[var(--app-muted)]">{sessionUser?.name || sessionUser?.username}</div>
       </div>
+      {(surface.code === "canopy" || surface.code === "leaf") && canSettings ? <button role="menuitem" type="button" onClick={() => choose(() => navigate("distribution"))} className={itemClass}><span className="inline-flex h-5 w-5 items-center justify-center"><DistributionIcon /></span>{t("system.distribution")}</button> : null}
       {canSettings ? <button role="menuitem" type="button" onClick={() => choose(() => navigate("master"))} className={itemClass}><span className="inline-flex h-5 w-5 items-center justify-center"><GearIcon /></span>{t("system.settings")}</button> : null}
       <button role="menuitem" type="button" onClick={() => choose(() => navigate("account"))} className={itemClass}><span className="inline-flex h-5 w-5 items-center justify-center"><NavIcon name="patient" /></span>{t("topbar.accountSettings")}</button>
       {onLogout ? <button role="menuitem" type="button" onClick={() => choose(onLogout)} className={`${itemClass} mt-1 text-rose-400 hover:bg-rose-500/10`}><span className="inline-flex h-5 w-5 items-center justify-center text-base">⏻</span>{t("topbar.signOut")}</button> : null}
@@ -196,23 +211,24 @@ function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, colla
   const canReport = permissions.includes("report.generate");
   const items: NavItem[] = surface.code === "canopy"
     ? [
-        { view: "dashboard", label: "Dashboard", icon: "canopy-dashboard" },
-        { view: "admissions", label: "Admissions", icon: "start" },
-        { view: "monitoring", label: "Central Charting", icon: "canopy-monitoring" },
-        { view: "fleet", label: "Case List", icon: "canopy-charts" },
-        { view: "report", label: "Reports", icon: "canopy-reports" },
-        { view: "or-schedule", label: "Schedule", icon: "canopy-charts" },
-        { view: "billing", label: "Billing", icon: "canopy-reports" },
-        ...(canConfigureCanopy || permissions.includes("staff.manage") ? [{ view: "staff-directory" as AppView, label: "Staff directory", icon: "staff" as NavIconName }] : []),
-        { view: "twin", label: "Digital twin", icon: "canopy-dashboard" },
-        { view: "topology", label: "Topology", icon: "canopy-monitoring" },
-        { view: "devices", label: "Devices", icon: "canopy-infrastructure" },
-        { view: "gateway-alerts", label: "Gateway Alerts", icon: "canopy-infrastructure" },
-        { view: "infrastructure", label: "Infrastructure", icon: "canopy-infrastructure" },
-        ...(canConfigureCanopy || canAuthor ? [{ view: "formdev" as AppView, label: t("topbar.formdev"), icon: "canopy-formdev" as NavIconName }] : []),
-        ...(canConfigureCanopy || canAuthor ? [{ view: "workflows" as AppView, label: t("topbar.workflows"), icon: "canopy-formdev" as NavIconName }] : []),
-        ...(canAuthor ? [{ view: "report-studio" as AppView, label: "Report Studio", icon: "canopy-reports" as NavIconName }] : []),
-        ...(canUseAiStudio(sessionUser) ? [{ view: "ai-studio" as AppView, label: "AI Studio", icon: "canopy-charts" as NavIconName }] : []),
+        { view: "dashboard", label: "Dashboard", icon: "canopy-dashboard", section: "User In-charge" },
+        { view: "admissions", label: "Admission", icon: "start", section: "User In-charge" },
+        { view: "monitoring", label: "Central Monitor", icon: "canopy-monitoring", section: "User In-charge" },
+        { view: "fleet", label: "Case List", icon: "canopy-charts", section: "User In-charge" },
+        { view: "icu-kpi", label: "ICU KPI", icon: "canopy-reports", section: "User In-charge" },
+        { view: "report", label: "Reports", icon: "canopy-reports", section: "User Admin" },
+        { view: "billing", label: "Billing", icon: "canopy-reports", section: "User Admin" },
+        { view: "topology", label: "Topology", icon: "canopy-monitoring", section: "User Admin" },
+        { view: "twin", label: "Digital twin", icon: "canopy-dashboard", section: "User Admin" },
+        ...(canConfigureCanopy || permissions.includes("staff.manage") ? [{ view: "staff-directory" as AppView, label: "Staffs", icon: "staff" as NavIconName, section: "User Admin" as NavSection }] : []),
+        ...(canConfigureCanopy || canAuthor ? [{ view: "formdev" as AppView, label: t("topbar.formdev"), icon: "canopy-formdev" as NavIconName, section: "Clinical Admin" as NavSection }] : []),
+        ...(canConfigureCanopy || canAuthor ? [{ view: "workflows" as AppView, label: t("topbar.workflows"), icon: "canopy-formdev" as NavIconName, section: "Clinical Admin" as NavSection }] : []),
+        ...(canAuthor ? [{ view: "report-studio" as AppView, label: "Report Studio", icon: "canopy-reports" as NavIconName, section: "Clinical Admin" as NavSection }] : []),
+        ...(canUseAiStudio(sessionUser) ? [{ view: "ai-studio" as AppView, label: "AI Studio", icon: "canopy-charts" as NavIconName, section: "Clinical Admin" as NavSection }] : []),
+        { view: "devices", label: "Devices", icon: "canopy-infrastructure", section: "Administrator" },
+        { view: "gateway-alerts", label: "Gateway Alerts", icon: "canopy-infrastructure", section: "Administrator" },
+        { view: "infrastructure", label: "Infrastructure", icon: "canopy-infrastructure", section: "Administrator" },
+        ...(canConfigureCanopy ? [{ view: "activity" as AppView, label: "Logs", icon: "canopy-reports" as NavIconName, section: "Administrator" as NavSection }] : []),
       ]
     : isIdleLeaf
       ? [
@@ -223,15 +239,22 @@ function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, colla
       : [
           { view: "ward", label: t("system.ward"), icon: "ward" },
           { view: "case", label: "Chart", icon: "chart" },
+          { view: "waveform", label: "Waveform", icon: "chart" },
           { view: "io", label: "I/O", icon: "io" },
           { view: "diagnosis", label: "Diag/Ops", icon: "clinical" },
           { view: "form", label: "Forms", icon: "form" },
+          { view: "medication", label: "Meds/MAR", icon: "clinical" },
+          { view: "shift-handover", label: "Handover", icon: "staff" },
           { view: "billing", label: "Billing", icon: "report" },
           { view: "staff", label: "Staff", icon: "staff" },
           { view: "patient", label: "Patient", icon: "patient" },
+          { view: "journey", label: "Journey", icon: "journey" },
           ...(canReport ? [{ view: "report" as AppView, label: "Reports", icon: "report" as NavIconName }] : []),
           { view: "history", label: t("topbar.archive"), icon: "archive" },
         ];
+
+  // The Admission page also covers the former Schedule page.
+  const isActiveItem = (view: AppView) => activeView === view || (view === "admissions" && activeView === "or-schedule");
 
   const navigate = (view: AppView) => {
     setActiveView(view);
@@ -274,8 +297,11 @@ function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, colla
           <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-[var(--app-muted)]">{t("ward.label")}</div>
           <div className="truncate text-xs font-semibold text-[var(--app-text)]" title={wardName}>{wardName}</div>
         </div>) : null}
-      {items.map(item => <div key={item.view}>
-        <ClinicalReferenceTooltip text={item.label} compact disabled={!collapsed} className="w-full"><button type="button" onClick={() => navigate(item.view)} aria-label={item.label} aria-current={activeView === item.view ? "page" : undefined} className={`flora-nav-item flex h-12 w-full items-center rounded-xl border text-sm font-semibold transition ${collapsed ? "justify-center" : "gap-3 px-3"} ${activeView === item.view ? "border-[var(--app-accent)] bg-[var(--app-accent)] text-[var(--app-accent-contrast)]" : "border-transparent hover:bg-[var(--app-control-bg)]"}`}><span className="flora-nav-icon inline-flex h-9 w-9 shrink-0 items-center justify-center"><NavIcon name={item.icon} /></span>{!collapsed ? <span className="truncate">{item.label}</span> : null}</button></ClinicalReferenceTooltip>
+      {items.map((item, index) => <div key={item.view}>
+        {item.section && item.section !== items[index - 1]?.section ? (collapsed
+          ? <div className={`mx-2 border-t border-[var(--app-border)] ${index ? "my-2" : "mb-2"}`} role="separator" aria-label={item.section} />
+          : <div className={`px-3 pb-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--app-muted)] ${index ? "pt-3" : "pt-1"}`} role="heading" aria-level={2}>{item.section}</div>) : null}
+        <ClinicalReferenceTooltip text={item.label} compact disabled={!collapsed} className="w-full"><button type="button" onClick={() => navigate(item.view)} aria-label={item.label} aria-current={isActiveItem(item.view) ? "page" : undefined} className={`flora-nav-item flex h-12 w-full items-center rounded-xl border text-sm font-semibold transition ${collapsed ? "justify-center" : "gap-3 px-3"} ${isActiveItem(item.view) ? "border-[var(--app-accent)] bg-[var(--app-accent)] text-[var(--app-accent-contrast)]" : "border-transparent hover:bg-[var(--app-control-bg)]"}`}><span className="flora-nav-icon inline-flex h-9 w-9 shrink-0 items-center justify-center"><NavIcon name={item.icon} /></span>{!collapsed ? <span className="truncate">{item.label}</span> : null}</button></ClinicalReferenceTooltip>
         {surface.code === "canopy" && item.view === "fleet" && activeView === "fleet" && canopyCaseOpen ? <div className={`mt-1 space-y-1 ${collapsed ? "border-t border-[var(--app-border)] pt-1" : "ml-5 border-l border-[var(--app-border)] pl-2"}`} aria-label="Clinical chart sections">
           {canopyClinicalItems.map(child => <ClinicalReferenceTooltip key={child.panel} text={child.label} compact disabled={!collapsed} className="w-full"><button type="button" onClick={() => navigateCanopyPanel(child.panel)} aria-label={child.label} aria-current={canopyPanel === child.panel ? "page" : undefined} className={`flex h-10 w-full items-center rounded-lg border text-xs font-semibold transition ${collapsed ? "justify-center" : "gap-2 px-2"} ${canopyPanel === child.panel ? "border-[var(--app-accent)] bg-[var(--app-control-bg)] text-[var(--app-accent)]" : "border-transparent text-[var(--app-muted)] hover:bg-[var(--app-control-bg)] hover:text-[var(--app-text)]"}`}><span className="inline-flex h-7 w-7 shrink-0 items-center justify-center"><NavIcon name={child.icon} /></span>{!collapsed ? <span className="truncate">{child.label}</span> : null}</button></ClinicalReferenceTooltip>)}
         </div> : null}
@@ -289,7 +315,7 @@ function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, colla
 export default function AppSidebar(props: Props) {
   const shared = { ...props };
   return <>
-    <aside className={`app-rail hidden shrink-0 border-r md:block ${props.collapsed ? "w-16" : "w-56"}`}><SidebarBody {...shared} /></aside>
+    <aside className={`app-rail hidden h-full min-h-0 shrink-0 border-r md:block ${props.collapsed ? "w-16" : "w-56"}`}><SidebarBody {...shared} /></aside>
     {props.mobileOpen ? <div className="fixed inset-0 z-[1150] md:hidden"><button type="button" aria-label="Close navigation" onClick={props.onCloseMobile} className="absolute inset-0 bg-black/55" /><aside className="app-rail absolute inset-y-0 left-0 w-[82vw] max-w-[280px] border-r shadow-2xl"><SidebarBody {...shared} collapsed={false} /></aside></div> : null}
   </>;
 }

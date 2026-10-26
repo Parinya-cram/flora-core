@@ -1,4 +1,6 @@
-# System Scope Comparison (สรุปเปรียบเทียบขอบเขตระบบ) — 2026-10-13
+# System Scope Comparison (สรุปเปรียบเทียบขอบเขตระบบ) — updated 2026-10-26
+
+> **2026-10-26:** FLORA re-assessed after gateway EKG/waveform, live streaming, ICU rounds, scoring engine and OR schedule work (B1, B2 → ✅; C4 → ◐). These features are on `main` but **not yet in a signed release** (pins leaf-1.2.9 / gateway-0.2.4).
 
 Built from the per-system checklists in [scope/](scope/) (same 48 items, A1–H3). Each cell links back to cited evidence in the system's file.
 Legend: ✅ supported · ◐ partial / add-on / extra product needed · ❌ not offered · ? not found publicly.
@@ -9,17 +11,17 @@ FLORA is a self-assessment from the repo ([scope/flora.md](scope/flora.md)); com
 | | FLORA | Philips ICCA | Picis | Dräger Innovian | Mediplex / Mindray | Mind Medical |
 |---|---|---|---|---|---|---|
 | ระบบหลัก | Anesthesia + ICU + Studio | ICU-first CIS + anesthesia | Full periop suite + ICU | Anesthesia-first AIMS (+ ICU legacy) | Device connectivity / central monitoring (no AIMS outside China) | IPD paperless, ER/LR/EMS telemedicine |
-| เด่นที่สุด | Hospital self-authoring, Thai, offline, AI | ICU depth, scoring, FDA, references | Device Hub 420–450+ drivers, OR management | Dräger/GE device data, offline thick client | Waveform, alarms, Mindray devices | Low price, Thai local |
-| อ่อนที่สุด | Device breadth (3 brands), no CPOE/CDS, no certification | Needs PIC iX/Capsule/IntelliBridge, no OR mgmt, no Thai | ICU thin, no ward, vendor-configured, no Thai | Legacy Windows stack, ICU dormant, no Thai | No clinical charting | No anesthesia/OR/ICU |
+| เด่นที่สุด | Hospital self-authoring, Thai, offline, AI, live streaming + OR schedule | ICU depth, scoring, FDA, references | Device Hub 420–450+ drivers, OR management | Dräger/GE device data, offline thick client | Waveform, alarms, Mindray devices | Low price, Thai local |
+| อ่อนที่สุด | Device breadth (3 brands; waveform M540 only), ICU content unpublished, no CPOE, no certification | Needs PIC iX/Capsule/IntelliBridge, no OR mgmt, no Thai | ICU thin, no ward, vendor-configured, no Thai | Legacy Windows stack, ICU dormant, no Thai | No clinical charting | No anesthesia/OR/ICU |
 | Tier ที่เจอ | 1 & 2 | **1 (main threat)** | 1 | 1 (replacement target) | **2 (hardware bundle)** | 2 (rare) |
 
 ## 2. ตารางเปรียบเทียบขอบเขต (Scope matrix)
 
 | Count | FLORA | Philips ICCA | Picis | Dräger Innovian | Mediplex / Mindray | Mind Medical |
 |---|---|---|---|---|---|---|
-| ✅ | 21 | 20 | 24 | 15 | 8 | 3 |
-| ◐ | 23 | 20 | 10 | 25 | 20 | 14 |
-| ❌ | 3 | 3 | 2 | 0 | 0 | 9 |
+| ✅ | 23 | 20 | 24 | 15 | 8 | 3 |
+| ◐ | 22 | 20 | 10 | 25 | 20 | 14 |
+| ❌ | 2 | 3 | 2 | 0 | 0 | 9 |
 | ? | 1 | 5 | 12 | 8 | 20 | 22 |
 
 ### A. Clinical workflow
@@ -49,8 +51,8 @@ FLORA is a self-assessment from the repo ([scope/flora.md](scope/flora.md)); com
 
 | # | Item | [FLORA](scope/flora.md) | [Philips ICCA](scope/philips-icca.md) | [Picis](scope/picis.md) | [Dräger Innovian](scope/drager-innovian.md) | [Mediplex / Mindray](scope/mediplex-mindray.md) | [Mind Medical](scope/mindmedical.md) |
 |---|---|---|---|---|---|---|---|
-| B1 | OR scheduling | ◐ | ❌ | ✅ | ◐ | ? | ❌ |
-| B2 | OR status board | ◐ | ❌ | ✅ | ◐ | ◐ | ❌ |
+| B1 | OR scheduling | ✅ | ❌ | ✅ | ◐ | ? | ❌ |
+| B2 | OR status board | ✅ | ❌ | ✅ | ◐ | ◐ | ❌ |
 | B3 | Staff / resources | ◐ | ? | ✅ | ? | ? | ? |
 | B4 | Supplies / charge capture | ✅ | ◐ | ✅ | ◐ | ? | ? |
 
@@ -61,7 +63,7 @@ FLORA is a self-assessment from the repo ([scope/flora.md](scope/flora.md)); com
 | C1 | Own gateway | ✅ | ◐ | ✅ | ✅ | ✅ | ◐ |
 | C2 | Multi-brand | ◐ | ◐ | ✅ | ◐ | ◐ | ? |
 | C3 | Monitors / machines / vents / pumps | ◐ | ◐ | ✅ | ◐ | ✅ | ◐ |
-| C4 | Waveform | ❌ | ◐ | ◐ | ◐ | ✅ | ◐ |
+| C4 | Waveform | ◐ | ◐ | ◐ | ◐ | ✅ | ◐ |
 | C5 | Alarm / surveillance | ◐ | ◐ | ❌ | ◐ | ✅ | ? |
 
 ### D. HIS / interoperability
@@ -112,11 +114,11 @@ FLORA is a self-assessment from the repo ([scope/flora.md](scope/flora.md)); com
 
 ## 3. ข้อสรุปเปรียบเทียบรายหมวด
 
-**A. Clinical workflow** — FLORA's anesthesia record (A1–A7) matches Picis/Innovian and beats ICCA on PACU and checklist content. ICCA leads ICU depth (A10–A15: nursing care plan, MAR/orders, built-in scoring, notes, results). Nobody publicly documents a true WHO sign-in/time-out/sign-out (A3) — an easy TOR differentiator for FLORA if we add the 3-phase format.
+**A. Clinical workflow** — FLORA's anesthesia record (A1–A7) matches Picis/Innovian and beats ICCA on PACU and checklist content. FLORA's ICU infrastructure is now strong (scheduled rounds/bundles with worklists, auto NEWS2/MEWS/qSOFA/GCS, long-stay flowsheet, multi-bed Leaf, transfer without discharge) but ICU forms are not yet published and APACHE II/MAR are missing; ICCA still leads ICU depth (care plan, MAR/orders, APACHE/SAPS). Nobody publicly documents a true WHO sign-in/time-out/sign-out (A3) — an easy TOR differentiator for FLORA if we add the 3-phase format.
 
-**B. OR management** — Picis is the only full OR suite (scheduling, board, staff, implants). ICCA has none. FLORA is ◐ (HL7/EPHIS-fed lists + charge capture). If a TOR asks for OR scheduling, Picis wins unless the HIS keeps scheduling.
+**B. OR management** — Picis is the fullest OR suite (scheduling, board, staff, implants). FLORA now has an OR schedule (room × time booking), OR status/journey and Digital Twin, plus charge capture — close to Picis except staff rostering and implants. ICCA has none.
 
-**C. Device integration** — Picis (Device Hub) and Mindray (eGateway, waveform, alarms) are strongest. ICCA and Innovian need separately licensed Philips/Dräger gateways. FLORA has its own gateway in the price but only 3 driver brands, 0 formally validated, no waveform — **the biggest technical gap for tier 1**.
+**C. Device integration** — Picis (Device Hub) and Mindray (eGateway, waveform, alarms) are strongest. ICCA and Innovian need separately licensed Philips/Dräger gateways. FLORA has its own gateway in the price and now live 1-s streaming with **EKG waveform from Dräger M540** (Leaf display, not diagnostic, rate unverified), but still only 3 driver brands, 0 formally validated, no Philips/Mindray, no clinical alarms — **still the biggest technical gap for tier 1**.
 
 **D. HIS / interoperability** — Competitors have mature HL7 v2 in/out. FLORA has inbound only and FHIR is demo; but FLORA is the only one with proven Thai HIS work (KCMH, EPHIS). Nobody shows production FHIR detail.
 
@@ -131,8 +133,8 @@ FLORA is a self-assessment from the repo ([scope/flora.md](scope/flora.md)); com
 ## 4. สิ่งที่ FLORA ควรทำ / ใช้ในการประมูล
 
 Close before tier-1 bids:
-1. Device drivers for **Philips and Mindray monitors** + a formally validated device list (C2/C3).
-2. Publish ICU workflows (A10/A13/E1) — today they are drafts.
+1. Device drivers for **Philips and Mindray monitors** + a formally validated device list (C2/C3); verify M540 waveform on real captures and extend waveform to GE.
+2. Publish ICU workflow content v2 (A10/A14/E1) and ship the ICU + live-stream code in a signed release (leaf > 1.2.9, gateway > 0.2.4).
 3. Outbound HL7 (ORU/MDM PDF to HIS) and a basic FHIR API (D1–D3).
 4. Regulatory path (Thai FDA medical-device software classification, ISO 13485 / IEC 62304 plan).
 

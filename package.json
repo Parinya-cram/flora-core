@@ -27,7 +27,7 @@
   },
   "build": {
     "appId": "com.flora.desktop",
-    "productName": "Flora",
+    "productName": "Flora iCIS",
     "toolsets": {
       "winCodeSign": "1.1.0"
     },
@@ -44,6 +44,14 @@
       {
         "from": "frontend/src/assets/eforllogo.png",
         "to": "assets/eforllogo.png"
+      },
+      {
+        "from": "build-win/serial-controller.exe",
+        "to": "serial-controller.exe"
+      },
+      {
+        "from": "build-win/runtime",
+        "to": "runtime"
       }
     ],
     "directories": {
@@ -55,10 +63,12 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
-      "artifactName": "Flora-Setup-${version}.${ext}"
+      "artifactName": "Flora-iCIS-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -66,7 +76,10 @@
       "allowToChangeInstallationDirectory": true,
       "include": "electron/installer.nsh",
       "installerIcon": "electron/assets/floraicon.ico",
-      "uninstallerIcon": "electron/assets/floraicon.ico"
+      "uninstallerIcon": "electron/assets/floraicon.ico",
+      "shortcutName": "Flora iCIS",
+      "createDesktopShortcut": true,
+      "runAfterFinish": true
     }
   }
 }

@@ -9,7 +9,7 @@ export default function CanopyAiStudioView({ sessionUser }: { sessionUser: AuthU
   return <main className="h-full overflow-y-auto bg-[var(--app-bg)] p-3 sm:p-5">
     <div className="w-full space-y-4">
       <header>
-        <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">ESM Flora Canopy · AI Studio</div>
+        <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">Flora iCIS Canopy · AI Studio</div>
         <h1 className="mt-1 text-2xl font-semibold text-[var(--app-text)]">AI Studio</h1>
         <p className="mt-1 text-sm text-[var(--app-muted)]">{thai
           ? "คุยกับ AI เรื่องข้อมูลเคส ได้คำตอบพร้อมกราฟที่รันใหม่ด้วยข้อมูลล่าสุดได้ เก็บและแชร์เป็น snippet"

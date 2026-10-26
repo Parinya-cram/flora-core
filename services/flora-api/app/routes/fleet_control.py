@@ -186,6 +186,8 @@ def control_plane(database: Connection = Depends(connection)) -> dict[str, Any]:
                leaf.software_version,
                leaf.last_seen_at, assignment.bed_location_id, assignment.desired_config,
                assignment.desired_version, assignment.applied_version,
+               coalesce((SELECT array_agg(extra.bed_location_id ORDER BY extra.bed_location_id)
+                         FROM canopy_leaf_bed extra WHERE extra.leaf_id=leaf.leaf_id), '{}') AS extra_bed_ids,
                CASE WHEN assignment.leaf_id IS NULL THEN 'unassigned'
                     WHEN assignment.applied_version >= assignment.desired_version THEN 'synced'
                     WHEN assignment.applied_version = 0 THEN 'pending'

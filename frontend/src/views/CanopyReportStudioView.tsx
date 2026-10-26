@@ -9,7 +9,7 @@ export default function CanopyReportStudioView({ sessionUser }: { sessionUser: A
   return <main className="h-full overflow-y-auto bg-[var(--app-bg)] p-3 sm:p-5">
     <div className="w-full space-y-4">
       <header>
-        <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">ESM Flora Canopy · Report Studio</div>
+        <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--app-accent)]">Flora iCIS Canopy · Report Studio</div>
         <h1 className="mt-1 text-2xl font-semibold text-[var(--app-text)]">Report Studio</h1>
         <p className="mt-1 text-sm text-[var(--app-muted)]">{thai
           ? "สร้างรายงานและสถิติเองด้วยการลากวางฟิลด์ ดูผลลัพธ์ทันที แล้วบันทึกเข้าหน้า Reports"

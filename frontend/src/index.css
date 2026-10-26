@@ -1048,6 +1048,11 @@ input {
     var(--app-main-bg);
 }
 
+/* Leaf pages share the Ward page's plain theme background. */
+.app-main.app-main--leaf {
+  background: var(--app-bg);
+}
+
 .app-rail {
   background: var(--app-panel-bg);
   border-color: var(--app-border);
@@ -1558,6 +1563,7 @@ input {
 .case-kronos__stepper input { width: 3rem; border: 0; outline: none; background: transparent; color: inherit; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
 .case-kronos__stepper input::-webkit-inner-spin-button, .case-kronos__stepper input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .case-kronos__stepper span { color: var(--app-muted); font-size: .7rem; }
+.case-kronos__scale-select { height: 2rem; border: 1px solid var(--app-border); border-radius: .65rem; background: var(--app-bg); color: inherit; padding: 0 .5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .case-kronos__sync { color: var(--app-muted); min-width: 3.4rem; }
 .case-kronos__latest { color: var(--app-accent); font-weight: 700; white-space: nowrap; }
 
