@@ -214,7 +214,7 @@ deploy-gateway-233:
     GATEWAY_HOST: esm@172.22.1.233
     GATEWAY_REPO: /home/esm/flora/flora-core
   script:
-    - if [ -z "${GATEWAY_233_SSH_KEY:-}" ]; then echo "GATEWAY_233_SSH_KEY is not set: gateway .233 not updated"; exit 0; fi
+    - if [ -z "${GATEWAY_233_SSH_KEY:-}" ]; then echo "GATEWAY_233_SSH_KEY is not set, gateway .233 not updated"; exit 0; fi
     - install -m 600 "$GATEWAY_233_SSH_KEY" "$CI_PROJECT_DIR/.gw233_key"
     - export GIT_SSH_COMMAND="ssh -i $CI_PROJECT_DIR/.gw233_key -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$CI_PROJECT_DIR/.gw233_known"
     - git push --force "ssh://$GATEWAY_HOST$GATEWAY_REPO" "HEAD:refs/heads/ci-incoming"
