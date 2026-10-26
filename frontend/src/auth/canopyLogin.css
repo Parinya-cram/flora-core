@@ -20,6 +20,17 @@
 .canopy-tree__node { fill: var(--app-panel-bg); stroke: var(--app-accent); stroke-width: 1.5 }
 .canopy-tree__halo { fill: var(--app-accent); opacity: 0; animation: canopy-halo 4.8s ease-out infinite }
 .canopy-tree__spark, .canopy-tree__seed { fill: color-mix(in srgb, var(--app-accent) 45%, #e6b75c) }
+.canopy-tree__branch--draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: canopy-draw 2.2s cubic-bezier(.4, 0, .2, 1) forwards }
+/* Leaf: the logo outline in black and white (the theme's text colour); sparks, seed and halos as on Canopy. */
+.canopy-tree--mono .canopy-tree__branch { stroke: color-mix(in srgb, var(--app-text) 42%, transparent) }
+.canopy-tree--mono .canopy-tree__seed { animation: canopy-seed 4.8s ease-in-out infinite }
+.canopy-glow { animation: canopy-glow 7s ease-in-out infinite }
+.canopy-glow__stop--seed { stop-color: color-mix(in srgb, var(--app-accent) 40%, #e6b75c); stop-opacity: .22 }
+.canopy-glow__stop--head { stop-color: var(--app-text); stop-opacity: .07 }
+.canopy-glow__stop--end { stop-color: var(--app-text); stop-opacity: 0 }
+@keyframes canopy-glow { 50% { opacity: .7 } }
+@keyframes canopy-seed { 50% { opacity: .55 } }
+@keyframes canopy-draw { to { stroke-dashoffset: 0 } }
 @keyframes canopy-halo { 0% { opacity: .35; r: 4 } 100% { opacity: 0; r: 22 } }
 
 /* ---------- card ---------- */
@@ -53,6 +64,7 @@
 @keyframes canopy-spin { to { transform: rotate(360deg) } }
 
 @media (prefers-reduced-motion: reduce) {
-  .canopy-tree__halo, .canopy-card { animation: none }
+  .canopy-tree__halo, .canopy-tree__seed, .canopy-glow, .canopy-card { animation: none }
+  .canopy-tree__branch--draw { animation: none; stroke-dashoffset: 0 }
   .canopy-tree__spark { display: none }
 }

@@ -4,15 +4,17 @@ import { useEffect, useState, type RefObject } from "react";
  * Decorative sign-in background: Flora Root's branching network in two shapes.
  *   tree   (Canopy) - Root turned upside down: branches rise from a seed at the bottom;
  *                     the glowing tips are the Leaves that sync into Canopy.
- *   flower (Leaf)   - one flower around the sign-in card (fitTo), just a little larger
- *                     than the card: teardrop petals in the same thin lines.
+ *   flower (Leaf)   - the Flora logo (four leaves and the head) traced around the sign-in
+ *                     card (fitTo): black-and-white lines that draw themselves in, with Canopy's sparks,
+ *                     glowing seed and tip halos.
  * Sparks travel along the branches. Same seed every visit; colours come from the
  * active app theme (--app-*).
  */
 
 export type NetworkShape = "tree" | "flower";
 
-type Branch = { d: string; width: number; spark?: { duration: number; begin: number } };
+/** draw: delay (s) of the line drawing itself in (the logo outline). */
+type Branch = { d: string; width: number; draw?: number; spark?: { duration: number; begin: number } };
 type Tip = { x: number; y: number; delay: number };
 
 function random(seed: number) {
@@ -21,6 +23,7 @@ function random(seed: number) {
 }
 
 type Frame = { x: number; y: number; width: number; height: number };
+type Glow = { x: number; y: number; rx: number; ry: number; kind: string };
 
 function buildNetwork(W: number, H: number, shape: NetworkShape, frame: Frame | null) {
   const rnd = random(7);
@@ -59,50 +62,56 @@ function buildNetwork(W: number, H: number, shape: NetworkShape, frame: Frame | 
     .filter((_, i) => i % 3 === 0)
     .slice(0, 14)
     .map((p, i) => ({ x: p.x, y: p.y, delay: (i * 0.37) % 4.8 }));
-  return { branches, tips, seed: { x: origin.x, y: H - 6 } };
+  return { branches, tips, seed: { x: origin.x, y: H - 6 }, glows: [] as Glow[] };
 }
 
-/** One flower around the sign-in card: teardrop petals drawn with Root's thin lines. */
+/** The Flora logo around the sign-in card: four leaves rising from one point and the head above them,
+ *  traced in thin monochrome lines (logo artwork coordinates, 256 x 256, stretched to frame the card). */
+const LOGO_LEAVES: { tip: [number, number]; edges: [number, number, number, number][]; rib: [number, number] }[] = [
+  { tip: [8, 120], edges: [[92, 206, 32, 162], [118, 150, 58, 114]], rib: [64, 160] },   // pink, outer left
+  { tip: [62, 58], edges: [[82, 180, 52, 108], [140, 148, 108, 78]], rib: [96, 130] },  // teal, inner left
+  { tip: [208, 58], edges: [[136, 140, 168, 74], [206, 172, 222, 108]], rib: [180, 128] }, // blue, inner right
+  { tip: [250, 118], edges: [[168, 150, 220, 112], [192, 206, 242, 160]], rib: [206, 158] }, // green, outer right
+];
+const LOGO_BASE: [number, number] = [136, 210];
+const LOGO_HEAD = { x: 138, y: 62, r: 26 };
+
 function buildFlower(W: number, H: number, frame: Frame | null, rnd: () => number) {
-  const MARGIN = 60; // how far the petal tips reach past the card
-  const box = frame ?? { x: W / 2 - 450, y: H / 2 - 100, width: 900, height: 200 };
-  const cx = box.x + box.width / 2;
-  const cy = box.y + box.height / 2;
-  // A unit petal reaches the edge of a box MARGIN larger than the card, so every petal tip,
-  // the diagonal ones included, shows just outside the card.
-  const rx = box.width / 2 + MARGIN;
-  const ry = box.height / 2 + MARGIN;
-  const reach = (angle: number) => Math.min(rx / Math.max(Math.abs(Math.cos(angle)), 1e-6), ry / Math.max(Math.abs(Math.sin(angle)), 1e-6));
+  const box = frame ?? { x: W / 2 - 450, y: H / 2 - 200, width: 900, height: 400 };
+  // The outer leaves reach well past the card's sides, the head sits wholly above it and the
+  // leaves meet below it, so the logo reads around the card.
+  const reach = Math.min(260, Math.max(90, (W - box.width) / 2 - 24));
+  const left = box.x - reach, right = box.x + box.width + reach;
+  const headBottom = LOGO_HEAD.y + LOGO_HEAD.r;
+  const sx = (right - left) / (250 - 8);
+  const sy = (box.y + box.height + 90 - (box.y - 18)) / (LOGO_BASE[1] - headBottom);
+  const map = (x: number, y: number) => [left + (x - 8) * sx, box.y - 18 + (y - headBottom) * sy];
+  const at = (x: number, y: number) => map(x, y).map(v => v.toFixed(1)).join(",");
+  const base = at(...LOGO_BASE);
   const branches: Branch[] = [];
   const tips: Tip[] = [];
-  const point = (angle: number, r: number) => [cx + Math.cos(angle) * r * reach(angle), cy + Math.sin(angle) * r * reach(angle)];
-  const at = (angle: number, r: number) => point(angle, r).map(v => v.toFixed(1)).join(",");
-  const petal = (heading: number, length: number, open: number, width: number, glow: boolean) => {
-    const tip = at(heading, length);
-    // Two edges leave the centre, swell out and meet again at the tip.
-    for (const side of [-1, 1]) {
-      const d = `M${cx},${cy} C${at(heading + side * open, length * 0.55)} ${at(heading + side * open * 0.55, length * 0.98)} ${tip}`;
-      branches.push({ d, width, spark: glow && side === 1 ? { duration: 4 + rnd() * 2, begin: rnd() * 4 } : undefined });
-    }
-    // Midrib and two side veins.
-    branches.push({ d: `M${cx},${cy} Q${at(heading + (rnd() - 0.5) * 0.06, length * 0.45)} ${at(heading, length * 0.82)}`, width: width * 0.55 });
-    for (const side of [-1, 1]) {
-      branches.push({ d: `M${at(heading, length * 0.32)} Q${at(heading + side * 0.1, length * 0.5)} ${at(heading + side * 0.14, length * 0.66)}`, width: width * 0.45 });
-    }
-    if (glow) {
-      const [x, y] = point(heading, length);
-      tips.push({ x, y, delay: (tips.length * 0.6) % 4.8 });
-    }
-  };
-  // Eight petals: four to the sides of the card and four to its corners; a shorter inner ring between them.
-  const corner = Math.atan2(ry, rx);
-  const headings = [-Math.PI / 2, -corner, 0, corner, Math.PI / 2, Math.PI - corner, Math.PI, Math.PI + corner];
-  headings.forEach(heading => petal(heading, 1, 0.16, 1.5, true));
-  headings.forEach((heading, i) => {
-    const next = headings[(i + 1) % headings.length] + (i === headings.length - 1 ? 2 * Math.PI : 0);
-    petal((heading + next) / 2, 0.72, 0.14, 1, false);
+  LOGO_LEAVES.forEach((leaf, index) => {
+    const tip = at(...leaf.tip);
+    leaf.edges.forEach(([c1x, c1y, c2x, c2y], side) => {
+      // Sparks run out from the seed along every leaf edge, as on Canopy's tree.
+      branches.push({ d: `M${base} C${at(c1x, c1y)} ${at(c2x, c2y)} ${tip}`, width: 2.2, draw: index * 0.25 + side * 0.1,
+                      spark: { duration: 3 + rnd() * 4, begin: 1.5 + rnd() * 4 } });
+    });
+    branches.push({ d: `M${base} Q${at(...leaf.rib)} ${tip}`, width: 1.1, draw: index * 0.25 + 0.3,
+                    spark: rnd() > 0.4 ? { duration: 4 + rnd() * 3, begin: 2 + rnd() * 4 } : undefined });
+    const [x, y] = map(...leaf.tip);
+    tips.push({ x, y, delay: index * 1.2 });
   });
-  return { branches, tips, seed: { x: cx, y: cy } };
+  const [hx, hy] = map(LOGO_HEAD.x, LOGO_HEAD.y);
+  const r = LOGO_HEAD.r * Math.min(sx, sy);
+  branches.push({ d: `M${(hx - r).toFixed(1)},${hy.toFixed(1)} a${r.toFixed(1)},${r.toFixed(1)} 0 1,0 ${(2 * r).toFixed(1)},0 a${r.toFixed(1)},${r.toFixed(1)} 0 1,0 ${(-2 * r).toFixed(1)},0`,
+                  width: 2.2, draw: 1.1, spark: { duration: 6, begin: 2.5 } });
+  tips.push({ x: hx, y: hy - r, delay: 2.4 });
+  const [bx, by] = map(...LOGO_BASE);
+  // Light spreading from the seed up through the leaves, and a softer one behind the head.
+  const glows = [{ x: bx, y: by, rx: (right - left) * 0.62, ry: (by - (hy - r)) * 1.05, kind: "seed" },
+                 { x: hx, y: hy, rx: r * 3.2, ry: r * 3.2, kind: "head" }];
+  return { branches, tips, seed: { x: bx, y: by }, glows };
 }
 
 function useViewport() {
@@ -141,12 +150,27 @@ function useFrame(target: RefObject<HTMLElement | null> | undefined) {
 export default function BranchNetwork({ shape, fitTo }: { shape: NetworkShape; fitTo?: RefObject<HTMLElement | null> }) {
   const { w, h } = useViewport();
   const frame = useFrame(fitTo);
-  const { branches, tips, seed } = buildNetwork(w, h, shape, frame);
+  const { branches, tips, seed, glows } = buildNetwork(w, h, shape, frame);
   return (
-    <svg className="canopy-tree" viewBox={`0 0 ${w} ${h}`} aria-hidden="true" focusable="false">
+    <svg className={`canopy-tree${shape === "flower" ? " canopy-tree--mono" : ""}`} viewBox={`0 0 ${w} ${h}`} aria-hidden="true" focusable="false">
+      {glows.length ? (
+        <defs>
+          {glows.map(glow => (
+            <radialGradient key={glow.kind} id={`leaf-glow-${glow.kind}`}>
+              <stop offset="0%" className={`canopy-glow__stop canopy-glow__stop--${glow.kind}`} />
+              <stop offset="100%" className="canopy-glow__stop canopy-glow__stop--end" />
+            </radialGradient>
+          ))}
+        </defs>
+      ) : null}
+      {glows.map(glow => (
+        <ellipse key={glow.kind} className="canopy-glow" cx={glow.x} cy={glow.y} rx={glow.rx} ry={glow.ry} fill={`url(#leaf-glow-${glow.kind})`} />
+      ))}
       {branches.map((branch, index) => (
         <g key={index}>
-          <path className="canopy-tree__branch" d={branch.d} strokeWidth={branch.width.toFixed(2)} />
+          <path className={`canopy-tree__branch${branch.draw != null ? " canopy-tree__branch--draw" : ""}`} d={branch.d}
+            strokeWidth={branch.width.toFixed(2)} pathLength={branch.draw != null ? 1 : undefined}
+            style={branch.draw != null ? { animationDelay: `${branch.draw}s` } : undefined} />
           {branch.spark ? (
             <circle className="canopy-tree__spark" r="1.8">
               <animateMotion dur={`${branch.spark.duration.toFixed(1)}s`} begin={`${branch.spark.begin.toFixed(1)}s`}
@@ -155,7 +179,7 @@ export default function BranchNetwork({ shape, fitTo }: { shape: NetworkShape; f
           ) : null}
         </g>
       ))}
-      <circle className="canopy-tree__seed" cx={seed.x} cy={seed.y} r="10" />
+      {seed ? <circle className="canopy-tree__seed" cx={seed.x} cy={seed.y} r="10" /> : null}
       {tips.map((tip, index) => (
         <g key={index}>
           <circle className="canopy-tree__halo" cx={tip.x} cy={tip.y} r="4" style={{ animationDelay: `${tip.delay.toFixed(2)}s` }} />

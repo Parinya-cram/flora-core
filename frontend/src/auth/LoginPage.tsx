@@ -73,7 +73,7 @@ function WorkstationLoginPage({ onLogin, loginEnabled = true, bootstrapStatus }:
     <div className="canopy-login app-main app-theme-scope flex min-h-[100dvh] items-center justify-center px-[16px] py-[16px] sm:px-[24px]">
       <BranchNetwork shape="flower" fitTo={cardRef} />
       <main className="w-full max-w-[900px]">
-        <div ref={cardRef} className="overflow-hidden rounded-[20px] border border-[var(--app-border)] bg-[var(--app-panel-bg)] shadow-2xl">
+        <div ref={cardRef} className="canopy-card overflow-hidden rounded-[20px] border border-[var(--app-border)]">
           <header className="flex items-center justify-between border-b border-[var(--app-border)] px-[22px] py-[14px] sm:px-[26px]">
             <div className="flex items-center gap-[10px]">
                 <span className="inline-flex h-[40px] w-[40px] items-center justify-center rounded-lg border border-[var(--app-border)] bg-[var(--app-control-bg)]">
