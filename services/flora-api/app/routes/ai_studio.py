@@ -131,6 +131,11 @@ Runtime available in the view:
 - FLORA.rows(name) -> array of objects keyed by your labels; FLORA.columns(name) -> [{{label, kind, type}}]
 - FLORA.series(name, {{x, y, by?}}) -> {{labels, series:[{{name, values}}]}} (by = a second group label to split series)
 - FLORA.params -> {{from, to}} period chosen by the viewer (may be empty); FLORA.theme -> colours
+- FLORA.leaf -> the Leaf the board follows ({{leaf_id, name, room_name, unit_name}}) or null; FLORA.case -> its current case or null
+  ({{case_code, hn, patient_name, operation, surgeon, anaesthetist, scheduled_at, duration_min, milestones:{{patient_in,
+  anesthesia_start, incision, surgery_end, anesthesia_end, patient_out}}}}, times in epoch ms or null); FLORA.cases -> all
+  current cases; FLORA.next -> next booked cases [{{scheduled_at, operation, surgeon, patient_name}}]. Re-rendered when it changes;
+  when FLORA.case is null show "no patient" and FLORA.next[0]. Tick timers yourself with setInterval.
 - FloraChart.bar(el, {{labels, series, stacked?, horizontal?, height?}}), FloraChart.line(el, {{labels, series, height?}}),
   FloraChart.pie(el, {{labels, values, donut?}}), FloraChart.table(el, name), FloraChart.kpi(el, [{{label, value, note?}}])
   (el = CSS selector or element; FloraChart.pie can take FLORA.series(...) output too)
@@ -482,7 +487,7 @@ def run_artifact(artifact_id: str, payload: RenderInput, request: Request):
 
 
 # Dashboards ----------------------------------------------------------------------------------
-WIDGET_TYPES = {"snippet", "html", "image", "text", "system_status", "active_cases", "gateway_alerts", "case_counts", "clock"}
+WIDGET_TYPES = {"snippet", "html", "image", "text", "system_status", "active_cases", "gateway_alerts", "case_counts", "clock", "case_timer"}
 MAX_GRID = 6
 MAX_IMAGE_BYTES = 1_500_000
 MAX_BOARD_BYTES = 6_000_000
@@ -494,6 +499,13 @@ class DashboardInput(BaseModel):
     rows: int = Field(default=3, ge=1, le=MAX_GRID)
     row_height: int = Field(default=220, ge=120, le=480)
     widgets: list[dict[str, Any]] = Field(default_factory=list, max_length=MAX_GRID * MAX_GRID)
+    # {"leafId": "..."}: the board follows that Leaf's current case (see app/leaf_context.py).
+    settings: dict[str, Any] = Field(default_factory=dict)
+
+
+def _clean_settings(payload: DashboardInput) -> dict[str, Any]:
+    leaf_id = str(payload.settings.get("leafId") or "").strip()[:120]
+    return {"leafId": leaf_id} if leaf_id else {}
 
 
 class ShareInput(BaseModel):
@@ -537,7 +549,7 @@ def _clean_widgets(payload: DashboardInput) -> list[dict[str, Any]]:
     return out
 
 
-DASHBOARD_COLUMNS = """d.id,d.title,d.cols,d.rows,d.row_height,d.shared,d.created_at,d.updated_at,d.owner_user_id,
+DASHBOARD_COLUMNS = """d.id,d.title,d.cols,d.rows,d.row_height,d.settings,d.shared,d.created_at,d.updated_at,d.owner_user_id,
   coalesce(u.name,u.username) AS owner_name"""
 
 
@@ -583,9 +595,10 @@ def create_dashboard(payload: DashboardInput, request: Request):
     widgets, now, dashboard_id = _clean_widgets(payload), _now(), uuid.uuid4()
     with pool.connection() as database:
         database.execute(
-            """INSERT INTO ai_studio_dashboard(id,owner_user_id,title,cols,rows,row_height,widgets,created_at,updated_at)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-            (dashboard_id, user["id"], payload.title.strip(), payload.cols, payload.rows, payload.row_height, Jsonb(widgets), now, now),
+            """INSERT INTO ai_studio_dashboard(id,owner_user_id,title,cols,rows,row_height,widgets,settings,created_at,updated_at)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (dashboard_id, user["id"], payload.title.strip(), payload.cols, payload.rows, payload.row_height, Jsonb(widgets),
+             Jsonb(_clean_settings(payload)), now, now),
         )
         return _visible_dashboard(database, str(dashboard_id), user)
 
@@ -597,8 +610,9 @@ def save_dashboard(dashboard_id: str, payload: DashboardInput, request: Request)
     with pool.connection() as database:
         row = _owned_dashboard(database, dashboard_id, user)
         database.execute(
-            "UPDATE ai_studio_dashboard SET title=%s,cols=%s,rows=%s,row_height=%s,widgets=%s,updated_at=%s WHERE id=%s",
-            (payload.title.strip(), payload.cols, payload.rows, payload.row_height, Jsonb(widgets), _now(), row["id"]),
+            "UPDATE ai_studio_dashboard SET title=%s,cols=%s,rows=%s,row_height=%s,widgets=%s,settings=%s,updated_at=%s WHERE id=%s",
+            (payload.title.strip(), payload.cols, payload.rows, payload.row_height, Jsonb(widgets), Jsonb(_clean_settings(payload)),
+             _now(), row["id"]),
         )
         return _visible_dashboard(database, dashboard_id, user)
 
@@ -625,7 +639,8 @@ def copy_dashboard(dashboard_id: str, request: Request):
     user = _user(request)
     with pool.connection() as database:
         row = _visible_dashboard(database, dashboard_id, user)
-    copy = DashboardInput(title=f"{row['title']} (copy)"[:160], cols=row["cols"], rows=row["rows"], row_height=row["row_height"], widgets=row["widgets"])
+    copy = DashboardInput(title=f"{row['title']} (copy)"[:160], cols=row["cols"], rows=row["rows"], row_height=row["row_height"], widgets=row["widgets"],
+                          settings=row.get("settings") or {})
     return create_dashboard(copy, request)
 
 

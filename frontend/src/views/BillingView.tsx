@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CaseStatus } from "../api/caseApi";
 import {
-  getBillingCatalog, getCaseBilling, reopenCaseBilling, saveCaseBilling, submitCaseBilling,
+  getBillingCatalog, getBillingPeriods, getCaseBilling, reopenCaseBilling, saveCaseBilling, submitCaseBilling,
   type BillingCatalog, type BillingDefaults, type BillingItem, type BillingLine, type BillingSave, type BillingSigner,
   type BillingSignerRole, type CaseBilling,
 } from "../api/billingApi";
 import { getCaseAllergies, getCasePatientInfo, type CasePatientInfo } from "../api/caseHisApi";
 import { getCaseDiagnosis, getCaseProcedures } from "../api/caseClinicalApi";
 import { buildBillingSheetHtml, printHtml, span, type BillingSheetGroup, type BillingSheetHeader } from "../components/billing/billingSheet";
+import DailyBillingPanel from "../components/billing/DailyBillingPanel";
 
 /**
  * OR billing checklist ("Anesthesia Check List (Billing)") for the open case.
@@ -51,6 +52,8 @@ export default function BillingView({ caseStatus }: { caseStatus: CaseStatus }) 
   const [lockPing, setLockPing] = useState(0);
   const dirtyRef = useRef(false);
   const timerRef = useRef<number | undefined>(undefined);
+  // ICU daily billing: the workflow bills by day (or the case has billing days), or switched on by hand.
+  const [daily, setDaily] = useState<{ mode: "case" | "daily"; canSwitch: boolean; on: boolean } | null>(null);
 
   const status = billing?.order?.status || "draft";
   const readOnly = caseArchived || status === "submitted";
@@ -62,7 +65,7 @@ export default function BillingView({ caseStatus }: { caseStatus: CaseStatus }) 
     const nextTicks: Record<string, Tick> = {};
     const nextExtras: Extra[] = [];
     for (const line of data.items) {
-      if (line.item_code) nextTicks[line.item_code] = { qty: String(line.qty ?? 1), variant: line.variant || "", source: line.source || "manual" };
+      if (line.item_code) nextTicks[line.item_code] = { qty: String(line.qty ?? 1), variant: line.variant || "", source: line.source === "io_suggestion" ? "io_suggestion" : "manual" };
       else nextExtras.push({ key: `x${line.line_no}`, group_code: line.group_code, name: line.name, qty: String(line.qty ?? 1) });
     }
     const order = data.order;
@@ -102,6 +105,16 @@ export default function BillingView({ caseStatus }: { caseStatus: CaseStatus }) 
       }));
     return () => { alive = false; };
   }, [caseId, applyBilling]);
+
+  useEffect(() => {
+    if (caseId == null) return;
+    let alive = true;
+    setDaily(null);
+    getBillingPeriods(caseId)
+      .then(p => alive && setDaily({ mode: p.mode, canSwitch: p.can_switch, on: p.mode === "daily" }))
+      .catch(() => undefined);  // a Leaf without daily billing: the checklist only
+    return () => { alive = false; };
+  }, [caseId]);
 
   const payload = useCallback((): BillingSave => {
     const items: BillingSave["items"] = [];
@@ -230,6 +243,10 @@ export default function BillingView({ caseStatus }: { caseStatus: CaseStatus }) 
   };
 
   if (caseId == null) return <div className="p-6 text-sm text-[var(--app-muted)]">Open a case to record billing.</div>;
+  if (daily?.on) {
+    return <DailyBillingPanel caseId={caseId} archived={caseArchived}
+      onCaseBilling={daily.mode !== "daily" ? () => setDaily(d => d && { ...d, on: false }) : undefined} />;
+  }
   if (error && !catalog) return <div className="p-6 text-sm text-red-600">{error}</div>;
   if (!catalog) return <div className="p-6 text-sm text-[var(--app-muted)]">Loading billing checklist…</div>;
 
@@ -258,6 +275,11 @@ export default function BillingView({ caseStatus }: { caseStatus: CaseStatus }) 
             <button type="button" onClick={fillFromChart} className="rounded-xl border border-[var(--app-border)] px-3 py-1.5 text-sm font-semibold">
               Fill from chart{pending ? ` (${pending})` : ""}
             </button>
+          ) : null}
+          {daily?.canSwitch && !caseArchived && !(billing?.items.length) && saveState !== "dirty" ? (
+            <button type="button" title="ICU: one bill per billing day with standing charges"
+              onClick={() => { if (window.confirm("Bill this case per day (ICU)? Opening a day creates its bill with the standing charges.")) setDaily(d => d && { ...d, on: true }); }}
+              className="rounded-xl border border-[var(--app-border)] px-3 py-1.5 text-sm font-semibold">Daily billing</button>
           ) : null}
           <button type="button" onClick={print} className="rounded-xl border border-[var(--app-border)] px-3 py-1.5 text-sm font-semibold">Print</button>
           {status === "submitted" && !caseArchived ? (

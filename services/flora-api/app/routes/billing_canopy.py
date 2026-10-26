@@ -64,18 +64,26 @@ def save_item(code: str, payload: dict = Body(...), actor: dict = Depends(manage
     if price is not None and price < 0:
         raise HTTPException(400, "unit_price must not be negative")
     clean = lambda key, size=120: (str(payload.get(key) or "").strip()[:size] or None)  # noqa: E731
+    # ICU daily billing: per_day / per_device_day items are standing charges (app/billing_periods.py).
+    basis = payload.get("charge_basis") or "unit"
+    if basis not in billing.CHARGE_BASES:
+        raise HTTPException(400, "charge_basis must be unit, per_day or per_device_day")
+    if basis == "per_device_day" and not clean("device_kind", 40):
+        raise HTTPException(400, "a per_device_day item needs a device_kind")
     stamp = now_ms()
     row = database.execute(
         """INSERT INTO billing_item(code,group_code,name,unit,qty_mode,variant_label,io_item_code,charge_code,unit_price,
-             sort_order,is_active,created_at,updated_at,updated_by)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+             sort_order,is_active,created_at,updated_at,updated_by,charge_basis,device_kind)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
            ON CONFLICT (code) DO UPDATE SET group_code=excluded.group_code,name=excluded.name,unit=excluded.unit,
              qty_mode=excluded.qty_mode,variant_label=excluded.variant_label,io_item_code=excluded.io_item_code,
              charge_code=excluded.charge_code,unit_price=excluded.unit_price,sort_order=excluded.sort_order,
-             is_active=excluded.is_active,updated_at=excluded.updated_at,updated_by=excluded.updated_by RETURNING *""",
+             is_active=excluded.is_active,updated_at=excluded.updated_at,updated_by=excluded.updated_by,
+             charge_basis=excluded.charge_basis,device_kind=excluded.device_kind RETURNING *""",
         (code.strip()[:80], group_code, name[:200], clean("unit", 40), qty_mode, clean("variant_label", 40),
          clean("io_item_code", 80), clean("charge_code", 80), price, int(payload.get("sort_order") or 0),
-         1 if payload.get("is_active", True) else 0, stamp, stamp, actor.get("username"))).fetchone()
+         1 if payload.get("is_active", True) else 0, stamp, stamp, actor.get("username"), basis,
+         clean("device_kind", 40) if basis == "per_device_day" else None)).fetchone()
     return billing.row_dict(row)
 
 
@@ -85,17 +93,24 @@ ORDER_FROM = """FROM canopy_case_billing b
   LEFT JOIN sync_leaf_node l ON l.leaf_id = b.leaf_id"""
 
 
-def _filters(status: str | None, q: str | None, date_from: int | None, date_to: int | None, scope: list[str] | None):
+# Date of an order: the anesthesia / surgery time of a case order, the day start of a billing day.
+ORDER_DATE = "coalesce(b.anesthesia_start,b.surgery_start,nullif(b.period_start,0),b.order_updated_at)"
+
+
+def _filters(status: str | None, q: str | None, date_from: int | None, date_to: int | None, scope: list[str] | None,
+             kind: str | None = None):
     where, params = [IN_SCOPE], [scope, scope]
     if status:
         where.append("b.status = %s"); params.append(status)
+    if kind:
+        where.append("b.kind = %s"); params.append(kind)
     if q:
         where.append("(b.hn ILIKE %s OR b.an ILIKE %s OR b.patient_name ILIKE %s OR b.case_code ILIKE %s)")
         params += [f"%{q}%"] * 4
     if date_from:
-        where.append("coalesce(b.anesthesia_start,b.surgery_start,b.order_updated_at) >= %s"); params.append(date_from)
+        where.append(f"{ORDER_DATE} >= %s"); params.append(date_from)
     if date_to:
-        where.append("coalesce(b.anesthesia_start,b.surgery_start,b.order_updated_at) < %s"); params.append(date_to)
+        where.append(f"{ORDER_DATE} < %s"); params.append(date_to)
     return " AND ".join(where), params
 
 
@@ -142,26 +157,32 @@ def _merge(parts: list[dict[str, Any]]) -> dict[str, Any]:
 
 @router.get("/api/fleet/billing/orders")
 def orders(status: str | None = Query(default=None, pattern="^(draft|submitted|void)$"),
+           kind: str | None = Query(default=None, pattern="^(case|daily)$"),
            q: str | None = Query(default=None, max_length=80), date_from: int | None = Query(default=None, alias="from"),
            date_to: int | None = Query(default=None, alias="to"), limit: int = Query(default=200, ge=1, le=1000),
            scope: list[str] | None = Depends(fleet_scope), database: Connection = Depends(connection)) -> dict:
-    where, params = _filters(status, q, date_from, date_to, scope)
+    """Case orders and ICU billing days (kind daily, one row per day; period_start 0 = the case order)."""
+    where, params = _filters(status, q, date_from, date_to, scope, kind)
+    order_by = "b.period_start DESC, b.global_case_id" if kind == "daily" else \
+        "coalesce(b.anesthesia_start,nullif(b.period_start,0),b.order_updated_at) DESC NULLS LAST, b.period_start"
     rows = database.execute(
         f"""SELECT b.*, coalesce(nullif(l.canopy_display_name,''),l.display_name) AS leaf_name {ORDER_FROM}
-            WHERE {where} ORDER BY coalesce(b.anesthesia_start,b.order_updated_at) DESC NULLS LAST LIMIT %s""",
+            WHERE {where} ORDER BY {order_by} LIMIT %s""",
         (*params, limit)).fetchall()
     totals = database.execute(
         f"""SELECT i.item_code, min(i.name) AS name, min(i.group_code) AS group_code, min(i.unit) AS unit,
                    sum(i.qty) AS qty, count(DISTINCT b.global_case_id) AS cases, sum(i.amount) AS amount
-            FROM canopy_case_billing_item i JOIN canopy_case_billing b ON b.global_case_id=i.global_case_id
+            FROM canopy_case_billing_item i
+            JOIN canopy_case_billing b ON b.global_case_id=i.global_case_id AND b.period_start=i.period_start
             LEFT JOIN canopy_leaf_unit scope_unit ON scope_unit.leaf_id = b.leaf_id
             WHERE {where} GROUP BY i.item_code ORDER BY min(i.group_code), min(i.name)""", params).fetchall()
     rows = [billing.row_dict(r) for r in rows]
     # OR + Recovery of one transfer with combined billing: one row (the other part is added even when filtered out).
-    groups = _combined_groups(database, [str(row["global_case_id"]) for row in rows])
+    # Only case orders combine; billing days stay one row each.
+    groups = _combined_groups(database, [str(row["global_case_id"]) for row in rows if row.get("kind", "case") == "case"])
     out, seen = [], set()
     for row in rows:
-        group = groups.get(str(row["global_case_id"]))
+        group = groups.get(str(row["global_case_id"])) if row.get("kind", "case") == "case" else None
         if group is None:
             out.append(row)
             continue
@@ -170,24 +191,38 @@ def orders(status: str | None = Query(default=None, pattern="^(draft|submitted|v
         seen.add(group["admission_id"])
         parts = database.execute(
             f"""SELECT b.*, coalesce(nullif(l.canopy_display_name,''),l.display_name) AS leaf_name {ORDER_FROM}
-                WHERE b.global_case_id::text = ANY(%s) AND {IN_SCOPE}""", (group["ids"], scope, scope)).fetchall()
+                WHERE b.global_case_id::text = ANY(%s) AND b.period_start=0 AND {IN_SCOPE}""", (group["ids"], scope, scope)).fetchall()
         out.append(_merge([{**billing.row_dict(part), "_part": groups[str(part["global_case_id"])]["part"]} for part in parts]))
     return {"rows": out, "item_totals": [billing.row_dict(r) for r in totals]}
 
 
 @router.get("/api/fleet/billing/orders/{global_case_id}")
-def order(global_case_id: str, scope: list[str] | None = Depends(fleet_scope), database: Connection = Depends(connection)) -> dict:
+def order(global_case_id: str, period_start: int = Query(default=0, ge=0), scope: list[str] | None = Depends(fleet_scope),
+          database: Connection = Depends(connection)) -> dict:
+    """The case order (period_start 0, combined with Recovery when billed as one) or one billing day."""
+    if period_start:
+        row = database.execute(
+            f"""SELECT b.*, coalesce(nullif(l.canopy_display_name,''),l.display_name) AS leaf_name {ORDER_FROM}
+                WHERE b.global_case_id::text = %s AND b.period_start = %s AND {IN_SCOPE}""",
+            (global_case_id, period_start, scope, scope)).fetchone()
+        if not row:
+            raise HTTPException(404, "billing order not found")
+        items = database.execute(
+            "SELECT * FROM canopy_case_billing_item WHERE global_case_id::text = %s AND period_start = %s ORDER BY line_no",
+            (global_case_id, period_start)).fetchall()
+        return {"order": billing.row_dict(row), "items": [billing.row_dict(r) for r in items]}
     group = _combined_groups(database, [global_case_id]).get(global_case_id)
     ids = group["ids"] if group else [global_case_id]
     rows = database.execute(
         f"""SELECT b.*, coalesce(nullif(l.canopy_display_name,''),l.display_name) AS leaf_name {ORDER_FROM}
-            WHERE b.global_case_id::text = ANY(%s) AND {IN_SCOPE}""", (ids, scope, scope)).fetchall()
+            WHERE b.global_case_id::text = ANY(%s) AND b.period_start = 0 AND {IN_SCOPE}""", (ids, scope, scope)).fetchall()
     if not rows:
         raise HTTPException(404, "billing order not found")
     parts = {str(row["global_case_id"]): (_combined_groups(database, ids).get(str(row["global_case_id"])) or {}).get("part")
              for row in rows}
     items = database.execute(
-        "SELECT * FROM canopy_case_billing_item WHERE global_case_id::text = ANY(%s) ORDER BY line_no", ([str(r["global_case_id"]) for r in rows],)
+        "SELECT * FROM canopy_case_billing_item WHERE global_case_id::text = ANY(%s) AND period_start = 0 ORDER BY line_no",
+        ([str(r["global_case_id"]) for r in rows],)
     ).fetchall()
     # Combined bill: OR lines first, then Recovery; each line says which part it came from.
     lines = sorted(({**billing.row_dict(r), "part": parts.get(str(r["global_case_id"]))} for r in items),

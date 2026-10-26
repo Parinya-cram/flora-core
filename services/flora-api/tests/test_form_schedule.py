@@ -158,5 +158,33 @@ class ValidationTest(unittest.TestCase):
                          {"kind": "daily", "at": "07:00", "days": None})
 
 
+class ShiftWindowTest(unittest.TestCase):
+    def test_default_shifts(self):
+        self.assertEqual(fs.shift_window(at(21, 10), None, TZ),
+                         {"code": "D", "label": "Day", "start": at(21, 7), "end": at(21, 15)})
+        self.assertEqual(fs.shift_window(at(21, 15), None, TZ)["code"], "E")  # start is inclusive
+        self.assertEqual(fs.shift_window(at(21, 14, 59), None, TZ)["code"], "D")
+
+    def test_night_across_midnight(self):
+        before = fs.shift_window(at(21, 23, 30), None, TZ)
+        after = fs.shift_window(at(22, 2), None, TZ)
+        self.assertEqual(before, after)
+        self.assertEqual((after["code"], after["start"], after["end"]), ("N", at(21, 23), at(22, 7)))
+
+    def test_previous_and_offset(self):
+        self.assertEqual(fs.previous_shift_window(at(22, 8), None, TZ)["start"], at(21, 23))
+        self.assertEqual(fs.previous_shift_window(at(22, 2), None, TZ)["start"], at(21, 15))
+        self.assertEqual(fs.shift_window(at(22, 8), None, TZ, -3)["start"], at(21, 7))
+        self.assertEqual(fs.shift_window(at(21, 23, 30), None, TZ, 1)["start"], at(22, 7))
+
+    def test_custom_shifts_and_timezone(self):
+        shifts = [{"code": "AM", "label": "Day", "start": "08:00"}, {"code": "PM", "label": "Night", "start": "20:00"}]
+        window = fs.shift_window(at(22, 7), shifts, TZ)
+        self.assertEqual((window["code"], window["start"], window["end"]), ("PM", at(21, 20), at(22, 8)))
+        # 07:00 UTC is 14:00 in Bangkok; the D shift in UTC runs 14:00-22:00 Bangkok time.
+        utc = fs.shift_window(at(21, 15), None, "UTC")
+        self.assertEqual((utc["code"], utc["start"], utc["end"]), ("D", at(21, 14), at(21, 22)))
+
+
 if __name__ == "__main__":
     unittest.main()

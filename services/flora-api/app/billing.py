@@ -4,9 +4,11 @@ Master data (billing_group, billing_item) is owned by Canopy and travels to ever
 with the directory exchange, like the I/O catalogue (io_catalog.py): the Leaf upserts
 by code and never deletes, so every order that references an item keeps its meaning.
 
-A Leaf keeps one live order per case (case_billing_order + case_billing_order_item).
+A Leaf keeps one live order per case (case_billing_order + case_billing_order_item, kind 'case').
 It reaches Canopy in the case snapshot under "billing"; sync ingest projects it into
 canopy_case_billing / canopy_case_billing_item for billing staff (project_snapshot).
+ICU daily billing adds one order per billing day (kind 'daily', app/billing_periods.py); the
+snapshot key "billing_all" carries every order of the case (project_orders).
 """
 import json
 import uuid
@@ -18,7 +20,8 @@ from psycopg.types.json import Jsonb
 
 GROUP_FIELDS = ("code", "name", "form_column", "sort_order", "is_active")
 ITEM_FIELDS = ("code", "group_code", "name", "unit", "qty_mode", "variant_label", "io_item_code", "charge_code",
-               "unit_price", "sort_order", "is_active")
+               "unit_price", "sort_order", "is_active", "charge_basis", "device_kind")
+CHARGE_BASES = ("unit", "per_day", "per_device_day")
 SIGNER_ROLES = ("surgeon", "anesthesiologist", "nurse1", "nurse2")
 
 
@@ -63,6 +66,8 @@ def apply_catalog(database: Connection, catalog: dict[str, Any], current_version
         for item in catalog.get("items") or []:
             stamp = int(item.get("updated_at") or version)
             values = [item.get(field) for field in ITEM_FIELDS]
+            # An older Canopy sends no charge basis: a plain unit item.
+            values[ITEM_FIELDS.index("charge_basis")] = item.get("charge_basis") if item.get("charge_basis") in CHARGE_BASES else "unit"
             database.execute(
                 f"""INSERT INTO billing_item({','.join(ITEM_FIELDS)},created_at,updated_at)
                     VALUES ({','.join(['%s'] * len(ITEM_FIELDS))},%s,%s)
@@ -75,8 +80,10 @@ def apply_catalog(database: Connection, catalog: dict[str, Any], current_version
 
 # ---------------------------------------------------------------- Leaf: one order per case
 def live_order(database: Connection, case_id: int) -> dict[str, Any] | None:
-    row = database.execute("SELECT * FROM case_billing_order WHERE case_id=%s AND status<>'void' ORDER BY id DESC LIMIT 1",
-                           (case_id,)).fetchone()
+    """The case's OR order (kind 'case'); daily orders are app/billing_periods.py's."""
+    row = database.execute(
+        "SELECT * FROM case_billing_order WHERE case_id=%s AND kind='case' AND status<>'void' ORDER BY id DESC LIMIT 1",
+        (case_id,)).fetchone()
     return row_dict(row) if row else None
 
 
@@ -93,9 +100,9 @@ def amount(line: dict[str, Any]) -> float | None:
     return round(float(price) * qty, 2)
 
 
-def order_payload(database: Connection, case_id: int) -> dict[str, Any]:
-    """The case's order as the Leaf UI, the snapshot and Canopy see it."""
-    order = live_order(database, case_id)
+def order_payload(database: Connection, case_id: int, order: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The case's order (or the given one) as the Leaf UI, the snapshot and Canopy see it."""
+    order = order or live_order(database, case_id)
     if not order:
         return {"order": None, "items": [], "total_amount": None}
     lines = order_lines(database, order["id"])
@@ -217,49 +224,91 @@ def chart_defaults(database: Connection, case_id: int) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------- Canopy: structured copy
-def project_snapshot(database: Connection, global_case_id: Any, leaf_id: str, source_case_id: str,
-                     payload: dict[str, Any], revision: int, now: int) -> None:
-    """Keep canopy_case_billing in step with the newest snapshot that carries billing."""
-    billing = payload.get("billing")
-    if not isinstance(billing, dict):
-        return  # an older Leaf: leave what Canopy has
-    order = billing.get("order")
-    held = database.execute("SELECT revision FROM canopy_case_billing WHERE global_case_id=%s", (str(global_case_id),)).fetchone()
-    if held and int(held["revision"]) > revision:
-        return
-    if not order:
-        database.execute("DELETE FROM canopy_case_billing WHERE global_case_id=%s", (str(global_case_id),))
-        return
+# canopy_case_billing is keyed by (global_case_id, period_start); the case order has period_start 0.
+def _case_header(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     case = payload.get("case") or {}
     patient = payload.get("patient") or {}
     if isinstance(patient, dict) and isinstance(patient.get("row"), dict):
         patient = patient["row"]
+    return case, patient if isinstance(patient, dict) else {}
+
+
+def _upsert_order(database: Connection, global_case_id: Any, leaf_id: str, source_case_id: str, payload: dict[str, Any],
+                  billing: dict[str, Any], revision: int, now: int) -> bool:
+    """Write one order (and replace its lines) unless Canopy holds a newer revision of it."""
+    order = billing["order"]
+    period = int(order.get("period_start") or 0) if order.get("kind") == "daily" else 0
+    held = database.execute("SELECT revision FROM canopy_case_billing WHERE global_case_id=%s AND period_start=%s",
+                            (str(global_case_id), period)).fetchone()
+    if held and int(held["revision"]) > revision:
+        return False
+    case, patient = _case_header(payload)
     lines = billing.get("items") or []
     database.execute(
         """INSERT INTO canopy_case_billing(global_case_id,leaf_id,source_case_id,order_uuid,case_code,hn,an,patient_name,
              case_status,status,anesthesia_start,anesthesia_end,surgery_start,surgery_end,discharge_location,signers,
-             item_count,total_amount,submitted_at,submitted_by,order_updated_at,revision,synced_at)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-           ON CONFLICT (global_case_id) DO UPDATE SET leaf_id=excluded.leaf_id,source_case_id=excluded.source_case_id,
+             item_count,total_amount,submitted_at,submitted_by,order_updated_at,revision,synced_at,
+             kind,period_start,period_end,closed_at,closed_by)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+           ON CONFLICT (global_case_id,period_start) DO UPDATE SET leaf_id=excluded.leaf_id,source_case_id=excluded.source_case_id,
              order_uuid=excluded.order_uuid,case_code=excluded.case_code,hn=excluded.hn,an=excluded.an,
              patient_name=excluded.patient_name,case_status=excluded.case_status,status=excluded.status,
              anesthesia_start=excluded.anesthesia_start,anesthesia_end=excluded.anesthesia_end,
              surgery_start=excluded.surgery_start,surgery_end=excluded.surgery_end,
              discharge_location=excluded.discharge_location,signers=excluded.signers,item_count=excluded.item_count,
              total_amount=excluded.total_amount,submitted_at=excluded.submitted_at,submitted_by=excluded.submitted_by,
-             order_updated_at=excluded.order_updated_at,revision=excluded.revision,synced_at=excluded.synced_at""",
+             order_updated_at=excluded.order_updated_at,revision=excluded.revision,synced_at=excluded.synced_at,
+             kind=excluded.kind,period_end=excluded.period_end,closed_at=excluded.closed_at,closed_by=excluded.closed_by""",
         (str(global_case_id), leaf_id, str(source_case_id), order.get("order_uuid"), case.get("case_code"), case.get("hn"),
          patient.get("an") or case.get("admission_number"),
          patient.get("patient_name") or " ".join(p for p in (patient.get("first_name"), patient.get("last_name")) if p) or None,
          str(case.get("status") or "").upper() or None, order.get("status") or "draft",
          order.get("anesthesia_start"), order.get("anesthesia_end"), order.get("surgery_start"), order.get("surgery_end"),
          order.get("discharge_location"), Jsonb(order.get("signers") or []), len(lines), billing.get("total_amount"),
-         order.get("submitted_at"), order.get("submitted_by"), order.get("updated_at"), revision, now))
-    database.execute("DELETE FROM canopy_case_billing_item WHERE global_case_id=%s", (str(global_case_id),))
+         order.get("submitted_at"), order.get("submitted_by"), order.get("updated_at"), revision, now,
+         "daily" if period else "case", period, order.get("period_end") if period else None,
+         order.get("closed_at"), order.get("closed_by")))
+    database.execute("DELETE FROM canopy_case_billing_item WHERE global_case_id=%s AND period_start=%s", (str(global_case_id), period))
     for line in lines:
         database.execute(
-            """INSERT INTO canopy_case_billing_item(global_case_id,line_no,item_code,group_code,name,variant,qty,unit,
-                 qty_mode,unit_price,amount,charge_code,source) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-            (str(global_case_id), int(line.get("line_no") or 0), line.get("item_code"), line.get("group_code"),
+            """INSERT INTO canopy_case_billing_item(global_case_id,period_start,line_no,item_code,group_code,name,variant,qty,unit,
+                 qty_mode,unit_price,amount,charge_code,source) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (str(global_case_id), period, int(line.get("line_no") or 0), line.get("item_code"), line.get("group_code"),
              line.get("name") or "", line.get("variant"), line.get("qty") or 0, line.get("unit"), line.get("qty_mode"),
              line.get("unit_price"), line.get("amount"), line.get("charge_code"), line.get("source")))
+    return True
+
+
+def project_snapshot(database: Connection, global_case_id: Any, leaf_id: str, source_case_id: str,
+                     payload: dict[str, Any], revision: int, now: int) -> None:
+    """Keep the case order (period_start 0) of canopy_case_billing in step with the newest snapshot."""
+    billing = payload.get("billing")
+    if not isinstance(billing, dict):
+        return  # an older Leaf: leave what Canopy has
+    if not billing.get("order"):
+        database.execute("DELETE FROM canopy_case_billing WHERE global_case_id=%s AND period_start=0 AND revision<=%s",
+                         (str(global_case_id), revision))
+        return
+    _upsert_order(database, global_case_id, leaf_id, source_case_id, payload, {**billing, "order": {**billing["order"], "kind": "case"}},
+                  revision, now)
+
+
+def project_orders(database: Connection, global_case_id: Any, leaf_id: str, source_case_id: str,
+                   payload: dict[str, Any], revision: int, now: int) -> None:
+    """Every order of the case (snapshot key "billing_all": the case order and the billing days).
+
+    Orders the Leaf no longer holds are removed; days closed under the previous case of a handover
+    (handover_billed) stay billed there and are not copied again."""
+    bundle = payload.get("billing_all")
+    if not isinstance(bundle, dict) or not isinstance(bundle.get("orders"), list):
+        return  # an older Leaf: leave what Canopy has
+    kept = []
+    for billing in bundle["orders"]:
+        order = (billing or {}).get("order") if isinstance(billing, dict) else None
+        if not order or order.get("handover_billed"):
+            continue
+        kept.append(int(order.get("period_start") or 0) if order.get("kind") == "daily" else 0)
+        _upsert_order(database, global_case_id, leaf_id, source_case_id, payload, billing, revision, now)
+    database.execute(
+        "DELETE FROM canopy_case_billing WHERE global_case_id=%s AND NOT (period_start = ANY(%s)) AND revision<=%s",
+        (str(global_case_id), kept, revision))

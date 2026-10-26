@@ -16,6 +16,8 @@ SYSTEMS = {
     "RXNORM": "http://www.nlm.nih.gov/research/umls/rxnorm",
     "ATC": "http://www.whocc.no/atc",
     "UCUM": "http://unitsofmeasure.org",
+    "TMT": "http://www.this.or.th/tmt",     # Thai Medicines Terminology (0100)
+    "TMLT": "http://www.this.or.th/tmlt",   # Thai Medical Laboratory Terminology
 }
 FLAT_FIELDS = {
     "SNOMED_CT": ("snomed_id", "snomed_name"),

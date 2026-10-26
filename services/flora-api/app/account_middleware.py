@@ -3,6 +3,7 @@
 Order, first match wins — a caller can only reach an account it proves it belongs to:
 1. sync mode: the Bearer sync secret (unique per account) — Leafs and Haber;
 2. a signed Canopy session token: its `acct` claim (a token never moves to another account);
+   kiosk requests (/api/kiosk/*) instead use the account holding their dashboard link;
 3. public API key (/api/v1, MCP) or HL7 webhook token: the account that holds it;
 4. before sign-in: the account code the login form sends (`X-Flora-Account`, remembered in the
    `flora_account` cookie), or — with exactly one active account — that account.
@@ -34,6 +35,12 @@ def resolve(path: str, headers: dict[str, str]) -> tenancy.Account | None:
         return tenancy.by_sync_secret(_bearer(headers))
     from .routes.auth_canopy import verified_payload
 
+    if path.startswith("/api/kiosk/"):
+        # A wall display's dashboard link: the account that holds it, whatever else the browser sends.
+        from .routes.ai_studio_kiosk import KIOSK_HEADER, split_token
+        parts = split_token(headers.get(KIOSK_HEADER, ""))
+        return tenancy.find_account_by("SELECT 1 FROM ai_studio_dashboard_link WHERE prefix=%s AND revoked_at IS NULL",
+                                       (parts[0],)) if parts else None
     token = headers.get("x-flora-session", "").strip() or _bearer(headers)
     if token and not token.startswith("flk_"):
         payload = verified_payload(token)

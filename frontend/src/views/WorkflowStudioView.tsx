@@ -64,7 +64,7 @@ function normalizeDefinition(definition: WorkflowDefinition): WorkflowDefinition
     anesthesia_record: { ...base.anesthesia_record, ...(definition.anesthesia_record || {}) },
     forms: Array.isArray(definition.forms) ? definition.forms : [],
     packet: Array.isArray(definition.packet) ? definition.packet : [],
-    billing: { template_id: definition.billing?.template_id ?? null },
+    billing: { template_id: definition.billing?.template_id ?? null, ...(definition.billing?.mode === "daily" ? { mode: "daily" as const } : {}) },
     scores: Array.isArray(definition.scores) ? definition.scores : [],
   };
 }
@@ -501,12 +501,18 @@ export default function WorkflowStudioView({ sessionUser }: { sessionUser: AuthU
           <div><h3 className="font-bold">Billing</h3><p className="text-xs text-[var(--app-muted)]">Itemize template shown on the Leaf Billing screen (groups, order and preselected items). One template can serve many workflows; manage them under Itemize templates.</p></div>
           <div className="flex flex-wrap items-center gap-2">
             <select className={`${inputClass} max-w-md`} disabled={readOnly} value={def.billing?.template_id || ""}
-              onChange={event => patchDef(current => ({ ...current, billing: { template_id: event.target.value || null } }))} aria-label="Itemize template">
+              onChange={event => patchDef(current => ({ ...current, billing: { ...current.billing, template_id: event.target.value || null } }))} aria-label="Itemize template">
               <option value="">No template (the whole billing master)</option>
               {templates.filter(t => t.status !== "archived" || t.id === def.billing?.template_id).map(t =>
                 <option key={t.id} value={t.id}>{t.name || t.id} · {t.itemCount} items{t.status !== "published" ? ` (${t.status})` : ""}</option>)}
             </select>
             <button type="button" className={secondary} onClick={() => setMode("templates")}>Manage templates</button>
+            {/* ICU: one bill per billing day from day_start, with standing charges (docs/BILLING.md). */}
+            <select className={inputClass} disabled={readOnly} value={def.billing?.mode === "daily" ? "daily" : "case"} aria-label="Billing mode"
+              onChange={event => patchDef(current => ({ ...current, billing: { template_id: current.billing?.template_id ?? null, ...(event.target.value === "daily" ? { mode: "daily" as const } : {}) } }))}>
+              <option value="case">One bill per case</option>
+              <option value="daily">Daily billing (ICU)</option>
+            </select>
           </div>
           {def.billing?.template_id && templates.find(t => t.id === def.billing?.template_id)?.status !== "published"
             ? <p className="text-xs text-amber-600 dark:text-amber-300">Publish this template before publishing the workflow.</p> : null}

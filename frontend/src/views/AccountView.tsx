@@ -16,6 +16,8 @@ import {
 } from "../api/authApi";
 import { getStaffDirectory, type StaffLibraryItem } from "../api/staffApi";
 import type { AuthUser } from "../auth/useAuth";
+import { getSurfaceInfo } from "../edition/config";
+import StaffPinSetter from "../components/meds/StaffPinSetter";
 import {
   normalizePatientNameLanguage,
   type PatientNameLanguage,
@@ -250,6 +252,9 @@ export default function AccountView({ sessionUser }: { sessionUser: AuthUser | n
       </section>
     </div>
     <button type="button" onClick={() => void save()} disabled={saving || !name.trim()} className="w-fit rounded-lg bg-[var(--app-accent)] px-5 py-2.5 font-semibold text-[var(--app-accent-contrast)] disabled:opacity-50">{saving ? "Saving…" : "Save account"}</button>
+    {getSurfaceInfo().clinicalWriteEnabled
+      ? <section className="rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-5"><StaffPinSetter /></section>
+      : null}
     {isLdapAccount
       ? <section className="space-y-1 rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-5"><h2 className="font-semibold">Password</h2><p className="text-sm text-[var(--app-muted)]">This account signs in through the organisation directory (LDAP). Change your password in the directory service.</p></section>
       : <section className="space-y-3 rounded-xl border border-[var(--app-border)] bg-[var(--app-panel-bg)] p-5"><h2 className="font-semibold">Password</h2><div className="grid max-w-3xl gap-3 sm:grid-cols-3"><input type="password" className="rounded-lg border border-[var(--app-border)] px-3 py-2" placeholder="Current password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} /><input type="password" className="rounded-lg border border-[var(--app-border)] px-3 py-2" placeholder="New password" value={newPassword} onChange={e => setNewPassword(e.target.value)} /><input type="password" className="rounded-lg border border-[var(--app-border)] px-3 py-2" placeholder="Confirm password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} /></div><button type="button" onClick={() => void changePassword()} disabled={saving || !currentPassword || !newPassword || !confirmPassword} className="rounded-lg border border-[var(--app-border)] px-4 py-2 text-sm font-semibold disabled:opacity-50">Change password</button></section>}

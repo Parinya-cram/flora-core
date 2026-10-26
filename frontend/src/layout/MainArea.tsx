@@ -36,6 +36,9 @@ const PatientJourneyView = lazy(() => import("../views/PatientJourneyView"));
 const BillingView = lazy(() => import("../views/BillingView"));
 const WaveformView = lazy(() => import("../views/WaveformView"));
 const CanopyBillingView = lazy(() => import("../views/CanopyBillingView"));
+const MedicationView = lazy(() => import("../views/MedicationView"));
+const ShiftHandoverView = lazy(() => import("../views/ShiftHandoverView"));
+const CanopyIcuKpiView = lazy(() => import("../views/CanopyIcuKpiView"));
 
 interface Props {
   caseStatus: CaseStatus;
@@ -74,7 +77,10 @@ interface Props {
     | "staff-directory"
     | "or-schedule"
     | "waveform"
-    | "journey";
+    | "journey"
+    | "medication"
+    | "shift-handover"
+    | "icu-kpi";
   sessionUser: AuthUser | null;
   onCaseDischargeTimeUpdated?: (caseId: number, dischargeTime: number) => void;
   onCaseArchived?: (caseId: number) => void;
@@ -86,7 +92,7 @@ interface Props {
   onNavigate?: (view: "patient" | "diagnosis" | "io" | "case" | "journey") => void;
 }
 
-const CASE_PAGES = new Set<Props["activeView"]>(["form", "diagnosis", "staff", "io", "patient", "report", "billing", "waveform", "journey"]);
+const CASE_PAGES = new Set<Props["activeView"]>(["form", "diagnosis", "staff", "io", "patient", "report", "billing", "waveform", "journey", "medication", "shift-handover"]);
 
 class ViewErrorBoundary extends Component<
   { resetKey: string; children: ReactNode },
@@ -192,6 +198,12 @@ export default function MainArea({
         surface.clinicalWriteEnabled
           ? <BillingView key={caseScopedKey} caseStatus={caseStatus} />
           : <CanopyBillingView sessionUser={sessionUser} />
+      ) : activeView === "medication" ? (
+        <MedicationView key={caseScopedKey} caseStatus={caseStatus} sessionUser={sessionUser} />
+      ) : activeView === "shift-handover" ? (
+        <ShiftHandoverView key={caseScopedKey} caseStatus={caseStatus} sessionUser={sessionUser} />
+      ) : activeView === "icu-kpi" ? (
+        <CanopyIcuKpiView />
       ) : activeView === "patient" ? (
         <PatientView key={caseScopedKey} caseStatus={caseStatus} />
       ) : activeView === "journey" ? (

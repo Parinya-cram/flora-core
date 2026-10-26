@@ -18,6 +18,7 @@ from .live_schema import ensure_live_schema
 from .routes.cases_read import router as cases_read_router
 from .routes.auth_canopy import router as canopy_auth_router
 from .routes.activity_log import router as activity_log_router
+from .routes.ai_studio_kiosk import router as ai_studio_kiosk_router
 from .routes.auth_leaf import router as leaf_auth_router
 from .routes.cases_lifecycle import router as cases_lifecycle_router
 from .routes.case_devices import router as case_devices_router
@@ -53,6 +54,8 @@ from .routes.staff_sync_leaf import router as staff_sync_leaf_router
 from .score_writer import score_writer
 from .routes.canopy_admissions import router as canopy_admissions_router
 from .routes.hl7_interface import admin_router as hl7_admin_router, webhook_router as hl7_webhook_router
+from .routes.outbound_admin import router as outbound_admin_router
+from .outbound import worker as outbound_worker
 from .routes.public_api import router as public_api_router
 from .routes.api_keys_admin import router as api_keys_admin_router
 from . import api_keys
@@ -72,6 +75,11 @@ from .routes.formdev_query import router as formdev_query_router
 from .routes.formdev_ai import router as formdev_ai_router
 from .routes.workflows import router as workflows_router
 from .routes.case_workflow import router as case_workflow_router
+from .routes.shift_handover_leaf import router as shift_handover_leaf_router
+from .routes.billing_periods_leaf import router as billing_periods_leaf_router
+from .routes.icu_kpi_leaf import router as icu_kpi_leaf_router
+from .routes.med_orders_leaf import router as med_orders_leaf_router
+from .routes.icu_kpi_canopy import router as icu_kpi_canopy_router
 from .routes import formdev_runtime
 from .formdev.errors import FormDevError
 
@@ -98,10 +106,12 @@ async def lifespan(_: FastAPI):
         score_writer.start()
     if api_mode == "canopy":
         formdev_runtime.start_background()
+        outbound_worker.start()
     yield
     if api_mode == "canopy":
         # Workers return unfinished jobs to the queue before the pools close.
         formdev_runtime.stop_background()
+        outbound_worker.stop()
     device_writer.stop()
     score_writer.stop()
     close_pool()
@@ -132,6 +142,10 @@ if API_MODE == "leaf" and os.getenv("FLORA_LEAF_WRITE_API", "false").lower() == 
     app.include_router(case_journey_router)
     app.include_router(central_leaf_router)
     app.include_router(case_workflow_router)
+    app.include_router(shift_handover_leaf_router)
+    app.include_router(billing_periods_leaf_router)
+    app.include_router(icu_kpi_leaf_router)
+    app.include_router(med_orders_leaf_router)
     app.include_router(case_devices_router)
     app.include_router(cases_lifecycle_router)
     app.include_router(clinical_write_router)
@@ -145,6 +159,7 @@ if API_MODE == "leaf" and os.getenv("FLORA_LEAF_WRITE_API", "false").lower() == 
 if API_MODE == "canopy":
     app.include_router(canopy_auth_router)
     app.include_router(activity_log_router)
+    app.include_router(ai_studio_kiosk_router)
     app.include_router(canopy_preferences_router)
     app.include_router(canopy_users_router)
     app.include_router(build_ai_settings_router())
@@ -152,8 +167,10 @@ if API_MODE == "canopy":
     app.include_router(canopy_admissions_router)
     app.include_router(hl7_webhook_router)
     app.include_router(hl7_admin_router)
+    app.include_router(outbound_admin_router)
     app.include_router(public_api_router)
     app.include_router(api_keys_admin_router)
+    app.include_router(icu_kpi_canopy_router)
     app.include_router(fleet_read_router)
     app.include_router(gateway_alerts_fleet_router)
     app.include_router(device_fleet_router)

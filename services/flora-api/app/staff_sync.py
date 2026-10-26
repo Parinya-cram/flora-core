@@ -42,12 +42,25 @@ def needs_code(database: Connection, role_id: str | None) -> bool:
 def record(row: dict[str, Any]) -> dict[str, Any]:
     return {**{key: row.get(key) for key in FIELDS}, "profile_data": row.get("profile_data") or {},
             "is_active": int(row.get("is_active") or 0), "all_units": bool(row.get("all_units")),
-            "directory_version": int(row.get("directory_version") or 0)}
+            "directory_version": int(row.get("directory_version") or 0),
+            # Staff PIN for medication approvals (app/staff_pin.py): hash only, newest pin_set_at wins.
+            "pin_hash": row.get("pin_hash"), "pin_set_at": row.get("pin_set_at")}
+
+
+def take_pin(database: Connection, staff_id: int, item: dict[str, Any]) -> None:
+    """Adopt a synced PIN when it is newer than ours (a reset is a newer pin_set_at without a hash).
+    Failure counts and locks stay local."""
+    if item.get("pin_set_at") is None:
+        return
+    database.execute(
+        """UPDATE staff_directory SET pin_hash=%s, pin_set_at=%s, pin_failed=0, pin_locked_until=NULL
+           WHERE id=%s AND coalesce(pin_set_at, 0) < %s""",
+        (item.get("pin_hash"), int(item["pin_set_at"]), staff_id, int(item["pin_set_at"])))
 
 
 def roles(database: Connection) -> list[dict[str, Any]]:
     return [dict(row) for row in database.execute(
-        "SELECT id, display_name, sort_order, staff_type, is_active FROM staff_role ORDER BY sort_order, id").fetchall()]
+        "SELECT id, display_name, sort_order, staff_type, is_active, seniority FROM staff_role ORDER BY sort_order, id").fetchall()]
 
 
 # ---------------------------------------------------------------- Canopy
@@ -105,6 +118,7 @@ def apply_leaf_change(database: Connection, leaf_id: str, unit: dict[str, Any] |
                              (code, current, current, same["id"]))
             existing = same
     if existing is not None:
+        take_pin(database, existing["id"], change)
         if add_unit(database, existing["id"], unit):
             database.execute("UPDATE staff_directory SET updated_at=%s WHERE id=%s", (current, existing["id"]))
         return {**out, "status": "merged"}
@@ -115,6 +129,7 @@ def apply_leaf_change(database: Connection, leaf_id: str, unit: dict[str, Any] |
     row = database.execute(
         f"INSERT INTO staff_directory ({', '.join(columns)}) VALUES ({', '.join(['%s'] * len(columns))}) RETURNING id",
         (*values.values(), Jsonb(change.get("profile_data") or {}), 1, 0, current, leaf_id, True, current, current)).fetchone()
+    take_pin(database, row["id"], change)
     add_unit(database, row["id"], unit)
     return {**out, "status": "created"}
 
@@ -145,12 +160,13 @@ def pending(database: Connection) -> list[dict[str, Any]]:
 
 def _upsert_role(database: Connection, role: dict[str, Any]) -> None:
     database.execute(
-        """INSERT INTO staff_role (id, display_name, sort_order, staff_type, is_active, updated_at)
-           VALUES (%s, %s, %s, %s, %s, %s)
+        """INSERT INTO staff_role (id, display_name, sort_order, staff_type, is_active, seniority, updated_at)
+           VALUES (%s, %s, %s, %s, %s, %s, %s)
            ON CONFLICT (id) DO UPDATE SET display_name=excluded.display_name, sort_order=excluded.sort_order,
-             staff_type=excluded.staff_type, is_active=excluded.is_active, updated_at=excluded.updated_at""",
+             staff_type=excluded.staff_type, is_active=excluded.is_active,
+             seniority=coalesce(%s, staff_role.seniority), updated_at=excluded.updated_at""",
         (role["id"], role["display_name"], role.get("sort_order"), role.get("staff_type") or "other",
-         int(role.get("is_active", 1)), now_ms()))
+         int(role.get("is_active", 1)), int(role.get("seniority") or 0), now_ms(), role.get("seniority")))
 
 
 def apply_from_canopy(database: Connection, payload: dict[str, Any]) -> dict[str, Any]:
@@ -205,13 +221,15 @@ def apply_from_canopy(database: Connection, payload: dict[str, Any]) -> dict[str
                         f"""UPDATE staff_directory SET {assignments}, profile_data=%s, directory_managed=1, directory_pending=0,
                               sync_error=NULL, updated_at=%s WHERE id=%s""",
                         (*values.values(), Jsonb(item.get("profile_data") or {}), current, row["id"]))
+                    take_pin(database, row["id"], item)
                     counts["updated"] += 1
                 else:
                     columns = list(values) + ["profile_data", "directory_managed", "directory_pending", "used_count",
                                               "created_at", "updated_at"]
-                    database.execute(
-                        f"INSERT INTO staff_directory ({', '.join(columns)}) VALUES ({', '.join(['%s'] * len(columns))})",
-                        (*values.values(), Jsonb(item.get("profile_data") or {}), 1, 0, 0, current, current))
+                    row = database.execute(
+                        f"INSERT INTO staff_directory ({', '.join(columns)}) VALUES ({', '.join(['%s'] * len(columns))}) RETURNING id",
+                        (*values.values(), Jsonb(item.get("profile_data") or {}), 1, 0, 0, current, current)).fetchone()
+                    take_pin(database, row["id"], item)
                     counts["inserted"] += 1
         except Exception:  # same name and role held locally by someone with another code
             counts["conflicts"] += 1

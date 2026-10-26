@@ -57,3 +57,38 @@ Delivery: published templates referenced by a ward's workflows ride on the ward 
 copy from its start (`bundled_billing_template`). The Billing screen shows the newest cached copy
 of the case's workflow template; a case without a workflow uses the ward's default workflow;
 without any template it shows the whole master.
+
+## ICU daily billing
+
+An ICU case bills per **billing day** instead of one order per case. Migration
+`0101-billing-periods.sql`, `app/billing_periods.py`, routes `routes/billing_periods_leaf.py`.
+
+- **Mode:** the workflow's `definition.billing.mode = "daily"` (Workflow Studio → Billing), or by hand with
+  **Daily billing** on the Billing screen while the case billing has no items. A case with billing days stays daily.
+- **Days:** aligned to the workflow `day_start` (default 07:00, Leaf time zone). Day 1 runs from the case start
+  to the next day_start, then whole days until discharge (or now). A day is addressed by its `period_start`.
+- **Orders:** `case_billing_order.kind` is `case` (OR, `period_start` NULL) or `daily` (`period_start`,
+  `period_end`). One live order per (case, period). Closing a day submits and locks it (`closed_at`, `closed_by`);
+  reopening needs `billing.manage`.
+- **Standing charges** (lines with `source = 'standing'`, marked *auto*), added when a day is first opened and
+  refreshed by **Refresh** and **Close day**:
+  - `billing_item.charge_basis`: `unit` (default), `per_day` (once per day), `per_device_day` (once per day per bound
+    device of `device_kind`: `ventilator`, `infusion_pump`, `monitor`, `anesthesia_machine`).
+  - An itemize template may mark items `standing: true` (qty = the template qty, else 1). Then only those items are
+    standing. When the template marks none, every active `per_day` / `per_device_day` item is standing.
+  - Device kind: from the gateway device list the Leaf caches from Canopy (`device_type`, label), else the device
+    id (keywords). A device whose kind is unknown adds nothing; the screen lists it and staff add its device-day
+    item by hand for that day.
+  - A manual line of the same item replaces the standing line (to change its quantity).
+- Seed group **ICU daily**: `icu_bed_day`, `icu_nursing_day`, `icu_monitor_day` (per day), `icu_ventilator_day`,
+  `icu_infusion_pump_day` (per device-day); price 0 until set in Canopy.
+- **Estimate:** closed days + open days + standing charges of days not opened yet (to today), plus N more days at
+  today's standing rate.
+- **Leaf API:** `GET /api/case/{id}/billing/periods`, `GET|PUT …/billing/periods/{period_start}`,
+  `POST …/{period_start}/generate|close|reopen`, `GET …/billing/estimate?extra_days=`, `GET …/billing/all`.
+- **Canopy:** the snapshot key `billing_all` (`GET /api/case/{id}/billing/all`) carries every order;
+  `billing.project_orders` keeps one `canopy_case_billing` row per order, keyed `(global_case_id, period_start)`
+  with `period_start = 0` for the case order. **OR Billing** lists both kinds (filter *Kind*), billing days grouped
+  under their case; `GET /api/fleet/billing/orders/{global_case_id}?period_start=` opens one day.
+- **Handover:** closed days are copied to the receiving Leaf marked `handover_billed`: shown as closed there,
+  never reopened or sent to Canopy again (they stay billed under the previous case).

@@ -7,6 +7,10 @@ Hospital-supplied ICD-10-TM TSV/CSV:
   python scripts/import-terminology.py generic --system ICD_10_TM --edition Thailand \
     --version 2016 --domain diagnosis --source ICD10TM.tsv
 
+Thai Medicines Terminology (TMT, from the THIS release; CSV/TSV with tmtid, fsn, level = SUBS/VTM/GP/GPU/TP/TPU):
+  python scripts/import-terminology.py tmt --source TMT_GPU.csv --version 20260901
+  python scripts/import-terminology.py tmt-map --source item_tmt.csv     (columns item_code, tmtid: link catalogue drugs)
+
 Licensed SNOMED CT RF2 Snapshot ZIP:
   python scripts/import-terminology.py snomed-rf2 --source SnomedCT_InternationalRF2.zip \
     --edition International --version 20260701
@@ -171,6 +175,54 @@ def snomed_entries(source: str) -> list[dict]:
         if temporary: path.unlink(missing_ok=True)
 
 
+TMT_URI = "http://www.this.or.th/tmt"
+
+
+def tmt_entries(args) -> list[dict]:
+    """TMT concept table(s) as one CSV/TSV: tmtid, fsn, level (column names overridable). Medication domain."""
+    path, temporary = materialize(args.source)
+    try:
+        with path.open("r", encoding=args.encoding, newline="") as handle:
+            sample = handle.read(4096); handle.seek(0)
+            reader = csv.DictReader(handle, delimiter=args.delimiter or ("\t" if "\t" in sample else ","))
+            lowered = lambda row: {str(k or "").strip().lower(): v for k, v in row.items()}
+            result = []
+            for row in map(lowered, reader):
+                code = clean_display(row.get("tmtid") or row.get("tmt_id") or row.get("code") or "")
+                display = clean_display(row.get("fsn") or row.get("display") or "")
+                if code and display:
+                    level = clean_display(row.get("level") or "").upper() or None
+                    result.append({"domain":"medication", "code":code, "display":display,
+                        "display_th":clean_display(row.get("fsn_th") or row.get("display_th") or "") or None,
+                        "is_billable":0, "metadata":{"level":level}})
+            return result
+    finally:
+        if temporary: path.unlink(missing_ok=True)
+
+
+def map_tmt(database, source: str, encoding: str) -> tuple[int, list[str]]:
+    """Link io_item_master drugs (item_code) to TMT codes (tmtid) as clinical_concept_coding TMT rows."""
+    now = int(time.time() * 1000); linked = 0; missing = []
+    with open(source, "r", encoding=encoding, newline="") as handle, database.transaction():
+        sample = handle.read(4096); handle.seek(0)
+        for row in csv.DictReader(handle, delimiter="\t" if "\t" in sample else ","):
+            code, tmtid = clean_display(row.get("item_code", "")), clean_display(row.get("tmtid", ""))
+            item = database.execute("SELECT concept_id FROM io_item_master WHERE kind='med' AND code=%s", (code,)).fetchone()
+            if not item or not item[0] or not tmtid:
+                missing.append(code); continue
+            entry = database.execute(
+                """SELECT e.id, e.display FROM terminology_entry e JOIN terminology_release r ON r.id=e.release_id
+                   WHERE r.system_key='TMT' AND r.status='active' AND e.code=%s LIMIT 1""", (tmtid,)).fetchone()
+            database.execute(
+                """INSERT INTO clinical_concept_coding(concept_id,system_key,system_uri,code,display,is_preferred,terminology_entry_id,created_at,updated_at)
+                   VALUES (%s,'TMT',%s,%s,%s,1,%s,%s,%s)
+                   ON CONFLICT(concept_id,system_key,code) DO UPDATE SET display=excluded.display,
+                     terminology_entry_id=excluded.terminology_entry_id,updated_at=excluded.updated_at""",
+                (item[0], TMT_URI, tmtid, entry[1] if entry else None, entry[0] if entry else None, now, now))
+            linked += 1
+    return linked, missing
+
+
 def import_release(database, *, system: str, system_uri: str, edition: str, version: str,
                    source_uri: str, license_name: str, license_uri: str, entries: list[dict], release_date: str | None = None):
     now = int(time.time() * 1000)
@@ -273,7 +325,7 @@ def materialize_icd_masters(database):
 
 def parser():
     root = argparse.ArgumentParser()
-    root.add_argument("command", choices=("public-baseline","icd10who","icd9cm","ucum","generic","snomed-rf2","materialize-icd-masters"))
+    root.add_argument("command", choices=("public-baseline","icd10who","icd9cm","ucum","generic","snomed-rf2","tmt","tmt-map","materialize-icd-masters"))
     root.add_argument("--database-url", default=os.getenv("FLORA_DATABASE_URL"))
     root.add_argument("--source")
     root.add_argument("--system")
@@ -328,6 +380,16 @@ def main():
             import_release(database,system="SNOMED_CT",system_uri="http://snomed.info/sct",edition=args.edition,version=args.version,
                 release_date=args.release_date,source_uri=args.source,license_name="SNOMED CT Affiliate License",license_uri="https://www.snomed.org/get-snomed",entries=entries)
             print(f"SNOMED CT {args.version}: {len(entries)} diagnosis/procedure concepts")
+        if args.command == "tmt":
+            if not all((args.source,args.version)): raise SystemExit("tmt requires --source --version")
+            entries = tmt_entries(args)
+            import_release(database,system="TMT",system_uri=TMT_URI,edition=args.edition or "Thailand",version=args.version,
+                release_date=args.release_date,source_uri=args.source,license_name="TMT (THIS) terms of use",license_uri="https://www.this.or.th/",entries=entries)
+            print(f"TMT {args.version}: {len(entries)} medication concepts")
+        if args.command == "tmt-map":
+            if not args.source: raise SystemExit("tmt-map requires --source")
+            linked, missing = map_tmt(database, args.source, args.encoding)
+            print(f"TMT mappings: {linked} linked, {len(missing)} not found: {', '.join(missing[:20])}")
         if args.command in {"public-baseline", "materialize-icd-masters"}:
             totals = materialize_icd_masters(database)
             print(f"Flora ICD masters: {totals.get('diagnosis', 0)} diagnoses, {totals.get('procedure', 0)} procedures")

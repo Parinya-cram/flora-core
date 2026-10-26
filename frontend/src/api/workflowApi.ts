@@ -60,7 +60,7 @@ export type WorkflowDefinition = {
   forms: WorkflowFormRef[];
   packet: WorkflowPacketEntry[];
   /** Itemize (billing) template for the Leaf Billing screen; one template may serve many workflows. */
-  billing?: { template_id: string | null };
+  billing?: { template_id: string | null; /** 'daily': ICU billing per billing day (from day_start); default one order per case. */ mode?: "case" | "daily" };
   /** Clinical scores (Workflow Studio → Scores) the Leaf computes for cases of this workflow. */
   scores?: string[];
   /** Day 1 of a stay starts at the first day_start at or before the case start (HH:MM, default 07:00). */
