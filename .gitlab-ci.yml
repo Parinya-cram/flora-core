@@ -215,7 +215,8 @@ deploy-gateway-233:
     GATEWAY_REPO: /home/esm/flora/flora-core
   script:
     - if [ -z "${GATEWAY_233_SSH_KEY:-}" ]; then echo "GATEWAY_233_SSH_KEY is not set, gateway .233 not updated"; exit 0; fi
-    - install -m 600 "$GATEWAY_233_SSH_KEY" "$CI_PROJECT_DIR/.gw233_key"
+    # A key pasted into the CI form may lose its last newline or gain CRs; ssh needs neither.
+    - (tr -d '\r' < "$GATEWAY_233_SSH_KEY"; echo) > "$CI_PROJECT_DIR/.gw233_key" && chmod 600 "$CI_PROJECT_DIR/.gw233_key"
     - export GIT_SSH_COMMAND="ssh -i $CI_PROJECT_DIR/.gw233_key -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$CI_PROJECT_DIR/.gw233_known"
     - git push --force "ssh://$GATEWAY_HOST$GATEWAY_REPO" "HEAD:refs/heads/ci-incoming"
     - $GIT_SSH_COMMAND "$GATEWAY_HOST" "cd $GATEWAY_REPO && git show ci-incoming:scripts/gateway/update-from-ci.sh | sh -s -- $CI_COMMIT_BRANCH"
