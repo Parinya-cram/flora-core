@@ -1,4 +1,4 @@
-import { DEMO_WORKSTATIONS, currentDemoWorkstation, demoWorkstationsEnabled, switchDemoWorkstation } from "./workstations";
+import { DEMO_WORKSTATIONS, currentDemoWorkstation, demoWorkstationsEnabled, hasOwnLeaf, switchDemoWorkstation } from "./workstations";
 
 /** Demo only: pick which OR-suite Leaf this screen acts as. Switching signs out. */
 export default function WorkstationSwitcher({ compact = false }: { compact?: boolean }) {
@@ -16,7 +16,7 @@ export default function WorkstationSwitcher({ compact = false }: { compact?: boo
       }}
       className="w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-control-bg)] px-[10px] py-[7px] text-[13px] text-[var(--app-text)]"
     >
-      <option value="">This Leaf</option>
+      {hasOwnLeaf() ? <option value="">This Leaf</option> : null}
       {DEMO_WORKSTATIONS.map(item => <option key={item.id} value={item.id}>{item.name} · {item.role}</option>)}
     </select>
   </label>;

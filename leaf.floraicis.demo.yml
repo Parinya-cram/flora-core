@@ -1,0 +1,84 @@
+# Flora ICIS demo — several Leafs in ONE container, switchable from the Leaf UI.
+# Use instead of leaf.floraicis.prod.yml (same port), never in production.
+#
+#   leaf-demo  one container: Leaf UI (nginx) + one leaf-api and one sync worker per Leaf in FLORA_DEMO_LEAVES.
+#              Each Leaf syncs to Canopy as itself and has its own database on the shared leaf-db
+#              (flora_<leaf_id>, created on first start). Pick the Leaf from "Demo workstation" on the
+#              sign-in page or in the user menu; switching signs out.
+#   leaf-stt   shared offline speech-to-text.
+# Database: leaf-db in db.floraicis.prod.yml (start that first). Assign each Leaf to its bed in Canopy
+# (Fleet); for the OR suite: docker exec floraicis-canopy-canopy-api-1 python -m app.demo_or_workstations kcmh
+#
+#   docker compose -f leaf.floraicis.demo.yml --env-file floraicis.prod.env up -d --build
+name: floraicis-leaf-demo
+
+services:
+  leaf-demo:
+    build:
+      context: .
+      dockerfile: Dockerfile.leaf-demo
+    image: flora-leaf-demo:prod
+    # Optional private CA for Canopy's TLS endpoint; absent with a public certificate.
+    env_file:
+      - path: ./flora-leaf/certs/trust.env
+        required: false
+    environment:
+      # leaf-id|short name|display name[|database]; the first Leaf also answers on plain /api.
+      FLORA_DEMO_LEAVES: ${FLORA_DEMO_LEAVES:-leaf-or-01|OR-1|Operating Room 1;leaf-recovery-01|Recovery|OR1 Recovery;leaf-icu-01|ICU|ICU Bed 1}
+      LEAF_DB_HOST: leaf-db
+      LEAF_DB_ADMIN_PASSWORD: ${LEAF_DB_ADMIN_PASSWORD:?set in floraicis.prod.env}
+      LEAF_DB_APP_PASSWORD: ${LEAF_DB_APP_PASSWORD:?set in floraicis.prod.env}
+      # Used by the init scripts when a Leaf's database is first created (roles already exist on leaf-db).
+      FLORA_DB_APP_PASSWORD: ${LEAF_DB_APP_PASSWORD:?set in floraicis.prod.env}
+      FLORA_DB_VIEW_PASSWORD: ${LEAF_DB_VIEW_PASSWORD:?set in floraicis.prod.env}
+      FLORA_DB_SYNC_PASSWORD: ${LEAF_DB_SYNC_PASSWORD:?set in floraicis.prod.env}
+      FLORA_API_ENV: production
+      FLORA_API_MODE: leaf
+      FLORA_LEAF_WRITE_API: "true"
+      FLORA_BOOTSTRAP_ADMIN_ENABLED: "true"
+      FLORA_BOOTSTRAP_ADMIN_USERNAME: ${LEAF_ADMIN_USERNAME:-admin}
+      FLORA_BOOTSTRAP_ADMIN_PASSWORD: ${LEAF_ADMIN_PASSWORD:?set in floraicis.prod.env}
+      FLORA_BOOTSTRAP_ADMIN_MUST_CHANGE_PASSWORD: ${FLORA_BOOTSTRAP_ADMIN_MUST_CHANGE_PASSWORD:-true}
+      FLORA_BOOTSTRAP_ADMIN_NAME: Administrator
+      FLORA_DEVICE_INGEST_ENABLED: "true"
+      FLORA_LEAF_SERVICE_SECRET: ${FLORA_LEAF_SERVICE_SECRET:?set in floraicis.prod.env}
+      FLORA_CANOPY_SYNC_URL: ${FLORAICIS_CANOPY_URL:-http://host.docker.internal:7200}
+      FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:?set in floraicis.prod.env}
+      FLORA_ACCOUNT_CONFIG_SYNC_TIMEOUT_SECONDS: "1.5"
+      FLORA_HOSPITAL_ID: ${FLORA_HOSPITAL_ID:-hospital-01}
+      FLORA_SYNC_INTERVAL_SECONDS: ${FLORA_SYNC_INTERVAL_SECONDS:-10}
+      # Device data per Leaf: <gateway>/data-api/<leaf-id>/api/observations.
+      FLORAICIS_GATEWAY_URL: ${FLORAICIS_GATEWAY_URL:-http://host.docker.internal:7400}
+      HIS_GATEWAY_BASE_URL: ${HIS_GATEWAY_BASE_URL:-http://127.0.0.1:9}
+      FLORA_HIS_DEMO_MODE: ${FLORA_HIS_DEMO_MODE:-false}
+      FLORA_STT_URL: http://leaf-stt:8000
+    volumes:
+      - ./flora-leaf/certs:/etc/flora/certs:ro
+    ports:
+      - "${FLORA_BIND_ADDR:-0.0.0.0}:${FLORAICIS_LEAF_PORT:-7300}:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [default, db]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  leaf-stt:
+    build:
+      context: ./services/flora-stt
+      args:
+        STT_MODEL: ${LEAF_STT_MODEL:-large-v3-turbo}
+        STT_DRAFT_MODEL: ${LEAF_STT_DRAFT_MODEL:-small}
+    image: ${FLORA_IMAGE_STT:-flora-stt:prod}
+    environment:
+      STT_LANGUAGE: ${LEAF_STT_LANGUAGE:-th}
+      STT_CPU_THREADS: ${LEAF_STT_CPU_THREADS:-8}
+    restart: unless-stopped
+
+networks:
+  db:
+    name: floraicis-db
+    external: true
