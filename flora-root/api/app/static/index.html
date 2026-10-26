@@ -116,10 +116,19 @@
   table.dev td, table.dev th { font-size:13px } table.dev .muted { font-size:12px }
   .panel2 { border:1px solid var(--line); border-radius:12px; padding:12px 16px; background:var(--panel); margin-bottom:14px; display:flex; gap:24px; flex-wrap:wrap }
   .panel2 div span { display:block; color:var(--muted); font-size:12px }
+
+  /* FLORA iCIS wordmark (same as the Leaf/Canopy apps): FLORA in the page's text colour, iCIS cyan → blue + pink dot. */
+  .wm { display:inline-flex !important; align-items:baseline; font-weight:900; letter-spacing:.03em; line-height:1; white-space:nowrap }
+  .wm, .wm span { font-size:inherit !important }
+  .wm .fl { display:inline !important; color:var(--ink, var(--text, #1d2621)) !important }
+  .wm .ic { display:inline !important; margin-left:.24em; background:linear-gradient(90deg,#1bb8d4,#2f6fe8); -webkit-background-clip:text; background-clip:text; color:transparent !important }
+  .wm .i { display:inline !important; position:relative }
+  .wm .dot { display:block !important; position:absolute; left:50%; top:.04em; width:.19em; height:.19em; transform:translateX(-50%); border-radius:50%; background:#ef4a82 }
+  .wm-part { display:inline-block !important; margin-left:8px; font-size:11px !important; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:var(--muted) !important }
 </style>
 </head>
 <body>
-<header><img id="logo" src="" alt="" width="30" height="30" style="vertical-align:middle;margin-right:8px"><h1>Flora iCIS Root</h1><span>Cloud control plane · tenants, licenses, releases, global configuration</span><span id="ts" class="muted"></span>
+<header><img id="logo" src="" alt="" width="30" height="30" style="vertical-align:middle;margin-right:8px"><h1 style="font-size:22px"><span class="wm" role="img" aria-label="Flora iCIS"><span class="fl">FLORA</span><span class="ic"><span class="i">ı<span class="dot"></span></span>CIS</span></span><span class="wm-part">Root</span></h1><span>Cloud control plane · tenants, licenses, releases, global configuration</span><span id="ts" class="muted"></span>
   <span class="me" id="me"></span></header>
 <div class="layout">
 <nav class="tabs" role="tablist" aria-label="Root sections">

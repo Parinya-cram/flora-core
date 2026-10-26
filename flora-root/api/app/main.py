@@ -795,8 +795,17 @@ h1{font-size:24px;margin:0 0 4px} .sub{color:#65706a;margin:0 0 20px} .tabs{disp
 .warn{color:#a46a12} code,pre{background:#eef2ee;border-radius:6px} code{padding:2px 6px} pre{padding:10px 12px;white-space:pre-wrap;word-break:break-all;user-select:all}
 li{margin:6px 0} h2{font-size:16px;margin:0 0 8px}"""
     return HTMLResponse(f"""<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Flora iCIS · ติดตั้งโรงพยาบาลใหม่</title><style>{css}</style></head><body>
-<h1>ติดตั้งโรงพยาบาลใหม่</h1><p class="sub">Flora iCIS Root · เลือกระบบปฏิบัติการของเครื่อง server หลัก</p>
+<title>Flora iCIS · ติดตั้งโรงพยาบาลใหม่</title><style>{css}
+  /* FLORA iCIS wordmark (same as the Leaf/Canopy apps): FLORA in the page's text colour, iCIS cyan → blue + pink dot. */
+  .wm {{ display:inline-flex !important; align-items:baseline; font-weight:900; letter-spacing:.03em; line-height:1; white-space:nowrap }}
+  .wm, .wm span {{ font-size:inherit !important }}
+  .wm .fl {{ display:inline !important; color:var(--ink, var(--text, #1d2621)) !important }}
+  .wm .ic {{ display:inline !important; margin-left:.24em; background:linear-gradient(90deg,#1bb8d4,#2f6fe8); -webkit-background-clip:text; background-clip:text; color:transparent !important }}
+  .wm .i {{ display:inline !important; position:relative }}
+  .wm .dot {{ display:block !important; position:absolute; left:50%; top:.04em; width:.19em; height:.19em; transform:translateX(-50%); border-radius:50%; background:#ef4a82 }}
+  .wm-part {{ display:inline-block !important; margin-left:8px; font-size:11px !important; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:var(--muted) !important }}
+</style></head><body>
+<div style="font-size:24px;margin-bottom:10px"><span class="wm" role="img" aria-label="Flora iCIS"><span class="fl">FLORA</span><span class="ic"><span class="i">ı<span class="dot"></span></span>CIS</span></span><span class="wm-part">Root</span></div><h1>ติดตั้งโรงพยาบาลใหม่</h1><p class="sub">Flora iCIS Root · เลือกระบบปฏิบัติการของเครื่อง server หลัก</p>
 <div class="tabs">{tabs}</div>{body}</body></html>""")
 
 

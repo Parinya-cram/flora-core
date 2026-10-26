@@ -18,11 +18,20 @@
   button { margin-top:18px; width:100%; font:inherit; font-weight:600; padding:9px; border:0; border-radius:6px;
            background:var(--accent); color:#fff; cursor:pointer }
   #error { color:var(--bad); min-height:20px; margin-top:10px; font-size:13px }
+
+  /* FLORA iCIS wordmark (same as the Leaf/Canopy apps): FLORA in the page's text colour, iCIS cyan → blue + pink dot. */
+  .wm { display:inline-flex !important; align-items:baseline; font-weight:900; letter-spacing:.03em; line-height:1; white-space:nowrap }
+  .wm, .wm span { font-size:inherit !important }
+  .wm .fl { display:inline !important; color:var(--ink, var(--text, #1d2621)) !important }
+  .wm .ic { display:inline !important; margin-left:.24em; background:linear-gradient(90deg,#1bb8d4,#2f6fe8); -webkit-background-clip:text; background-clip:text; color:transparent !important }
+  .wm .i { display:inline !important; position:relative }
+  .wm .dot { display:block !important; position:absolute; left:50%; top:.04em; width:.19em; height:.19em; transform:translateX(-50%); border-radius:50%; background:#ef4a82 }
+  .wm-part { display:inline-block !important; margin-left:8px; font-size:11px !important; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:var(--muted) !important }
 </style>
 </head>
 <body>
 <form id="form">
-  <h1>ESM Flora Gateway</h1>
+  <h1 style="font-size:24px"><span class="wm" role="img" aria-label="Flora iCIS"><span class="fl">FLORA</span><span class="ic"><span class="i">ı<span class="dot"></span></span>CIS</span></span><span class="wm-part">Gateway</span></h1>
   <p id="station">Station admin sign-in</p>
   <label for="username">Username</label>
   <input id="username" name="username" autocomplete="username" required autofocus>
