@@ -7,6 +7,7 @@ library, with the document as its source). A restart forgets running jobs; the s
 """
 from __future__ import annotations
 
+import contextvars
 import io
 import logging
 import threading
@@ -85,7 +86,9 @@ def start(owner: str, name: str, content: bytes, options: dict[str, Any], ai_con
     with _lock:
         _forget_old()
         _jobs[job.id] = job
-    _pool.submit(_run, job, ai_config)
+    # The request's context goes with the job: on a multi-account Canopy its account (app/tenancy.py) decides which
+    # schema the job's connections see; without it they point at an empty schema.
+    _pool.submit(contextvars.copy_context().run, _run, job, ai_config)
     return job
 
 
@@ -258,7 +261,7 @@ def start_ai(owner: str, name: str, options: dict[str, Any], ai_config: Callable
     with _lock:
         _forget_old()
         _jobs[job.id] = job
-    _pool.submit(_run_ai, job, ai_config, validate)
+    _pool.submit(contextvars.copy_context().run, _run_ai, job, ai_config, validate)
     return job
 
 

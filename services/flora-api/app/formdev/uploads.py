@@ -39,7 +39,12 @@ def root() -> Path:
 
 
 def owner_of(user: dict[str, Any]) -> str:
-    return str(user.get("username") or user.get("id"))
+    """Uploads and reading jobs belong to a user of one account: on a multi-account Canopy two hospitals can both
+    have an "admin", so the account code is part of the key."""
+    from .. import tenancy
+    name = str(user.get("username") or user.get("id"))
+    account = tenancy.current_account()
+    return f"{account.code}:{name}" if account else name
 
 
 def _folder(owner: str) -> Path:

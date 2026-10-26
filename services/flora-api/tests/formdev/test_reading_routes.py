@@ -178,3 +178,42 @@ class AiJobs(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Accounts(unittest.TestCase):
+    """Multi-account Canopy: a reading job works in the account that started it, and owners are per account."""
+
+    def test_a_job_runs_in_the_account_that_started_it(self):
+        from unittest import mock
+        from app import tenancy
+        from app.formdev.reading import jobs
+
+        seen = []
+        done = __import__("threading").Event()
+
+        def run(job, ai_config):
+            seen.append(tenancy.current_account())
+            done.set()
+
+        account = tenancy.Account("north", "North Hospital", "acct_north", "active")
+        token = tenancy.set_current(account)
+        try:
+            with mock.patch.object(jobs, "_run", run):
+                jobs.start("north:admin", "doc.pdf", b"%PDF", {}, lambda: {})
+                self.assertTrue(done.wait(10))
+        finally:
+            tenancy.reset_current(token)
+        self.assertEqual(seen, [account], "without the account its connections would see an empty schema")
+
+    def test_the_same_user_name_in_two_accounts_is_two_owners(self):
+        from app import tenancy
+
+        owners = []
+        for code in ("north", "south"):
+            token = tenancy.set_current(tenancy.Account(code, code, f"acct_{code}", "active"))
+            try:
+                owners.append(uploads.owner_of({"username": "admin"}))
+            finally:
+                tenancy.reset_current(token)
+        self.assertEqual(owners, ["north:admin", "south:admin"])
+        self.assertEqual(uploads.owner_of({"username": "admin"}), "admin", "a Leaf (one account) keeps the plain name")
