@@ -71,10 +71,10 @@ SETTINGS_KEYS = {
     "root_url": ("ROOT_URL", str), "root_registry_url": ("ROOT_REGISTRY_URL", str),
     "registry_public": ("REGISTRY_PUBLIC", str), "canopy_sync_url": ("CANOPY_SYNC_URL", str),
     "canopy_sync_public": ("CANOPY_SYNC_PUBLIC", str), "ai_hosts": ("AI_HOSTS", str),
-    "tenant_id": ("TENANT_ID", str), "tenant_key": ("TENANT_KEY", str),
+    "tenant_id": ("TENANT_ID", str), "tenant_key": ("TENANT_KEY", str), "sync_secret": ("SYNC_SECRET", str),
     "sync_interval": ("SYNC_INTERVAL", int),
 }
-SECRET_KEYS = {"tenant_key"}  # never returned by the API, only writable
+SECRET_KEYS = {"tenant_key", "sync_secret"}  # never returned by the API, only writable
 # Snapshot the env-derived defaults now, before any override is applied, so clearing a
 # setting in the UI can restore the default live (not only after a restart).
 ENV_DEFAULTS = {global_name: globals()[global_name] for global_name, _ in SETTINGS_KEYS.values()}
@@ -745,6 +745,7 @@ class SettingsIn(BaseModel):
     ai_hosts: str | None = None             # comma-separated AI hosts the relay may reach
     tenant_id: str | None = None
     tenant_key: str | None = None   # write-only; blank keeps the current value
+    sync_secret: str | None = None  # write-only: this hospital's Canopy account sync secret
     sync_interval: int | str | None = None   # blank string resets to the env default (like the URL fields)
 
 

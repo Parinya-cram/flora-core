@@ -199,7 +199,7 @@ const SETTING_FIELDS = [
   ["root_url", "Flora Root URL"], ["root_registry_url", "Root registry URL (blank = use what Root advertises)"],
   ["registry_public", "Haber registry public (host:port that nodes pull from)"],
   ["canopy_sync_url", "Canopy sync URL"], ["tenant_id", "Tenant ID"],
-  ["tenant_key", "Root tenant key", true], ["sync_interval", "Root sync interval (seconds)"],
+  ["tenant_key", "Root tenant key", true], ["sync_secret", "Canopy account sync secret", true], ["sync_interval", "Root sync interval (seconds)"],
 ];
 async function loadSettings() {
   const s = (await (await fetch("api/haber/v1/settings")).json()).settings;
