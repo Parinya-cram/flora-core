@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from .. import case_forms, directory, form_sync, hl7_interface, workflows
 from ..database import connection
 from .canopy_preferences import require_canopy_permission
-from .canopy_users import ward_scope
+from .canopy_users import permitted_wards, ward_scope
 
 router = APIRouter(prefix="/api/fleet/admissions", tags=["canopy admissions"])
 
@@ -112,7 +112,7 @@ def _load(database: Connection, admission_id: str, scope: list[str] | None, lock
 
 
 @router.get("/options")
-def options(scope: list[str] | None = Depends(ward_scope), database: Connection = Depends(connection)) -> dict[str, Any]:
+def options(scope: list[str] | None = Depends(permitted_wards), database: Connection = Depends(connection)) -> dict[str, Any]:
     """Wards the user may admit to, with each ward's beds (Leafs)."""
     wards = [ward for ward in directory.ward_options(database)["rows"] if scope is None or ward["key"] in scope]
     leaves = database.execute(
@@ -165,8 +165,9 @@ def list_admissions(
 
 @router.post("")
 def create_admission(payload: AdmissionInput, user: dict = Depends(require_canopy_permission("case.create")),
+                     permitted: list[str] | None = Depends(permitted_wards),
                      scope: list[str] | None = Depends(ward_scope), database: Connection = Depends(connection)) -> dict[str, Any]:
-    _allowed(scope, payload.unit_key)
+    _allowed(permitted, payload.unit_key)
     if not any(ward["key"] == payload.unit_key for ward in directory.ward_options(database)["rows"]):
         raise HTTPException(status_code=400, detail="unknown ward")
     _target_check(database, payload.unit_key, payload.target_leaf_id)
@@ -181,14 +182,16 @@ def create_admission(payload: AdmissionInput, user: dict = Depends(require_canop
              (payload.admission_number or "").strip() or None, Jsonb(payload.patient.model_dump()),
              Jsonb(payload.admission.model_dump()), payload.scheduled_at, payload.note, user["username"], current, current),
         )
-    return {"row": _public(_load(database, str(admission_id), scope))}
+    return {"row": _public(_load(database, str(admission_id), permitted))}
 
 
 @router.put("/{admission_id}")
 def update_admission(admission_id: str, payload: AdmissionInput,
                      _: dict = Depends(require_canopy_permission("case.create")),
+                     permitted: list[str] | None = Depends(permitted_wards),
                      scope: list[str] | None = Depends(ward_scope), database: Connection = Depends(connection)) -> dict[str, Any]:
-    _allowed(scope, payload.unit_key)
+    # The admission is found in the ward being viewed; it may move to any ward the user works in (e.g. ICU → OR).
+    _allowed(permitted, payload.unit_key)
     with database.transaction():
         row = _load(database, admission_id, scope, lock=True)
         if row["status"] != "pending":
@@ -201,7 +204,7 @@ def update_admission(admission_id: str, payload: AdmissionInput,
              (payload.admission_number or "").strip() or None, Jsonb(payload.patient.model_dump()),
              Jsonb(payload.admission.model_dump()), payload.scheduled_at, payload.note, directory.now_ms(), admission_id),
         )
-    return {"row": _public(_load(database, admission_id, scope))}
+    return {"row": _public(_load(database, admission_id, permitted))}
 
 
 @router.post("/{admission_id}/cancel")

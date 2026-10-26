@@ -41,6 +41,12 @@ def ward_scope(
     return allowed
 
 
+def permitted_wards(user: dict[str, Any] = Depends(current_canopy_user)) -> list[str] | None:
+    """Every ward the user is assigned to (None: all), whatever ward the view is filtered to —
+    for choosing where a patient goes, e.g. moving an admission from ICU to OR."""
+    return None if directory.has_all_units(user) else [unit["key"] for unit in user.get("_units") or []]
+
+
 @router.get("/wards")
 def my_wards(user: dict = Depends(current_canopy_user), database: Connection = Depends(connection)) -> dict:
     rows = directory.ward_options(database)["rows"]
