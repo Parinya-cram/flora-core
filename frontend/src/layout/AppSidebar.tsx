@@ -27,7 +27,7 @@ import { canAuthorStudio, canUseAiStudio } from "../auth/studioAccess";
 import { useHospitalProfile } from "../hooks/useHospitalProfile";
 import { hospitalDisplayName } from "../formdev/core/hospital";
 
-export type AppView = "ward" | "case" | "form" | "diagnosis" | "staff" | "io" | "patient" | "report" | "master" | "account" | "dashboard" | "admissions" | "monitoring" | "fleet" | "infrastructure" | "topology" | "gateway-alerts" | "devices" | "distribution" | "twin" | "formdev" | "workflows" | "report-studio" | "ai-studio" | "history" | "billing" | "staff-directory" | "or-schedule" | "waveform" | "journey" | "activity";
+export type AppView = "ward" | "case" | "form" | "diagnosis" | "staff" | "io" | "patient" | "report" | "master" | "account" | "dashboard" | "admissions" | "monitoring" | "fleet" | "infrastructure" | "topology" | "gateway-alerts" | "devices" | "distribution" | "twin" | "formdev" | "workflows" | "report-studio" | "ai-studio" | "history" | "billing" | "staff-directory" | "or-schedule" | "waveform" | "journey" | "activity" | "medication" | "shift-handover" | "icu-kpi";
 
 type Props = {
   activeView: AppView;
@@ -215,6 +215,7 @@ function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, colla
         { view: "admissions", label: "Admission", icon: "start", section: "User In-charge" },
         { view: "monitoring", label: "Central Monitor", icon: "canopy-monitoring", section: "User In-charge" },
         { view: "fleet", label: "Case List", icon: "canopy-charts", section: "User In-charge" },
+        { view: "icu-kpi", label: "ICU KPI", icon: "canopy-reports", section: "User In-charge" },
         { view: "report", label: "Reports", icon: "canopy-reports", section: "User Admin" },
         { view: "billing", label: "Billing", icon: "canopy-reports", section: "User Admin" },
         { view: "topology", label: "Topology", icon: "canopy-monitoring", section: "User Admin" },
@@ -242,6 +243,8 @@ function SidebarBody({ activeView, setActiveView, sessionUser, caseStatus, colla
           { view: "io", label: "I/O", icon: "io" },
           { view: "diagnosis", label: "Diag/Ops", icon: "clinical" },
           { view: "form", label: "Forms", icon: "form" },
+          { view: "medication", label: "Meds/MAR", icon: "clinical" },
+          { view: "shift-handover", label: "Handover", icon: "staff" },
           { view: "billing", label: "Billing", icon: "report" },
           { view: "staff", label: "Staff", icon: "staff" },
           { view: "patient", label: "Patient", icon: "patient" },

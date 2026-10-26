@@ -103,8 +103,11 @@ def normalize(definition: dict[str, Any]) -> dict[str, Any]:
         "forms": forms,
         "packet": list(definition.get("packet") or []),
         # Itemize (billing) template shown on the Leaf Billing screen; shared by any number of workflows.
+        # mode 'daily': ICU billing per billing day (app/billing_periods.py); absent = one order per case.
         "billing": {"template_id": (str((definition.get("billing") or {}).get("template_id") or "").strip() or None)
-                    if isinstance(definition.get("billing"), dict) else None},
+                    if isinstance(definition.get("billing"), dict) else None,
+                    **({"mode": definition["billing"]["mode"]}
+                       if isinstance(definition.get("billing"), dict) and definition["billing"].get("mode") not in (None, "") else {})},
         # Clinical scores (app/scoring.py) the Leaf computes for cases of this workflow.
         "scores": [str(item).strip() for item in definition.get("scores") or [] if str(item or "").strip()]
                   if isinstance(definition.get("scores"), list) else [],
@@ -221,6 +224,8 @@ def validate(database: Connection, definition: Any) -> list[dict[str, str]]:
             issues.append({"path": f"{path}.kind", "message": "kind must be anesthesia_report or form"})
     if reports > 1:
         issues.append({"path": "$.packet", "message": "at most one anesthesia_report"})
+    if workflow["billing"].get("mode", "case") not in ("case", "daily"):
+        issues.append({"path": "$.billing.mode", "message": "mode must be case or daily"})
     template_id = workflow["billing"]["template_id"]
     if template_id:
         from . import billing_templates

@@ -80,5 +80,13 @@
  "0094-leaf-transfer.sql",
  "0095-case-transfer.sql",
  "0096-canopy-activity-log.sql",
- "0097-case-form-entry.sql"
+ "0097-case-form-entry.sql",
+ "0098-ai-studio-kiosk-link.sql",
+ "0099-ai-studio-board-leaf.sql",
+ "0100-med-orders-mar.sql",
+ "0101-billing-periods.sql",
+ "0102-icu-kpi.sql",
+ "0103-icu-shift-handover.sql",
+ "0110-canopy-outbound-interface.sql",
+ "0111-canopy-outbound-tls.sql"
 ]

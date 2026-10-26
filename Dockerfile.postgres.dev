@@ -84,3 +84,11 @@ COPY infrastructure/postgres/0094-leaf-transfer.sql /docker-entrypoint-initdb.d/
 COPY infrastructure/postgres/0095-case-transfer.sql /docker-entrypoint-initdb.d/0095-case-transfer.sql
 COPY infrastructure/postgres/0096-canopy-activity-log.sql /docker-entrypoint-initdb.d/0096-canopy-activity-log.sql
 COPY infrastructure/postgres/0097-case-form-entry.sql /docker-entrypoint-initdb.d/0097-case-form-entry.sql
+COPY infrastructure/postgres/0098-ai-studio-kiosk-link.sql /docker-entrypoint-initdb.d/0098-ai-studio-kiosk-link.sql
+COPY infrastructure/postgres/0099-ai-studio-board-leaf.sql /docker-entrypoint-initdb.d/0099-ai-studio-board-leaf.sql
+COPY infrastructure/postgres/0100-med-orders-mar.sql /docker-entrypoint-initdb.d/0100-med-orders-mar.sql
+COPY infrastructure/postgres/0101-billing-periods.sql /docker-entrypoint-initdb.d/0101-billing-periods.sql
+COPY infrastructure/postgres/0102-icu-kpi.sql /docker-entrypoint-initdb.d/0102-icu-kpi.sql
+COPY infrastructure/postgres/0103-icu-shift-handover.sql /docker-entrypoint-initdb.d/0103-icu-shift-handover.sql
+COPY infrastructure/postgres/0110-canopy-outbound-interface.sql /docker-entrypoint-initdb.d/0110-canopy-outbound-interface.sql
+COPY infrastructure/postgres/0111-canopy-outbound-tls.sql /docker-entrypoint-initdb.d/0111-canopy-outbound-tls.sql

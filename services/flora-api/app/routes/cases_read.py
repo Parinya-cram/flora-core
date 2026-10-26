@@ -852,6 +852,11 @@ def io_summary(
     from_ts, to_ts = resolve_case_range(case_row, request)
     requested_bucket = number_or_none(request.query_params.get("bucket"))
     bucket_min = int(max(1, min(1440, math.floor(requested_bucket)))) if requested_bucket is not None else 1
+    return io_summary_data(database, case_id, from_ts, to_ts, bucket_min)
+
+
+def io_summary_data(database: Connection, case_id: int, from_ts: int, to_ts: int, bucket_min: int = 1) -> dict:
+    """GET /io/summary over from..to (inclusive minute); also the shift handover summary (app/shift_handover.py)."""
     bucket_ms = bucket_min * MINUTE_MS
     # Totals cover from..to (inclusive minute) whatever the bucket width, so a coarse bucket
     # (summary-only callers) gives the same totals as bucket=1.

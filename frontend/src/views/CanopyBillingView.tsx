@@ -35,6 +35,24 @@ function sumByItem(lines: BillingLine[]): BillingLine[] {
 type Tab = "orders" | "master";
 const money = (n: number | null | undefined) => (n == null ? "—" : Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const day = (ts: number | null | undefined) => (ts ? new Date(ts).toLocaleDateString() : "—");
+const stamp = (ts: number | null | undefined) => (ts ? new Date(ts).toLocaleString(undefined, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }) : "—");
+const rowKey = (row: CanopyBillingOrder) => `${row.global_case_id}:${row.kind === "daily" ? row.period_start || 0 : 0}`;
+/** ICU billing days of one case under a single heading row (case orders stay one row each). */
+type Display = { type: "order"; row: CanopyBillingOrder } | { type: "case"; key: string; days: CanopyBillingOrder[] };
+function groupDays(rows: CanopyBillingOrder[]): Display[] {
+  const out: Display[] = [];
+  const cases = new Map<string, CanopyBillingOrder[]>();
+  for (const row of rows) {
+    if (row.kind !== "daily") { out.push({ type: "order", row }); continue; }
+    const days = cases.get(row.global_case_id);
+    if (days) { days.push(row); continue; }
+    const list = [row];
+    cases.set(row.global_case_id, list);
+    out.push({ type: "case", key: row.global_case_id, days: list });
+  }
+  for (const entry of out) if (entry.type === "case") entry.days.sort((a, b) => (a.period_start || 0) - (b.period_start || 0));
+  return out;
+}
 const localDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const input = "rounded-md border border-[var(--app-border)] bg-[var(--app-control-bg,transparent)] px-2 py-1 text-sm";
 
@@ -67,6 +85,8 @@ export default function CanopyBillingView({ sessionUser }: { sessionUser: AuthUs
 
 function Orders({ catalog }: { catalog: BillingCatalog | null }) {
   const [status, setStatus] = useState("");
+  const [kind, setKind] = useState("");
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [q, setQ] = useState("");
   const [range, setRange] = useState(() => {
     const today = new Date();
@@ -81,13 +101,16 @@ function Orders({ catalog }: { catalog: BillingCatalog | null }) {
   const load = useCallback(() => {
     const from = new Date(`${range.from}T00:00:00`).getTime();
     const to = new Date(`${range.to}T00:00:00`).getTime() + 86400000;
-    getCanopyBillingOrders({ status: status || undefined, q: q.trim() || undefined, from, to })
+    getCanopyBillingOrders({ status: status || undefined, kind: kind || undefined, q: q.trim() || undefined, from, to })
       .then(data => { setRows(data.rows); setTotals(data.item_totals); setError(""); })
       .catch(err => setError(err instanceof Error ? err.message : String(err)));
-  }, [q, range, status]);
+  }, [kind, q, range, status]);
   useEffect(() => { load(); }, [load]);
 
-  const open = (row: CanopyBillingOrder) => getCanopyBillingOrder(row.global_case_id).then(setSelected).catch(err => setError(String(err)));
+  const open = (row: CanopyBillingOrder) =>
+    getCanopyBillingOrder(row.global_case_id, row.kind === "daily" ? row.period_start || 0 : 0).then(setSelected).catch(err => setError(String(err)));
+  const display = useMemo(() => groupDays(rows), [rows]);
+  const selectedKey = selected ? rowKey(selected.order) : "";
   const print = () => {
     if (!selected || !catalog) return;
     const o = selected.order;
@@ -114,6 +137,11 @@ function Orders({ catalog }: { catalog: BillingCatalog | null }) {
             <option value="">All</option><option value="submitted">Submitted</option><option value="draft">Draft</option>
           </select>
         </label>
+        <label className="grid gap-1 text-xs font-semibold">Kind
+          <select value={kind} onChange={e => setKind(e.target.value)} className={input}>
+            <option value="">All</option><option value="case">Case (OR)</option><option value="daily">ICU daily</option>
+          </select>
+        </label>
         <label className="grid flex-1 gap-1 text-xs font-semibold">Search<input value={q} onChange={e => setQ(e.target.value)} placeholder="HN, AN, name, case" className={input} /></label>
         <button type="button" onClick={load} className="rounded-xl border border-[var(--app-border)] px-3 py-1.5 text-sm font-semibold">Refresh</button>
         <button type="button" onClick={printSummary} className="rounded-xl border border-[var(--app-border)] px-3 py-1.5 text-sm font-semibold">Print summary</button>
@@ -123,12 +151,45 @@ function Orders({ catalog }: { catalog: BillingCatalog | null }) {
         <div className="overflow-auto rounded-2xl border border-[var(--app-border)] bg-[var(--app-panel-bg)]">
           <table className="w-full text-sm">
             <thead className="bg-[var(--app-accent)]/10 text-left text-[11px] uppercase tracking-[0.08em]">
-              <tr><th className="p-2">Date</th><th className="p-2">HN / AN</th><th className="p-2">Patient</th><th className="p-2">Leaf</th><th className="p-2">Anesthesia</th><th className="p-2 text-right">Items</th><th className="p-2 text-right">Amount</th><th className="p-2">Status</th></tr>
+              <tr><th className="p-2">Date</th><th className="p-2">HN / AN</th><th className="p-2">Patient</th><th className="p-2">Leaf</th><th className="p-2">Anesthesia / period</th><th className="p-2 text-right">Items</th><th className="p-2 text-right">Amount</th><th className="p-2">Status</th></tr>
             </thead>
             <tbody>
-              {rows.map(row => (
-                <tr key={row.global_case_id} onClick={() => void open(row)}
-                  className={`cursor-pointer border-t border-[var(--app-border)] hover:bg-[var(--app-accent)]/5 ${selected?.order.global_case_id === row.global_case_id ? "bg-[var(--app-accent)]/10" : ""}`}>
+              {display.map(entry => {
+                if (entry.type === "case") {
+                  const first = entry.days[0];
+                  const open_ = expanded[entry.key] ?? true;
+                  const amounts = entry.days.map(d => d.total_amount).filter((n): n is number => n != null);
+                  const closedDays = entry.days.filter(d => d.status === "submitted").length;
+                  return (
+                    <Fragment key={`case-${entry.key}`}>
+                      <tr onClick={() => setExpanded(x => ({ ...x, [entry.key]: !open_ }))} className="cursor-pointer border-t border-[var(--app-border)] bg-[var(--app-accent)]/5 font-semibold">
+                        <td className="p-2">{open_ ? "▾" : "▸"} {day(first.period_start)}</td>
+                        <td className="p-2">{first.hn || "—"}<div className="text-xs font-normal text-[var(--app-muted)]">{first.an || ""}</div></td>
+                        <td className="p-2">{first.patient_name || "—"}</td>
+                        <td className="p-2">{first.leaf_name || first.leaf_id}<div><span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-800">ICU daily</span></div></td>
+                        <td className="p-2 text-xs">{entry.days.length} day{entry.days.length === 1 ? "" : "s"} · {closedDays} closed</td>
+                        <td className="p-2 text-right">{entry.days.reduce((n, d) => n + (d.item_count || 0), 0)}</td>
+                        <td className="p-2 text-right">{money(amounts.length ? amounts.reduce((a, b) => a + Number(b), 0) : null)}</td>
+                        <td className="p-2" />
+                      </tr>
+                      {open_ ? entry.days.map(row => (
+                        <tr key={rowKey(row)} onClick={() => void open(row)}
+                          className={`cursor-pointer border-t border-[var(--app-border)] hover:bg-[var(--app-accent)]/5 ${selectedKey === rowKey(row) ? "bg-[var(--app-accent)]/10" : ""}`}>
+                          <td className="p-2 pl-6 text-xs">{day(row.period_start)}</td>
+                          <td className="p-2" colSpan={3} />
+                          <td className="p-2 text-xs">{stamp(row.period_start)} – {stamp(row.period_end)}</td>
+                          <td className="p-2 text-right">{row.item_count}</td>
+                          <td className="p-2 text-right">{money(row.total_amount)}</td>
+                          <td className="p-2"><span className={`rounded-full px-2 py-0.5 text-xs font-bold ${row.status === "submitted" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{row.status === "submitted" ? "closed" : "open"}</span></td>
+                        </tr>
+                      )) : null}
+                    </Fragment>
+                  );
+                }
+                const row = entry.row;
+                return (
+                <tr key={rowKey(row)} onClick={() => void open(row)}
+                  className={`cursor-pointer border-t border-[var(--app-border)] hover:bg-[var(--app-accent)]/5 ${selectedKey === rowKey(row) ? "bg-[var(--app-accent)]/10" : ""}`}>
                   <td className="p-2">{day(row.anesthesia_start || row.order_updated_at)}</td>
                   <td className="p-2">{row.hn || "—"}<div className="text-xs text-[var(--app-muted)]">{row.an || ""}</div></td>
                   <td className="p-2">{row.patient_name || "—"}</td>
@@ -138,7 +199,8 @@ function Orders({ catalog }: { catalog: BillingCatalog | null }) {
                   <td className="p-2 text-right">{money(row.total_amount)}</td>
                   <td className="p-2"><span className={`rounded-full px-2 py-0.5 text-xs font-bold ${row.status === "submitted" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{row.status}</span></td>
                 </tr>
-              ))}
+                );
+              })}
               {!rows.length ? <tr><td colSpan={8} className="p-6 text-center text-[var(--app-muted)]">No billing in this period.</td></tr> : null}
             </tbody>
           </table>
@@ -152,6 +214,7 @@ function Orders({ catalog }: { catalog: BillingCatalog | null }) {
                 <button type="button" onClick={printStatement} className="rounded-xl border border-[var(--app-accent)] bg-[var(--app-accent)] px-3 py-1 text-sm font-semibold text-[var(--app-accent-contrast)]">Print bill</button>
                 <button type="button" onClick={print} disabled={!catalog} title="Hospital paper form layout" className="rounded-xl border border-[var(--app-border)] px-3 py-1 text-sm font-semibold disabled:opacity-50">Print checklist</button>
               </div>
+              {selected.order.kind === "daily" ? <div className="mb-2 text-xs text-[var(--app-muted)]">ICU billing day {stamp(selected.order.period_start)} – {stamp(selected.order.period_end)}{selected.order.closed_by ? ` · closed by ${selected.order.closed_by}` : ""}</div> : null}
               {selected.order.combined ? <div className="mb-2 text-xs text-[var(--app-muted)]">Combined bill: {selected.order.parts?.map(part => `${PART_LABEL[part.part || "or"]} (${part.leaf_name || part.case_code || "case"}, ${part.status})`).join(" + ")}</div> : null}
               <table className="w-full text-sm">
                 <tbody>{selected.items.map((line, index) => <Fragment key={`${line.part || ""}-${line.line_no ?? index}`}>

@@ -15,7 +15,8 @@ export const WIDGETS: Array<{ th: string; en: string; items: CatalogItem[] }> = 
     { type: "active_cases", icon: "♥", th: "เคสที่กำลังดำเนินอยู่", en: "Active cases", hintTh: "เคสที่ยังไม่จำหน่าย", hintEn: "Cases in progress at the bedside", size: [1, 2], config: { showHn: false } },
     { type: "gateway_alerts", icon: "⚠", th: "การแจ้งเตือน Gateway", en: "Gateway alerts", hintTh: "รายการที่ยังเปิดอยู่", hintEn: "Open alerts", size: [1, 1], config: {} },
     { type: "case_counts", icon: "#", th: "จำนวนเคส", en: "Case counts", hintTh: "วันนี้ 7 วัน เดือนนี้", hintEn: "Today, 7 days, this month", size: [2, 1], config: {} },
-    { type: "clock", icon: "🕒", th: "นาฬิกา", en: "Clock", hintTh: "วันและเวลาปัจจุบัน", hintEn: "Current date and time", size: [1, 1], config: {} },
+    { type: "clock", icon: "🕒", th: "นาฬิกา", en: "Clock", hintTh: "วันและเวลาปัจจุบัน (และเวลาของเคสเมื่อบอร์ดเลือก Leaf)", hintEn: "Date and time (and the case timers when the board follows a Leaf)", size: [1, 1], config: {} },
+    { type: "case_timer", icon: "⏱", th: "เคสของ Leaf", en: "Leaf case", hintTh: "เวลาเข้าห้อง ดมยา ลงมีด หรือเคสถัดไป", hintEn: "Time in room, anaesthesia, incision, or the next case", size: [1, 2], config: { showPatient: false } },
   ] },
 ];
 export const catalogItem = (type: WidgetType) => WIDGETS.flatMap(group => group.items).find(item => item.type === type)!;

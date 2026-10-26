@@ -1,4 +1,5 @@
-"""Applies migration 0090 (multi-case + live stream) and later Leaf migrations (0097 scheduled form entries)
+"""Applies migration 0090 (multi-case + live stream) and later Leaf migrations (0097 scheduled form entries,
+0100 MAR, 0101 billing days, 0103 shift handover)
 to a Leaf database created before them.
 
 A Leaf database only runs migrations when its volume is first initialised. This runs the bundled
@@ -30,8 +31,26 @@ def form_entry_missing(connection) -> bool:
     return connection.execute("SELECT to_regclass('case_form_entry') IS NULL").fetchone()[0]
 
 
+def med_orders_missing(connection) -> bool:
+    return connection.execute("SELECT to_regclass('case_med_approval') IS NULL").fetchone()[0]
+
+
+def billing_periods_missing(connection) -> bool:
+    return connection.execute(
+        """SELECT NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema()
+             AND table_name='case_billing_order' AND column_name='kind')""").fetchone()[0]
+
+
+def shift_handover_missing(connection) -> bool:
+    return connection.execute("SELECT to_regclass('case_shift_handover') IS NULL").fetchone()[0]
+
+
 # Later Leaf migrations applied the same way: (file, check that says it is still missing).
-LATER = [(Path(__file__).parent / "tenancy_sql" / "0097-case-form-entry.sql", form_entry_missing)]
+SQL = Path(__file__).parent / "tenancy_sql"
+LATER = [(SQL / "0097-case-form-entry.sql", form_entry_missing),
+         (SQL / "0100-med-orders-mar.sql", med_orders_missing),
+         (SQL / "0101-billing-periods.sql", billing_periods_missing),  # billing.live_order filters on kind
+         (SQL / "0103-icu-shift-handover.sql", shift_handover_missing)]
 
 
 def apply(url: str, migration: Path, is_missing) -> bool:

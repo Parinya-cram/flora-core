@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 
-from .. import ai_service, billing, case_forms, central_auth, tenancy, device_registry, device_types, directory, form_sync, io_catalog, ldap_auth, workflows
+from .. import ai_service, billing, case_forms, icu_kpi, central_auth, tenancy, device_registry, device_types, directory, form_sync, io_catalog, ldap_auth, workflows
 from ..database import connection, pool
 
 
@@ -246,11 +246,15 @@ def ingest_batch(batch: SyncBatch, database: Connection = Depends(connection)) -
                     now,
                 ),
             )
-            if "billing" in message.payload:
-                # Structured copy of the case's billing order for billing staff.
+            if "billing_all" in message.payload or "billing" in message.payload:
+                # Structured copy of the case's billing orders (case order + ICU billing days) for billing staff.
+                # An older Leaf answers /billing/all with 404 (None): keep projecting its single case order.
+                project = billing.project_orders if isinstance(message.payload.get("billing_all"), dict) else billing.project_snapshot
                 with database.transaction():
-                    billing.project_snapshot(database, global_case_id, batch.leaf_id, message.entity_id,
-                                             message.payload, message.revision, int(time.time() * 1000))
+                    project(database, global_case_id, batch.leaf_id, message.entity_id,
+                            message.payload, message.revision, int(time.time() * 1000))
+            # ICU bundle compliance and KPIs (own savepoint; never fails the ingest).
+            icu_kpi.project_case(database, batch.leaf_id, batch.hospital_id, global_case_id, message.payload, message.revision)
             # Leafs with the case form exchange (app/case_forms.py) send their forms there, field by field with
             # receipts; scheduled entries (workflow_entries) still come this way.
             forms = {} if message.payload.get("case_forms_channel") else (message.payload.get("workflow_forms") or {})

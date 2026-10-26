@@ -28,7 +28,7 @@ const scriptJson = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u0
 
 const RUNTIME = String.raw`
 (function () {
-  var D = window.__FLORA_DATA__ || {}, P = window.__FLORA_PARAMS__ || {}, T = window.__FLORA_THEME__ || {};
+  var D = window.__FLORA_DATA__ || {}, P = window.__FLORA_PARAMS__ || {}, T = window.__FLORA_THEME__ || {}, C = window.__FLORA_CONTEXT__ || {};
   var fillHeight = 0; // fit mode: default chart height chosen to match the cell
   var PALETTE = [T.accent || "#8a6a4a", "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#14b8a6", "#ec4899", "#64748b", "#84cc16"];
   function post(message) { try { parent.postMessage(Object.assign({ flora: true, frame: window.__FLORA_FRAME__ }, message), "*"); } catch (e) {} }
@@ -59,7 +59,9 @@ const RUNTIME = String.raw`
     names.sort();
     return { labels: labels, series: names.map(function (n) { return { name: n, values: labels.map(function (l) { return total(function (r) { return String(r[o.x] == null ? "—" : r[o.x]) === l && String(r[o.by] == null ? "—" : r[o.by]) === n; }); }) }; }) };
   }
-  window.FLORA = { data: D, params: P, theme: T, rows: rows, columns: columns, series: series };
+  // On a board that follows a Leaf: FLORA.leaf, FLORA.case (null between cases), FLORA.cases, FLORA.next (booked cases).
+  window.FLORA = { data: D, params: P, theme: T, rows: rows, columns: columns, series: series,
+    leaf: C.leaf || null, case: (C.cases || [])[0] || null, cases: C.cases || [], next: C.next || [] };
 
   function niceMax(v) { if (v <= 0) return 1; var p = Math.pow(10, Math.floor(Math.log10(v))), f = v / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; }
   function legend(names) {
@@ -257,13 +259,13 @@ h1,h2,h3{margin:0 0 8px;font-weight:600} h1{font-size:18px} h2{font-size:15px} h
 `;
 
 /** options.fit: scale the visual to its frame (dashboard cells) instead of growing the frame to the visual. */
-export function buildSrcDoc(html: string, data: Record<string, DataResult>, params: Period, theme: FrameTheme, frameId: string, options: { fit?: boolean } = {}): string {
+export function buildSrcDoc(html: string, data: Record<string, DataResult>, params: Period, theme: FrameTheme, frameId: string, options: { fit?: boolean; context?: unknown } = {}): string {
   const vars = `:root{--bg:${theme.bg};--panel:${theme.panel};--text:${theme.text};--muted:${theme.muted};--border:${theme.border};--accent:${theme.accent}}`;
   return `<!doctype html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="${CSP}">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>${vars}${BASE_CSS}</style>
-<script>${options.fit ? "window.__FLORA_FIT__=true;document.documentElement.className=\"fit\";" : ""}window.__FLORA_FRAME__=${scriptJson(frameId)};window.__FLORA_DATA__=${scriptJson(data)};window.__FLORA_PARAMS__=${scriptJson(params)};window.__FLORA_THEME__=${scriptJson(theme)};</script>
+<script>${options.fit ? "window.__FLORA_FIT__=true;document.documentElement.className=\"fit\";" : ""}window.__FLORA_FRAME__=${scriptJson(frameId)};window.__FLORA_DATA__=${scriptJson(data)};window.__FLORA_PARAMS__=${scriptJson(params)};window.__FLORA_THEME__=${scriptJson(theme)};window.__FLORA_CONTEXT__=${scriptJson(options.context ?? {})};</script>
 <script>${RUNTIME}</script>
 </head><body>${html}</body></html>`;
 }

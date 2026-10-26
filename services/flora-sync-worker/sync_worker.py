@@ -124,6 +124,10 @@ def build_snapshot(client: httpx.Client, case: dict[str, Any], case_forms_active
         "workflow_forms": f"/api/case/{case_id}/workflow-forms",
         "workflow_entries": f"/api/case/{case_id}/workflow-entries",
         "billing": f"/api/case/{case_id}/billing",
+        "billing_all": f"/api/case/{case_id}/billing/all",
+        "shift_handovers": f"/api/case/{case_id}/shift-handovers",
+        "med_orders": f"/api/case/{case_id}/med-orders",
+        "mar": f"/api/case/{case_id}/mar?from={from_ms}&to={end_ms}",
         "scores": f"/api/case/{case_id}/scores?from={from_ms}&to={end_ms}",
         "devices": f"/api/case/{case_id}/devices",
     }

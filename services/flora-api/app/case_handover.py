@@ -21,7 +21,17 @@ CASE_TABLES = (
     "case_event_note", "case_timeline_value", "case_timeline_mask", "case_io_run", "case_io_event",
     "case_billing_order", "case_billing_order_item", "case_score_result",
     "case_form_record", "case_form_entry",  # workflow forms (single record / scheduled entries)
+    "case_shift_handover", "case_med_order", "case_med_admin", "case_med_approval",  # ICU handover, MAR
 )
+# uuid ids kept across Leafs (a new one only when handed back to a Leaf that still holds the row).
+KEEP_IDS = ("case_form_entry", "case_shift_handover", "case_med_order", "case_med_admin", "case_med_approval")
+# Columns pointing at rows imported earlier in CASE_TABLES: (table, column) -> (parent table, required).
+# A required parent that was not imported drops the row; an optional one becomes NULL.
+PARENTS = {("case_med_admin", "order_id"): ("case_med_order", True),
+           ("case_med_admin", "io_event_id"): ("case_io_event", False),
+           ("case_med_admin", "io_run_id"): ("case_io_run", False),
+           ("case_med_approval", "order_id"): ("case_med_order", True),
+           ("case_med_approval", "admin_id"): ("case_med_admin", False)}
 # Export order of tables without a serial id.
 ORDER_BY = {"case_form_record": "form_id"}
 CASE_COLUMNS_SKIP = {"id", "status", "case_code", "archive_time", "handover_from_leaf_id", "handover_from_case_id",
@@ -44,10 +54,7 @@ def export_case(database: Connection, case_id: int) -> dict[str, Any] | None:
     tables["case_io_segment"] = _rows(
         database, "SELECT s.* FROM case_io_segment s JOIN case_io_run r ON r.id=s.run_id WHERE r.case_id=%s ORDER BY s.id",
         (case_id,))
-    # Workflow (Form Studio) forms: keyed by (case_id, form_id), no id column, so copied on their own.
-    tables["case_form_record"] = _rows(database, "SELECT * FROM case_form_record WHERE case_id=%s ORDER BY form_id", (case_id,)) \
-        if _columns(database, "case_form_record") else []
-    item_ids = sorted({row["item_id"] for key in ("case_io_run", "case_io_event") for row in tables[key] if row.get("item_id")})
+    item_ids = sorted({row["item_id"] for key in ("case_io_run", "case_io_event", "case_med_order") for row in tables[key] if row.get("item_id")})
     concept_ids = sorted({row["concept_id"] for key in ("case_diagnosis", "case_procedure")
                           for row in tables[key] if row.get("concept_id")})
     items = {str(row["id"]): row["code"] for row in _rows(
@@ -116,12 +123,14 @@ def import_case(database: Connection, export: dict[str, Any], *, from_leaf_id: s
                                  (domain, local_id)).fetchone()
         concepts[old_id] = found["id"] if found else None
     counts, skipped, run_ids, billing_ids = {}, [], {}, {}
+    imported: dict[str, dict[Any, Any]] = {}  # table -> old id -> new id
     tables = export["tables"]
     for table in CASE_TABLES:
         columns = _columns(database, table)
         if not columns:
             continue
         for item in tables.get(table) or []:
+            source_id = item.get("id")
             item = {**item, "case_id": case_id}
             if "item_id" in item and item["item_id"] is not None:
                 mapped = items.get(export["items"].get(str(item["item_id"])))
@@ -133,12 +142,28 @@ def import_case(database: Connection, export: dict[str, Any], *, from_leaf_id: s
                 if item.get("order_id") not in billing_ids:
                     continue
                 item["order_id"] = billing_ids[item["order_id"]]
+            if table == "case_billing_order" and item.get("kind") == "daily" and item.get("status") == "submitted":
+                item["handover_billed"] = True  # closed days stay billed under the previous case (billing.project_orders)
+            orphan = False
+            for (child, column), (parent, required) in PARENTS.items():
+                if child != table or item.get(column) is None:
+                    continue
+                item[column] = imported.get(parent, {}).get(item[column])
+                orphan = orphan or (required and item[column] is None)
+            if orphan:
+                continue
+            if table == "case_med_approval":
+                item["approver_staff_id"] = None  # staff_directory ids are each Leaf's own; approver_code stays
             if "concept_id" in item and item["concept_id"] is not None:
                 item["concept_id"] = concepts.get(str(item["concept_id"]))
-            keep_id = table == "case_form_entry"
-            if keep_id and database.execute("SELECT 1 FROM case_form_entry WHERE id=%s", (item["id"],)).fetchone():
+            keep_id = table in KEEP_IDS
+            if keep_id and database.execute(f"SELECT 1 FROM {table} WHERE id=%s", (item["id"],)).fetchone():
                 item["id"] = str(uuid.uuid4())  # handed back to a Leaf that still holds the original rows
+            if table == "case_billing_order" and item.get("order_uuid") and database.execute(
+                    "SELECT 1 FROM case_billing_order WHERE order_uuid=%s", (item["order_uuid"],)).fetchone():
+                item["order_uuid"] = str(uuid.uuid4())
             new_id = _insert(database, table, columns, item, keep_id=keep_id)
+            imported.setdefault(table, {})[source_id] = new_id
             if table == "case_io_run":
                 run_ids[item["id"]] = new_id
             if table == "case_billing_order":

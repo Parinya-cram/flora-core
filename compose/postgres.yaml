@@ -107,6 +107,12 @@ services:
       - ../infrastructure/postgres/0095-case-transfer.sql:/docker-entrypoint-initdb.d/0095-case-transfer.sql:ro
       - ../infrastructure/postgres/0096-canopy-activity-log.sql:/docker-entrypoint-initdb.d/0096-canopy-activity-log.sql:ro
       - ../infrastructure/postgres/0097-case-form-entry.sql:/docker-entrypoint-initdb.d/0097-case-form-entry.sql:ro
+      - ../infrastructure/postgres/0098-ai-studio-kiosk-link.sql:/docker-entrypoint-initdb.d/0098-ai-studio-kiosk-link.sql:ro
+      - ../infrastructure/postgres/0099-ai-studio-board-leaf.sql:/docker-entrypoint-initdb.d/0099-ai-studio-board-leaf.sql:ro
+      - ../infrastructure/postgres/0100-med-orders-mar.sql:/docker-entrypoint-initdb.d/0100-med-orders-mar.sql:ro
+      - ../infrastructure/postgres/0101-billing-periods.sql:/docker-entrypoint-initdb.d/0101-billing-periods.sql:ro
+      - ../infrastructure/postgres/0102-icu-kpi.sql:/docker-entrypoint-initdb.d/0102-icu-kpi.sql:ro
+      - ../infrastructure/postgres/0103-icu-shift-handover.sql:/docker-entrypoint-initdb.d/0103-icu-shift-handover.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s

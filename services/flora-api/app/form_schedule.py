@@ -262,3 +262,29 @@ def next_slot_ts(slot_list: list[dict[str, Any]]) -> int | None:
     """The earliest slot still to be filled (overdue, due or upcoming)."""
     open_slots = [s["slot_ts"] for s in slot_list if s["status"] in ("overdue", "due", "upcoming")]
     return min(open_slots) if open_slots else None
+
+
+# ---------------------------------------------------------------- shift windows (shift handover)
+
+def shift_window(ts: int, shifts: list[dict[str, str]] | None, tz: ZoneInfo | str | None,
+                 offset: int = 0) -> dict[str, Any]:
+    """The shift containing `ts` ({code, label, start, end}, end exclusive); offset -1 = the shift before it,
+    +1 = the one after. A shift that starts before midnight (N 23:00) ends on the next day."""
+    zone_info = tz if isinstance(tz, ZoneInfo) else zone(tz)
+    shift_list = shifts or DEFAULT_SHIFTS
+    today = local(ts, zone_info).date()
+    starts = sorted(((at_local(today + timedelta(days=d), minutes(s["start"]), zone_info), s)
+                    for d in (-1, 0, 1) for s in shift_list), key=lambda pair: pair[0])
+    index = max(i for i, (start, _) in enumerate(starts) if start <= ts)
+    start, shift = starts[index]
+    window_out = {"code": shift["code"], "label": str(shift.get("label") or shift["code"]), "start": start,
+                  "end": starts[index + 1][0]}
+    if offset < 0:
+        return shift_window(start - 1, shift_list, zone_info, offset + 1)
+    if offset > 0:
+        return shift_window(window_out["end"], shift_list, zone_info, offset - 1)
+    return window_out
+
+
+def previous_shift_window(ts: int, shifts: list[dict[str, str]] | None, tz: ZoneInfo | str | None) -> dict[str, Any]:
+    return shift_window(ts, shifts, tz, -1)
