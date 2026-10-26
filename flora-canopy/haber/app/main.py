@@ -410,7 +410,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Flora Canopy Haber", lifespan=lifespan)
 basic_auth.install(app, "Canopy Haber", "HABER", [
-    r"/health", r"/brand/.*", r"/api/haber/v1/gateways/[^/]+/(checkin|alerts|activity|case-bindings)",  # gateways, token auth
+    r"/health", r"/api/haber/v1/gateways/[^/]+/(checkin|alerts|activity|case-bindings)",  # gateways, token auth
     r"/api/haber/v1/root-keys", r"/api/haber/v1/nodes/[^/]+/(desired|report|stream-token)",  # flora-updater, Leafs, token auth
     r"/api/haber/v1/ai-relay/.+",   # Canopy / Leaf AI calls, relay token in the path
     r"/install", r"/install/(leaf|gateway)\.sh", r"/install/windows(/[A-Za-z0-9._-]+)?", r"/install/files/[a-z]+/[A-Za-z0-9._-]+", r"/api/haber/v1/install/(claim|report)",   # new LAN machines, one-time code
@@ -1127,7 +1127,7 @@ def install_page(request: Request, os_name: str | None = Query(None, alias="os")
 <pre>curl -fsSL {esc(here)}/install/gateway.sh | sudo sh -s -- --code XXXX-XXXX-XXXX-XXXX</pre></div>"""
     return HTMLResponse(f"""<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Flora iCIS · ติดตั้ง</title><style>{INSTALL_PAGE_CSS}</style></head><body>
-<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><img src="/brand/flora-icis-logo.png" alt="Flora iCIS" style="height:44px;width:auto"><b style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#2f6f4f">Appliance</b></div><h1>ติดตั้ง Flora iCIS</h1><p class="sub">Appliance ของโรงพยาบาล {esc(TENANT_ID)} · เลือกระบบปฏิบัติการของเครื่องที่จะติดตั้ง</p>
+<h1>ติดตั้ง Flora iCIS</h1><p class="sub">Appliance ของโรงพยาบาล {esc(TENANT_ID)} · เลือกระบบปฏิบัติการของเครื่องที่จะติดตั้ง</p>
 <div class="tabs">{tabs}</div>{body}</body></html>""")
 
 
@@ -1176,9 +1176,3 @@ def health():
 @app.get("/")
 def index():
     return FileResponse(Path(__file__).parent / "static" / "index.html")
-
-
-@app.get("/brand/flora-icis-logo.png", include_in_schema=False)
-def brand_logo():
-    return FileResponse(Path(__file__).parent / "static" / "brand" / "flora-icis-logo.png",
-                        headers={"cache-control": "public, max-age=86400"})

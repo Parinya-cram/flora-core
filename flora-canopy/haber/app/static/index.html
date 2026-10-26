@@ -10,7 +10,7 @@
   @media (prefers-color-scheme: dark) { :root { --bg:#121614; --panel:#1a201d; --ink:#e4ebe6; --muted:#9aa59f;
           --line:#2a332e; --accent:#6dbb8f; --ok:#6dbb8f; --warn:#e0a84a; --bad:#e07a7a; --chip:#232b27; } }
   * { box-sizing:border-box } body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif }
-  header { padding:18px 24px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:center; flex-wrap:wrap }
+  header { padding:18px 24px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:baseline; flex-wrap:wrap }
   header h1 { font-size:18px; margin:0 } header span { color:var(--muted) }
   main { padding:20px 24px; display:grid; gap:18px; max-width:1200px; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); align-content:start }
   section { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px; overflow-x:auto }
@@ -64,7 +64,7 @@
 </style>
 </head>
 <body>
-<header><span class="flora-brand" style="display:inline-flex;align-items:center;gap:10px"><span style="display:inline-flex;align-items:center;background:#fff;border-radius:8px;padding:4px 6px;box-shadow:0 1px 2px rgba(0,0,0,.08)"><img src="/brand/flora-icis-logo.png" alt="Flora iCIS" style="height:32px;width:auto;display:block"></span><b style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#2f6f4f">Appliance · Haber</b></span><span>Image repository · releases, Device Type, Device License</span><span id="ts" class="muted"></span></header>
+<header><h1>ESM Flora Canopy · Haber</h1><span>Image repository · releases, Device Type, Device License</span><span id="ts" class="muted"></span></header>
 <div class="layout">
 <nav class="tabs" role="tablist" aria-label="Haber sections">
   <button role="tab" data-go="license">License<span class="badge" hidden></span></button>
