@@ -1,0 +1,225 @@
+# Flora ICIS production — Gateway (device integration, one per bedside/OR network).
+# Public port 7400 (plain HTTP): admin UI/API, and /data-api/ for Leaves.
+# Device feeds are not HTTP and keep their own ports (HL7 7421/7422, webhook 7423,
+# Dräger Vista 9500). Database: gateway-db in db.floraicis.prod.yml (start that first).
+#
+#   docker compose -f gateway.floraicis.prod.yml --env-file floraicis.prod.env up -d --build
+name: floraicis-gateway
+
+x-rust: &rust
+  build:
+    context: ./flora-gateway/rust
+  image: ${FLORA_IMAGE_RUST:-flora-gateway-rust:prod}
+  environment: &rust-env
+    FLORA_GATEWAY_CONFIG: /config/${FLORA_GATEWAY_CONFIG_FILE:-gateway.toml}
+    FLORA_GATEWAY_ID: ${FLORA_GATEWAY_ID:-gateway-hospital-01-a}
+    FLORA_KAFKA_BROKERS: kafka:9092
+    FLORA_GATEWAY_DATABASE_URL: postgresql://flora_gateway:${FLORA_GATEWAY_DB_PASSWORD:?set in floraicis.prod.env}@gateway-db:5432/flora_gateway
+    RUST_LOG: ${RUST_LOG:-info}
+  volumes:
+    - ./flora-gateway/config:/config:ro
+  depends_on:
+    kafka: {condition: service_healthy}
+  restart: unless-stopped
+
+services:
+  # ---------------------------------------------------------------- broker
+  kafka:
+    image: apache/kafka:3.9.1
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_NUM_PARTITIONS: 1
+      KAFKA_LOG_RETENTION_HOURS: 72
+      KAFKA_HEAP_OPTS: -Xmx512m -Xms256m
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------- ingress layer (Rust)
+  serial-controller:
+    <<: *rust
+    command: ["serial-controller"]
+    environment:
+      <<: *rust-env
+      FLORA_SERIAL_BRIDGES: ${FLORA_SERIAL_BRIDGES:-ttyV0:7430 ttyV1:7431}
+    # Real hardware on Linux: map the device, e.g.  devices: ["/dev/ttyUSB0:/dev/ttyUSB0"]
+
+  feeder-controller:
+    <<: *rust
+    command: ["feeder-controller"]
+
+  webhook-controller:
+    <<: *rust
+    command: ["webhook-controller"]
+    ports:
+      - "${FLORA_GATEWAY_WEBHOOK_PORT:-7423}:9003"
+
+  socket-controller:
+    <<: *rust
+    command: ["socket-controller"]
+    ports:
+      - "${FLORA_GATEWAY_HL7_OR_PORT:-7421}:9001"
+      - "${FLORA_GATEWAY_HL7_ICU_PORT:-7422}:9002"
+      # Dräger Vista 120 S monitors connect here as to their central station (CMS).
+      - "${FLORA_GATEWAY_VISTA_PORT:-9500}:9500"
+
+  # ---------------------------------------------------------------- process layer (Python)
+  # Built here, started per device instance by gateway-service.
+  parser-image:
+    build:
+      context: ./flora-gateway/python/device-medical-service
+    image: ${FLORA_IMAGE_PARSER:-flora-gateway-parser:prod}
+    command: ["true"]
+    restart: "no"
+
+  # ---------------------------------------------------------------- egress layer (Rust)
+  collector:
+    <<: *rust
+    command: ["collector"]
+    networks: [default, db]
+
+  server:
+    <<: *rust
+    command: ["server"]
+    networks: [default, db]
+    depends_on: []
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  publisher:
+    <<: *rust
+    command: ["publisher"]
+
+  kong:
+    image: kong:3.9
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yaml
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_ADMIN_LISTEN: 127.0.0.1:8001
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      # Re-resolve `server` every few seconds: a release recreates it with a new IP.
+      KONG_DNS_VALID_TTL: "5"
+    volumes:
+      - ./flora-gateway/kong:/kong:ro
+    depends_on:
+      server: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------- control plane
+  gateway-service:
+    build:
+      context: ./flora-gateway/python/gateway-service
+    image: ${FLORA_IMAGE_SERVICE:-flora-gateway-service:prod}
+    env_file:
+      - path: ./flora-gateway/certs/trust.env
+        required: false
+    environment:
+      FLORA_GATEWAY_ID: ${FLORA_GATEWAY_ID:-gateway-hospital-01-a}
+      FLORA_GATEWAY_DATABASE_URL: postgresql://flora_gateway:${FLORA_GATEWAY_DB_PASSWORD:?set in floraicis.prod.env}@gateway-db:5432/flora_gateway
+      FLORA_KAFKA_BROKERS: kafka:9092
+      FLORA_GATEWAY_CONFIG: /config/${FLORA_GATEWAY_CONFIG_FILE:-gateway.toml}
+      FLORA_GATEWAY_SEED: /config/${FLORA_GATEWAY_SEED_FILE:-instances.json}
+      SERIAL_ADMIN_URL: http://serial-controller:5001
+      SOCKET_ADMIN_URL: http://socket-controller:5004
+      HABER_URL: ${FLORAICIS_CANOPY_URL:-http://host.docker.internal:7200}
+      # Address Leaves on this LAN use for the data-api (shown in the Leaf gateway wizard).
+      GATEWAY_DATA_API_URL: ${FLORAICIS_GATEWAY_URL:-http://host.docker.internal:7400}/data-api
+      HABER_GATEWAY_TOKEN: ${HABER_GATEWAY_TOKEN:?set in floraicis.prod.env}
+      GATEWAY_LICENSE_REQUIRED: ${GATEWAY_LICENSE_REQUIRED:-true}
+      GATEWAY_SYNC_INTERVAL_SEC: ${GATEWAY_SYNC_INTERVAL_SEC:-20}
+      GATEWAY_ADMIN_KEY: ${GATEWAY_ADMIN_KEY:?set in floraicis.prod.env}
+      GATEWAY_ADMIN_USERNAME: ${GATEWAY_ADMIN_USERNAME:-admin}
+      GATEWAY_ADMIN_PASSWORD: ${GATEWAY_ADMIN_PASSWORD:?set in floraicis.prod.env}
+      # Parser containers join this project's default network (kafka lives there).
+      GATEWAY_DOCKER_NETWORK: floraicis-gateway_default
+      GATEWAY_COMPOSE_PROJECT: floraicis-gateway
+      GATEWAY_PARSER_IMAGE: ${FLORA_IMAGE_PARSER:-flora-gateway-parser:prod}
+    volumes:
+      - ./flora-gateway/certs:/etc/flora/certs:ro
+      - ./flora-gateway/config:/config
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [default, db]
+    depends_on:
+      kafka: {condition: service_healthy}
+      parser-image: {condition: service_completed_successfully}
+    restart: unless-stopped
+
+  # Keeps this project on the release approved in Haber (see flora-updater).
+  updater:
+    build:
+      context: ./flora-updater
+    image: ${FLORA_IMAGE_UPDATER:-flora-updater:prod}
+    env_file:
+      - path: ./flora-gateway/certs/trust.env
+        required: false
+    environment:
+      FLORA_COMPONENT: gateway
+      FLORA_NODE_ID: ${FLORA_GATEWAY_ID:-gateway-hospital-01-a}
+      HABER_URL: ${FLORAICIS_CANOPY_URL:-http://host.docker.internal:7200}
+      HABER_NODE_TOKEN: ${HABER_NODE_TOKEN:?set in floraicis.prod.env}
+      FLORA_ROOT_PUBLIC_KEY: ${FLORA_ROOT_PUBLIC_KEY:-}
+      FLORA_UPDATER_WINDOW: ${FLORA_UPDATER_WINDOW:-}
+    volumes:
+      - ./flora-gateway/certs:/etc/flora/certs:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      # The compose project's parent directory; the updater re-runs compose against it.
+      - ..:/host
+      - updater_state:/state
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # The only HTTP port published: /data-api/ → kong, everything else → gateway-service.
+  edge:
+    image: nginx:1.27-alpine
+    ports:
+      - "${FLORA_BIND_ADDR:-0.0.0.0}:${FLORAICIS_GATEWAY_PORT:-7400}:80"
+    volumes:
+      - ./flora-gateway/edge/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - gateway-service
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+networks:
+  db:
+    name: floraicis-db
+    external: true
+
+volumes:
+  updater_state:
+  kafka_data:

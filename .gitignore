@@ -45,6 +45,8 @@ SnomedCT_*RF2*.zip
 env/*.env
 !.env.example
 !.env.server.example
+floraicis.prod.env
+floraicis.prod.env.bak-*
 
 # Deployment runtime
 backup/

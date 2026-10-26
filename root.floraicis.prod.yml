@@ -1,0 +1,58 @@
+# Flora ICIS production — Root (cloud control plane: tenants, licenses, releases).
+# Public port 7100 (plain HTTP; put TLS in front of it if it leaves the LAN).
+# Database: root-db in db.floraicis.prod.yml (start that first).
+#
+#   docker compose -f root.floraicis.prod.yml --env-file floraicis.prod.env up -d --build
+name: floraicis-root
+
+services:
+  root-api:
+    build:
+      context: ./flora-root/api
+    image: flora-root-api:prod
+    environment:
+      FLORA_ROOT_DATABASE_URL: postgresql://flora_root:${FLORA_ROOT_DB_PASSWORD:?set in floraicis.prod.env}@root-db:5432/flora_root
+      ROOT_ADMIN_KEY: ${ROOT_ADMIN_KEY:?set in floraicis.prod.env}
+      ROOT_ADMIN_USERNAME: ${ROOT_ADMIN_USERNAME:-admin}
+      ROOT_ADMIN_PASSWORD: ${ROOT_ADMIN_PASSWORD:?set in floraicis.prod.env}
+      ROOT_SEED_DEMO: ${ROOT_SEED_DEMO:-false}
+      ROOT_DEMO_TENANT_ID: ${ROOT_DEMO_TENANT_ID:-hospital-01}
+      ROOT_DEMO_TENANT_KEY: ${ROOT_DEMO_TENANT_KEY:-}
+      # Registry address handed to every Haber in the signed release manifest (/v2/ on the edge).
+      ROOT_REGISTRY_URL: ${ROOT_REGISTRY_URL:-${FLORAICIS_ROOT_URL:-http://host.docker.internal:7100}}
+    networks: [default, db]
+    restart: unless-stopped
+
+  # Every Flora image is built by Root CI and pushed here; Haber mirrors from it.
+  root-registry:
+    image: registry:3
+    environment:
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+      OTEL_TRACES_EXPORTER: none
+    volumes:
+      - root_registry_data:/var/lib/registry
+    restart: unless-stopped
+
+  # The only published port: /v2/ → root-registry, everything else → root-api.
+  edge:
+    image: nginx:1.27-alpine
+    ports:
+      - "${FLORA_BIND_ADDR:-0.0.0.0}:${FLORAICIS_ROOT_PORT:-7100}:80"
+    volumes:
+      - ./flora-root/edge/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - root-api
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/api/v1/keys || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+networks:
+  db:
+    name: floraicis-db
+    external: true
+
+volumes:
+  root_registry_data:

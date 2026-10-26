@@ -1,0 +1,224 @@
+# Flora ICIS production — Canopy (one per hospital): Canopy viewer + API, the sync
+# API every Leaf pushes to, Haber (device registry / release mirror) and the MCP server.
+# Public port 7200 (plain HTTP; put TLS in front of it if it leaves the LAN).
+# Database: canopy-db in db.floraicis.prod.yml (start that first).
+#
+#   docker compose -f canopy.floraicis.prod.yml --env-file floraicis.prod.env up -d --build
+name: floraicis-canopy
+
+x-ldap-env: &ldap-env
+  FLORA_LDAP_ENABLED: ${FLORA_LDAP_ENABLED:-false}
+  FLORA_LDAP_URL: ${FLORA_LDAP_URL:-}
+  FLORA_LDAP_BIND_DN: ${FLORA_LDAP_BIND_DN:-}
+  FLORA_LDAP_BIND_PASSWORD: ${FLORA_LDAP_BIND_PASSWORD:-}
+  FLORA_LDAP_BASE_DN: ${FLORA_LDAP_BASE_DN:-}
+  FLORA_LDAP_USER_FILTER: ${FLORA_LDAP_USER_FILTER:-(uid={username})}
+  FLORA_LDAP_NAME_ATTR: ${FLORA_LDAP_NAME_ATTR:-displayName}
+  FLORA_LDAP_START_TLS: ${FLORA_LDAP_START_TLS:-false}
+  FLORA_LDAP_TLS_VERIFY: ${FLORA_LDAP_TLS_VERIFY:-true}
+  FLORA_LDAP_AUTO_PROVISION: ${FLORA_LDAP_AUTO_PROVISION:-false}
+  FLORA_LDAP_DEFAULT_ROLE: ${FLORA_LDAP_DEFAULT_ROLE:-viewer}
+
+x-api-health: &api-health
+  test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+  interval: 10s
+  timeout: 3s
+  retries: 15
+
+services:
+  canopy-api:
+    build:
+      context: ./services/flora-api
+    image: ${FLORA_IMAGE_API:-flora-canopy-api:prod}
+    environment:
+      <<: *ldap-env
+      FLORA_DATABASE_URL: postgresql://flora_view:${CANOPY_DB_VIEW_PASSWORD:?set in floraicis.prod.env}@canopy-db:5432/flora
+      # Database owner: account registry (platform schema) and per-account provisioning / migrations.
+      FLORA_PLATFORM_DATABASE_URL: postgresql://flora_admin:${CANOPY_DB_ADMIN_PASSWORD:?set in floraicis.prod.env}@canopy-db:5432/flora
+      FLORA_API_ENV: production
+      FLORA_API_MODE: canopy
+      FLORA_CANOPY_SESSION_SECRET: ${CANOPY_SESSION_SECRET:?set in floraicis.prod.env}
+      FLORA_BOOTSTRAP_ADMIN_ENABLED: "true"
+      FLORA_BOOTSTRAP_ADMIN_USERNAME: ${CANOPY_ADMIN_USERNAME:-admin}
+      FLORA_BOOTSTRAP_ADMIN_PASSWORD: ${CANOPY_ADMIN_PASSWORD:?set in floraicis.prod.env}
+      FLORA_BOOTSTRAP_ADMIN_MUST_CHANGE_PASSWORD: ${FLORA_BOOTSTRAP_ADMIN_MUST_CHANGE_PASSWORD:-true}
+      FLORA_BOOTSTRAP_ADMIN_NAME: Canopy Administrator
+      # Topology page reads gateways and their devices from Haber.
+      FLORA_HABER_URL: http://haber:8000
+      HABER_ADMIN_USERNAME: ${HABER_ADMIN_USERNAME:-admin}
+      HABER_ADMIN_PASSWORD: ${HABER_ADMIN_PASSWORD:?set in floraicis.prod.env}
+      FORMDEV_JOB_DIR: /var/lib/flora/formdev-jobs
+    volumes:
+      - formdev_jobs:/var/lib/flora/formdev-jobs
+    networks: [default, db]
+    healthcheck: *api-health
+    restart: unless-stopped
+
+  # Every Leaf in the hospital pushes case snapshots here (/api/sync/ on the edge).
+  sync-api:
+    build:
+      context: ./services/flora-api
+    image: ${FLORA_IMAGE_API:-flora-canopy-api:prod}
+    environment:
+      <<: *ldap-env
+      FLORA_DATABASE_URL: postgresql://flora_sync:${CANOPY_DB_SYNC_PASSWORD:?set in floraicis.prod.env}@canopy-db:5432/flora
+      FLORA_API_ENV: production
+      FLORA_API_MODE: sync
+      FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:?set in floraicis.prod.env}
+    networks: [default, db]
+    healthcheck: *api-health
+    restart: unless-stopped
+
+  canopy-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend.prod
+      args:
+        FLORA_SURFACE: canopy
+    image: flora-canopy-web:prod
+    environment:
+      API_UPSTREAM: http://canopy-api:8000
+    depends_on:
+      canopy-api: {condition: service_healthy}
+    restart: unless-stopped
+
+  # Image repository + device registry. Gateways check in here; every node's
+  # flora-updater asks it which release to run and pulls from haber-registry.
+  # One Haber per account (= Root tenant): this one is account `demo` (also reachable as haber-demo,
+  # and the default /haber/ + /api/haber/ on the edge); haber-kcmh / haber-nit below share its definition.
+  haber: &haber
+    build:
+      context: ./flora-canopy/haber
+    image: ${FLORA_IMAGE_HABER:-flora-canopy-haber:prod}
+    # Trust bundle for a privately signed Root certificate; absent otherwise.
+    env_file:
+      - path: ./flora-canopy/certs/trust.env
+        required: false
+    environment: &haber-env
+      FLORA_ROOT_URL: ${FLORAICIS_ROOT_URL:-http://host.docker.internal:7100}
+      FLORA_TENANT_ID: ${FLORA_TENANT_ID:-demo}
+      FLORA_ROOT_TENANT_KEY: ${FLORA_ROOT_TENANT_KEY:?set in floraicis.prod.env}
+      FLORA_ROOT_PUBLIC_KEY: ${FLORA_ROOT_PUBLIC_KEY:-}
+      HABER_GATEWAY_TOKEN: ${HABER_GATEWAY_TOKEN:?set in floraicis.prod.env}
+      # Gateway check-ins are stored in Canopy, which can hand back a configuration (clone).
+      FLORA_CANOPY_SYNC_URL: http://sync-api:8000
+      FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:?set in floraicis.prod.env}
+      HABER_ADMIN_USERNAME: ${HABER_ADMIN_USERNAME:-admin}
+      HABER_ADMIN_PASSWORD: ${HABER_ADMIN_PASSWORD:?set in floraicis.prod.env}
+      CANOPY_DATABASE_URL: postgresql://flora_view:${CANOPY_DB_VIEW_PASSWORD:?set in floraicis.prod.env}@canopy-db:5432/flora
+      HABER_ROOT_SYNC_SEC: ${HABER_ROOT_SYNC_SEC:-15}
+      HABER_NODE_TOKEN: ${HABER_NODE_TOKEN:?set in floraicis.prod.env}
+      HABER_REGISTRY_URL: http://haber-registry:5000
+      # How nodes' Docker daemons address haber-registry (/v2/ on this tier's edge).
+      HABER_REGISTRY_PUBLIC: ${HABER_REGISTRY_PUBLIC:-localhost:7200}
+      FLORA_ROOT_REGISTRY_URL: ${FLORA_ROOT_REGISTRY_URL:-}
+    volumes:
+      - haber_data:/data
+      - ./flora-canopy/certs:/etc/flora/certs:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      default: {aliases: [haber-demo]}
+      db: {}
+    depends_on:
+      haber-registry: {condition: service_started}
+    restart: unless-stopped
+
+  # Other accounts' Habers. Their Root tenant key and Canopy sync secret are not in env: they are
+  # saved in each Haber's own /data (Settings → "Root tenant key" / "Canopy account sync secret").
+  haber-kcmh:
+    <<: *haber
+    environment:
+      <<: *haber-env
+      FLORA_TENANT_ID: kcmh
+      FLORA_ROOT_TENANT_KEY: ""
+      FLORA_SYNC_SHARED_SECRET: ""
+    volumes:
+      - haber_kcmh_data:/data
+      - ./flora-canopy/certs:/etc/flora/certs:ro
+    networks: [default, db]
+
+  haber-nit:
+    <<: *haber
+    environment:
+      <<: *haber-env
+      FLORA_TENANT_ID: nit
+      FLORA_ROOT_TENANT_KEY: ""
+      FLORA_SYNC_SHARED_SECRET: ""
+    volumes:
+      - haber_nit_data:/data
+      - ./flora-canopy/certs:/etc/flora/certs:ro
+    networks: [default, db]
+
+  # The hospital's copy of every approved Flora image. Only Haber writes to it.
+  haber-registry:
+    image: registry:3
+    environment:
+      OTEL_TRACES_EXPORTER: none
+    volumes:
+      - haber_registry_data:/var/lib/registry
+    restart: unless-stopped
+
+  # Keeps this project on the release approved in Haber (see flora-updater).
+  updater:
+    build:
+      context: ./flora-updater
+    image: ${FLORA_IMAGE_UPDATER:-flora-updater:prod}
+    environment:
+      FLORA_COMPONENT: canopy
+      FLORA_NODE_ID: ${CANOPY_NODE_ID:-canopy}
+      HABER_URL: http://haber:8000
+      HABER_NODE_TOKEN: ${HABER_NODE_TOKEN:?set in floraicis.prod.env}
+      FLORA_ROOT_PUBLIC_KEY: ${FLORA_ROOT_PUBLIC_KEY:-}
+      FLORA_UPDATER_WINDOW: ${FLORA_UPDATER_WINDOW:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # The compose project's parent directory; the updater re-runs compose against it.
+      - ..:/host
+      - updater_state:/state
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # MCP server for AI agents (Streamable HTTP, /mcp on the edge).
+  flora-mcp:
+    build:
+      context: ./services/flora-mcp
+    image: ${FLORA_IMAGE_MCP:-flora-canopy-mcp:prod}
+    environment:
+      FLORA_API_URL: http://canopy-api:8000
+    depends_on:
+      canopy-api: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # The only published port. Leaves, Gateways and browsers reach Canopy here.
+  edge:
+    image: nginx:1.27-alpine
+    ports:
+      - "${FLORA_BIND_ADDR:-0.0.0.0}:${FLORAICIS_CANOPY_PORT:-7200}:80"
+    volumes:
+      - ./flora-canopy/edge/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/api/sync/v1/fingerprint || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+networks:
+  db:
+    name: floraicis-db
+    external: true
+
+volumes:
+  updater_state:
+  haber_registry_data:
+  formdev_jobs:
+  haber_data:
+  haber_kcmh_data:
+  haber_nit_data:

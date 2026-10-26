@@ -1,0 +1,138 @@
+# Flora ICIS production — Leaf (bedside/OR workstation): Leaf UI + API, offline
+# speech-to-text and the sync worker that pushes to Canopy.
+# Public port 7300 (plain HTTP): leaf-web serves the UI and proxies /api and /health
+# to leaf-api, so browsers and Electron (FLORA_API_BASE_URL=http://<host>:7300) use it.
+# Database: leaf-db in db.floraicis.prod.yml (start that first).
+#
+#   docker compose -f leaf.floraicis.prod.yml --env-file floraicis.prod.env up -d --build
+name: floraicis-leaf
+
+services:
+  leaf-api:
+    build:
+      context: ./services/flora-api
+    image: ${FLORA_IMAGE_API:-flora-leaf-api:prod}
+    # Optional private CA for Canopy's TLS endpoint; absent with a public certificate.
+    env_file:
+      - path: ./flora-leaf/certs/trust.env
+        required: false
+    environment:
+      FLORA_DATABASE_URL: postgresql://flora_app:${LEAF_DB_APP_PASSWORD:?set in floraicis.prod.env}@leaf-db:5432/flora
+      FLORA_API_ENV: production
+      FLORA_API_MODE: leaf
+      FLORA_LEAF_WRITE_API: "true"
+      FLORA_BOOTSTRAP_ADMIN_ENABLED: "true"
+      FLORA_BOOTSTRAP_ADMIN_USERNAME: ${LEAF_ADMIN_USERNAME:-admin}
+      FLORA_BOOTSTRAP_ADMIN_PASSWORD: ${LEAF_ADMIN_PASSWORD:?set in floraicis.prod.env}
+      FLORA_BOOTSTRAP_ADMIN_MUST_CHANGE_PASSWORD: ${FLORA_BOOTSTRAP_ADMIN_MUST_CHANGE_PASSWORD:-true}
+      FLORA_BOOTSTRAP_ADMIN_NAME: Administrator
+      FLORA_DEVICE_INGEST_ENABLED: "true"
+      FLORA_LEAF_SERVICE_SECRET: ${FLORA_LEAF_SERVICE_SECRET:?set in floraicis.prod.env}
+      FLORA_CANOPY_SYNC_URL: ${FLORAICIS_CANOPY_URL:-http://host.docker.internal:7200}
+      FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:?set in floraicis.prod.env}
+      FLORA_ACCOUNT_CONFIG_SYNC_TIMEOUT_SECONDS: "1.5"
+      FLORA_LEAF_ID: ${FLORA_LEAF_ID:-leaf-or-01}
+      # Device data from the Flora Gateway data-api (/data-api/ on the gateway edge).
+      VECTOR_READ_URL: ${LEAF_DEVICE_READ_URL:-${FLORAICIS_GATEWAY_URL:-http://host.docker.internal:7400}/data-api/${FLORA_LEAF_ID:-leaf-or-01}/api/observations}
+      HIS_GATEWAY_BASE_URL: ${HIS_GATEWAY_BASE_URL:-http://127.0.0.1:9}
+      FLORA_HIS_DEMO_MODE: ${FLORA_HIS_DEMO_MODE:-false}
+      FLORA_STT_URL: http://leaf-stt:8000
+    volumes:
+      - ./flora-leaf/certs:/etc/flora/certs:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [default, db]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+
+  # The only published port.
+  leaf-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend.prod
+      args:
+        FLORA_SURFACE: leaf
+    image: flora-leaf-web:prod
+    environment:
+      API_UPSTREAM: http://leaf-api:8000
+    ports:
+      - "${FLORA_BIND_ADDR:-0.0.0.0}:${FLORAICIS_LEAF_PORT:-7300}:80"
+    depends_on:
+      leaf-api: {condition: service_healthy}
+    restart: unless-stopped
+
+  # Offline speech-to-text (faster-whisper on CPU, models baked into the image).
+  leaf-stt:
+    build:
+      context: ./services/flora-stt
+      args:
+        STT_MODEL: ${LEAF_STT_MODEL:-large-v3-turbo}
+        STT_DRAFT_MODEL: ${LEAF_STT_DRAFT_MODEL:-small}
+    image: ${FLORA_IMAGE_STT:-flora-stt:prod}
+    environment:
+      STT_LANGUAGE: ${LEAF_STT_LANGUAGE:-th}
+      STT_CPU_THREADS: ${LEAF_STT_CPU_THREADS:-8}
+    restart: unless-stopped
+
+  leaf-sync:
+    build:
+      context: ./services/flora-sync-worker
+    image: ${FLORA_IMAGE_SYNC:-flora-leaf-sync:prod}
+    env_file:
+      - path: ./flora-leaf/certs/trust.env
+        required: false
+    environment:
+      FLORA_LEAF_API_URL: http://leaf-api:8000
+      FLORA_CANOPY_SYNC_URL: ${FLORAICIS_CANOPY_URL:-http://host.docker.internal:7200}
+      FLORA_SYNC_SHARED_SECRET: ${FLORA_SYNC_SHARED_SECRET:?set in floraicis.prod.env}
+      FLORA_LEAF_SERVICE_SECRET: ${FLORA_LEAF_SERVICE_SECRET:?set in floraicis.prod.env}
+      FLORA_LEAF_ID: ${FLORA_LEAF_ID:-leaf-or-01}
+      FLORA_HOSPITAL_ID: ${FLORA_HOSPITAL_ID:-hospital-01}
+      FLORA_LEAF_NAME: ${FLORA_LEAF_NAME:-Operating Room 1}
+      FLORA_SYNC_INTERVAL_SECONDS: ${FLORA_SYNC_INTERVAL_SECONDS:-10}
+    volumes:
+      - ./flora-leaf/certs:/etc/flora/certs:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      leaf-api: {condition: service_healthy}
+    restart: unless-stopped
+
+  # Keeps this project on the release approved in Haber; never while a case is open.
+  updater:
+    build:
+      context: ./flora-updater
+    image: ${FLORA_IMAGE_UPDATER:-flora-updater:prod}
+    env_file:
+      - path: ./flora-leaf/certs/trust.env
+        required: false
+    environment:
+      FLORA_COMPONENT: leaf
+      FLORA_NODE_ID: ${FLORA_LEAF_ID:-leaf-or-01}
+      HABER_URL: ${FLORAICIS_CANOPY_URL:-http://host.docker.internal:7200}
+      HABER_NODE_TOKEN: ${HABER_NODE_TOKEN:?set in floraicis.prod.env}
+      FLORA_ROOT_PUBLIC_KEY: ${FLORA_ROOT_PUBLIC_KEY:-}
+      FLORA_UPDATER_WINDOW: ${FLORA_UPDATER_WINDOW:-}
+      FLORA_UPDATER_GATE_URL: http://leaf-api:8000/api/case/status
+      FLORA_UPDATER_GATE_HEADER: "x-flora-service-secret: ${FLORA_LEAF_SERVICE_SECRET:?set in floraicis.prod.env}"
+    volumes:
+      - ./flora-leaf/certs:/etc/flora/certs:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      # The compose project's parent directory; the updater re-runs compose against it.
+      - ..:/host
+      - updater_state:/state
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+networks:
+  db:
+    name: floraicis-db
+    external: true
+
+volumes:
+  updater_state:

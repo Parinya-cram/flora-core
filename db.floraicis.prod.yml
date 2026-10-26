@@ -1,0 +1,99 @@
+# Flora ICIS production — shared database tier.
+#
+# One Postgres per tier (Canopy and Leaf both need a database called "flora" with
+# the same role names, and roles are cluster-wide, so they cannot share one server).
+# Every database sits on the fixed-name network "floraicis-db"; the tier stacks
+# (root/canopy/leaf/gateway.floraicis.prod.yml) join it as an external network and
+# reach their database by service name. No database port is published on the host.
+#
+# Start this stack first, then the tiers:
+#   docker compose -f db.floraicis.prod.yml --env-file floraicis.prod.env up -d --build
+# On a host that runs only some tiers, name the databases it needs:
+#   docker compose -f db.floraicis.prod.yml --env-file floraicis.prod.env up -d --build leaf-db
+name: floraicis-db
+
+x-flora-db-health: &flora-db-health
+  # TCP, not the unix socket: during a fresh init the temp server listens on the
+  # socket only. start_period covers the long terminology import.
+  test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U flora_admin -d flora"]
+  interval: 5s
+  timeout: 3s
+  retries: 30
+  start_period: 300s
+
+services:
+  root-db:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_DB: flora_root
+      POSTGRES_USER: flora_root
+      POSTGRES_PASSWORD: ${FLORA_ROOT_DB_PASSWORD:?set in floraicis.prod.env}
+    volumes:
+      - root_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U flora_root -d flora_root"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  canopy-db:
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres.dev
+    image: floraicis-postgres:prod
+    environment:
+      POSTGRES_DB: flora
+      POSTGRES_USER: flora_admin
+      POSTGRES_PASSWORD: ${CANOPY_DB_ADMIN_PASSWORD:?set in floraicis.prod.env}
+      FLORA_DB_APP_PASSWORD: ${CANOPY_DB_APP_PASSWORD:?set in floraicis.prod.env}
+      FLORA_DB_VIEW_PASSWORD: ${CANOPY_DB_VIEW_PASSWORD:?set in floraicis.prod.env}
+      FLORA_DB_SYNC_PASSWORD: ${CANOPY_DB_SYNC_PASSWORD:?set in floraicis.prod.env}
+    volumes:
+      - canopy_db_data:/var/lib/postgresql/data
+    healthcheck: *flora-db-health
+    restart: unless-stopped
+
+  leaf-db:
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres.dev
+    image: floraicis-postgres:prod
+    environment:
+      POSTGRES_DB: flora
+      POSTGRES_USER: flora_admin
+      POSTGRES_PASSWORD: ${LEAF_DB_ADMIN_PASSWORD:?set in floraicis.prod.env}
+      FLORA_DB_APP_PASSWORD: ${LEAF_DB_APP_PASSWORD:?set in floraicis.prod.env}
+      FLORA_DB_VIEW_PASSWORD: ${LEAF_DB_VIEW_PASSWORD:?set in floraicis.prod.env}
+      FLORA_DB_SYNC_PASSWORD: ${LEAF_DB_SYNC_PASSWORD:?set in floraicis.prod.env}
+    volumes:
+      - leaf_db_data:/var/lib/postgresql/data
+    healthcheck: *flora-db-health
+    restart: unless-stopped
+
+  gateway-db:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_DB: flora_gateway
+      POSTGRES_USER: flora_gateway
+      POSTGRES_PASSWORD: ${FLORA_GATEWAY_DB_PASSWORD:?set in floraicis.prod.env}
+    volumes:
+      - gateway_db_data:/var/lib/postgresql/data
+      - ./flora-gateway/db/0001-gateway.sql:/docker-entrypoint-initdb.d/0001-gateway.sql:ro
+      - ./flora-gateway/db/0002-device-measurements.sql:/docker-entrypoint-initdb.d/0002-device-measurements.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U flora_gateway -d flora_gateway"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+networks:
+  default:
+    name: floraicis-db
+
+volumes:
+  root_db_data:
+  canopy_db_data:
+  leaf_db_data:
+  gateway_db_data:
