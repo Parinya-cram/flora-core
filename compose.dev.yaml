@@ -1,5 +1,8 @@
 name: flora-core
 
+# The gateway is not part of this stack (on the shared dev server it would add Kafka and its device ports);
+# run it on its own: docker compose -f flora-gateway/compose.yaml up -d
+
 include:
   - path: ./compose/postgres.yaml
   - path: ./compose/flora-liveagent.yaml
@@ -8,4 +11,3 @@ include:
   - path: ./compose/flora-canopy.yaml
   - path: ./compose/flora-sync.yaml
   - path: ./compose/flora-multi-leaf.yaml
-  - path: ./flora-gateway/compose.yaml
