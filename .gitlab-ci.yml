@@ -198,6 +198,36 @@ deploy-k8s:
       when: never
     - if: $CI_COMMIT_BRANCH == "device-distribution"
 
+# Gateway .233 follows this branch: the commit is pushed into its checkout over SSH (the gateway cannot reach
+# GitLab) and scripts/gateway/update-from-ci.sh rebuilds it there; compose recreates only the services that
+# changed, so running parsers stay up unless their image changed. Needs the CI file variable GATEWAY_233_SSH_KEY
+# (a key that .233 accepts from the runner's address only). Runs when the gateway changes, or with GATEWAY_DEPLOY=1.
+deploy-gateway-233:
+  stage: deploy
+  tags: [flora-k8s]
+  needs: []
+  resource_group: gateway-233   # never two updates at once
+  environment:
+    name: gateway-233
+    url: http://172.22.1.233:7400
+  variables:
+    GATEWAY_HOST: esm@172.22.1.233
+    GATEWAY_REPO: /home/esm/flora/flora-core
+  script:
+    - if [ -z "${GATEWAY_233_SSH_KEY:-}" ]; then echo "GATEWAY_233_SSH_KEY is not set: gateway .233 not updated"; exit 0; fi
+    - install -m 600 "$GATEWAY_233_SSH_KEY" "$CI_PROJECT_DIR/.gw233_key"
+    - export GIT_SSH_COMMAND="ssh -i $CI_PROJECT_DIR/.gw233_key -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$CI_PROJECT_DIR/.gw233_known"
+    - git push --force "ssh://$GATEWAY_HOST$GATEWAY_REPO" "HEAD:refs/heads/ci-incoming"
+    - $GIT_SSH_COMMAND "$GATEWAY_HOST" "cd $GATEWAY_REPO && git show ci-incoming:scripts/gateway/update-from-ci.sh | sh -s -- $CI_COMMIT_BRANCH"
+  after_script:
+    - rm -f "$CI_PROJECT_DIR/.gw233_key" "$CI_PROJECT_DIR/.gw233_known"
+  rules:
+    - if: $SITE_TEST
+      when: never
+    - if: $CI_COMMIT_BRANCH == "device-distribution" && $GATEWAY_DEPLOY
+    - if: $CI_COMMIT_BRANCH == "device-distribution"
+      changes: [flora-gateway/**/*, scripts/gateway/**/*]
+
 # On demand (API/manual with SITE_TEST=install|cleanup): install a whole hospital site on the pilot
 # cluster in sitetest-* namespaces with the real site installer, then remove it again.
 site-install-test:
