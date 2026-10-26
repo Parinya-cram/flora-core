@@ -18,6 +18,7 @@ import { currentDemoWorkstation } from "../demo/workstations";
 import { useCaseWorklist } from "../components/workflow/caseWorklist";
 import WorklistBadge from "../components/workflow/WorklistBadge";
 import { BADGE_TONE } from "../components/workflow/formSchedule";
+import Wordmark from "../components/Wordmark";
 
 type Props = {
   setActiveView: (view: AppView) => void;
@@ -136,8 +137,8 @@ export default function TopBar({ setActiveView, sessionUser, caseStatus, activeC
     <ClinicalReferenceTooltip text="Navigation" compact className="shrink-0"><button type="button" onClick={onToggleNavigation} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[var(--app-nav-border)] bg-[var(--app-nav-bg)] text-xl text-[var(--app-text)]" aria-label="Toggle navigation">☰</button></ClinicalReferenceTooltip>
     <img src={floraIcisLogo} alt="Flora iCIS" className="h-10 w-10 shrink-0 object-contain" />
     <div className="hidden min-w-0 leading-tight sm:block">
-      <div className="truncate text-[15px] font-extrabold text-[var(--app-text)]">Flora iCIS</div>
-      <div className="truncate text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--app-muted)]">{surface.code === "canopy" ? "Canopy" : "Leaf"}</div>
+      <Wordmark size={16} />
+      <div className="mt-1 truncate text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--app-muted)]">{surface.code === "canopy" ? "Canopy" : "Leaf"}</div>
     </div>
     {hospitalName ? <div className="hidden min-w-0 shrink border-l border-[var(--app-border)] pl-3 text-[13px] font-semibold leading-tight text-[var(--app-text)] md:block" title={account ? `${hospitalName} · account ${account.code}` : hospitalName}>{hospitalName}</div> : null}
     {surface.code === "leaf" && activeCases.length ? <CaseSwitcher caseStatus={caseStatus} activeCases={activeCases} onSelectCase={onSelectCase} onNewCase={onNewCase} /> : null}

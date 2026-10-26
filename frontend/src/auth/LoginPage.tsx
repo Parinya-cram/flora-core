@@ -11,6 +11,7 @@ import BranchNetwork from "./BranchNetwork";
 import "./canopyLogin.css";
 import { ReadinessRow, type Readiness } from "./ReadinessRow";
 import WorkstationSwitcher from "../demo/WorkstationSwitcher";
+import Wordmark from "../components/Wordmark";
 
 type Props = {
   onLogin: (username: string, password: string, accountCode?: string) => Promise<boolean> | boolean;
@@ -79,7 +80,7 @@ function WorkstationLoginPage({ onLogin, loginEnabled = true, bootstrapStatus }:
                   <img src={appIcon} alt="" className="h-[34px] w-[34px] object-contain" />
                 </span>
                 <div>
-                  <div className="text-[17px] font-bold leading-[21px] text-[var(--app-text)]">{productName}</div>
+                  <div className="flex items-baseline gap-2" title={productName}><Wordmark size={18} /><span className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--app-muted)]">{surface.code === "canopy" ? "Canopy" : "Leaf"}</span></div>
                   <div className="text-[11px] text-[var(--app-muted)]">{productDescription}</div>
                 </div>
             </div>

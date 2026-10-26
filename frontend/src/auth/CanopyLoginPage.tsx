@@ -9,6 +9,7 @@ import { lookupAccount, readAccountCookie, type CanopyAccount } from "../api/acc
 import BranchNetwork from "./BranchNetwork";
 import { ReadinessRow, type Readiness } from "./ReadinessRow";
 import "./canopyLogin.css";
+import Wordmark from "../components/Wordmark";
 
 type Props = {
   onLogin: (username: string, password: string, accountCode?: string) => Promise<boolean> | boolean;
@@ -132,7 +133,7 @@ export default function CanopyLoginPage({ onLogin, loginEnabled = true, bootstra
               <img src={appIcon} alt="" className="h-[38px] w-[38px] object-contain" />
             </span>
             <div className="min-w-0">
-              <div className="text-[19px] font-extrabold leading-[23px] tracking-[-0.01em] text-[var(--app-text)]">{t("product.canopy.name")}</div>
+              <div className="flex items-baseline gap-2" title={t("product.canopy.name")}><Wordmark size={20} /><span className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--app-muted)]">Canopy</span></div>
               <div className="truncate text-[11.5px] text-[var(--app-muted)]">{t("product.canopy.description")}</div>
             </div>
             <span className="ml-auto hidden items-center gap-[6px] rounded-full border border-[var(--app-border)] px-[10px] py-[3px] text-[11px] font-semibold text-[var(--app-muted)] lg:inline-flex">

@@ -10,6 +10,7 @@ import {
   updateAccount,
   type PlatformAccount,
 } from "../api/platformApi";
+import Wordmark from "../components/Wordmark";
 
 type Props = { user: AuthUser; onLogout: () => void };
 
@@ -150,7 +151,7 @@ export default function PlatformConsoleView({ user, onLogout }: Props) {
   return <div className="app-shell app-theme-scope min-h-screen bg-[var(--app-bg)] font-sans text-[var(--app-text)]">
     <header className="app-topbar flex h-14 items-center gap-3 border-b px-4">
       <img src={canopyLogo} alt="" className="h-9 w-9 object-contain [image-rendering:pixelated]" />
-      <div className="leading-tight"><div className="text-[15px] font-extrabold">Canopy platform</div><div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--app-muted)]">Accounts</div></div>
+      <div className="leading-tight"><div className="flex items-baseline gap-2"><Wordmark size={16} /><span className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--app-muted)]">Canopy</span></div><div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--app-muted)]">Accounts</div></div>
       <div className="ml-auto flex items-center gap-2">
         <ThemePicker compact />
         <span className="hidden text-xs text-[var(--app-muted)] sm:inline">@{user.username}</span>
