@@ -10,8 +10,10 @@ import { LanguageProvider } from "./context/LanguageContext";
 import { installAuthenticatedFetch } from "./api/authenticatedFetch";
 import { getSurfaceInfo } from "./edition/config";
 import appIcon from "./assets/logos/flora-icis-icon.png";
+import { installStaleBuildReload } from "./staleBuild";
 
 installAuthenticatedFetch();
+installStaleBuildReload();
 
 const surface = getSurfaceInfo();
 document.title = surface.productName;

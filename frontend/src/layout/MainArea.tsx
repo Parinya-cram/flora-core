@@ -26,6 +26,7 @@ import WorkflowStudioView from "../views/WorkflowStudioView";
 import CanopyStaffView from "../views/CanopyStaffView";
 import { getSurfaceInfo } from "../edition/config";
 import CaseHeaderStrip from "../components/case/CaseHeaderStrip";
+import { isStaleBuildError, reloadForNewBuild } from "../staleBuild";
 
 const ClinicalChartView = lazy(() => import("../views/ClinicalChartView"));
 const FormView = lazy(() => import("../views/FormView"));
@@ -101,6 +102,8 @@ class ViewErrorBoundary extends Component<
   }
 
   componentDidCatch(error: unknown, errorInfo: ErrorInfo) {
+    // A tab left open across a release: its page files are gone; reload once for the new build.
+    if (isStaleBuildError(error) && reloadForNewBuild()) return;
     console.error("MainArea view render failed:", error, errorInfo);
   }
 
@@ -117,7 +120,7 @@ class ViewErrorBoundary extends Component<
           <div>View failed to load.</div>
           <button
             type="button"
-            onClick={() => this.setState({ hasError: false })}
+            onClick={() => (reloadForNewBuild() ? undefined : this.setState({ hasError: false }))}
             className="rounded border border-amber-500/50 px-2 py-1 text-xs hover:bg-amber-500/10"
           >
             Retry
