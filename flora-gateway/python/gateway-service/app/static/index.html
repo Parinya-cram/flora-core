@@ -236,6 +236,11 @@
   <section><div class="head"><h2>Station</h2><span style="margin-left:auto; display:flex; gap:6px">
       <button class="admin-only" onclick="editCanopyLink()">Canopy connection</button>
       <button class="admin-only" id="edit-site" onclick="editSite()">Edit location</button></span></div><div id="site"></div></section>
+  <section><div class="head"><h2>Status history</h2>
+      <label class="muted" style="margin-left:auto">Range <select id="tl-hours"><option value="1">1 hour</option><option value="6" selected>6 hours</option><option value="24">24 hours</option></select></label></div>
+    <div class="legend" id="tl-legend"></div>
+    <div class="timeline" id="timeline"></div>
+    <div id="incidents"></div></section>
   <section><div class="head"><h2>Installed devices</h2><span id="live-note" class="muted" style="margin-left:auto"></span><span class="viewtoggle" role="group" aria-label="View"><button data-view="cards">Cards</button><button data-view="list">List</button></span><span class="devsearch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><input type="search" id="device-search" placeholder="Search devices…" aria-label="Search devices" autocomplete="off"></span>&#32;<button class="primary" onclick="editDevice()">Add device</button></div>
     <div class="legend"><span><span class="state live"><i></i></span>receiving · in use</span><span><span class="state online"><i></i></span>online · not in use</span>
       <span><span class="state silent"><i></i></span>unplugged / off (serial) · not connected / connection lost (network)</span><span><span class="state off"><i></i></span>parser or port problem</span></div>
@@ -1403,6 +1408,64 @@ async function renderDeviceMonitor() {
 const hhmm = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 const dur = (ms) => ms < 3600000 ? `${Math.max(1, Math.round(ms / 60000))} min` : `${(ms / 3600000).toFixed(1)} h`;
 
+// ---------------------------------------------------------------- status history
+const ST = { ok: ["var(--st-ok)", "✓", "Up"], down: ["var(--st-down)", "✕", "Down / unreachable"],
+             stopped: ["var(--st-stopped)", "■", "Stopped or disabled"], none: ["url(#tl-hatch)", "", "No record"] };
+$("tl-legend").innerHTML = Object.entries(ST).map(([k, [color, icon, label]]) =>
+  `<span><i style="background:${k === "none" ? "var(--st-none)" : color}">${icon}</i>${label}</span>`).join("") +
+  `<span class="muted">· a gap in “Gateway service” means the service itself was not running</span>`;
+$("tl-hours").addEventListener("change", () => renderTimeline());
+
+async function renderTimeline() {
+  const t = await get(`api/status/timeline?hours=${$("tl-hours").value}`);
+  const el = $("timeline"), W = Math.max(320, el.clientWidth || 800), LABEL = Math.min(170, W * 0.32), RIGHT = 52;
+  const ROW = 18, GAP = 5, GROUP = 18, cw = (W - LABEL - RIGHT) / t.buckets;
+  let y = 0, body = "", prevKind = null;
+  const kindTitle = { gateway: "Gateway", canopy: "Gateway", controller: "Controllers", device: "Devices" };
+  for (const lane of t.lanes) {
+    const group = kindTitle[lane.kind];
+    if (group !== prevKind) { body += `<text class="group" x="0" y="${y + 12}">${esc(group)}</text>`; y += GROUP; prevKind = group; }
+    body += `<text x="0" y="${y + 13}">${esc(lane.label.length > 26 ? lane.label.slice(0, 25) + "…" : lane.label)}</text>`;
+    // Runs of the same state become one bar, with a 1px surface gap only where the state changes.
+    for (let i = 0; i < lane.states.length;) {
+      let j = i; while (j + 1 < lane.states.length && lane.states[j + 1] === lane.states[i]) j++;
+      const x0 = LABEL + i * cw, x1 = LABEL + (j + 1) * cw - (j + 1 < lane.states.length ? 1 : 0);
+      body += `<rect x="${x0.toFixed(2)}" y="${y}" width="${Math.max(0.8, x1 - x0).toFixed(2)}" height="${ROW}" rx="2" fill="${ST[lane.states[i]][0]}" data-lane="${esc(lane.lane)}"/>`;
+      i = j + 1;
+    }
+    body += `<text class="muted" x="${W}" y="${y + 13}" text-anchor="end">${lane.uptime == null ? "—" : lane.uptime + "%"}</text>`;
+    y += ROW + GAP;
+  }
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => t.start + f * t.buckets * t.bucket_ms);
+  body += ticks.map((ms, k) => `<text class="muted" x="${LABEL + (ms - t.start) / t.bucket_ms * cw}" y="${y + 12}" text-anchor="${k === 0 ? "start" : k === 4 ? "end" : "middle"}">${k === 4 ? "now" : hhmm(ms)}</text>`).join("");
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${y + 18}" height="${y + 18}" role="img" aria-label="Status of each gateway part over the last ${t.hours} hours; incidents are listed below">
+    <defs><pattern id="tl-hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="4" height="4" fill="var(--st-none)"/><line x1="0" y1="0" x2="0" y2="4" stroke="var(--line)" stroke-width="1.5"/></pattern></defs>
+    <text class="muted" x="${W}" y="-4" text-anchor="end">uptime</text>${body}</svg><div class="tip" hidden></div>`;
+  const tip = el.querySelector(".tip"), byLane = Object.fromEntries(t.lanes.map((l) => [l.lane, l]));
+  el.querySelector("svg").addEventListener("mousemove", (ev) => {
+    const r = ev.target.closest("rect[data-lane]"); if (!r) { tip.hidden = true; return; }
+    const box = el.querySelector("svg").getBoundingClientRect(), px = (ev.clientX - box.left) / box.width * W;
+    const lane = byLane[r.dataset.lane], i = Math.max(0, Math.min(t.buckets - 1, Math.floor((px - LABEL) / cw)));
+    const st = lane.states[i], from = t.start + i * t.bucket_ms;
+    tip.hidden = false;
+    tip.innerHTML = `<b>${esc(lane.label)}</b><div class="muted">${hhmm(from)}–${hhmm(from + t.bucket_ms)}</div>
+      <div><span class="key" style="background:${st === "none" ? "var(--st-none)" : ST[st][0]}"></span>${ST[st][1]} ${esc(ST[st][2])}</div>
+      ${lane.details[i] ? `<div class="muted">${esc(lane.details[i])}</div>` : ""}`;
+    const outer = el.getBoundingClientRect(), x = ev.clientX - outer.left;
+    tip.style.left = `${x > box.width / 2 ? x - tip.offsetWidth - 12 : x + 12}px`; tip.style.top = `${ev.clientY - outer.top + 12}px`;
+  });
+  el.querySelector("svg").addEventListener("mouseleave", () => tip.hidden = true);
+  const incidents = t.lanes.flatMap((l) => l.incidents.map((x) => ({ ...x, label: l.label, kind: l.kind }))).sort((a, b) => b.start - a.start);
+  const since = t.recording_since ? `Recording since ${new Date(t.recording_since).toLocaleString()}.` : "Recording starts within 30 seconds.";
+  $("incidents").innerHTML = incidents.length ? `<table class="incidents"><tr><th>Down</th><th>From</th><th>To</th><th>Duration</th><th>Detail</th></tr>${incidents.slice(0, 30).map((x) => `<tr>
+      <td><span class="bad">✕</span> ${esc(x.label)}</td><td>${hhmm(x.start)}</td><td>${Date.now() - x.end < t.bucket_ms * 1.5 ? "<b class='bad'>ongoing</b>" : hhmm(x.end)}</td>
+      <td>${dur(x.end - x.start)}</td><td class="muted">${esc(x.detail || "")}</td></tr>`).join("")}</table>
+      <div class="muted" style="font-size:12px">${since}${incidents.length > 30 ? ` Showing the latest 30 of ${incidents.length}.` : ""}</div>`
+    : `<div class="ok" style="margin-top:8px">✓ No outages in the last ${t.hours} h.</div><div class="muted" style="font-size:12px">${since}</div>`;
+}
+
+
 // ---------------------------------------------------------------- alerts
 const SEV = { critical: ["✕", "Critical"], warning: ["!", "Warning"], info: ["i", "Info"] };
 const sevBadge = (s) => `<span class="sev ${s}"><i>${SEV[s][0]}</i>${SEV[s][1]}</span>`;
@@ -1743,6 +1806,7 @@ async function render() {
   try {
     if (tab === "overview") {
       loadSite().catch(() => {});
+      renderTimeline().catch((e) => console.error(e));
       await loadRegistry();
       renderDevices();
       await renderLive();
