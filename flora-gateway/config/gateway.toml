@@ -43,6 +43,8 @@ pods = [
     { id = "icu-monitor", port = 9002, framing = "mllp", auto_ack = true },
     { id = "vista", port = 9500, framing = "raw", auto_ack = false },
     # Simulated Dräger M540s (m540-sim-N), relayed like tools/iacs-relay; one pod parser splits them by source_ip.
+    # Keep udp_relay: the simulator sends over TCP with each monitor's source IP in the frame. A real M540
+    # (IACS UDP multicast) uses its own transport = "udp" pod, see config/gateway.draeger.toml.
     { id = "m540-relay", port = 9510, framing = "udp_relay", auto_ack = false, max_frame_bytes = 6096 },
 ]
 

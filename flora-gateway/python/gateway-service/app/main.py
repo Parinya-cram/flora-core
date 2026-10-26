@@ -573,6 +573,9 @@ def pod_device_map(members: list[tuple[dict[str, Any], dict[str, Any]]]) -> list
                    for instance, device_type in members), key=lambda item: item["device_id"])
 
 
+CRASHING_PODS: set[str] = set()   # pod parsers already reported as crash-looping
+
+
 def reconcile() -> dict[str, Any]:
     """Parser containers follow the instance table, the license and the device type's image."""
     states = docker_ops.parser_states()
@@ -628,6 +631,15 @@ def reconcile() -> dict[str, Any]:
         image = images[0]
         config_hash = hashlib.sha1(json.dumps(device_map, sort_keys=True).encode()).hexdigest()[:16]
         state = pod_states.get(pod) or {}
+        if state.get("status") == "restarting" and state.get("config_hash") == config_hash and state.get("image_ref") == image:
+            # Docker's restart policy already retries it with back-off. Recreating it every cycle
+            # would only hide why it fails; a new image or device set still replaces it below.
+            if pod not in CRASHING_PODS:
+                CRASHING_PODS.add(pod)
+                log.warning("pod parser %s keeps exiting on %s (restarts: %s): %s", pod, image,
+                            state.get("restart_count"), docker_ops.last_log_line(state["container"]))
+            continue
+        CRASHING_PODS.discard(pod)
         try:
             if state.get("status") != "running" or state.get("config_hash") != config_hash:
                 docker_ops.start_pod_parser(pod, image, device_map, config_hash)

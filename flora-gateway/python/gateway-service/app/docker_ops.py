@@ -160,6 +160,15 @@ def parser_states() -> dict[str, dict[str, Any]]:
     return states
 
 
+def last_log_line(container_name: str) -> str:
+    """Last line a container wrote, e.g. the exception that made it exit."""
+    try:
+        lines = client().containers.get(container_name).logs(tail=5).decode(errors="replace").strip().splitlines()
+    except (NotFound, DockerException):
+        return ""
+    return lines[-1] if lines else ""
+
+
 def pod_parser_states() -> dict[str, dict[str, Any]]:
     try:
         containers = client().containers.list(all=True, filters={"label": [
@@ -168,6 +177,7 @@ def pod_parser_states() -> dict[str, dict[str, Any]]:
         return {}
     return {container.labels.get("flora.gateway.pod"): {
                 **_state(container), "config_hash": container.labels.get("flora.gateway.config_hash"),
+                "restart_count": container.attrs.get("RestartCount", 0),
                 "device_ids": [d for d in container.labels.get("flora.gateway.device_ids", "").split(",") if d]}
             for container in containers}
 
