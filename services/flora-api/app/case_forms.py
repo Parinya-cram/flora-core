@@ -280,8 +280,12 @@ def exchange(database: Connection, leaf_id: str, hospital_id: str, payload: dict
     need_files: set[str] = set()
     cases = [case for case in payload.get("cases") or [] if isinstance(case, dict) and case.get("case_id") is not None]
     with database.transaction():
+        # Only admissions that still hold forms need relinking: found in one query rather than one per case.
+        admission_keys = [f"{ADMISSION_PREFIX}{case['admission_id']}" for case in cases if case.get("admission_id")]
+        holding = {row["case_key"] for row in database.execute(
+            "SELECT DISTINCT case_key FROM canopy_case_form WHERE case_key = ANY(%s)", (admission_keys,)).fetchall()} if admission_keys else set()
         for case in cases:
-            if case.get("admission_id"):
+            if case.get("admission_id") and f"{ADMISSION_PREFIX}{case['admission_id']}" in holding:
                 _relink(database, str(case["admission_id"]), _case_key(case, leaf_id, hospital_id), leaf_id,
                         str(case["case_id"]), case.get("hn"), now)
         for ack in payload.get("acks") or []:
@@ -324,10 +328,14 @@ def inbound(database: Connection, leaf_id: str, hospital_id: str, cases: list[di
     """Canopy's copies the Leaf has to merge: changed in Canopy since the Leaf last confirmed, or forms of the case's
     workflow the Leaf has no record of yet (e.g. filled for the admission, or after a workflow was attached)."""
     out = []
-    for case in cases:
-        case_key = _case_key(case, leaf_id, hospital_id)
+    keys = [_case_key(case, leaf_id, hospital_id) for case in cases]
+    by_key: dict[str, list[dict[str, Any]]] = {}
+    if keys:  # every case of the exchange in one query
+        for row in database.execute("SELECT * FROM canopy_case_form WHERE case_key = ANY(%s) ORDER BY case_key, form_id", (keys,)).fetchall():
+            by_key.setdefault(row["case_key"], []).append(row)
+    for case, case_key in zip(cases, keys):
         wants, have = set(case.get("wants") or []), set(case.get("have") or [])
-        for row in database.execute("SELECT * FROM canopy_case_form WHERE case_key=%s ORDER BY form_id", (case_key,)).fetchall():
+        for row in by_key.get(case_key, []):
             missing_here = row["form_id"] in wants and row["form_id"] not in have and bool(row["data"])
             if row["canopy_rev"] > row["leaf_rev"] or missing_here:
                 out.append({"case_id": case["case_id"], "case_key": case_key, "form_id": row["form_id"],
@@ -594,9 +602,15 @@ def leaf_outbox(database: Connection, now: int, limit_forms: int = OUTBOX_FORMS,
               OR EXISTS (SELECT 1 FROM case_form_record f WHERE f.case_id = c.id
                          AND (f.synced_at IS NULL OR f.updated_at > f.synced_at OR f.sync_state = 'waiting_files'))
            ORDER BY (c.status = 'active') DESC, c.id DESC""").fetchall()
+    # Every case's forms in one query (not one query per case: this runs on every sync pass).
+    by_case: dict[Any, list[dict[str, Any]]] = {}
+    if cases:
+        for row in database.execute("SELECT * FROM case_form_record WHERE case_id = ANY(%s) ORDER BY case_id, form_id",
+                                    ([case["id"] for case in cases],)).fetchall():
+            by_case.setdefault(row["case_id"], []).append(row)
     forms, listed, more = [], [], False
     for case in cases:
-        rows = database.execute("SELECT * FROM case_form_record WHERE case_id=%s ORDER BY form_id", (case["id"],)).fetchall()
+        rows = by_case.get(case["id"], [])
         wants = [entry["form_id"] for entry in ((case["workflow"] or {}).get("forms") or [])
                  if isinstance(entry, dict) and entry.get("form_id")]
         global_id = str(case["handover_global_case_id"]) if case.get("handover_global_case_id") else None

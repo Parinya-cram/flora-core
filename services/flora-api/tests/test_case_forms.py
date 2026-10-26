@@ -44,6 +44,20 @@ def now() -> int:
     return time.time_ns() // 1_000_000
 
 
+class Counting:
+    """A connection that records the statements run through it (to show a read does not run one query per item)."""
+
+    def __init__(self, database):
+        self._database, self.statements = database, []
+
+    def execute(self, sql, *args, **kwargs):
+        self.statements.append(str(sql))
+        return self._database.execute(sql, *args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._database, name)
+
+
 class CaseForms(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -108,6 +122,34 @@ class CaseForms(unittest.TestCase):
               "base_version": base_version or current["version"], "data": data, "status": current["status"],
               "client_updated_at": now(), **({"reason": reason} if reason else {})}
         return services.sync.apply([op], "canopy_reviewer", linked=case_forms.amender(self.db))[0]
+
+    # ------------------------------------------------------------ no N+1 queries
+
+    def test_the_sync_reads_take_the_same_number_of_queries_however_many_cases(self):
+        def statements(function, *args):
+            counting = Counting(self.db)
+            function(counting, *args)
+            return counting.statements
+
+        for _ in range(4):
+            self.patch(self.new_case(), {"hn": "HN1"})
+        outbox = case_forms.leaf_outbox(self.db, now())
+        self.assertGreaterEqual(len(outbox["cases"]), 4)
+        one, many = outbox["cases"][:1], outbox["cases"][:4]
+        self.assertEqual(len(statements(case_forms.leaf_outbox, now())), 2, "the cases, then every case's forms at once")
+        self.assertEqual(len(statements(case_forms.inbound, LEAF, HOSPITAL, one)), len(statements(case_forms.inbound, LEAF, HOSPITAL, many)))
+
+    def test_a_case_with_several_forms_reads_the_ward_workflows_once(self):
+        case_id = self.new_case()
+        self.db.execute(
+            """INSERT INTO leaf_workflow_state (id, version, payload, synced_at) VALUES (1, 1, %s, %s)
+               ON CONFLICT (id) DO UPDATE SET payload = excluded.payload""",
+            (Jsonb({"items": [], "forms": {f"{FORM}@1": self.definition}}), now()))
+        for route in (case_workflow.case_workflow, case_workflow.report_templates):
+            counting = Counting(self.db)
+            route(case_id, {}, counting)
+            reads = [sql for sql in counting.statements if "leaf_workflow_state" in sql]
+            self.assertEqual(len(reads), 1, f"{route.__name__}: not once per form")
 
     # ------------------------------------------------------------ Leaf → Canopy
 

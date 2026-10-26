@@ -200,8 +200,12 @@ def copies(saved: dict[str, Any], form_id: str) -> list[str]:
                   key=case_forms.instance_of)
 
 
-def definition_for(database: Connection, workflow: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any] | None:
-    _, forms, _ = cached_items(database)
+def definition_for(database: Connection, workflow: dict[str, Any], entry: dict[str, Any],
+                   forms: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    """The pinned definition of a workflow form. In a loop, pass `forms` (cached_items) read once: the cached payload
+    holds every workflow and form definition of the ward and is not small."""
+    if forms is None:
+        _, forms, _ = cached_items(database)
     cached = forms.get(f"{entry['form_id']}@{entry['version']}")
     if cached is not None:
         return cached
@@ -240,10 +244,11 @@ def case_workflow(case_id: int, _: dict = Depends(require_permission("case.read"
     if workflow is None:
         return {"workflow": None, "forms": {}}
     saved = records(database, case_id)
+    _, cached, _ = cached_items(database)
     forms = {}
     for entry in workflow.get("forms") or []:
         if isinstance(entry, dict) and entry.get("form_id"):
-            definition = definition_for(database, workflow, entry)
+            definition = definition_for(database, workflow, entry, cached)
             forms[entry["form_id"]] = {"definition": definition, "record": public_record(saved.get(entry["form_id"]))}
             # A repeatable form: its further copies, each under its own key ("<form_id>~2"...).
             for key in copies(saved, entry["form_id"]) if entry.get("repeatable") else []:
@@ -261,12 +266,13 @@ def report_templates(case_id: int, _: dict = Depends(require_permission("case.re
     case = case_row(database, case_id)
     workflow = case["workflow"] or {}
     saved = records(database, case_id)
+    items, forms, synced_at = cached_items(database)  # read once for the whole list
     templates: list[dict[str, Any]] = []
     seen: set[str] = set()
     for entry in workflow.get("forms") or []:
         if not isinstance(entry, dict) or not entry.get("form_id") or entry["form_id"] in seen:
             continue
-        definition = definition_for(database, workflow, entry)
+        definition = definition_for(database, workflow, entry, forms)
         if definition is None:
             continue
         seen.add(entry["form_id"])
@@ -278,7 +284,6 @@ def report_templates(case_id: int, _: dict = Depends(require_permission("case.re
             templates.append({"form_id": key, "version": entry["version"], "title": f"{title} ({case_forms.instance_of(key)})",
                               "display": entry.get("display") or "tab", "source": "case", "workflow": workflow.get("name") or "",
                               "definition": definition, "record": public_record(saved[key])})
-    items, forms, synced_at = cached_items(database)
     for item in items:
         definition_of = item["definition"]
         for entry in definition_of.get("forms") or []:
