@@ -123,6 +123,7 @@ class CaseForms(unittest.TestCase):
               "client_updated_at": now(), **({"reason": reason} if reason else {})}
         return services.sync.apply([op], "canopy_reviewer", linked=case_forms.amender(self.db))[0]
 
+<<<<<<< HEAD
     # ------------------------------------------------------------ the Leaf record, both ways (field.bind "record.*")
 
     LINKED = {"format": "flora.form/1", "form_id": "linked_record_test", "schema_version": 1, "title": "Linked", "paper": "A4",
@@ -192,6 +193,8 @@ class CaseForms(unittest.TestCase):
         row = self.linked_form(case_id)
         self.assertTrue(row is None or ("weight" not in row["data"] and "pacu_airway" not in row["data"]))
 
+=======
+>>>>>>> a4164cf (Case form sync reads without N+1 queries)
     # ------------------------------------------------------------ no N+1 queries
 
     def test_the_sync_reads_take_the_same_number_of_queries_however_many_cases(self):
