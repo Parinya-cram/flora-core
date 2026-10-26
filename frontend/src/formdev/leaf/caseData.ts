@@ -7,10 +7,12 @@
 import type { FieldDefinition, FieldOption, FormDefinition, JsonValue, RecordData, TimelineValue } from "../core/types";
 import { fieldKey, fields as definitionFields } from "../core/validate";
 import { CONCEPT_BY_KEY, conceptOf } from "./concepts";
+import { RECORD_BY_BIND, recordToForm } from "./record";
 import { loadLeafTimeline, neededRows, timelineConfig } from "./timeline";
 
 export type CaseValue = { value: string | number; source: string };
-export type CaseData = { values: Record<string, CaseValue>; failed: string[]; loadedAt: number };
+/** record: the Leaf's anesthesia record as saved (fields bound with "record.<field>", leaf/record.ts). */
+export type CaseData = { values: Record<string, CaseValue>; failed: string[]; loadedAt: number; record?: Record<string, unknown> };
 /** What the case is known by on the Report page (CaseStatus). */
 export type CaseHead = { caseId: number; hn?: string | null; admissionNumber?: string | null; startTime?: number | null; dischargeTime?: number | null };
 
@@ -185,7 +187,7 @@ export async function loadCaseData(head: CaseHead): Promise<CaseData> {
     if (result.status === "fulfilled") loaded[names[index]] = result.value ?? loaded[names[index]];
     else failed.push(names[index]);
   });
-  return { values: caseValues(head, loaded as unknown as Loaded), failed, loadedAt: Date.now() };
+  return { values: caseValues(head, loaded as unknown as Loaded), failed, loadedAt: Date.now(), record: (loaded.draft as Record<string, unknown> | null) ?? {} };
 }
 
 // Into a form -----------------------------------------------------------------------------------------
@@ -239,6 +241,19 @@ export function fillFromCase(definition: FormDefinition, data: RecordData, caseD
     const line: FillLine = { field: key, label: field.label, concept: concept?.key ?? null, how: concept?.how ?? null, value: "", status: "none", source: "" };
     lines.push(line);
     if (!empty(out[key])) { line.status = "kept"; line.value = String(out[key]); line.source = "แบบฟอร์ม / Form"; continue; }
+    const record = field.bind ? RECORD_BY_BIND.get(field.bind) : undefined;
+    if (record) {
+      // Shared with the Leaf's anesthesia record (both ways on the Leaf; here only read).
+      const raw = caseData.record?.[record.key];
+      const value = recordToForm(raw, field);
+      line.source = `ใบบันทึก / Record · ${record.tab_en}`;
+      if (raw === undefined || raw === null || raw === "" || (Array.isArray(raw) && !raw.length)) { line.status = "empty"; continue; }
+      line.value = Array.isArray(raw) ? raw.join(", ") : String(raw);
+      if (value === undefined) { line.status = "unmatched"; continue; }
+      out[key] = value;
+      line.status = "filled";
+      continue;
+    }
     if (!concept) continue;
     const found = caseData.values[concept.key];
     if (!found) { line.status = CONCEPT_BY_KEY.has(concept.key) ? "empty" : "unmatched"; continue; }

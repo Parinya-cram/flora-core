@@ -21,10 +21,10 @@ import psycopg  # noqa: E402
 from psycopg.rows import dict_row  # noqa: E402
 from psycopg.types.json import Jsonb  # noqa: E402
 
-from app import case_forms, case_handover  # noqa: E402
+from app import case_forms, case_handover, form_sync, record_link  # noqa: E402
 from app.formdev.adapters.postgres import PostgreSQLAdapter  # noqa: E402
 from app.formdev.errors import FormDevError  # noqa: E402
-from app.routes import case_workflow  # noqa: E402
+from app.routes import case_workflow, clinical_write  # noqa: E402
 
 FORM = "patient_assessment"
 FILES = "case_files_test"
@@ -122,6 +122,75 @@ class CaseForms(unittest.TestCase):
               "base_version": base_version or current["version"], "data": data, "status": current["status"],
               "client_updated_at": now(), **({"reason": reason} if reason else {})}
         return services.sync.apply([op], "canopy_reviewer", linked=case_forms.amender(self.db))[0]
+
+    # ------------------------------------------------------------ the Leaf record, both ways (field.bind "record.*")
+
+    LINKED = {"format": "flora.form/1", "form_id": "linked_record_test", "schema_version": 1, "title": "Linked", "paper": "A4",
+              "style_id": "form.a4.medical", "sections": [{"id": "pacu", "title": "PACU", "fields": [
+                  {"id": "pacu_airway", "type": "radio", "label": "Airway", "bind": "record.pacu_airway",
+                   "options": [{"value": "patent", "label": "Patent"}, {"value": "requires_support", "label": "Requires support"}]},
+                  {"id": "pacu_arrival_time", "type": "time", "label": "Arrival", "bind": "record.pacu_arrival_time"},
+                  {"id": "weight", "type": "decimal", "label": "Weight", "bind": "record.weight_kg"},
+                  {"id": "note", "type": "text", "label": "Not linked"}]}]}
+
+    def linked_case(self):
+        workflow = {**self.workflow, "id": "wf_linked_test", "forms": [{"form_id": "linked_record_test", "version": 1, "title": "Linked", "display": "tab"}],
+                    "bundled_forms": {"linked_record_test": {"version": 1, "definition": self.LINKED}}}
+        hn = f"L{secrets.token_hex(4)}"
+        at = now()
+        return self.db.execute(
+            """INSERT INTO cases (case_code, hn, start_time, status, created_at, updated_at, workflow) VALUES (%s,%s,%s,'active',%s,%s,%s) RETURNING id""",
+            (f"{hn}_L", hn, at, at, at, Jsonb(workflow))).fetchone()["id"]
+
+    def record_draft(self, case_id):
+        row = self.db.execute("SELECT form_draft_json FROM case_detail WHERE case_id=%s", (case_id,)).fetchone()
+        return form_sync.parse(row and row["form_draft_json"])
+
+    def linked_form(self, case_id):
+        return self.db.execute("SELECT * FROM case_form_record WHERE case_id=%s AND form_id='linked_record_test'", (case_id,)).fetchone()
+
+    def test_a_value_typed_in_a_bound_form_field_goes_into_the_leaf_record(self):
+        case_id = self.linked_case()
+        self.patch(case_id, {"pacu_airway": "requires_support", "weight": 62.5, "note": "x"}, form_id="linked_record_test")
+        draft = self.record_draft(case_id)
+        self.assertEqual((draft.get("pacuAirway"), draft.get("weightKg")), ("Requires support", "62.5"), "the Leaf tab's own option label")
+        self.assertNotIn("note", draft, "an unbound field stays in the form")
+
+    def test_a_value_changed_on_the_leaf_tab_reaches_the_bound_form(self):
+        case_id = self.linked_case()
+        clinical_write.patch_draft(case_id, {"patch": {"pacuArrivalTime": "9.05", "pacuAirway": "Patent"}}, NURSE, self.db)
+        row = self.linked_form(case_id)
+        self.assertEqual((row["data"]["pacu_arrival_time"], row["data"]["pacu_airway"]), ("09:05", "patent"))
+        self.assertEqual(row["field_authors"]["pacu_airway"]["via"], "record")
+
+    def test_the_newest_change_wins_on_both_sides(self):
+        case_id = self.linked_case()
+        self.patch(case_id, {"pacu_airway": "requires_support"}, form_id="linked_record_test")
+        time.sleep(0.01)
+        clinical_write.patch_draft(case_id, {"patch": {"pacuAirway": "Patent"}}, NURSE, self.db)
+        self.assertEqual(self.linked_form(case_id)["data"]["pacu_airway"], "patent", "the Leaf tab changed it last")
+        time.sleep(0.01)
+        self.patch(case_id, {"pacu_airway": "requires_support"}, form_id="linked_record_test")
+        self.assertEqual(self.record_draft(case_id)["pacuAirway"], "Requires support", "then the form did")
+        # An older copy arriving later does not put the older value back.
+        draft_row = self.db.execute("SELECT field_versions FROM case_detail WHERE case_id=%s", (case_id,)).fetchone()
+        stale = int(draft_row["field_versions"]["pacuAirway"]) - 5000
+        record_link.form_to_record(self.db, case_id, self.LINKED, {"pacu_airway": "patent"}, {"pacu_airway": stale}, None, "old-copy")
+        self.assertEqual(self.record_draft(case_id)["pacuAirway"], "Requires support")
+
+    def test_a_completed_form_is_not_changed_by_the_record(self):
+        case_id = self.linked_case()
+        self.patch(case_id, {"pacu_airway": "patent", "pacu_arrival_time": "09:00", "weight": 60, "note": "ok"}, status="completed",
+                   form_id="linked_record_test")
+        clinical_write.patch_draft(case_id, {"patch": {"pacuAirway": "Requires support"}}, NURSE, self.db)
+        self.assertEqual(self.linked_form(case_id)["data"]["pacu_airway"], "patent", "completed: only an amendment changes it")
+        self.assertEqual(self.record_draft(case_id)["pacuAirway"], "Requires support", "the record itself is the Leaf's")
+
+    def test_a_value_that_does_not_fit_is_skipped_not_guessed(self):
+        case_id = self.linked_case()
+        clinical_write.patch_draft(case_id, {"patch": {"weightKg": "about sixty", "pacuAirway": "Obstructed"}}, NURSE, self.db)
+        row = self.linked_form(case_id)
+        self.assertTrue(row is None or ("weight" not in row["data"] and "pacu_airway" not in row["data"]))
 
     # ------------------------------------------------------------ no N+1 queries
 

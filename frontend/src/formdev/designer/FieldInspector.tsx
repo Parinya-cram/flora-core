@@ -21,6 +21,7 @@ import PrintedEditor from "./PrintedEditor";
 import CaseBlockEditor from "./CaseBlockEditor";
 import { MAX_ROW_SPAN } from "../core/validate";
 import { CONCEPT_BY_KEY, CONCEPTS, conceptOf } from "../leaf/concepts";
+import { isRecordBind, RECORD_BY_BIND, RECORD_TABS } from "../leaf/record";
 import OptionsEditor, { type LookupInfo } from "./OptionsEditor";
 import PermissionEditor from "./PermissionEditor";
 import { input, label, small } from "./styles";
@@ -168,11 +169,22 @@ export default function FieldInspector({ definition, fieldRef, lang, lookups, pu
       {!CONTAINER.has(type) && !PRINTED.has(type) && type !== "calculated" ? <Toggle label={t("อ่านอย่างเดียว", "Read-only")} checked={field.readonly === true} onChange={on => set({ readonly: on || undefined })} /> : null}
       {type === "repeat" ? <Toggle label={t("แสดงเป็นตารางแบบ Excel (1 แถวต่อรายการ, วางข้อมูลจาก Excel ได้)", "Show as an Excel-style table (one row per entry; paste from Excel)")}
         checked={field.view === "table"} onChange={on => set({ view: on ? "table" : undefined })} /> : null}
-      {!CONTAINER.has(type) && !PRINTED.has(type) && !["timeline", "matrix", "signature", "file", "image", "calculated"].includes(type) ? <SelectField
-        label={t("ข้อมูลจาก Flora Leaf (เติมให้เมื่อพิมพ์/กรอกในเคส)", "Flora Leaf case datum (filled when printed / filled for a case)")}
-        value={field.bind ?? ""} onChange={value => set({ bind: value || undefined })}
-        options={[{ value: "", label: autoConcept ? t(`อัตโนมัติจากชื่อช่อง: ${autoConcept.th}`, `Automatic from the field name: ${autoConcept.en}`) : t("ไม่เชื่อม", "Not linked") },
-          ...CONCEPTS.map(concept => ({ value: concept.key, label: `${tr(lang, concept.th, concept.en)} (${concept.key})` }))]} /> : null}
+      {!CONTAINER.has(type) && !PRINTED.has(type) && !["timeline", "matrix", "signature", "file", "image", "calculated"].includes(type) ? <label className="block space-y-1">
+        <span className={label}>{t("ข้อมูลจาก Flora Leaf (เติมให้เมื่อพิมพ์/กรอกในเคส)", "Flora Leaf case datum (filled when printed / filled for a case)")}</span>
+        <select className={input} value={field.bind ?? ""} onChange={event => set({ bind: event.target.value || undefined })}>
+          <option value="">{autoConcept ? t(`อัตโนมัติจากชื่อช่อง: ${autoConcept.th}`, `Automatic from the field name: ${autoConcept.en}`) : t("ไม่เชื่อม", "Not linked")}</option>
+          <optgroup label={t("ข้อมูลเคส (อ่านอย่างเดียว)", "Case data (read only)")}>
+            {CONCEPTS.map(concept => <option key={concept.key} value={concept.key}>{tr(lang, concept.th, concept.en)} ({concept.key})</option>)}
+          </optgroup>
+          {RECORD_TABS.map(tab => <optgroup key={tab.id} label={`⇄ ${t("ใบบันทึก Leaf", "Leaf record")} › ${tr(lang, tab.th, tab.en)}`}>
+            {tab.fields.map(item => <option key={item.bind} value={item.bind}>{item.label}</option>)}
+          </optgroup>)}
+        </select>
+        {isRecordBind(field.bind) ? <span className="block text-[11px] text-emerald-700 dark:text-emerald-300">
+          ⇄ {t(`ใช้ข้อมูลร่วมกับใบบันทึกดมยาบน Leaf สองทาง (แท็บ ${RECORD_BY_BIND.get(field.bind!)?.tab_th}): แก้ที่ไหนก็ตาม ค่าที่แก้ล่าสุดจะถูกใช้ทั้งสองที่ — ยกเว้นฟอร์มที่ทำเสร็จแล้ว`,
+            `Shared both ways with the Leaf anesthesia record (${RECORD_BY_BIND.get(field.bind!)?.tab_en} tab): edited on either side, the newest change is used on both — except in completed forms`)}
+        </span> : null}
+      </label> : null}
       <SelectField label={t("ชนิดช่อง", "Field type")} value={type} onChange={value => changeType(value as FieldType)}
         options={PALETTE.flatMap(group => group.items).map(item => ({ value: item.type, label: tr(lang, item.th, item.en) }))} />
     </Group>

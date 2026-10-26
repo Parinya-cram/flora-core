@@ -13,7 +13,7 @@ from psycopg import Connection
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
-from .. import case_forms, form_sync
+from .. import case_forms, form_sync, record_link
 from ..clinical import case_audit
 from ..database import connection
 from .auth_leaf import now_ms, require_permission, service_only
@@ -411,6 +411,11 @@ def _save_form(database: Connection, case_id: int, form_id: str, patch: dict[str
             (case_id, form_id, int((row or {}).get("form_version") or entry["version"]), Jsonb(updated["data"]),
              Jsonb(updated["versions"]), Jsonb(updated["authors"]), status, current, actor["username"], current,
              actor["username"])).fetchone()
+        # Fields bound to the Leaf record (field.bind "record.*") change it too; the newest change wins.
+        written = record_link.form_to_record(database, case_id, definition, updated["data"], updated["versions"], set(patch),
+                                             actor["username"])
+        if written:
+            record_link.record_to_forms(database, case_id, set(written))
         action = "sign" if signed else "amend" if amending else "patch"
         case_audit(database, case_id, f"workflow_form.{action}:{form_id}",
                    {"data": copy["data"], "status": copy["status"]},

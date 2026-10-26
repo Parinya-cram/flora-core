@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, HTTPException
 from psycopg import Connection, sql
 from psycopg.types.json import Jsonb
-from .. import form_sync
+from .. import form_sync, record_link
 from ..database import connection
 from ..clinical import insert,update,text,number,timestamp,case_audit
 from .auth_leaf import now_ms,require_permission
@@ -65,6 +65,8 @@ def save_draft(db,case_id,draft,actor):
               field_versions=excluded.field_versions""",
             (case_id,now,now,json.dumps(draft) if draft is not None else None,Jsonb(versions)))
         case_audit(db,case_id,"form.draft",old,draft,actor)
+        # Workflow forms bound to these record fields follow (Form Studio, field.bind "record.*").
+        record_link.record_to_forms(db,case_id,record_link.changed_record_keys((old or {}).get("field_versions"),versions))
     return {"ok":True,"case_id":case_id,"updated_at":now}
 
 
@@ -96,6 +98,7 @@ def patch_draft(case_id:int,payload:dict=Body(...),actor:dict=Depends(require_pe
               field_versions=excluded.field_versions""",
             (case_id,now,now,json.dumps(merged),Jsonb(versions)))
         case_audit(database,case_id,"form.draft.patch",old,merged,actor)
+        record_link.record_to_forms(database,case_id,record_link.changed_record_keys((row or {}).get("field_versions"),versions))
     return {"ok":True,"case_id":case_id,"updated_at":now,"draft":merged}
 
 

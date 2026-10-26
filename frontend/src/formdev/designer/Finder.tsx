@@ -7,8 +7,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { FieldDefinition, FieldType, FormDefinition, SectionDefinition } from "../core/types";
 import type { RestApiAdapter } from "../data/RestApiAdapter";
 import { CONCEPTS } from "../leaf/concepts";
-import { BLOCKS, PALETTE, tr, type Lang } from "./catalog";
-import { allFields, type FieldRef } from "./model";
+import { BLOCKS, PALETTE, scaleSpans, tr, type Lang } from "./catalog";
+import { allFields, usedNames, type FieldRef } from "./model";
+import { formColumns } from "../core/layout";
+import { fieldFromRecord, RECORD_FIELDS } from "../leaf/record";
 
 export type FinderPick =
   | { kind: "type"; type: FieldType }
@@ -94,6 +96,14 @@ export default function Finder({ lang, definition, remote, online, commands, onP
       out.push({ id: `concept:${concept.key}`, group: t("ข้อมูลเคส (ผูกอัตโนมัติ)", "Case data (bound)"), icon: "⛓", title: tr(lang, concept.th, concept.en), hint: concept.key,
         words: fold(`${concept.th} ${concept.en} ${concept.key} ${concept.aliases.join(" ")}`),
         pick: { kind: "concept", concept: concept.key, type: CONCEPT_TYPE[concept.kind] ?? "text", th: concept.th, en: concept.en } });
+    }
+    // The Leaf's anesthesia record, field by field: added already bound both ways ("record.<field>").
+    const columns = formColumns(definition);
+    for (const record of RECORD_FIELDS) {
+      out.push({ id: `record:${record.bind}`, group: t("ใบบันทึกดมยา Leaf (ใช้ข้อมูลร่วมกันสองทาง)", "Leaf anesthesia record (shared both ways)"), icon: "⇄",
+        title: record.label, hint: `${tr(lang, record.tab_th, record.tab_en)} · ${record.bind}`,
+        words: fold(`${record.label} ${record.key} ${record.bind} ${record.tab_th} ${record.tab_en}`),
+        pick: () => Promise.resolve({ kind: "fields", name: record.label, fields: scaleSpans([fieldFromRecord(record, usedNames(definition), lang)], columns) }) });
     }
     for (const { ref, field } of allFields(definition)) {
       out.push({ id: `field:${JSON.stringify(ref)}`, group: t("ช่องในฟอร์มนี้", "Fields in this form"), icon: "↪", title: field.label, hint: field.key ?? field.id,

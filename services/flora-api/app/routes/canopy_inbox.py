@@ -11,7 +11,7 @@ from fastapi import HTTPException, APIRouter, Depends
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 
-from .. import form_sync
+from .. import form_sync, record_link
 from ..clinical import case_audit
 from ..database import connection
 from . import leaf_sync
@@ -144,6 +144,7 @@ def inbox(payload: dict[str, Any], _: dict = Depends(service_only), database: Co
             if changed:
                 case_audit(database, case["id"], "form.draft.canopy", old, values, SYNC_ACTOR)
                 updated_forms += 1
+                record_link.record_to_forms(database, case["id"], record_link.changed_record_keys((row or {}).get("field_versions"), versions))
         # Archived cases included in the outbox this exchange was built from have now reached Canopy.
         if isinstance(payload.get("outbox_built_at"), int):
             leaf_sync.set_state(database, "admissions.synced_at", payload["outbox_built_at"])

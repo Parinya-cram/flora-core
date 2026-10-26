@@ -7,6 +7,7 @@ import { instantiateTemplate } from "../logic/calculators";
 import { CALCULATOR_TEMPLATES } from "../registry/defaults";
 import { emptyForm, newField, uniqueName } from "./model";
 import { CASE_BLOCK_IDS, CASE_BLOCKS } from "../core/caseBlocks";
+import { RECORD_TABS, tabFields } from "../leaf/record";
 import { PAPER_TEMPLATES } from "./templates";
 
 export type Lang = "th" | "en";
@@ -83,8 +84,8 @@ export function paletteField(type: FieldType, used: Set<string>, lang: Lang): Fi
 export type Block = { fields: FieldDefinition[]; calculators: CalculatorDefinition[] };
 export type BlockItem = {
   id: string; icon: string; th: string; en: string; hintTh: string; hintEn: string; needsLookup?: string; build: (used: Set<string>, lang: Lang) => Block;
-  /** report: a report component (case_block) listed under "Report components". */
-  group?: "report";
+  /** report: a report component (case_block) listed under "Report components"; leaf: a whole tab of the Leaf record. */
+  group?: "report" | "leaf";
 };
 
 const template = (id: string) => CALCULATOR_TEMPLATES.find(item => item.template_id === id)!;
@@ -179,6 +180,12 @@ export const BLOCKS: BlockItem[] = [
       { id: uniqueName("recorded_at", used), type: "datetime", label: tr(lang, "วันเวลาที่บันทึก", "Recorded at"), layout: { span: 6 } },
       { id: uniqueName("recorder_signature", used), type: "signature", label: tr(lang, "ลายเซ็น", "Signature"), layout: { span: 12 } },
     ] }) },
+  // The Leaf's anesthesia record, a whole tab at a time: every field bound both ways ("record.<field>").
+  ...RECORD_TABS.map((tab): BlockItem => ({
+    id: `leaf_${tab.id}`, icon: "⇄", th: `แท็บ ${tab.th}`, en: `Tab: ${tab.en}`, group: "leaf",
+    hintTh: `${tab.fields.length} ช่องจากใบบันทึก Leaf`, hintEn: `${tab.fields.length} fields of the Leaf record`,
+    build: (used, lang) => ({ calculators: [], fields: tabFields(tab.id, used, lang) }),
+  })),
   // Report components: one per kind of case data, printed from Flora Leaf with the case's own rows.
   ...CASE_BLOCK_IDS.map((block): BlockItem => ({
     id: `case_${block}`, icon: "📋", th: CASE_BLOCKS[block].th, en: CASE_BLOCKS[block].en, group: "report",

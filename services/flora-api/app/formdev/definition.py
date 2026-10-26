@@ -16,6 +16,9 @@ from datetime import date
 from typing import Any, Callable, Iterable
 
 from .blocks import section_field_lists
+# Fields of the Leaf anesthesia record a form field can share (bind "record.<field>", app/record_link.py).
+RECORD_BINDS = frozenset(item["bind"] for item in json.loads(
+    (__import__("pathlib").Path(__file__).resolve().parents[1] / "record_fields.json").read_text(encoding="utf-8"))["fields"])
 from .case_blocks import CASE_BLOCKS, LIMITS as CASE_BLOCK_LIMITS, MAX_COLUMNS as CASE_BLOCK_MAX_COLUMNS
 from .logic import model as logic_model
 from .logic.formula import check as check_formula
@@ -1047,6 +1050,8 @@ def _validate_field(ctx: _Ctx, field: Any, path: str, scope: _Scope, columns: in
         _validate_case_block(ctx, field, path)
     if "bind" in field and not (isinstance(field["bind"], str) and BIND.match(field["bind"])):
         ctx.add(f"{path}.bind", "invalid_type", "bind names a case datum such as patient.hn or case.asa")
+    elif isinstance(field.get("bind"), str) and field["bind"].startswith("record.") and field["bind"] not in RECORD_BINDS:
+        ctx.add(f"{path}.bind", "invalid_type", f"{field['bind']} is not a field of the Flora Leaf anesthesia record")
     if "derive" in field and "derive" in allowed:
         _validate_derive(ctx, field, path, scope)
 

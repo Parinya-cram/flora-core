@@ -60,6 +60,15 @@ def _field_types_table() -> str:
     return "\n".join(lines)
 
 
+def _record_table() -> str:
+    from .. import record_link
+
+    tabs: dict[str, list[str]] = {}
+    for item in record_link.CATALOG:
+        tabs.setdefault(f"{item['tab']} ({item['tab_en']})", []).append(item["bind"][len("record."):])
+    return "\n".join(f"- {tab}: {', '.join(names)}" for tab, names in tabs.items())
+
+
 def _sections_table() -> str:
     return "\n".join(f"- {section['id']}: {section['label']}" for section in SECTIONS)
 
@@ -127,6 +136,12 @@ NAMES (the variable-name standard). An id is English lower snake_case and says w
 (not text_2, date, field_1): pain_score, assessor_name, consent_date. A field holding case data gets "bind" and is named
 after it: {", ".join(CONCEPT_KEYS)} (e.g. bind "patient.weight_kg" → id "patient_weight_kg"). A vague name (date, time,
 name, note, other) gets its section's name first: consent_date, witness_name.
+
+LEAF RECORD (shared both ways). A field that asks for something the Leaf's anesthesia record already holds gets
+"bind":"record.<field>" from this list (tab: fields): on the Leaf it then shows the record's value, and what is typed
+into the form goes back into the record (the newest change wins). Name it after the bind without "record."
+(bind "record.pacu_arrival_time" → id "pacu_arrival_time"). Prefer these to the case data above when both fit.
+{_record_table()}
 
 RULES.
 - Capture every fillable item: blanks, check boxes, tables, scores, signatures, dates and times. Do not invent items that

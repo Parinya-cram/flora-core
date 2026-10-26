@@ -3,6 +3,8 @@
 #
 #   compose   docker compose files are valid               (CI: compose-config)
 #   compile   Python of the API and the sync worker compiles (CI: python-compile)
+#   catalogs  generated lists are up to date: the Leaf record fields Form Studio links to
+#             (formdev/scripts/build_leaf_record_fields.mjs) and the per-account schema bundle (scripts/tenancy)
 #   tsc       frontend type check                           (CI: frontend-build, first half)
 #   lint      frontend eslint
 #   vitest    frontend tests (Form Studio, Leaf, Canopy)    (CI: test-frontend)
@@ -39,14 +41,14 @@ FRONTEND_MODULES="${FRONTEND_MODULES:-flora-core_flora_frontend_modules}"
 PG_CONTAINER="${PG_CONTAINER:-flora-core-postgres-1}"
 LOG_DIR="${LOG_DIR:-${TMPDIR:-/tmp}/flora-tests-$(date +%Y%m%d-%H%M%S)}"
 
-ALL="compose compile tsc lint vitest build api worker db e2e"
-STEPS="compose compile tsc lint vitest api worker db e2e"
+ALL="compose compile catalogs tsc lint vitest build api worker db e2e"
+STEPS="compose compile catalogs tsc lint vitest api worker db e2e"
 SKIP=""
 CI_DB=0
 LIST=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --quick) STEPS="compose compile tsc lint vitest api worker" ;;
+    --quick) STEPS="compose compile catalogs tsc lint vitest api worker" ;;
     --full) STEPS="$ALL" ;;
     --only) shift; STEPS="$(printf '%s' "${1:-}" | tr ',' ' ')" ;;
     --only=*) STEPS="$(printf '%s' "${1#--only=}" | tr ',' ' ')" ;;
@@ -54,7 +56,7 @@ while [ $# -gt 0 ]; do
     --skip=*) SKIP="$SKIP $(printf '%s' "${1#--skip=}" | tr ',' ' ')" ;;
     --ci) CI_DB=1 ;;
     --list) LIST=1 ;;
-    -h|--help) sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown option: $1 (see --help)" >&2; exit 2 ;;
   esac
   shift
@@ -89,7 +91,7 @@ front() { docker run --rm -v "$REPO:/app" -v "$FRONTEND_MODULES:/app/frontend/no
 # Why a step cannot run here (empty: it can).
 missing() {
   case "$1" in
-    tsc|lint|vitest|build)
+    catalogs|tsc|lint|vitest|build)
       have_image "$FRONTEND_IMAGE" || { echo "image $FRONTEND_IMAGE not built"; return; }
       have_volume "$FRONTEND_MODULES" || echo "volume $FRONTEND_MODULES missing (start the dev stack once)" ;;
     compile|api) have_image "$API_IMAGE" || echo "image $API_IMAGE not built" ;;
@@ -117,6 +119,9 @@ run_step() {
 files = [path for root in sys.argv[1:] for path in pathlib.Path(root).rglob('*.py')]
 for path in files: compile(path.read_text(encoding='utf-8'), str(path), 'exec')
 print(len(files), 'files compiled')" /repo/services/flora-api/app /repo/services/flora-sync-worker ;;
+    catalogs)
+      docker run --rm -v "$REPO:/app" -v "$FRONTEND_MODULES:/app/frontend/node_modules" -w /app "$FRONTEND_IMAGE" node formdev/scripts/build_leaf_record_fields.mjs --check \
+        && api python /repo/scripts/tenancy/build_schema_bundle.py --check ;;
     tsc) front node_modules/.bin/tsc -b --noEmit && echo "no type errors" ;;
     lint) front node_modules/.bin/eslint . && echo "no lint errors" ;;
     vitest) front node_modules/.bin/vitest run tests ;;

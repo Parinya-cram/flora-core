@@ -7,6 +7,10 @@ import { HOSPITAL_LOGO } from "./hospital";
 import { allowedProps, allProps, FIELD_TYPE_SPECS, fieldTypeSpec, hasValue, INDEX_FAMILY, INDEXABLE_TYPES, STYLE_COMPONENTS, STYLE_TOKENS, valueKind, type TokenSpec, type ValueKind } from "./fieldTypes";
 import { sectionFieldLists } from "./blocks";
 import { CASE_BLOCK_IDS, CASE_BLOCK_LIMITS, caseBlockSpec } from "./caseBlocks";
+import { RECORD_FIELDS } from "../leaf/recordFields";
+
+/** Fields of the Leaf anesthesia record a form field can share (bind "record.<field>", leaf/record.ts). */
+const RECORD_BINDS = new Set(RECORD_FIELDS.map(field => field.bind));
 import { check as checkFormula } from "../logic/formula";
 import { build as buildModel, cycles as logicCycles } from "../logic/model";
 import { MESSAGES } from "./messages";
@@ -918,6 +922,9 @@ function validateField(ctx: Ctx, field: unknown, path: string, scope: Scope, col
   if (field.type === "case_block") validateCaseBlock(ctx, field, path);
   if (STATIC_TYPES.has(field.type as string)) validateStaticElement(ctx, field, path);
   if ("bind" in field && !(isText(field.bind) && BIND.test(field.bind))) ctx.add(`${path}.bind`, "invalid_type", "bind names a case datum such as patient.hn or case.asa");
+  else if (isText(field.bind) && field.bind.startsWith("record.") && !RECORD_BINDS.has(field.bind)) {
+    ctx.add(`${path}.bind`, "invalid_type", `${field.bind} is not a field of the Flora Leaf anesthesia record`);
+  }
   if ("derive" in field && allowed.has("derive")) validateDerive(ctx, field, path, scope);
 
   if (field.indexed === true && allowed.has("indexed")) {

@@ -792,8 +792,9 @@ function Palette({ lang, setDrag, onAdd, onSearch, lookups }: {
   const words = query.normalize("NFC").toLowerCase().split(/\s+/).filter(Boolean);
   const matches = (...texts: string[]) => { const hay = texts.join(" ").toLowerCase(); return words.every(word => hay.includes(word)); };
   const found = BLOCKS.filter(block => matches(block.th, block.en, block.hintTh, block.hintEn));
-  const blocks = found.filter(block => block.group !== "report");
+  const blocks = found.filter(block => !block.group);
   const reports = found.filter(block => block.group === "report");
+  const leafTabs = found.filter(block => block.group === "leaf");
   const groups = PALETTE.map(group => ({ ...group, items: group.items.filter(item => matches(item.th, item.en, item.hintTh, item.hintEn, item.type)) })).filter(group => group.items.length);
   const start = (item: DragItem, text: string) => (event: DragEvent) => {
     setDrag(item);
@@ -822,6 +823,17 @@ function Palette({ lang, setDrag, onAdd, onSearch, lookups }: {
         })}
       </div>
     </div> : null}
+    {leafTabs.length ? <div>
+      <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">{t("ใบบันทึกดมยา Leaf (สองทาง)", "Leaf anesthesia record (both ways)")}</div>
+      <p className="mb-1 text-[10px] text-[var(--app-muted)]">{t("ทั้งแท็บพร้อมผูกข้อมูล: กรอกที่ฟอร์มหรือที่แท็บ Leaf ก็ได้ ค่าล่าสุดใช้ทั้งสองที่ · ทีละช่อง: Ctrl+K", "A whole tab, bound: fill it in the form or on the Leaf tab, the newest value is used on both · one field at a time: Ctrl+K")}</p>
+      <div className="grid grid-cols-2 gap-1">
+        {leafTabs.map(block => <button key={block.id} type="button" draggable className={tile} onDragStart={start({ kind: "block", id: block.id }, block.en)} onDragEnd={() => setDrag(null)}
+          onClick={() => onAdd({ kind: "block", id: block.id })} title={tr(lang, block.hintTh, block.hintEn)}>
+          <span className="min-w-0"><span className="block truncate font-semibold text-[var(--app-text)]">{block.icon} {tr(lang, block.th, block.en).replace(/^แท็บ |^Tab: /, "")}</span>
+            <span className="block truncate text-[10px] text-[var(--app-muted)]">{tr(lang, block.hintTh, block.hintEn)}</span></span>
+        </button>)}
+      </div>
+    </div> : null}
     {reports.length ? <div>
       <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">{t("ส่วนประกอบรายงาน (ข้อมูลเคส)", "Report components (case data)")}</div>
       <p className="mb-1 text-[10px] text-[var(--app-muted)]">{t("พิมพ์ด้วยข้อมูลจริงของเคสจาก Flora Leaf → รายงาน — ตั้งคอลัมน์และสัดส่วนได้ที่แผงขวา", "Printed with the case's real data from Flora Leaf → Reports — set columns and widths in the right panel")}</p>
@@ -843,7 +855,7 @@ function Palette({ lang, setDrag, onAdd, onSearch, lookups }: {
         </button>)}
       </div>
     </div>)}
-    {!blocks.length && !reports.length && !groups.length ? <p className="py-4 text-center text-xs text-[var(--app-muted)]">{t("ไม่พบ — ลองค้นหาทุกอย่าง (Ctrl+K)", "Nothing here — try searching everything (Ctrl+K)")}</p> : null}
+    {!blocks.length && !reports.length && !leafTabs.length && !groups.length ? <p className="py-4 text-center text-xs text-[var(--app-muted)]">{t("ไม่พบ — ลองค้นหาทุกอย่าง (Ctrl+K)", "Nothing here — try searching everything (Ctrl+K)")}</p> : null}
   </aside>;
 }
 

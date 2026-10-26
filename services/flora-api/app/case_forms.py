@@ -690,5 +690,11 @@ def leaf_inbox(database: Connection, payload: dict[str, Any], now: int) -> dict[
                            {"data": local["data"], "status": local["status"]}, {"data": merged["data"], "status": merged["status"]},
                            {"username": f"canopy:{first.get('by') or 'sync'}"[:120], "role": "integration"})
                 applied += 1
+                from . import record_link
+                from .routes.case_workflow import definition_for
+                written = record_link.form_to_record(database, case["id"], definition_for(database, case["workflow"], entry),
+                                                     merged["data"], merged["versions"], None, f"canopy:{first.get('by') or 'sync'}"[:120])
+                if written:
+                    record_link.record_to_forms(database, case["id"], set(written))
             acks.append({**ack, "state": "applied"})
     return {"ok": True, "receipts": received, "applied": applied, "acks": acks}
